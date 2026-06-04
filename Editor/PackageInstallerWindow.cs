@@ -41,7 +41,6 @@ namespace JorisHoef.PackageInstaller.Editor
                 _scriptingDefineService);
 
             _packageInstallService.StateChanged += Repaint;
-            _packageInstallService.QueueCompleted += RefreshInstalledPackages;
             _packageDetectionService.StateChanged += Repaint;
 
             _packageDetectionService.Refresh();
@@ -52,8 +51,12 @@ namespace JorisHoef.PackageInstaller.Editor
             if (_packageInstallService != null)
             {
                 _packageInstallService.StateChanged -= Repaint;
-                _packageInstallService.QueueCompleted -= RefreshInstalledPackages;
                 _packageInstallService.Dispose();
+            }
+
+            if (_integrationInstaller != null)
+            {
+                _integrationInstaller.Dispose();
             }
 
             if (_packageDetectionService != null)
@@ -173,6 +176,7 @@ namespace JorisHoef.PackageInstaller.Editor
                 }
 
                 EditorGUILayout.LabelField(packageDefinition.Description, EditorStyles.wordWrappedLabel);
+                DrawDisplayVersion(packageDefinition);
                 DrawSelectableValue("Package ID", packageDefinition.PackageId);
                 DrawSelectableValue("Reference", packageDefinition.PackageReference);
 
@@ -206,6 +210,7 @@ namespace JorisHoef.PackageInstaller.Editor
                 }
 
                 EditorGUILayout.LabelField(packageDefinition.Description, EditorStyles.wordWrappedLabel);
+                DrawDisplayVersion(packageDefinition);
                 DrawSelectableValue("Dependencies", string.Join(", ", packageDefinition.Dependencies.ToArray()));
                 DrawSelectableValue("Defines", string.Join(", ", packageDefinition.ScriptingDefineSymbols.ToArray()));
 
@@ -215,9 +220,13 @@ namespace JorisHoef.PackageInstaller.Editor
 
                     bool complete = _integrationInstaller.IsIntegrationComplete(packageDefinition);
 
-                    using (new EditorGUI.DisabledScope(complete || _packageDetectionService.IsRefreshing))
+                    bool pending = _integrationInstaller.HasPendingIntegration(packageDefinition);
+
+                    using (new EditorGUI.DisabledScope(complete || pending || _packageDetectionService.IsRefreshing))
                     {
-                        if (GUILayout.Button(complete ? "Enabled" : "Install Integration", GUILayout.Width(140f)))
+                        string buttonLabel = complete ? "Enabled" : pending ? "Pending" : "Install Integration";
+
+                        if (GUILayout.Button(buttonLabel, GUILayout.Width(140f)))
                         {
                             _integrationInstaller.InstallIntegration(packageDefinition);
                         }
@@ -245,6 +254,12 @@ namespace JorisHoef.PackageInstaller.Editor
 
         private void DrawIntegrationStatus(PackageDefinition packageDefinition)
         {
+            if (_integrationInstaller.HasPendingIntegration(packageDefinition))
+            {
+                DrawStatusLabel("Pending", MessageType.Info);
+                return;
+            }
+
             bool dependenciesInstalled = _integrationInstaller.ArePackageDependenciesInstalled(packageDefinition);
             bool symbolsEnabled = _integrationInstaller.AreIntegrationSymbolsEnabled(packageDefinition);
 
@@ -267,6 +282,16 @@ namespace JorisHoef.PackageInstaller.Editor
             }
 
             DrawStatusLabel("Not enabled", MessageType.Warning);
+        }
+
+        private static void DrawDisplayVersion(PackageDefinition packageDefinition)
+        {
+            if (!packageDefinition.HasDisplayVersion)
+            {
+                return;
+            }
+
+            DrawSelectableValue("Version", packageDefinition.DisplayVersion);
         }
 
         private static void DrawStatusLabel(string label, MessageType messageType)
@@ -303,9 +328,5 @@ namespace JorisHoef.PackageInstaller.Editor
             }
         }
 
-        private void RefreshInstalledPackages()
-        {
-            _packageDetectionService.Refresh();
-        }
     }
 }

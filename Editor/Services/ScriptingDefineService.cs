@@ -2,6 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
+#if UNITY_2021_2_OR_NEWER
+using UnityEditor.Build;
+#endif
 using UnityEngine;
 
 namespace JorisHoef.PackageInstaller.Editor
@@ -26,7 +29,7 @@ namespace JorisHoef.PackageInstaller.Editor
                 return string.Empty;
             }
 
-            return PlayerSettings.GetScriptingDefineSymbolsForGroup(buildTargetGroup);
+            return GetScriptingDefineSymbols(buildTargetGroup);
         }
 
         public bool HasSymbols(BuildTargetGroup buildTargetGroup, IEnumerable<string> symbols)
@@ -86,10 +89,28 @@ namespace JorisHoef.PackageInstaller.Editor
             }
 
             string nextSymbols = string.Join(";", orderedSymbols);
-            PlayerSettings.SetScriptingDefineSymbolsForGroup(buildTargetGroup, nextSymbols);
+            SetScriptingDefineSymbols(buildTargetGroup, nextSymbols);
 
             Debug.Log(LogPrefix + " Added scripting define symbols for " + buildTargetGroup + ": " + string.Join(", ", requiredSymbols) + ".");
             return true;
+        }
+
+        private static string GetScriptingDefineSymbols(BuildTargetGroup buildTargetGroup)
+        {
+#if UNITY_2021_2_OR_NEWER
+            return PlayerSettings.GetScriptingDefineSymbols(NamedBuildTarget.FromBuildTargetGroup(buildTargetGroup));
+#else
+            return PlayerSettings.GetScriptingDefineSymbolsForGroup(buildTargetGroup);
+#endif
+        }
+
+        private static void SetScriptingDefineSymbols(BuildTargetGroup buildTargetGroup, string symbols)
+        {
+#if UNITY_2021_2_OR_NEWER
+            PlayerSettings.SetScriptingDefineSymbols(NamedBuildTarget.FromBuildTargetGroup(buildTargetGroup), symbols);
+#else
+            PlayerSettings.SetScriptingDefineSymbolsForGroup(buildTargetGroup, symbols);
+#endif
         }
 
         private HashSet<string> GetSymbolSet(BuildTargetGroup buildTargetGroup)

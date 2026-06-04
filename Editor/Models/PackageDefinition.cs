@@ -13,7 +13,8 @@ namespace JorisHoef.PackageInstaller.Editor
             string description,
             IEnumerable<string> dependencies = null,
             IEnumerable<string> scriptingDefineSymbols = null,
-            bool isIntegration = false)
+            bool isIntegration = false,
+            string displayVersion = null)
         {
             if (string.IsNullOrWhiteSpace(displayName))
             {
@@ -32,6 +33,7 @@ namespace JorisHoef.PackageInstaller.Editor
             Dependencies = ToReadOnlyList(dependencies);
             ScriptingDefineSymbols = ToReadOnlyList(scriptingDefineSymbols);
             IsIntegration = isIntegration;
+            DisplayVersion = displayVersion ?? string.Empty;
         }
 
         public string DisplayName { get; }
@@ -42,6 +44,8 @@ namespace JorisHoef.PackageInstaller.Editor
 
         public string Description { get; }
 
+        public string DisplayVersion { get; }
+
         public IReadOnlyList<string> Dependencies { get; }
 
         public IReadOnlyList<string> ScriptingDefineSymbols { get; }
@@ -49,6 +53,8 @@ namespace JorisHoef.PackageInstaller.Editor
         public bool IsIntegration { get; }
 
         public bool HasPackageReference => !string.IsNullOrWhiteSpace(PackageReference);
+
+        public bool HasDisplayVersion => !string.IsNullOrWhiteSpace(DisplayVersion);
 
         private static IReadOnlyList<string> ToReadOnlyList(IEnumerable<string> values)
         {

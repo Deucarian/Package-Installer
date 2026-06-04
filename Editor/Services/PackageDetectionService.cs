@@ -19,6 +19,8 @@ namespace JorisHoef.PackageInstaller.Editor
 
         public event Action StateChanged;
 
+        public event Action RefreshCompleted;
+
         public bool IsRefreshing => _listRequest != null && !_listRequest.IsCompleted;
 
         public void Refresh()
@@ -95,6 +97,7 @@ namespace JorisHoef.PackageInstaller.Editor
             _listRequest = null;
             EditorApplication.update -= Update;
             NotifyStateChanged();
+            RefreshCompleted?.Invoke();
         }
 
         private void NotifyStateChanged()

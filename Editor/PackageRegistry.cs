@@ -20,25 +20,29 @@ namespace JorisHoef.PackageInstaller.Editor
                 "CoreState",
                 CoreStatePackageId,
                 "https://github.com/JorisHoef/Core-State.git#main",
-                "Small, standalone repository and selection services for Unity projects."),
+                "Small, standalone repository and selection services for Unity projects.",
+                displayVersion: "0.1.0"),
 
             new PackageDefinition(
                 "GenericUIItems",
                 GenericUIItemsPackageId,
                 "https://github.com/JorisHoef/GenericUIItems.git#develop",
-                "Lightweight UGUI collection-to-item presentation helpers."),
+                "Lightweight UGUI collection-to-item presentation helpers.",
+                displayVersion: "1.0.0"),
 
             new PackageDefinition(
                 "APIHelper",
                 APIHelperPackageId,
                 "https://github.com/JorisHoef/API-Helper.git#main",
-                "Reusable API client package for JSON, text, bytes, textures, and endpoint workflows."),
+                "Reusable API client package for JSON, text, bytes, textures, and endpoint workflows.",
+                displayVersion: "1.0.0"),
 
             new PackageDefinition(
                 "SessionHelper",
                 SessionHelperPackageId,
-                "https://github.com/JorisHoef/Session-Helper.git#main",
-                "Standalone authenticated-session lifecycle helpers with storage, restore, refresh, and change notifications.")
+                "https://github.com/JorisHoef/Session-Helper.git#master",
+                "Standalone authenticated-session lifecycle helpers with storage, restore, refresh, and change notifications.",
+                displayVersion: "0.1.0")
         };
 
         private static readonly PackageDefinition[] IntegrationPackageDefinitions =
