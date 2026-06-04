@@ -1,0 +1,17 @@
+{
+  "name": "com.jorishoef.package-installer",
+  "version": "0.1.0",
+  "displayName": "JorisHoef Package Installer",
+  "description": "Editor-only installer window for installing and composing JorisHoef Unity UPM packages.",
+  "unity": "2021.3",
+  "author": {
+    "name": "JorisHoef"
+  },
+  "keywords": [
+    "upm",
+    "editor",
+    "installer",
+    "package-manager"
+  ],
+  "dependencies": {}
+}
