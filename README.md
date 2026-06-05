@@ -1,12 +1,18 @@
 # JorisHoef Package Installer
 
-JorisHoef Package Installer is a small editor-only Unity Package Manager package that adds a custom installer window for JorisHoef packages.
+## Overview
+
+JorisHoef Package Installer is an editor-only Unity Package Manager package that adds a custom installer window for the JorisHoef UPM package ecosystem.
 
 Open it from:
 
-`Tools > JorisHoef > Package Installer`
+```text
+Tools > JorisHoef > Package Installer
+```
 
-The installer can install standalone packages and opt into package integrations without making this package a runtime dependency of any other package.
+The installer can install standalone packages, choose Stable or Development channels per package, check for Git updates, enable optional integration define symbols, and explicitly import package samples after a package is installed.
+
+Package ID: `com.jorishoef.package-installer`
 
 ## Installation
 
@@ -20,6 +26,12 @@ Add the installer through Unity Package Manager with a Git URL:
 }
 ```
 
+For development builds, use:
+
+```json
+"com.jorishoef.package-installer": "https://github.com/JorisHoef/JorisHoef.Package-Installer.git#develop"
+```
+
 You can also use Unity's Package Manager window:
 
 1. Open `Window > Package Manager`.
@@ -27,108 +39,150 @@ You can also use Unity's Package Manager window:
 3. Enter the installer Git URL.
 4. Open `Tools > JorisHoef > Package Installer`.
 
-## Included Packages
+The package requires Unity `2021.3` or newer and has no package dependencies.
 
-The first version knows about these package entries:
+## Core Concepts
 
-- Core State
-- Generic UI Items
-- API Helper
-- Session Helper
-- Generic UI Items + Core State integration
-- Session Helper + API Helper integration
+Package entries are data-driven in `Editor/PackageRegistry.cs`.
 
-`Install All` installs the standalone packages and enables all integration define symbols.
+Each standalone package definition contains:
 
-Package IDs remain branded as `com.jorishoef.*`. Display names are clean user-facing labels used only by the installer UI.
-Technical details such as package IDs, selected references, installed references, revisions, and raw update messages are available from each row's Advanced foldout.
+- Display name
+- Package ID
+- Stable URL
+- Development URL when verified
+- Description
+- Optional display version
+- Optional sample/extras metadata
 
-## Adding Package Definitions
+Each integration definition contains:
 
-Package entries are data-driven through `PackageRegistry`.
+- Display name
+- Integration package ID used only by the installer
+- Required package IDs
+- Scripting define symbols to add after dependencies are installed and detected
 
-To add or change packages, edit:
+The installer keeps target packages standalone. It does not add runtime dependencies between packages and it does not create a runtime assembly.
 
-`Editor/PackageRegistry.cs`
+## Public API
 
-Each `PackageDefinition` contains:
+This package is editor-only and exposes no runtime API for game code.
 
-- `displayName`: the name shown in the installer window.
-- `packageId`: the Unity package name, such as `com.jorishoef.api-helper`.
-- `stableUrl`: the stable Git URL or UPM identifier passed to `UnityEditor.PackageManager.Client.Add`.
-- `developmentUrl`: optional development-channel Git URL or UPM identifier. If this is empty, Development falls back to Stable.
-- `description`: the explanatory text shown in the UI.
-- `displayVersion`: optional human-readable version text shown in the UI.
-- `extras`: optional package samples or extras shown after the package is installed.
-- `dependencies`: package IDs that should be installed before an integration is enabled.
-- `scriptingDefineSymbols`: optional symbols added to the selected build target group.
+The user-facing entry point is the Unity menu item:
 
-For regular packages, set `stableUrl` and, when available, `developmentUrl` to the UPM identifier or Git URL. For integration entries that only compose other packages, leave the URL fields empty and list the required packages in `dependencies`.
+```text
+Tools/JorisHoef/Package Installer
+```
 
-When an installed Git package can be matched to `#main` or `#develop`, the installer infers the visible channel from the installed package reference. If the installed reference does not match a known channel, the row shows a Custom channel until the user selects Stable or Development.
+The implementation is split into internal editor classes:
 
-## Samples And Extras
+- `PackageInstallerWindow`: IMGUI window and coordination.
+- `PackageRegistry`: local package and integration definitions.
+- `PackageDefinition`, `PackageChannel`, and `PackageExtraDefinition`: installer data models.
+- `PackageInstallService`: Unity Package Manager install and update operations through `Client.Add`.
+- `PackageDetectionService`: installed package detection through `Client.List`.
+- `PackageUpdateCheckService`: Git revision comparison for installed Git packages.
+- `ScriptingDefineService`: selected build target group define-symbol updates.
+- `IntegrationInstaller`: dependency install sequencing and integration symbol gating.
+- `PackageSampleImportService`: explicit sample import through Unity sample APIs or a safe copy fallback.
 
-UPM packages can include `Samples~` folders, but Unity does not import those samples automatically. The installer keeps package installation clean and shows a Samples foldout only after an installed package has declared extras.
+## Packages
 
-Sample imports are explicit. The installer first tries Unity's Package Manager sample import API, then falls back to copying from the installed package's `Samples~` folder into `Assets/Samples/<Package Display Name>/<Sample Name>`.
+The registry currently knows about these standalone packages:
 
-If a sample destination already exists, the installer shows it as already imported and does not overwrite it silently.
+- `Core State` (`com.jorishoef.core.state`)
+- `Generic UI Items` (`com.jorishoef.generic-ui-items`)
+- `API Helper` (`com.jorishoef.api-helper`)
+- `Session Helper` (`com.jorishoef.session-helper`)
 
-## Update Checks
+Each package row has its own Stable/Development selector. Development falls back to Stable when a development URL is missing. Installed packages are shown as installed regardless of channel; the installer does not try to infer installed package versions beyond the current update-check metadata.
 
-`Check for Updates` compares installed registry packages against the selected Stable or Development channel. Git packages are compared by installed revision and the latest revision returned by `git ls-remote`.
+Technical details such as package IDs, selected references, installed references, revisions, and raw update messages are available from each row's `Advanced` foldout.
 
-Unknown revisions, missing Git, network failures, local/file packages, and non-Git UPM identifiers are reported as check failures instead of blocking the installer.
+## Samples
 
-`Update` and `Update All Installed Packages` reuse Unity Package Manager installation through `Client.Add` with the selected channel URL.
+The Package Installer itself has no `Samples~` folder.
 
-TODO: installer self-update is intentionally out of scope for this version.
+It can import samples from installed packages when their `PackageDefinition` declares extras. The current registry declares these sample extras:
 
-## Progress Display
+- Core State: `Standalone Repository Selection`
+- Generic UI Items: `Basic Usage`
+- API Helper: `API Helper Example Scene`
+- Session Helper: `Basic Session Usage`
+- Session Helper: `APIHelper Integration`
 
-The installer shows step-based progress for package install, integration install, install-all, single update, and update-all operations.
+Samples are hidden until the package is installed. Import is explicit; package installation does not auto-import samples.
 
-Progress is counted by package/integration steps because Unity Package Manager does not provide reliable download-byte progress for these Git package operations.
+Import behavior:
 
-Progress summaries list succeeded, failed, and skipped package steps so multi-package operations do not rely only on console logs.
+1. The installer first tries Unity's `UnityEditor.PackageManager.UI.Sample` API.
+2. If that API is unavailable or cannot find the sample, it copies from the installed package's `Samples~` folder into `Assets/Samples/<Package Display Name>/<Sample Name>`.
+3. Existing destinations are treated as already imported and are not overwritten silently.
 
 ## Integrations
 
-Integrations keep packages standalone. The installer does not add compile-time references between packages by itself.
+The registry currently exposes two integration buttons:
 
-An integration definition does two things:
+- `Generic UI Items + Core State integration`
+- `Session Helper + API Helper integration`
 
-1. Installs its required package dependencies if they are not already installed.
-2. Adds the integration's scripting define symbols to the active build target group.
+Integration install flow:
 
-The installer only adds symbols. It never removes user symbols.
-
-The Build Target Group selector in the window controls which build target group receives integration symbols.
+1. Install required packages that are missing.
+2. Refresh installed-package detection.
+3. Add the integration scripting define symbols only after required packages are installed and detected.
 
 Current integration symbols:
 
 - `GENERIC_UI_ITEMS_CORE_STATE`
 - `SESSION_HELPER_APIHELPER`
 
-Packages that provide optional integration code should gate that code behind the same symbols in their own asmdefs or source.
+The installer only adds symbols; it never removes user symbols.
 
-## Why Editor-Only
+`SESSION_HELPER_APIHELPER` enables the real optional APIHelper adapter inside Session Helper when APIHelper is installed. `GENERIC_UI_ITEMS_CORE_STATE` is available for packages or project code that gate their own composition code behind that symbol; Generic UI Items does not currently include a Core State adapter assembly.
 
-This package exists only to help developers install and compose packages inside the Unity Editor. It creates no runtime assembly, has no `Runtime` folder, and should not be referenced by game code.
+## Update Checking
 
-Keeping the installer editor-only ensures:
+`Check for Updates` compares installed registry packages against each package's selected Stable or Development channel.
 
-- Core State, Generic UI Items, API Helper, and Session Helper remain standalone.
-- Projects do not ship installer code in builds.
-- No package gains a runtime dependency on this installer.
+For Git package URLs, update checks compare:
 
-## Validation Notes
+- Installed revision from Unity package metadata and lock files.
+- Latest branch revision from `git ls-remote`.
 
-The installer uses:
+`Update` and `Update All Installed Packages` reuse Unity Package Manager installation through `Client.Add` with the selected channel URL. `Update All` lists exactly which installed packages have available updates before running.
 
-- `UnityEditor.PackageManager.Client.Add` for package installation.
-- `UnityEditor.PackageManager.Client.List` for installed-package detection.
-- `PlayerSettings` scripting define APIs for integration symbols.
+Local/file packages, non-Git identifiers, missing Git, unknown revisions, and network failures are reported as check failures instead of blocking installer use.
 
-After installing a package, the installer refreshes installed-package state so installed entries show as installed.
+## Progress
+
+The installer shows step-based progress for:
+
+- Installing one package
+- Installing integrations
+- Installing all packages
+- Updating one package
+- Updating all installed packages with available updates
+- Importing samples
+
+Progress is counted by package, integration, or sample steps because Unity Package Manager does not provide reliable download-byte progress for Git package operations.
+
+## Versioning
+
+Current package version: `0.1.0`.
+
+Branch strategy:
+
+- `main`: stable installer branch.
+- `develop`: development installer branch.
+
+Use branch refs for active development and stable release tags when tags are available.
+
+## Limitations
+
+- This package is editor-only. It has no `Runtime` folder and should not be referenced by game code.
+- Package definitions are local C# data in `PackageRegistry`, not remote manifests.
+- Only Git branch update checks are supported today.
+- The installer cannot know download-byte progress for Git packages.
+- Sample import avoids silent overwrite; there is no overwrite UI in this version.
+- Define symbols only have an effect when installed packages or project code actually contain code gated by those symbols.
