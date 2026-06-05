@@ -12,11 +12,11 @@ namespace JorisHoef.PackageInstaller.Editor
             string stableUrl,
             string description,
             IEnumerable<string> dependencies = null,
-            IEnumerable<string> scriptingDefineSymbols = null,
-            bool isIntegration = false,
+            PackageType packageType = PackageType.Core,
             string developmentUrl = null,
             string displayVersion = null,
-            IEnumerable<PackageExtraDefinition> extras = null)
+            IEnumerable<PackageExtraDefinition> extras = null,
+            string category = null)
         {
             if (string.IsNullOrWhiteSpace(displayName))
             {
@@ -34,8 +34,10 @@ namespace JorisHoef.PackageInstaller.Editor
             DevelopmentUrl = developmentUrl ?? string.Empty;
             Description = description ?? string.Empty;
             Dependencies = ToReadOnlyList(dependencies);
-            ScriptingDefineSymbols = ToReadOnlyList(scriptingDefineSymbols);
-            IsIntegration = isIntegration;
+            PackageType = packageType;
+            Category = string.IsNullOrWhiteSpace(category)
+                ? GetDefaultCategory(packageType)
+                : category.Trim();
             DisplayVersion = displayVersion ?? string.Empty;
             Extras = ToReadOnlyList(extras);
         }
@@ -56,11 +58,13 @@ namespace JorisHoef.PackageInstaller.Editor
 
         public IReadOnlyList<string> Dependencies { get; }
 
-        public IReadOnlyList<string> ScriptingDefineSymbols { get; }
-
         public IReadOnlyList<PackageExtraDefinition> Extras { get; }
 
-        public bool IsIntegration { get; }
+        public PackageType PackageType { get; }
+
+        public string Category { get; }
+
+        public bool IsBridge => string.Equals(Category, "Bridge", StringComparison.OrdinalIgnoreCase);
 
         public bool HasPackageReference => !string.IsNullOrWhiteSpace(GetUrl(PackageChannel.Stable));
 
@@ -107,6 +111,19 @@ namespace JorisHoef.PackageInstaller.Editor
             return values
                 .Where(value => value != null)
                 .ToArray();
+        }
+
+        private static string GetDefaultCategory(PackageType packageType)
+        {
+            switch (packageType)
+            {
+                case PackageType.UI:
+                    return "UI";
+                case PackageType.Bridge:
+                    return "Bridge";
+                default:
+                    return "Core";
+            }
         }
     }
 }
