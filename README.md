@@ -6,7 +6,7 @@ Open it from:
 
 `Tools > JorisHoef > Package Installer`
 
-The installer can install standalone packages and opt into package integrations without making this package a runtime dependency of any other package.
+The installer can install standalone packages, bridge packages, and package samples without making this package a runtime dependency of any other package.
 
 ## Installation
 
@@ -29,16 +29,18 @@ You can also use Unity's Package Manager window:
 
 ## Included Packages
 
-The first version knows about these package entries:
+The installer knows about these package entries:
 
-- Core State
-- Generic UI Items
-- API Helper
-- Session Helper
-- Generic UI Items + Core State integration
-- Session Helper + API Helper integration
+- Core: Core State, API Helper, Session Helper
+- UI: Generic UI Items
+- Bridge: GenericUIItems CoreState Bridge, SessionHelper APIHelper Bridge
 
-`Install All` installs the standalone packages and enables all integration define symbols.
+Bridge packages are first-class UPM packages with their own package IDs:
+
+- `com.jorishoef.generic-ui-items.core-state-bridge`
+- `com.jorishoef.session-helper.api-helper-bridge`
+
+`Install All` installs all missing registered packages in dependency order. Installing one bridge package automatically installs its missing dependencies first, then installs the bridge.
 
 Package IDs remain branded as `com.jorishoef.*`. Display names are clean user-facing labels used only by the installer UI.
 Technical details such as package IDs, selected references, installed references, revisions, and raw update messages are available from each row's Advanced foldout.
@@ -58,12 +60,12 @@ Each `PackageDefinition` contains:
 - `stableUrl`: the stable Git URL or UPM identifier passed to `UnityEditor.PackageManager.Client.Add`.
 - `developmentUrl`: optional development-channel Git URL or UPM identifier. If this is empty, Development falls back to Stable.
 - `description`: the explanatory text shown in the UI.
+- `packageType`: Core, UI, or Bridge. The installer uses this for grouping and status display.
 - `displayVersion`: optional human-readable version text shown in the UI.
 - `extras`: optional package samples or extras shown after the package is installed.
-- `dependencies`: package IDs that should be installed before an integration is enabled.
-- `scriptingDefineSymbols`: optional symbols added to the selected build target group.
+- `dependencies`: package IDs that should be installed before this package is installed.
 
-For regular packages, set `stableUrl` and, when available, `developmentUrl` to the UPM identifier or Git URL. For integration entries that only compose other packages, leave the URL fields empty and list the required packages in `dependencies`.
+Set `stableUrl` and, when available, `developmentUrl` to the UPM identifier or Git URL. Bridge packages should also list their dependency package IDs in `dependencies`.
 
 When an installed Git package can be matched to `#main` or `#develop`, the installer infers the visible channel from the installed package reference. If the installed reference does not match a known channel, the row shows a Custom channel until the user selects Stable or Development.
 
@@ -87,31 +89,26 @@ TODO: installer self-update is intentionally out of scope for this version.
 
 ## Progress Display
 
-The installer shows step-based progress for package install, integration install, install-all, single update, and update-all operations.
+The installer shows step-based progress for package install, bridge install, install-all, single update, update-all, and remove operations.
 
-Progress is counted by package/integration steps because Unity Package Manager does not provide reliable download-byte progress for these Git package operations.
+Progress is counted by package steps because Unity Package Manager does not provide reliable download-byte progress for these Git package operations.
 
 Progress summaries list succeeded, failed, and skipped package steps so multi-package operations do not rely only on console logs.
 
-## Integrations
+## Bridge Packages
 
-Integrations keep packages standalone. The installer does not add compile-time references between packages by itself.
+Bridge packages keep the core packages standalone while providing explicit composition packages for projects that want the combined behavior.
 
-An integration definition does two things:
+Current bridge package dependencies:
 
-1. Installs its required package dependencies if they are not already installed.
-2. Adds the integration's scripting define symbols to the active build target group.
+- GenericUIItems CoreState Bridge depends on Generic UI Items and Core State.
+- SessionHelper APIHelper Bridge depends on Session Helper and API Helper.
 
-The installer only adds symbols. It never removes user symbols.
+Installing a bridge only requires one click. The installer computes the dependency-first install plan from `PackageDefinition.Dependencies` and sends that ordered package list to Unity Package Manager.
 
-The Build Target Group selector in the window controls which build target group receives integration symbols.
+Bridge packages are regular UPM packages, so no scripting define symbols are required for these bridge installs.
 
-Current integration symbols:
-
-- `GENERIC_UI_ITEMS_CORE_STATE`
-- `SESSION_HELPER_APIHELPER`
-
-Packages that provide optional integration code should gate that code behind the same symbols in their own asmdefs or source.
+When removing a package, the installer warns and disables removal if another installed registered package depends on it. Remove the dependent bridge package first to avoid silently breaking the project.
 
 ## Why Editor-Only
 
@@ -128,7 +125,7 @@ Keeping the installer editor-only ensures:
 The installer uses:
 
 - `UnityEditor.PackageManager.Client.Add` for package installation.
+- `UnityEditor.PackageManager.Client.Remove` for package removal.
 - `UnityEditor.PackageManager.Client.List` for installed-package detection.
-- `PlayerSettings` scripting define APIs for integration symbols.
 
 After installing a package, the installer refreshes installed-package state so installed entries show as installed.

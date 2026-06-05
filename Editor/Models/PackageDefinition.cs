@@ -12,8 +12,7 @@ namespace JorisHoef.PackageInstaller.Editor
             string stableUrl,
             string description,
             IEnumerable<string> dependencies = null,
-            IEnumerable<string> scriptingDefineSymbols = null,
-            bool isIntegration = false,
+            PackageType packageType = PackageType.Core,
             string developmentUrl = null,
             string displayVersion = null,
             IEnumerable<PackageExtraDefinition> extras = null)
@@ -34,8 +33,7 @@ namespace JorisHoef.PackageInstaller.Editor
             DevelopmentUrl = developmentUrl ?? string.Empty;
             Description = description ?? string.Empty;
             Dependencies = ToReadOnlyList(dependencies);
-            ScriptingDefineSymbols = ToReadOnlyList(scriptingDefineSymbols);
-            IsIntegration = isIntegration;
+            PackageType = packageType;
             DisplayVersion = displayVersion ?? string.Empty;
             Extras = ToReadOnlyList(extras);
         }
@@ -56,11 +54,11 @@ namespace JorisHoef.PackageInstaller.Editor
 
         public IReadOnlyList<string> Dependencies { get; }
 
-        public IReadOnlyList<string> ScriptingDefineSymbols { get; }
-
         public IReadOnlyList<PackageExtraDefinition> Extras { get; }
 
-        public bool IsIntegration { get; }
+        public PackageType PackageType { get; }
+
+        public bool IsBridge => PackageType == PackageType.Bridge;
 
         public bool HasPackageReference => !string.IsNullOrWhiteSpace(GetUrl(PackageChannel.Stable));
 

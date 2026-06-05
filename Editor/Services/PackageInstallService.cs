@@ -11,7 +11,8 @@ namespace JorisHoef.PackageInstaller.Editor
     internal enum PackageInstallRequestState
     {
         Idle,
-        Installing
+        Installing,
+        Removing
     }
 
     internal enum PackageInstallProgressItemState
@@ -55,7 +56,9 @@ namespace JorisHoef.PackageInstaller.Editor
             new Dictionary<string, PackageInstallProgressItem>(StringComparer.OrdinalIgnoreCase);
 
         private AddRequest _currentRequest;
+        private RemoveRequest _currentRemoveRequest;
         private QueuedPackageInstall _currentInstall;
+        private PackageDefinition _currentRemovePackage;
         private string _currentOperationName = string.Empty;
         private string _lastStatusMessage = string.Empty;
         private string _lastErrorMessage = string.Empty;
@@ -73,13 +76,16 @@ namespace JorisHoef.PackageInstaller.Editor
 
         public PackageInstallRequestState State { get; private set; } = PackageInstallRequestState.Idle;
 
-        public PackageDefinition CurrentPackage => _currentInstall != null ? _currentInstall.PackageDefinition : null;
+        public PackageDefinition CurrentPackage => _currentInstall != null ? _currentInstall.PackageDefinition : _currentRemovePackage;
 
         public PackageChannel CurrentChannel => _currentInstall != null ? _currentInstall.Channel : PackageChannel.Stable;
 
         public string CurrentUrl => _currentInstall != null ? _currentInstall.Url : string.Empty;
 
-        public bool IsBusy => State == PackageInstallRequestState.Installing || _installQueue.Count > 0;
+        public bool IsBusy =>
+            State == PackageInstallRequestState.Installing ||
+            State == PackageInstallRequestState.Removing ||
+            _installQueue.Count > 0;
 
         public bool HasProgress => _totalSteps > 0 || !string.IsNullOrWhiteSpace(_currentOperationName);
 
@@ -268,6 +274,61 @@ namespace JorisHoef.PackageInstaller.Editor
             NotifyStateChanged();
         }
 
+        public bool Remove(PackageDefinition packageDefinition)
+        {
+            string operationName = packageDefinition != null
+                ? "Remove " + packageDefinition.DisplayName
+                : "Remove Package";
+
+            return Remove(packageDefinition, operationName);
+        }
+
+        public bool Remove(PackageDefinition packageDefinition, string operationName)
+        {
+            if (packageDefinition == null)
+            {
+                Debug.LogError(LogPrefix + " Cannot remove a null package definition.");
+                return false;
+            }
+
+            if (IsBusy)
+            {
+                _lastErrorMessage = "Cannot start " + packageDefinition.DisplayName + " removal because another package operation is already running.";
+                Debug.LogWarning(LogPrefix + " " + _lastErrorMessage);
+                NotifyStateChanged();
+                return false;
+            }
+
+            BeginOperation(
+                string.IsNullOrWhiteSpace(operationName) ? "Remove " + packageDefinition.DisplayName : operationName,
+                new[] { packageDefinition });
+
+            _currentRemovePackage = packageDefinition;
+            State = PackageInstallRequestState.Removing;
+            MarkProgressItem(
+                packageDefinition,
+                PackageInstallProgressItemState.Active,
+                "Removing " + packageDefinition.DisplayName + "...");
+            _lastStatusMessage = "Removing " + packageDefinition.DisplayName + "...";
+            ClearSavedOperationState();
+
+            try
+            {
+                _currentRemoveRequest = Client.Remove(packageDefinition.PackageId);
+                EditorApplication.update -= Update;
+                EditorApplication.update += Update;
+                Debug.Log(LogPrefix + " Removing " + packageDefinition.DisplayName + " (" + packageDefinition.PackageId + ").");
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError(LogPrefix + " Failed to start remove for " + packageDefinition.DisplayName + ": " + exception.Message);
+                CompleteCurrentRemoveRequest(false, exception.Message);
+            }
+
+            NotifyStateChanged();
+            return _currentRemoveRequest != null;
+        }
+
         public bool IsQueuedOrInstalling(string packageId)
         {
             return !string.IsNullOrWhiteSpace(packageId) && _queuedOrInstallingPackageIds.Contains(packageId);
@@ -280,7 +341,7 @@ namespace JorisHoef.PackageInstaller.Editor
 
         private void StartNextRequestIfNeeded()
         {
-            if (_currentRequest != null || _installQueue.Count == 0)
+            if (_currentRequest != null || _currentRemoveRequest != null || _installQueue.Count == 0)
             {
                 return;
             }
@@ -311,6 +372,12 @@ namespace JorisHoef.PackageInstaller.Editor
 
         private void Update()
         {
+            if (_currentRemoveRequest != null)
+            {
+                UpdateRemoveRequest();
+                return;
+            }
+
             if (_currentRequest == null || !_currentRequest.IsCompleted)
             {
                 return;
@@ -337,6 +404,32 @@ namespace JorisHoef.PackageInstaller.Editor
 
             CompleteCurrentRequest(false, errorMessage);
             Debug.LogError(LogPrefix + " Failed to install " + failedPackageName + ": " + errorMessage);
+        }
+
+        private void UpdateRemoveRequest()
+        {
+            if (_currentRemoveRequest == null || !_currentRemoveRequest.IsCompleted)
+            {
+                return;
+            }
+
+            PackageDefinition packageDefinition = _currentRemovePackage;
+            string packageName = packageDefinition != null ? packageDefinition.DisplayName : "package";
+
+            if (_currentRemoveRequest.Status == StatusCode.Success)
+            {
+                string message = "Removed " + packageName + ".";
+                CompleteCurrentRemoveRequest(true, message);
+                Debug.Log(LogPrefix + " " + message);
+                return;
+            }
+
+            string errorMessage = _currentRemoveRequest.Error != null
+                ? _currentRemoveRequest.Error.message
+                : "Package Manager returned an unknown error.";
+
+            CompleteCurrentRemoveRequest(false, errorMessage);
+            Debug.LogError(LogPrefix + " Failed to remove " + packageName + ": " + errorMessage);
         }
 
         private void CompleteCurrentRequest(bool success, string message)
@@ -371,6 +464,28 @@ namespace JorisHoef.PackageInstaller.Editor
                 SavePendingOperationState();
             }
 
+            NotifyStateChanged();
+        }
+
+        private void CompleteCurrentRemoveRequest(bool success, string message)
+        {
+            PackageDefinition completedPackage = _currentRemovePackage;
+
+            if (completedPackage != null)
+            {
+                MarkProgressItem(
+                    completedPackage,
+                    success ? PackageInstallProgressItemState.Completed : PackageInstallProgressItemState.Failed,
+                    message);
+            }
+
+            _currentRemoveRequest = null;
+            _currentRemovePackage = null;
+            State = PackageInstallRequestState.Idle;
+            EditorApplication.update -= Update;
+            SetOperationCompleteSummary();
+            ClearSavedOperationState();
+            QueueCompleted?.Invoke();
             NotifyStateChanged();
         }
 
@@ -458,7 +573,7 @@ namespace JorisHoef.PackageInstaller.Editor
 
         private void CompleteOperationIfIdle()
         {
-            if (_currentRequest != null || _installQueue.Count > 0)
+            if (_currentRequest != null || _currentRemoveRequest != null || _installQueue.Count > 0)
             {
                 return;
             }
@@ -493,7 +608,7 @@ namespace JorisHoef.PackageInstaller.Editor
 
         private void SavePendingOperationState()
         {
-            if (!IsBusy)
+            if (!IsBusy || State == PackageInstallRequestState.Removing)
             {
                 ClearSavedOperationState();
                 return;
