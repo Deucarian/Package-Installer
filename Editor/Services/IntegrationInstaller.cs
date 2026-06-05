@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using UnityEditor;
 using UnityEngine;
 
 namespace JorisHoef.PackageInstaller.Editor
@@ -8,6 +9,7 @@ namespace JorisHoef.PackageInstaller.Editor
     internal sealed class IntegrationInstaller : IDisposable
     {
         private const string LogPrefix = "[JorisHoef Package Installer]";
+        private const string PendingIntegrationsKey = "JorisHoef.PackageInstaller.PendingIntegrations";
 
         private readonly PackageInstallService _packageInstallService;
         private readonly PackageDetectionService _packageDetectionService;
@@ -15,6 +17,9 @@ namespace JorisHoef.PackageInstaller.Editor
         private readonly List<PackageDefinition> _pendingIntegrations = new List<PackageDefinition>();
         private readonly HashSet<string> _trackedPackageStepIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _trackedIntegrationStepIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private readonly List<PackageInstallProgressItem> _progressItems = new List<PackageInstallProgressItem>();
+        private readonly Dictionary<string, PackageInstallProgressItem> _progressItemsByPackageId =
+            new Dictionary<string, PackageInstallProgressItem>(StringComparer.OrdinalIgnoreCase);
 
         private string _currentOperationName = string.Empty;
         private string _currentPackageName = string.Empty;
@@ -23,6 +28,7 @@ namespace JorisHoef.PackageInstaller.Editor
         private int _completedSteps;
         private int _successfulSteps;
         private int _failedSteps;
+        private int _skippedSteps;
         private int _totalSteps;
 
         public IntegrationInstaller(
@@ -37,6 +43,8 @@ namespace JorisHoef.PackageInstaller.Editor
             _packageInstallService.InstallCompleted += HandlePackageInstallCompleted;
             _packageInstallService.QueueCompleted += RefreshInstalledPackages;
             _packageDetectionService.RefreshCompleted += CompletePendingIntegrations;
+
+            LoadPendingIntegrations();
         }
 
         public event Action StateChanged;
@@ -59,9 +67,13 @@ namespace JorisHoef.PackageInstaller.Editor
 
         public int FailedSteps => _failedSteps;
 
+        public int SkippedSteps => _skippedSteps;
+
         public string LastStatusMessage => _lastStatusMessage;
 
         public string LastErrorMessage => _lastErrorMessage;
+
+        public IReadOnlyList<PackageInstallProgressItem> ProgressItems => _progressItems;
 
         public void Dispose()
         {
@@ -180,6 +192,15 @@ namespace JorisHoef.PackageInstaller.Editor
 
             BeginOperation("Install All", missingPackages, incompleteIntegrations);
 
+            foreach (PackageDefinition installedPackage in PackageRegistry.StandalonePackages
+                         .Where(package => _packageDetectionService.IsInstalled(package.PackageId)))
+            {
+                MarkPackageStep(
+                    installedPackage,
+                    PackageInstallProgressItemState.Skipped,
+                    installedPackage.DisplayName + " is already installed.");
+            }
+
             if (missingPackages.Length == 0)
             {
                 foreach (PackageDefinition integration in incompleteIntegrations)
@@ -284,12 +305,14 @@ namespace JorisHoef.PackageInstaller.Editor
             }
 
             _pendingIntegrations.Add(integrationDefinition);
+            SavePendingIntegrations();
         }
 
         private void RemovePendingIntegration(PackageDefinition integrationDefinition)
         {
             _pendingIntegrations.RemoveAll(pendingIntegration =>
                 string.Equals(pendingIntegration.PackageId, integrationDefinition.PackageId, StringComparison.OrdinalIgnoreCase));
+            SavePendingIntegrations();
         }
 
         private void CompletePendingIntegrations()
@@ -340,7 +363,46 @@ namespace JorisHoef.PackageInstaller.Editor
 
         private void RefreshInstalledPackages()
         {
+            RestorePendingIntegrationsForCompletedPackageOperation();
             _packageDetectionService.Refresh();
+        }
+
+        private void RestorePendingIntegrationsForCompletedPackageOperation()
+        {
+            string operationName = _packageInstallService.CurrentOperationName;
+
+            if (string.IsNullOrWhiteSpace(operationName))
+            {
+                return;
+            }
+
+            if (string.Equals(operationName, "Install All", StringComparison.OrdinalIgnoreCase))
+            {
+                foreach (PackageDefinition integration in PackageRegistry.Integrations)
+                {
+                    if (!HasPendingIntegration(integration) && !IsIntegrationComplete(integration))
+                    {
+                        QueueIntegrationUntilDependenciesAreDetected(integration);
+                    }
+                }
+
+                return;
+            }
+
+            foreach (PackageDefinition integration in PackageRegistry.Integrations)
+            {
+                if (!string.Equals(operationName, "Install " + integration.DisplayName, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (!HasPendingIntegration(integration) && !IsIntegrationComplete(integration))
+                {
+                    QueueIntegrationUntilDependenciesAreDetected(integration);
+                }
+
+                return;
+            }
         }
 
         private void HandlePackageInstallCompleted(PackageDefinition packageDefinition, bool success, string message)
@@ -350,7 +412,10 @@ namespace JorisHoef.PackageInstaller.Editor
                 return;
             }
 
-            MarkOperationStep(success, message);
+            MarkPackageStep(
+                packageDefinition,
+                success ? PackageInstallProgressItemState.Completed : PackageInstallProgressItemState.Failed,
+                message);
         }
 
         private void BeginOperation(
@@ -365,14 +430,18 @@ namespace JorisHoef.PackageInstaller.Editor
             _completedSteps = 0;
             _successfulSteps = 0;
             _failedSteps = 0;
+            _skippedSteps = 0;
             _trackedPackageStepIds.Clear();
             _trackedIntegrationStepIds.Clear();
+            _progressItems.Clear();
+            _progressItemsByPackageId.Clear();
 
             foreach (PackageDefinition packageDefinition in packageSteps ?? Array.Empty<PackageDefinition>())
             {
                 if (packageDefinition != null)
                 {
                     _trackedPackageStepIds.Add(packageDefinition.PackageId);
+                    AddProgressItem(packageDefinition);
                 }
             }
 
@@ -381,10 +450,11 @@ namespace JorisHoef.PackageInstaller.Editor
                 if (integrationDefinition != null)
                 {
                     _trackedIntegrationStepIds.Add(integrationDefinition.PackageId);
+                    AddProgressItem(integrationDefinition);
                 }
             }
 
-            _totalSteps = _trackedPackageStepIds.Count + _trackedIntegrationStepIds.Count;
+            _totalSteps = _progressItems.Count;
             NotifyStateChanged();
         }
 
@@ -396,22 +466,63 @@ namespace JorisHoef.PackageInstaller.Editor
             }
 
             _currentPackageName = integrationDefinition.DisplayName;
-            MarkOperationStep(success, message);
+            MarkOperationStep(
+                integrationDefinition,
+                success ? PackageInstallProgressItemState.Completed : PackageInstallProgressItemState.Failed,
+                message);
         }
 
-        private void MarkOperationStep(bool success, string message)
+        private void MarkPackageStep(
+            PackageDefinition packageDefinition,
+            PackageInstallProgressItemState state,
+            string message)
         {
+            if (packageDefinition == null)
+            {
+                return;
+            }
+
+            _trackedPackageStepIds.Remove(packageDefinition.PackageId);
+            MarkOperationStep(packageDefinition, state, message);
+        }
+
+        private void MarkOperationStep(
+            PackageDefinition packageDefinition,
+            PackageInstallProgressItemState state,
+            string message)
+        {
+            if (packageDefinition == null)
+            {
+                return;
+            }
+
+            PackageInstallProgressItem item = AddProgressItem(packageDefinition);
+            PackageInstallProgressItemState previousState = item.State;
+            item.State = state;
+            item.Message = message ?? string.Empty;
+
+            if (previousState == PackageInstallProgressItemState.Completed ||
+                previousState == PackageInstallProgressItemState.Failed ||
+                previousState == PackageInstallProgressItemState.Skipped)
+            {
+                return;
+            }
+
             _completedSteps++;
             _lastStatusMessage = message ?? string.Empty;
 
-            if (success)
+            if (state == PackageInstallProgressItemState.Completed)
             {
                 _successfulSteps++;
             }
-            else
+            else if (state == PackageInstallProgressItemState.Failed)
             {
                 _failedSteps++;
                 _lastErrorMessage = message ?? string.Empty;
+            }
+            else if (state == PackageInstallProgressItemState.Skipped)
+            {
+                _skippedSteps++;
             }
 
             NotifyStateChanged();
@@ -428,14 +539,68 @@ namespace JorisHoef.PackageInstaller.Editor
             {
                 _lastStatusMessage = _currentOperationName + " finished with " +
                                      _successfulSteps + " succeeded and " +
-                                     _failedSteps + " failed.";
+                                     _failedSteps + " failed" +
+                                     FormatSkippedSummarySuffix() + ".";
             }
             else
             {
-                _lastStatusMessage = _currentOperationName + " completed successfully.";
+                _lastStatusMessage = _currentOperationName + " completed successfully" +
+                                     FormatSkippedSummarySuffix() + ".";
             }
 
             NotifyStateChanged();
+        }
+
+        private PackageInstallProgressItem AddProgressItem(PackageDefinition packageDefinition)
+        {
+            if (_progressItemsByPackageId.TryGetValue(packageDefinition.PackageId, out PackageInstallProgressItem item))
+            {
+                return item;
+            }
+
+            item = new PackageInstallProgressItem(packageDefinition.PackageId, packageDefinition.DisplayName);
+            _progressItems.Add(item);
+            _progressItemsByPackageId[packageDefinition.PackageId] = item;
+            _totalSteps = _progressItems.Count;
+            return item;
+        }
+
+        private string FormatSkippedSummarySuffix()
+        {
+            return _skippedSteps > 0 ? " and " + _skippedSteps + " skipped" : string.Empty;
+        }
+
+        private void LoadPendingIntegrations()
+        {
+            string pendingIds = SessionState.GetString(PendingIntegrationsKey, string.Empty);
+
+            if (string.IsNullOrWhiteSpace(pendingIds))
+            {
+                return;
+            }
+
+            foreach (string packageId in pendingIds.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (PackageRegistry.TryGetPackage(packageId, out PackageDefinition packageDefinition) &&
+                    packageDefinition.IsIntegration &&
+                    !HasPendingIntegration(packageDefinition))
+                {
+                    _pendingIntegrations.Add(packageDefinition);
+                }
+            }
+        }
+
+        private void SavePendingIntegrations()
+        {
+            if (_pendingIntegrations.Count == 0)
+            {
+                SessionState.SetString(PendingIntegrationsKey, string.Empty);
+                return;
+            }
+
+            SessionState.SetString(
+                PendingIntegrationsKey,
+                string.Join("\n", _pendingIntegrations.Select(integration => integration.PackageId).ToArray()));
         }
 
         private void NotifyStateChanged()

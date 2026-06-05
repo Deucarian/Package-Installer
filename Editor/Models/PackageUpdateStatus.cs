@@ -75,7 +75,7 @@ namespace JorisHoef.PackageInstaller.Editor
                     case PackageUpdateStatusKind.Failed:
                         return "Check failed";
                     default:
-                        return "Check unknown";
+                        return "Unknown";
                 }
             }
         }

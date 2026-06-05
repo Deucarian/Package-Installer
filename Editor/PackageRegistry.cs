@@ -22,7 +22,14 @@ namespace JorisHoef.PackageInstaller.Editor
                 "https://github.com/JorisHoef/Core-State.git#main",
                 "Small, standalone repository and selection services for Unity projects.",
                 developmentUrl: "https://github.com/JorisHoef/Core-State.git#develop",
-                displayVersion: "0.1.0"),
+                displayVersion: "1.0.0",
+                extras: new[]
+                {
+                    new PackageExtraDefinition(
+                        "Standalone Repository Selection",
+                        "Simple IMGUI scene showing repository-backed key selection without any UI package dependency.",
+                        samplePath: "Samples~/StandaloneRepositorySelection")
+                }),
 
             new PackageDefinition(
                 "Generic UI Items",
@@ -30,7 +37,14 @@ namespace JorisHoef.PackageInstaller.Editor
                 "https://github.com/JorisHoef/GenericUIItems.git#develop",
                 "Lightweight UGUI collection-to-item presentation helpers.",
                 developmentUrl: "https://github.com/JorisHoef/GenericUIItems.git#develop",
-                displayVersion: "1.0.0"),
+                displayVersion: "1.0.0",
+                extras: new[]
+                {
+                    new PackageExtraDefinition(
+                        "Basic Usage",
+                        "Example scene showing list, scroll view, add, update, remove, clear, and identity-based synchronization.",
+                        samplePath: "Samples~/BasicUsage")
+                }),
 
             new PackageDefinition(
                 "API Helper",
@@ -38,15 +52,33 @@ namespace JorisHoef.PackageInstaller.Editor
                 "https://github.com/JorisHoef/API-Helper.git#main",
                 "Reusable API client package for JSON, text, bytes, textures, and endpoint workflows.",
                 developmentUrl: "https://github.com/JorisHoef/API-Helper.git#develop",
-                displayVersion: "1.0.0"),
+                displayVersion: "1.0.0",
+                extras: new[]
+                {
+                    new PackageExtraDefinition(
+                        "API Helper Example Scene",
+                        "Example scene showing config, authentication, GET, POST, and ApiResult handling.",
+                        samplePath: "Samples~/ExampleScene")
+                }),
 
             new PackageDefinition(
                 "Session Helper",
                 SessionHelperPackageId,
-                "https://github.com/JorisHoef/Session-Helper.git#master",
+                "https://github.com/JorisHoef/Session-Helper.git#main",
                 "Standalone authenticated-session lifecycle helpers with storage, restore, refresh, and change notifications.",
                 developmentUrl: "https://github.com/JorisHoef/Session-Helper.git#develop",
-                displayVersion: "0.1.0")
+                displayVersion: "1.0.0",
+                extras: new[]
+                {
+                    new PackageExtraDefinition(
+                        "Basic Session Usage",
+                        "Minimal fake login, restore, refresh, logout, and store clearing scene using standalone SessionHelper APIs.",
+                        samplePath: "Samples~/BasicUsage"),
+                    new PackageExtraDefinition(
+                        "APIHelper Integration",
+                        "Minimal code sample showing how to pass SessionHelper tokens to APIHelper through IApiAuthProvider.",
+                        samplePath: "Samples~/APIHelperIntegration")
+                })
         };
 
         private static readonly PackageDefinition[] IntegrationPackageDefinitions =

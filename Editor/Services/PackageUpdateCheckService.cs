@@ -57,6 +57,13 @@ namespace JorisHoef.PackageInstaller.Editor
                 PackageChannel channel = channelSelector != null ? channelSelector(packageDefinition) : PackageChannel.Stable;
                 string selectedUrl = packageDefinition.GetUrl(channel);
 
+                if (channel == PackageChannel.Custom)
+                {
+                    _statuses[packageDefinition.PackageId] =
+                        PackageUpdateStatus.Unknown(packageDefinition, channel);
+                    continue;
+                }
+
                 if (!_packageDetectionService.TryGetInstalledPackage(
                         packageDefinition.PackageId,
                         out PackageManagerPackageInfo packageInfo))

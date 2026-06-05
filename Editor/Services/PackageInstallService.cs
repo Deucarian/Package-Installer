@@ -19,7 +19,8 @@ namespace JorisHoef.PackageInstaller.Editor
         Pending,
         Active,
         Completed,
-        Failed
+        Failed,
+        Skipped
     }
 
     internal sealed class PackageInstallProgressItem
@@ -44,6 +45,8 @@ namespace JorisHoef.PackageInstaller.Editor
     internal sealed class PackageInstallService : IDisposable
     {
         private const string LogPrefix = "[JorisHoef Package Installer]";
+        private const string PendingOperationNameKey = "JorisHoef.PackageInstaller.PendingOperationName";
+        private const string PendingQueueKey = "JorisHoef.PackageInstaller.PendingQueue";
 
         private readonly Queue<QueuedPackageInstall> _installQueue = new Queue<QueuedPackageInstall>();
         private readonly HashSet<string> _queuedOrInstallingPackageIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -59,6 +62,7 @@ namespace JorisHoef.PackageInstaller.Editor
         private int _completedSteps;
         private int _successfulSteps;
         private int _failedSteps;
+        private int _skippedSteps;
         private int _totalSteps;
 
         public event Action StateChanged;
@@ -91,11 +95,47 @@ namespace JorisHoef.PackageInstaller.Editor
 
         public int FailedSteps => _failedSteps;
 
+        public int SkippedSteps => _skippedSteps;
+
         public string LastStatusMessage => _lastStatusMessage;
 
         public string LastErrorMessage => _lastErrorMessage;
 
         public IReadOnlyList<PackageInstallProgressItem> ProgressItems => _progressItems;
+
+        public bool ResumeSavedOperation()
+        {
+            if (IsBusy || !TryLoadSavedOperation(out string operationName, out QueuedPackageInstall[] pendingInstalls))
+            {
+                return false;
+            }
+
+            PackageDefinition[] packages = pendingInstalls
+                .Select(install => install.PackageDefinition)
+                .Where(packageDefinition => packageDefinition != null)
+                .ToArray();
+
+            if (packages.Length == 0)
+            {
+                ClearSavedOperationState();
+                return false;
+            }
+
+            BeginOperation(
+                string.IsNullOrWhiteSpace(operationName) ? "Resume Package Operation" : operationName,
+                packages);
+
+            foreach (QueuedPackageInstall pendingInstall in pendingInstalls)
+            {
+                QueueInstall(pendingInstall.PackageDefinition, pendingInstall.Channel);
+            }
+
+            StartNextRequestIfNeeded();
+            CompleteOperationIfIdle();
+            NotifyStateChanged();
+
+            return IsBusy;
+        }
 
         public bool Install(PackageDefinition packageDefinition)
         {
@@ -134,6 +174,7 @@ namespace JorisHoef.PackageInstaller.Editor
             bool queued = QueueInstall(packageDefinition, channel);
             StartNextRequestIfNeeded();
             CompleteOperationIfIdle();
+            SavePendingOperationState();
             NotifyStateChanged();
 
             return queued;
@@ -154,7 +195,7 @@ namespace JorisHoef.PackageInstaller.Editor
             if (_queuedOrInstallingPackageIds.Contains(packageDefinition.PackageId))
             {
                 string message = packageDefinition.DisplayName + " is already queued or installing.";
-                MarkProgressItem(packageDefinition, PackageInstallProgressItemState.Failed, message);
+                MarkProgressItem(packageDefinition, PackageInstallProgressItemState.Skipped, message);
                 Debug.Log(LogPrefix + " " + message);
                 return false;
             }
@@ -194,6 +235,8 @@ namespace JorisHoef.PackageInstaller.Editor
 
             PackageDefinition[] packages = packageDefinitions
                 .Where(packageDefinition => packageDefinition != null)
+                .GroupBy(packageDefinition => packageDefinition.PackageId, StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.First())
                 .ToArray();
 
             if (packages.Length == 0)
@@ -221,6 +264,7 @@ namespace JorisHoef.PackageInstaller.Editor
 
             StartNextRequestIfNeeded();
             CompleteOperationIfIdle();
+            SavePendingOperationState();
             NotifyStateChanged();
         }
 
@@ -254,6 +298,7 @@ namespace JorisHoef.PackageInstaller.Editor
                 _currentRequest = Client.Add(_currentInstall.Url);
                 EditorApplication.update -= Update;
                 EditorApplication.update += Update;
+                SavePendingOperationState();
 
                 Debug.Log(LogPrefix + " Installing " + _currentInstall.PackageDefinition.DisplayName + " using " + _currentInstall.Url + " (" + _currentInstall.Channel + ").");
             }
@@ -278,17 +323,20 @@ namespace JorisHoef.PackageInstaller.Editor
                 string version = _currentRequest.Result != null ? _currentRequest.Result.version : "unknown";
                 string message = "Installed " + packageDefinition.DisplayName + " (" + packageName + "@" + version + ") from " + _currentInstall.Channel + ".";
 
-                Debug.Log(LogPrefix + " " + message);
                 CompleteCurrentRequest(true, message);
+                Debug.Log(LogPrefix + " " + message);
                 return;
             }
 
             string errorMessage = _currentRequest.Error != null
                 ? _currentRequest.Error.message
                 : "Package Manager returned an unknown error.";
+            string failedPackageName = _currentInstall != null && _currentInstall.PackageDefinition != null
+                ? _currentInstall.PackageDefinition.DisplayName
+                : "package";
 
-            Debug.LogError(LogPrefix + " Failed to install " + _currentInstall.PackageDefinition.DisplayName + ": " + errorMessage);
             CompleteCurrentRequest(false, errorMessage);
+            Debug.LogError(LogPrefix + " Failed to install " + failedPackageName + ": " + errorMessage);
         }
 
         private void CompleteCurrentRequest(bool success, string message)
@@ -315,7 +363,12 @@ namespace JorisHoef.PackageInstaller.Editor
             {
                 EditorApplication.update -= Update;
                 SetOperationCompleteSummary();
+                ClearSavedOperationState();
                 QueueCompleted?.Invoke();
+            }
+            else
+            {
+                SavePendingOperationState();
             }
 
             NotifyStateChanged();
@@ -329,6 +382,7 @@ namespace JorisHoef.PackageInstaller.Editor
             _completedSteps = 0;
             _successfulSteps = 0;
             _failedSteps = 0;
+            _skippedSteps = 0;
             _progressItems.Clear();
             _progressItemsByPackageId.Clear();
 
@@ -373,9 +427,11 @@ namespace JorisHoef.PackageInstaller.Editor
             item.Message = message ?? string.Empty;
 
             if ((state == PackageInstallProgressItemState.Completed ||
-                 state == PackageInstallProgressItemState.Failed) &&
+                 state == PackageInstallProgressItemState.Failed ||
+                 state == PackageInstallProgressItemState.Skipped) &&
                 previousState != PackageInstallProgressItemState.Completed &&
-                previousState != PackageInstallProgressItemState.Failed)
+                previousState != PackageInstallProgressItemState.Failed &&
+                previousState != PackageInstallProgressItemState.Skipped)
             {
                 _completedSteps++;
 
@@ -383,10 +439,14 @@ namespace JorisHoef.PackageInstaller.Editor
                 {
                     _successfulSteps++;
                 }
-                else
+                else if (state == PackageInstallProgressItemState.Failed)
                 {
                     _failedSteps++;
                     _lastErrorMessage = message ?? string.Empty;
+                }
+                else
+                {
+                    _skippedSteps++;
                 }
             }
 
@@ -417,11 +477,106 @@ namespace JorisHoef.PackageInstaller.Editor
             {
                 _lastStatusMessage = _currentOperationName + " finished with " +
                                      _successfulSteps + " succeeded and " +
-                                     _failedSteps + " failed.";
+                                     _failedSteps + " failed" +
+                                     FormatSkippedSummarySuffix() + ".";
                 return;
             }
 
-            _lastStatusMessage = _currentOperationName + " completed successfully.";
+            _lastStatusMessage = _currentOperationName + " completed successfully" +
+                                 FormatSkippedSummarySuffix() + ".";
+        }
+
+        private string FormatSkippedSummarySuffix()
+        {
+            return _skippedSteps > 0 ? " and " + _skippedSteps + " skipped" : string.Empty;
+        }
+
+        private void SavePendingOperationState()
+        {
+            if (!IsBusy)
+            {
+                ClearSavedOperationState();
+                return;
+            }
+
+            string queue = string.Join(
+                "\n",
+                GetCurrentAndQueuedInstalls().Select(SerializePendingInstall).ToArray());
+
+            SessionState.SetString(PendingOperationNameKey, _currentOperationName ?? string.Empty);
+            SessionState.SetString(PendingQueueKey, queue);
+        }
+
+        private void ClearSavedOperationState()
+        {
+            SessionState.SetString(PendingOperationNameKey, string.Empty);
+            SessionState.SetString(PendingQueueKey, string.Empty);
+        }
+
+        private IEnumerable<QueuedPackageInstall> GetCurrentAndQueuedInstalls()
+        {
+            if (_currentInstall != null)
+            {
+                yield return _currentInstall;
+            }
+
+            foreach (QueuedPackageInstall queuedInstall in _installQueue)
+            {
+                yield return queuedInstall;
+            }
+        }
+
+        private static string SerializePendingInstall(QueuedPackageInstall install)
+        {
+            if (install == null || install.PackageDefinition == null)
+            {
+                return string.Empty;
+            }
+
+            return install.PackageDefinition.PackageId + "|" + (int)install.Channel;
+        }
+
+        private static bool TryLoadSavedOperation(
+            out string operationName,
+            out QueuedPackageInstall[] pendingInstalls)
+        {
+            operationName = SessionState.GetString(PendingOperationNameKey, string.Empty);
+            string queue = SessionState.GetString(PendingQueueKey, string.Empty);
+
+            if (string.IsNullOrWhiteSpace(queue))
+            {
+                pendingInstalls = Array.Empty<QueuedPackageInstall>();
+                return false;
+            }
+
+            List<QueuedPackageInstall> installs = new List<QueuedPackageInstall>();
+
+            foreach (string line in queue.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                string[] parts = line.Split('|');
+
+                if (parts.Length < 2 ||
+                    !PackageRegistry.TryGetPackage(parts[0], out PackageDefinition packageDefinition) ||
+                    !int.TryParse(parts[1], out int channelValue))
+                {
+                    continue;
+                }
+
+                PackageChannel channel = Enum.IsDefined(typeof(PackageChannel), channelValue)
+                    ? (PackageChannel)channelValue
+                    : PackageChannel.Stable;
+                string url = packageDefinition.GetUrl(channel);
+
+                if (string.IsNullOrWhiteSpace(url))
+                {
+                    continue;
+                }
+
+                installs.Add(new QueuedPackageInstall(packageDefinition, channel, url));
+            }
+
+            pendingInstalls = installs.ToArray();
+            return pendingInstalls.Length > 0;
         }
 
         private void NotifyStateChanged()

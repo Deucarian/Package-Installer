@@ -41,6 +41,7 @@ The first version knows about these package entries:
 `Install All` installs the standalone packages and enables all integration define symbols.
 
 Package IDs remain branded as `com.jorishoef.*`. Display names are clean user-facing labels used only by the installer UI.
+Technical details such as package IDs, selected references, installed references, revisions, and raw update messages are available from each row's Advanced foldout.
 
 ## Adding Package Definitions
 
@@ -58,10 +59,21 @@ Each `PackageDefinition` contains:
 - `developmentUrl`: optional development-channel Git URL or UPM identifier. If this is empty, Development falls back to Stable.
 - `description`: the explanatory text shown in the UI.
 - `displayVersion`: optional human-readable version text shown in the UI.
+- `extras`: optional package samples or extras shown after the package is installed.
 - `dependencies`: package IDs that should be installed before an integration is enabled.
 - `scriptingDefineSymbols`: optional symbols added to the selected build target group.
 
 For regular packages, set `stableUrl` and, when available, `developmentUrl` to the UPM identifier or Git URL. For integration entries that only compose other packages, leave the URL fields empty and list the required packages in `dependencies`.
+
+When an installed Git package can be matched to `#main` or `#develop`, the installer infers the visible channel from the installed package reference. If the installed reference does not match a known channel, the row shows a Custom channel until the user selects Stable or Development.
+
+## Samples And Extras
+
+UPM packages can include `Samples~` folders, but Unity does not import those samples automatically. The installer keeps package installation clean and shows a Samples foldout only after an installed package has declared extras.
+
+Sample imports are explicit. The installer first tries Unity's Package Manager sample import API, then falls back to copying from the installed package's `Samples~` folder into `Assets/Samples/<Package Display Name>/<Sample Name>`.
+
+If a sample destination already exists, the installer shows it as already imported and does not overwrite it silently.
 
 ## Update Checks
 
@@ -79,6 +91,8 @@ The installer shows step-based progress for package install, integration install
 
 Progress is counted by package/integration steps because Unity Package Manager does not provide reliable download-byte progress for these Git package operations.
 
+Progress summaries list succeeded, failed, and skipped package steps so multi-package operations do not rely only on console logs.
+
 ## Integrations
 
 Integrations keep packages standalone. The installer does not add compile-time references between packages by itself.
@@ -89,6 +103,8 @@ An integration definition does two things:
 2. Adds the integration's scripting define symbols to the active build target group.
 
 The installer only adds symbols. It never removes user symbols.
+
+The Build Target Group selector in the window controls which build target group receives integration symbols.
 
 Current integration symbols:
 

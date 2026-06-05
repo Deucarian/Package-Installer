@@ -15,7 +15,8 @@ namespace JorisHoef.PackageInstaller.Editor
             IEnumerable<string> scriptingDefineSymbols = null,
             bool isIntegration = false,
             string developmentUrl = null,
-            string displayVersion = null)
+            string displayVersion = null,
+            IEnumerable<PackageExtraDefinition> extras = null)
         {
             if (string.IsNullOrWhiteSpace(displayName))
             {
@@ -36,6 +37,7 @@ namespace JorisHoef.PackageInstaller.Editor
             ScriptingDefineSymbols = ToReadOnlyList(scriptingDefineSymbols);
             IsIntegration = isIntegration;
             DisplayVersion = displayVersion ?? string.Empty;
+            Extras = ToReadOnlyList(extras);
         }
 
         public string DisplayName { get; }
@@ -56,6 +58,8 @@ namespace JorisHoef.PackageInstaller.Editor
 
         public IReadOnlyList<string> ScriptingDefineSymbols { get; }
 
+        public IReadOnlyList<PackageExtraDefinition> Extras { get; }
+
         public bool IsIntegration { get; }
 
         public bool HasPackageReference => !string.IsNullOrWhiteSpace(GetUrl(PackageChannel.Stable));
@@ -66,12 +70,17 @@ namespace JorisHoef.PackageInstaller.Editor
 
         public string GetUrl(PackageChannel channel)
         {
+            if (channel == PackageChannel.Stable)
+            {
+                return StableUrl;
+            }
+
             if (channel == PackageChannel.Development && !string.IsNullOrWhiteSpace(DevelopmentUrl))
             {
                 return DevelopmentUrl;
             }
 
-            return StableUrl;
+            return channel == PackageChannel.Development ? StableUrl : string.Empty;
         }
 
         private static IReadOnlyList<string> ToReadOnlyList(IEnumerable<string> values)
@@ -85,6 +94,18 @@ namespace JorisHoef.PackageInstaller.Editor
                 .Where(value => !string.IsNullOrWhiteSpace(value))
                 .Select(value => value.Trim())
                 .Distinct(StringComparer.Ordinal)
+                .ToArray();
+        }
+
+        private static IReadOnlyList<PackageExtraDefinition> ToReadOnlyList(IEnumerable<PackageExtraDefinition> values)
+        {
+            if (values == null)
+            {
+                return Array.Empty<PackageExtraDefinition>();
+            }
+
+            return values
+                .Where(value => value != null)
                 .ToArray();
         }
     }

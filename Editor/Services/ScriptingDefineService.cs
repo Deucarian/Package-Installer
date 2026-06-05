@@ -13,13 +13,19 @@ namespace JorisHoef.PackageInstaller.Editor
     {
         private const string LogPrefix = "[JorisHoef Package Installer]";
 
+        private BuildTargetGroup _selectedBuildTargetGroup;
+
+        public ScriptingDefineService()
+        {
+            _selectedBuildTargetGroup = GetDefaultBuildTargetGroup();
+        }
+
         public BuildTargetGroup SelectedBuildTargetGroup
         {
-            get
-            {
-                BuildTargetGroup group = BuildPipeline.GetBuildTargetGroup(EditorUserBuildSettings.activeBuildTarget);
-                return group == BuildTargetGroup.Unknown ? EditorUserBuildSettings.selectedBuildTargetGroup : group;
-            }
+            get => _selectedBuildTargetGroup;
+            set => _selectedBuildTargetGroup = value == BuildTargetGroup.Unknown
+                ? GetDefaultBuildTargetGroup()
+                : value;
         }
 
         public string GetSymbols(BuildTargetGroup buildTargetGroup)
@@ -137,6 +143,12 @@ namespace JorisHoef.PackageInstaller.Editor
 
                 yield return symbol.Trim();
             }
+        }
+
+        private static BuildTargetGroup GetDefaultBuildTargetGroup()
+        {
+            BuildTargetGroup group = BuildPipeline.GetBuildTargetGroup(EditorUserBuildSettings.activeBuildTarget);
+            return group == BuildTargetGroup.Unknown ? EditorUserBuildSettings.selectedBuildTargetGroup : group;
         }
     }
 }
