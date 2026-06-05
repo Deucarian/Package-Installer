@@ -302,13 +302,17 @@ namespace JorisHoef.PackageInstaller.Editor
         private void DrawChannelPopup(PackageDefinition packageDefinition)
         {
             PackageChannel selectedChannel = GetSelectedChannel(packageDefinition);
-            PackageChannel nextChannel = (PackageChannel)EditorGUILayout.EnumPopup(
-                selectedChannel,
-                GUILayout.Width(115f));
 
-            if (nextChannel != selectedChannel)
+            using (new EditorGUI.DisabledScope(!packageDefinition.HasDevelopmentUrl))
             {
-                _selectedChannels[packageDefinition.PackageId] = nextChannel;
+                PackageChannel nextChannel = (PackageChannel)EditorGUILayout.EnumPopup(
+                    selectedChannel,
+                    GUILayout.Width(115f));
+
+                if (nextChannel != selectedChannel)
+                {
+                    _selectedChannels[packageDefinition.PackageId] = nextChannel;
+                }
             }
         }
 

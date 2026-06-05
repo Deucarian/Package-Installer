@@ -62,6 +62,8 @@ namespace JorisHoef.PackageInstaller.Editor
 
         public bool HasDisplayVersion => !string.IsNullOrWhiteSpace(DisplayVersion);
 
+        public bool HasDevelopmentUrl => !string.IsNullOrWhiteSpace(DevelopmentUrl);
+
         public string GetUrl(PackageChannel channel)
         {
             if (channel == PackageChannel.Development && !string.IsNullOrWhiteSpace(DevelopmentUrl))

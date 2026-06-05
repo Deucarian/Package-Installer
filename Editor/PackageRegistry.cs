@@ -21,6 +21,7 @@ namespace JorisHoef.PackageInstaller.Editor
                 CoreStatePackageId,
                 "https://github.com/JorisHoef/Core-State.git#main",
                 "Small, standalone repository and selection services for Unity projects.",
+                developmentUrl: "https://github.com/JorisHoef/Core-State.git#develop",
                 displayVersion: "0.1.0"),
 
             new PackageDefinition(
