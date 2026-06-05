@@ -149,8 +149,10 @@ namespace JorisHoef.PackageInstaller.Editor
             _packageDependencyInstaller = new PackageDependencyInstaller(
                 _packageInstallService,
                 _packageDetectionService);
+            PackageRegistryProvider.EnsureLoaded();
             EnsureValidSelection();
 
+            PackageRegistryProvider.RegistryChanged += HandleRegistryChanged;
             _packageInstallService.StateChanged += Repaint;
             _packageInstallService.QueueCompleted += HandlePackageOperationCompleted;
             _packageDetectionService.StateChanged += Repaint;
@@ -190,6 +192,8 @@ namespace JorisHoef.PackageInstaller.Editor
             {
                 _packageSampleImportService.StateChanged -= Repaint;
             }
+
+            PackageRegistryProvider.RegistryChanged -= HandleRegistryChanged;
         }
 
         private void OnGUI()
@@ -415,7 +419,16 @@ namespace JorisHoef.PackageInstaller.Editor
             using (new EditorGUILayout.HorizontalScope())
             {
                 EditorGUILayout.LabelField("Registry", _mutedMiniLabelStyle, GUILayout.Width(54f));
-                DrawStatusBadge(PackageRegistry.All.Count + " packages", VisualStatusKind.Info, GUILayout.Width(104f));
+                DrawStatusBadge(PackageRegistryProvider.All.Count + " packages", VisualStatusKind.Info, GUILayout.Width(104f));
+
+                if (PackageRegistryProvider.IsRemoteRefreshing)
+                {
+                    DrawStatusBadge("Refreshing", VisualStatusKind.Busy, GUILayout.Width(92f));
+                }
+                else
+                {
+                    EditorGUILayout.LabelField(PackageRegistryProvider.StatusMessage, _mutedMiniLabelStyle, GUILayout.MinWidth(170f));
+                }
             }
         }
 
@@ -438,7 +451,7 @@ namespace JorisHoef.PackageInstaller.Editor
 
         private void CheckForUpdates()
         {
-            _packageUpdateCheckService.CheckForUpdates(PackageRegistry.All, GetSelectedChannel);
+            _packageUpdateCheckService.CheckForUpdates(PackageRegistryProvider.All, GetSelectedChannel);
         }
 
         private void UpdateAllPackages()
@@ -473,15 +486,47 @@ namespace JorisHoef.PackageInstaller.Editor
 
         private void DrawRegistrySidebarSections()
         {
-            DrawSidebarSection("Packages", PackageRegistry.CorePackages, SelectionKind.Package, "Core");
-            GUILayout.Space(8f);
-            DrawSidebarSection(null, PackageRegistry.UiPackages, SelectionKind.Package, "UI");
-            GUILayout.Space(10f);
-            DrawHorizontalSeparator();
-            GUILayout.Space(8f);
-            DrawSidebarSection("Bridge Packages", PackageRegistry.BridgePackages, SelectionKind.Bridge, null);
+            bool drewPackageHeader = false;
+            bool drewBridgeHeader = false;
 
-            if (PackageRegistry.All.Count == 0)
+            foreach (string category in PackageRegistryProvider.Categories)
+            {
+                IReadOnlyList<PackageDefinition> packageDefinitions =
+                    PackageRegistryProvider.GetPackagesByCategory(category);
+
+                if (packageDefinitions.Count == 0)
+                {
+                    continue;
+                }
+
+                bool bridgeCategory = string.Equals(category, "Bridge", StringComparison.OrdinalIgnoreCase);
+
+                if (bridgeCategory)
+                {
+                    if (!drewBridgeHeader && drewPackageHeader)
+                    {
+                        GUILayout.Space(10f);
+                        DrawHorizontalSeparator();
+                        GUILayout.Space(8f);
+                    }
+
+                    DrawSidebarSection("Bridge Packages", packageDefinitions, SelectionKind.Bridge, category);
+                    drewBridgeHeader = true;
+                }
+                else
+                {
+                    DrawSidebarSection(
+                        drewPackageHeader ? null : "Packages",
+                        packageDefinitions,
+                        SelectionKind.Package,
+                        category);
+                    drewPackageHeader = true;
+                }
+
+                GUILayout.Space(8f);
+            }
+
+            if (!drewPackageHeader && !drewBridgeHeader)
             {
                 DrawInlineHelp("No package entries are available in the active registry.", VisualStatusKind.Failed);
             }
@@ -737,7 +782,7 @@ namespace JorisHoef.PackageInstaller.Editor
 
             DrawStatusBadge(status.Label, status.Kind, GUILayout.Width(150f));
             GUILayout.Space(6f);
-            DrawKeyValueRow("Type", GetPackageTypeLabel(packageDefinition.PackageType));
+            DrawKeyValueRow("Type", packageDefinition.Category);
 
             if (_packageDetectionService.TryGetInstalledPackage(
                     packageDefinition.PackageId,
@@ -819,7 +864,7 @@ namespace JorisHoef.PackageInstaller.Editor
 
         private void DrawRequirementRow(string dependencyId)
         {
-            if (!PackageRegistry.TryGetPackage(dependencyId, out PackageDefinition dependencyDefinition))
+            if (!PackageRegistryProvider.TryGetPackage(dependencyId, out PackageDefinition dependencyDefinition))
             {
                 DrawKeyValueRow(dependencyId, "Not registered");
                 return;
@@ -1085,7 +1130,7 @@ namespace JorisHoef.PackageInstaller.Editor
             PackageUpdateStatus updateStatus = _packageUpdateCheckService.GetStatus(packageDefinition, selectedChannel);
 
             DrawSelectableValue("Package ID", packageDefinition.PackageId);
-            DrawSelectableValue("Type", GetPackageTypeLabel(packageDefinition.PackageType));
+            DrawSelectableValue("Type", packageDefinition.Category);
             DrawSelectableValue("Git URL", packageDefinition.GetUrl(selectedChannel));
             DrawSelectableValue("Stable URL", packageDefinition.StableUrl);
             DrawSelectableValue("Development URL", packageDefinition.DevelopmentUrl);
@@ -1662,22 +1707,9 @@ namespace JorisHoef.PackageInstaller.Editor
 
         private static string GetDependencyDisplayName(string packageId)
         {
-            return PackageRegistry.TryGetPackage(packageId, out PackageDefinition packageDefinition)
+            return PackageRegistryProvider.TryGetPackage(packageId, out PackageDefinition packageDefinition)
                 ? packageDefinition.DisplayName
                 : packageId;
-        }
-
-        private static string GetPackageTypeLabel(PackageType packageType)
-        {
-            switch (packageType)
-            {
-                case PackageType.UI:
-                    return "UI";
-                case PackageType.Bridge:
-                    return "Bridge";
-                default:
-                    return "Core";
-            }
         }
 
         private void DrawChannelPopup(PackageDefinition packageDefinition)
@@ -1817,7 +1849,7 @@ namespace JorisHoef.PackageInstaller.Editor
 
         private void SynchronizeSelectedChannelsFromInstalledPackages()
         {
-            foreach (PackageDefinition packageDefinition in PackageRegistry.All)
+            foreach (PackageDefinition packageDefinition in PackageRegistryProvider.All)
             {
                 if (!_packageDetectionService.TryGetInstalledPackageChannel(
                         packageDefinition,
@@ -1843,11 +1875,11 @@ namespace JorisHoef.PackageInstaller.Editor
                 return;
             }
 
-            PackageDefinition defaultSelection = PackageRegistry.All.FirstOrDefault(package => !package.IsBridge);
+            PackageDefinition defaultSelection = PackageRegistryProvider.All.FirstOrDefault(package => !package.IsBridge);
 
             if (defaultSelection == null)
             {
-                defaultSelection = PackageRegistry.BridgePackages.FirstOrDefault();
+                defaultSelection = PackageRegistryProvider.BridgePackages.FirstOrDefault();
                 _selectionKind = SelectionKind.Bridge;
             }
             else
@@ -1885,14 +1917,14 @@ namespace JorisHoef.PackageInstaller.Editor
                 return null;
             }
 
-            return PackageRegistry.All.FirstOrDefault(packageDefinition =>
+            return PackageRegistryProvider.All.FirstOrDefault(packageDefinition =>
                 string.Equals(packageDefinition.PackageId, _selectedPackageId, StringComparison.OrdinalIgnoreCase));
         }
 
         private PackageDefinition[] GetPackagesWithUpdates()
         {
             return _packageUpdateCheckService
-                .GetPackagesWithUpdates(PackageRegistry.All, GetSelectedChannel)
+                .GetPackagesWithUpdates(PackageRegistryProvider.All, GetSelectedChannel)
                 .ToArray();
         }
 
@@ -1982,6 +2014,13 @@ namespace JorisHoef.PackageInstaller.Editor
             }
         }
 
+        private void HandleRegistryChanged()
+        {
+            _packageUpdateCheckService?.InvalidateAll();
+            EnsureValidSelection();
+            Repaint();
+        }
+
         private void HandlePackageOperationCompleted()
         {
             if (_packageUpdateCheckService.HasStatuses)
@@ -2002,7 +2041,7 @@ namespace JorisHoef.PackageInstaller.Editor
             }
 
             _checkUpdatesAfterDetectionRefresh = false;
-            _packageUpdateCheckService.CheckForUpdates(PackageRegistry.All, GetSelectedChannel);
+            _packageUpdateCheckService.CheckForUpdates(PackageRegistryProvider.All, GetSelectedChannel);
         }
     }
 }

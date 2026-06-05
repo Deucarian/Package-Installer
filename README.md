@@ -6,7 +6,7 @@ Open it from:
 
 `Tools > JorisHoef > Package Installer`
 
-The installer can install standalone packages, bridge packages, and package samples without making this package a runtime dependency of any other package.
+The installer can install standalone packages, bridge packages, and explicitly declared package samples without making this package a runtime dependency of any other package.
 
 ## Installation
 
@@ -27,43 +27,54 @@ You can also use Unity's Package Manager window:
 3. Enter the installer Git URL.
 4. Open `Tools > JorisHoef > Package Installer`.
 
-## Included Packages
+## Package Registry
 
-The installer knows about these package entries:
+Package entries are loaded from a registry instead of being hardcoded in the installer window.
+
+The installer loads the bundled `PackageRegistry.json` first so it works offline, then tries to refresh from:
+
+`https://raw.githubusercontent.com/JorisHoef/Package-Registry/main/packages.json`
+
+If the remote registry succeeds and validates, the window uses it. If it fails, the bundled registry stays active and the header shows that the remote registry failed.
+
+The current registry includes these package entries:
 
 - Core: Core State, API Helper, Session Helper
 - UI: Generic UI Items
-- Bridge: GenericUIItems CoreState Bridge, SessionHelper APIHelper Bridge
+- Bridge: Generic UI Items + Core State Bridge, Session Helper + API Helper Bridge
 
 Bridge packages are first-class UPM packages with their own package IDs:
 
+- `com.jorishoef.core-state`
+- `com.jorishoef.api-helper`
+- `com.jorishoef.session-helper`
+- `com.jorishoef.generic-ui-items`
 - `com.jorishoef.generic-ui-items.core-state-bridge`
 - `com.jorishoef.session-helper.api-helper-bridge`
 
 `Install All` installs all missing registered packages in dependency order. Installing one bridge package automatically installs its missing dependencies first, then installs the bridge.
 
-Package IDs remain branded as `com.jorishoef.*`. Display names are clean user-facing labels used only by the installer UI.
+Package IDs remain branded as `com.jorishoef.*`. Display names are supplied by the registry and used by the installer UI.
 Technical details such as package IDs, selected references, installed references, revisions, and raw update messages are available from each row's Advanced foldout.
 
 ## Adding Package Definitions
 
-Package entries are data-driven through `PackageRegistry`.
+Package entries are data-driven through registry JSON.
 
-To add or change packages, edit:
+To add or change packages, update the remote registry repository and keep the bundled fallback in sync:
 
-`Editor/PackageRegistry.cs`
+- Remote: `https://github.com/JorisHoef/Package-Registry`
+- Bundled fallback: `PackageRegistry.json`
 
-Each `PackageDefinition` contains:
+The registry schema uses `schemaVersion` 1 and contains:
 
+- `id`: the Unity package name, such as `com.jorishoef.api-helper`.
 - `displayName`: the name shown in the installer window.
-- `packageId`: the Unity package name, such as `com.jorishoef.api-helper`.
+- `category`: grouping shown in the sidebar. Core, UI, and Bridge are ordered first; unknown categories are shown alphabetically after them.
+- `description`: explanatory text shown in the detail pane.
 - `stableUrl`: the stable Git URL or UPM identifier passed to `UnityEditor.PackageManager.Client.Add`.
-- `developmentUrl`: optional development-channel Git URL or UPM identifier. If this is empty, Development falls back to Stable.
-- `description`: the explanatory text shown in the UI.
-- `packageType`: Core, UI, or Bridge. The installer uses this for grouping and status display.
-- `displayVersion`: optional human-readable version text shown in the UI.
-- `extras`: optional package samples or extras shown after the package is installed.
-- `dependencies`: package IDs that should be installed before this package is installed.
+- `developmentUrl`: optional development-channel Git URL or UPM identifier. If this is empty, the Development channel is disabled for that package.
+- `dependencies`: package IDs that should be installed before this package is installed. Bridge packages are just packages in the `Bridge` category with dependencies.
 
 Set `stableUrl` and, when available, `developmentUrl` to the UPM identifier or Git URL. Bridge packages should also list their dependency package IDs in `dependencies`.
 
@@ -71,7 +82,9 @@ When an installed Git package can be matched to `#main` or `#develop`, the insta
 
 ## Samples And Extras
 
-UPM packages can include `Samples~` folders, but Unity does not import those samples automatically. The installer keeps package installation clean and shows a Samples foldout only after an installed package has declared extras.
+UPM packages can include `Samples~` folders, but Unity does not import those samples automatically. The installer keeps package installation clean and only imports samples when an explicit sample extra is available and clicked.
+
+The current registry schema does not declare sample extras. Packages without declared extras show no fake samples.
 
 Sample imports are explicit. The installer first tries Unity's Package Manager sample import API, then falls back to copying from the installed package's `Samples~` folder into `Assets/Samples/<Package Display Name>/<Sample Name>`.
 

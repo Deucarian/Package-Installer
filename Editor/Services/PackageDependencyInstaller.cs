@@ -46,7 +46,7 @@ namespace JorisHoef.PackageInstaller.Editor
 
         public void InstallAll(Func<PackageDefinition, PackageChannel> channelSelector)
         {
-            PackageDefinition[] installPlan = CreateInstallPlan(PackageRegistry.All);
+            PackageDefinition[] installPlan = CreateInstallPlan(PackageRegistryProvider.All);
 
             if (installPlan.Length == 0)
             {
@@ -95,7 +95,7 @@ namespace JorisHoef.PackageInstaller.Editor
             return packageDefinition.Dependencies
                 .Where(packageId => !_packageDetectionService.IsInstalled(packageId))
                 .Select(packageId =>
-                    PackageRegistry.TryGetPackage(packageId, out PackageDefinition dependency)
+                    PackageRegistryProvider.TryGetPackage(packageId, out PackageDefinition dependency)
                         ? dependency
                         : null)
                 .Where(dependency => dependency != null)
@@ -109,7 +109,7 @@ namespace JorisHoef.PackageInstaller.Editor
                 return Array.Empty<PackageDefinition>();
             }
 
-            return PackageRegistry.All
+            return PackageRegistryProvider.All
                 .Where(candidate => candidate != null &&
                                     !string.Equals(
                                         candidate.PackageId,
@@ -139,7 +139,7 @@ namespace JorisHoef.PackageInstaller.Editor
 
             visitedPackageIds.Add(packageDefinition.PackageId);
 
-            foreach (PackageDefinition dependency in PackageRegistry.GetInstallableDependencies(packageDefinition))
+            foreach (PackageDefinition dependency in PackageRegistryProvider.GetInstallableDependencies(packageDefinition))
             {
                 AddPackageToPlan(dependency, installPlan, visitedPackageIds, plannedPackageIds);
             }

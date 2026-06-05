@@ -671,7 +671,7 @@ namespace JorisHoef.PackageInstaller.Editor
                 string[] parts = line.Split('|');
 
                 if (parts.Length < 2 ||
-                    !PackageRegistry.TryGetPackage(parts[0], out PackageDefinition packageDefinition) ||
+                    !PackageRegistryProvider.TryGetPackage(parts[0], out PackageDefinition packageDefinition) ||
                     !int.TryParse(parts[1], out int channelValue))
                 {
                     continue;
