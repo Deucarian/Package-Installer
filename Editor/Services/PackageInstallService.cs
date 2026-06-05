@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEditor;
 using UnityEditor.PackageManager;
 using UnityEditor.PackageManager.Requests;
@@ -13,15 +14,52 @@ namespace JorisHoef.PackageInstaller.Editor
         Installing
     }
 
+    internal enum PackageInstallProgressItemState
+    {
+        Pending,
+        Active,
+        Completed,
+        Failed
+    }
+
+    internal sealed class PackageInstallProgressItem
+    {
+        public PackageInstallProgressItem(string packageId, string displayName)
+        {
+            PackageId = packageId ?? string.Empty;
+            DisplayName = displayName ?? string.Empty;
+            State = PackageInstallProgressItemState.Pending;
+            Message = string.Empty;
+        }
+
+        public string PackageId { get; }
+
+        public string DisplayName { get; }
+
+        public PackageInstallProgressItemState State { get; internal set; }
+
+        public string Message { get; internal set; }
+    }
+
     internal sealed class PackageInstallService : IDisposable
     {
         private const string LogPrefix = "[JorisHoef Package Installer]";
 
         private readonly Queue<QueuedPackageInstall> _installQueue = new Queue<QueuedPackageInstall>();
         private readonly HashSet<string> _queuedOrInstallingPackageIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private readonly List<PackageInstallProgressItem> _progressItems = new List<PackageInstallProgressItem>();
+        private readonly Dictionary<string, PackageInstallProgressItem> _progressItemsByPackageId =
+            new Dictionary<string, PackageInstallProgressItem>(StringComparer.OrdinalIgnoreCase);
 
         private AddRequest _currentRequest;
         private QueuedPackageInstall _currentInstall;
+        private string _currentOperationName = string.Empty;
+        private string _lastStatusMessage = string.Empty;
+        private string _lastErrorMessage = string.Empty;
+        private int _completedSteps;
+        private int _successfulSteps;
+        private int _failedSteps;
+        private int _totalSteps;
 
         public event Action StateChanged;
 
@@ -39,6 +77,26 @@ namespace JorisHoef.PackageInstaller.Editor
 
         public bool IsBusy => State == PackageInstallRequestState.Installing || _installQueue.Count > 0;
 
+        public bool HasProgress => _totalSteps > 0 || !string.IsNullOrWhiteSpace(_currentOperationName);
+
+        public string CurrentOperationName => _currentOperationName;
+
+        public string CurrentPackageName => CurrentPackage != null ? CurrentPackage.DisplayName : string.Empty;
+
+        public int CompletedSteps => _completedSteps;
+
+        public int TotalSteps => _totalSteps;
+
+        public int SuccessfulSteps => _successfulSteps;
+
+        public int FailedSteps => _failedSteps;
+
+        public string LastStatusMessage => _lastStatusMessage;
+
+        public string LastErrorMessage => _lastErrorMessage;
+
+        public IReadOnlyList<PackageInstallProgressItem> ProgressItems => _progressItems;
+
         public bool Install(PackageDefinition packageDefinition)
         {
             return Install(packageDefinition, PackageChannel.Stable);
@@ -46,32 +104,65 @@ namespace JorisHoef.PackageInstaller.Editor
 
         public bool Install(PackageDefinition packageDefinition, PackageChannel channel)
         {
+            string operationName = packageDefinition != null
+                ? "Install " + packageDefinition.DisplayName
+                : "Install Package";
+
+            return Install(packageDefinition, channel, operationName);
+        }
+
+        public bool Install(PackageDefinition packageDefinition, PackageChannel channel, string operationName)
+        {
             if (packageDefinition == null)
             {
                 Debug.LogError(LogPrefix + " Cannot install a null package definition.");
                 return false;
             }
 
+            if (IsBusy)
+            {
+                _lastErrorMessage = "Cannot start " + packageDefinition.DisplayName + " because another package operation is already running.";
+                Debug.LogWarning(LogPrefix + " " + _lastErrorMessage);
+                NotifyStateChanged();
+                return false;
+            }
+
+            BeginOperation(
+                string.IsNullOrWhiteSpace(operationName) ? "Install " + packageDefinition.DisplayName : operationName,
+                new[] { packageDefinition });
+
+            bool queued = QueueInstall(packageDefinition, channel);
+            StartNextRequestIfNeeded();
+            CompleteOperationIfIdle();
+            NotifyStateChanged();
+
+            return queued;
+        }
+
+        private bool QueueInstall(PackageDefinition packageDefinition, PackageChannel channel)
+        {
             string packageUrl = packageDefinition.GetUrl(channel);
 
             if (string.IsNullOrWhiteSpace(packageUrl))
             {
-                Debug.LogWarning(LogPrefix + " " + packageDefinition.DisplayName + " has no package URL to install.");
+                string message = packageDefinition.DisplayName + " has no package URL to install.";
+                MarkProgressItem(packageDefinition, PackageInstallProgressItemState.Failed, message);
+                Debug.LogWarning(LogPrefix + " " + message);
                 return false;
             }
 
             if (_queuedOrInstallingPackageIds.Contains(packageDefinition.PackageId))
             {
-                Debug.Log(LogPrefix + " " + packageDefinition.DisplayName + " is already queued or installing.");
+                string message = packageDefinition.DisplayName + " is already queued or installing.";
+                MarkProgressItem(packageDefinition, PackageInstallProgressItemState.Failed, message);
+                Debug.Log(LogPrefix + " " + message);
                 return false;
             }
 
             _installQueue.Enqueue(new QueuedPackageInstall(packageDefinition, channel, packageUrl));
             _queuedOrInstallingPackageIds.Add(packageDefinition.PackageId);
+            _lastStatusMessage = "Queued " + packageDefinition.DisplayName + ".";
             Debug.Log(LogPrefix + " Queued " + packageDefinition.DisplayName + " from " + packageUrl + " (" + channel + ").");
-
-            StartNextRequestIfNeeded();
-            NotifyStateChanged();
 
             return true;
         }
@@ -88,16 +179,49 @@ namespace JorisHoef.PackageInstaller.Editor
 
         public void InstallMany(IEnumerable<PackageDefinition> packageDefinitions, Func<PackageDefinition, PackageChannel> channelSelector)
         {
+            InstallMany(packageDefinitions, channelSelector, "Install Packages");
+        }
+
+        public void InstallMany(
+            IEnumerable<PackageDefinition> packageDefinitions,
+            Func<PackageDefinition, PackageChannel> channelSelector,
+            string operationName)
+        {
             if (packageDefinitions == null)
             {
                 return;
             }
 
-            foreach (PackageDefinition packageDefinition in packageDefinitions)
+            PackageDefinition[] packages = packageDefinitions
+                .Where(packageDefinition => packageDefinition != null)
+                .ToArray();
+
+            if (packages.Length == 0)
+            {
+                return;
+            }
+
+            if (IsBusy)
+            {
+                _lastErrorMessage = "Cannot start " + operationName + " because another package operation is already running.";
+                Debug.LogWarning(LogPrefix + " " + _lastErrorMessage);
+                NotifyStateChanged();
+                return;
+            }
+
+            BeginOperation(
+                string.IsNullOrWhiteSpace(operationName) ? "Install Packages" : operationName,
+                packages);
+
+            foreach (PackageDefinition packageDefinition in packages)
             {
                 PackageChannel channel = channelSelector != null ? channelSelector(packageDefinition) : PackageChannel.Stable;
-                Install(packageDefinition, channel);
+                QueueInstall(packageDefinition, channel);
             }
+
+            StartNextRequestIfNeeded();
+            CompleteOperationIfIdle();
+            NotifyStateChanged();
         }
 
         public bool IsQueuedOrInstalling(string packageId)
@@ -119,6 +243,11 @@ namespace JorisHoef.PackageInstaller.Editor
 
             _currentInstall = _installQueue.Dequeue();
             State = PackageInstallRequestState.Installing;
+            MarkProgressItem(
+                _currentInstall.PackageDefinition,
+                PackageInstallProgressItemState.Active,
+                "Installing " + _currentInstall.PackageDefinition.DisplayName + "...");
+            _lastStatusMessage = "Installing " + _currentInstall.PackageDefinition.DisplayName + "...";
 
             try
             {
@@ -169,6 +298,10 @@ namespace JorisHoef.PackageInstaller.Editor
             if (completedPackage != null)
             {
                 _queuedOrInstallingPackageIds.Remove(completedPackage.PackageId);
+                MarkProgressItem(
+                    completedPackage,
+                    success ? PackageInstallProgressItemState.Completed : PackageInstallProgressItemState.Failed,
+                    message);
             }
 
             _currentRequest = null;
@@ -181,10 +314,114 @@ namespace JorisHoef.PackageInstaller.Editor
             if (_currentRequest == null && _installQueue.Count == 0)
             {
                 EditorApplication.update -= Update;
+                SetOperationCompleteSummary();
                 QueueCompleted?.Invoke();
             }
 
             NotifyStateChanged();
+        }
+
+        private void BeginOperation(string operationName, IEnumerable<PackageDefinition> packages)
+        {
+            _currentOperationName = operationName ?? string.Empty;
+            _lastStatusMessage = "Queued " + _currentOperationName + ".";
+            _lastErrorMessage = string.Empty;
+            _completedSteps = 0;
+            _successfulSteps = 0;
+            _failedSteps = 0;
+            _progressItems.Clear();
+            _progressItemsByPackageId.Clear();
+
+            foreach (PackageDefinition packageDefinition in packages)
+            {
+                if (packageDefinition == null)
+                {
+                    continue;
+                }
+
+                PackageInstallProgressItem item = new PackageInstallProgressItem(
+                    packageDefinition.PackageId,
+                    packageDefinition.DisplayName);
+
+                _progressItems.Add(item);
+                _progressItemsByPackageId[packageDefinition.PackageId] = item;
+            }
+
+            _totalSteps = _progressItems.Count;
+        }
+
+        private void MarkProgressItem(
+            PackageDefinition packageDefinition,
+            PackageInstallProgressItemState state,
+            string message)
+        {
+            if (packageDefinition == null)
+            {
+                return;
+            }
+
+            if (!_progressItemsByPackageId.TryGetValue(packageDefinition.PackageId, out PackageInstallProgressItem item))
+            {
+                item = new PackageInstallProgressItem(packageDefinition.PackageId, packageDefinition.DisplayName);
+                _progressItems.Add(item);
+                _progressItemsByPackageId[packageDefinition.PackageId] = item;
+                _totalSteps = _progressItems.Count;
+            }
+
+            PackageInstallProgressItemState previousState = item.State;
+            item.State = state;
+            item.Message = message ?? string.Empty;
+
+            if ((state == PackageInstallProgressItemState.Completed ||
+                 state == PackageInstallProgressItemState.Failed) &&
+                previousState != PackageInstallProgressItemState.Completed &&
+                previousState != PackageInstallProgressItemState.Failed)
+            {
+                _completedSteps++;
+
+                if (state == PackageInstallProgressItemState.Completed)
+                {
+                    _successfulSteps++;
+                }
+                else
+                {
+                    _failedSteps++;
+                    _lastErrorMessage = message ?? string.Empty;
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(message))
+            {
+                _lastStatusMessage = message;
+            }
+        }
+
+        private void CompleteOperationIfIdle()
+        {
+            if (_currentRequest != null || _installQueue.Count > 0)
+            {
+                return;
+            }
+
+            SetOperationCompleteSummary();
+        }
+
+        private void SetOperationCompleteSummary()
+        {
+            if (!HasProgress)
+            {
+                return;
+            }
+
+            if (_failedSteps > 0)
+            {
+                _lastStatusMessage = _currentOperationName + " finished with " +
+                                     _successfulSteps + " succeeded and " +
+                                     _failedSteps + " failed.";
+                return;
+            }
+
+            _lastStatusMessage = _currentOperationName + " completed successfully.";
         }
 
         private void NotifyStateChanged()

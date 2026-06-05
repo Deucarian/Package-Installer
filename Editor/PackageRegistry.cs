@@ -17,7 +17,7 @@ namespace JorisHoef.PackageInstaller.Editor
         private static readonly PackageDefinition[] StandalonePackageDefinitions =
         {
             new PackageDefinition(
-                "CoreState",
+                "Core State",
                 CoreStatePackageId,
                 "https://github.com/JorisHoef/Core-State.git#main",
                 "Small, standalone repository and selection services for Unity projects.",
@@ -25,7 +25,7 @@ namespace JorisHoef.PackageInstaller.Editor
                 displayVersion: "0.1.0"),
 
             new PackageDefinition(
-                "GenericUIItems",
+                "Generic UI Items",
                 GenericUIItemsPackageId,
                 "https://github.com/JorisHoef/GenericUIItems.git#develop",
                 "Lightweight UGUI collection-to-item presentation helpers.",
@@ -33,7 +33,7 @@ namespace JorisHoef.PackageInstaller.Editor
                 displayVersion: "1.0.0"),
 
             new PackageDefinition(
-                "APIHelper",
+                "API Helper",
                 APIHelperPackageId,
                 "https://github.com/JorisHoef/API-Helper.git#main",
                 "Reusable API client package for JSON, text, bytes, textures, and endpoint workflows.",
@@ -41,7 +41,7 @@ namespace JorisHoef.PackageInstaller.Editor
                 displayVersion: "1.0.0"),
 
             new PackageDefinition(
-                "SessionHelper",
+                "Session Helper",
                 SessionHelperPackageId,
                 "https://github.com/JorisHoef/Session-Helper.git#master",
                 "Standalone authenticated-session lifecycle helpers with storage, restore, refresh, and change notifications.",
@@ -52,19 +52,19 @@ namespace JorisHoef.PackageInstaller.Editor
         private static readonly PackageDefinition[] IntegrationPackageDefinitions =
         {
             new PackageDefinition(
-                "GenericUIItems + CoreState integration",
+                "Generic UI Items + Core State integration",
                 "com.jorishoef.integration.generic-ui-items-core-state",
                 string.Empty,
-                "Installs GenericUIItems and CoreState, then enables their optional integration define symbol.",
+                "Installs Generic UI Items and Core State, then enables their optional integration define symbol.",
                 new[] { GenericUIItemsPackageId, CoreStatePackageId },
                 new[] { GenericUIItemsCoreStateSymbol },
                 true),
 
             new PackageDefinition(
-                "SessionHelper + APIHelper integration",
+                "Session Helper + API Helper integration",
                 "com.jorishoef.integration.session-helper-api-helper",
                 string.Empty,
-                "Installs SessionHelper and APIHelper, then enables the SessionHelper APIHelper adapter symbol.",
+                "Installs Session Helper and API Helper, then enables the Session Helper API Helper adapter symbol.",
                 new[] { SessionHelperPackageId, APIHelperPackageId },
                 new[] { SessionHelperAPIHelperSymbol },
                 true)

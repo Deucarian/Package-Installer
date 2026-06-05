@@ -31,14 +31,16 @@ You can also use Unity's Package Manager window:
 
 The first version knows about these package entries:
 
-- CoreState
-- GenericUIItems
-- APIHelper
-- SessionHelper
-- GenericUIItems + CoreState integration
-- SessionHelper + APIHelper integration
+- Core State
+- Generic UI Items
+- API Helper
+- Session Helper
+- Generic UI Items + Core State integration
+- Session Helper + API Helper integration
 
 `Install All` installs the standalone packages and enables all integration define symbols.
+
+Package IDs remain branded as `com.jorishoef.*`. Display names are clean user-facing labels used only by the installer UI.
 
 ## Adding Package Definitions
 
@@ -71,6 +73,12 @@ Unknown revisions, missing Git, network failures, local/file packages, and non-G
 
 TODO: installer self-update is intentionally out of scope for this version.
 
+## Progress Display
+
+The installer shows step-based progress for package install, integration install, install-all, single update, and update-all operations.
+
+Progress is counted by package/integration steps because Unity Package Manager does not provide reliable download-byte progress for these Git package operations.
+
 ## Integrations
 
 Integrations keep packages standalone. The installer does not add compile-time references between packages by itself.
@@ -95,7 +103,7 @@ This package exists only to help developers install and compose packages inside 
 
 Keeping the installer editor-only ensures:
 
-- CoreState, GenericUIItems, APIHelper, and SessionHelper remain standalone.
+- Core State, Generic UI Items, API Helper, and Session Helper remain standalone.
 - Projects do not ship installer code in builds.
 - No package gains a runtime dependency on this installer.
 
