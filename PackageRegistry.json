@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-06-05",
+  "updatedAt": "2026-06-06",
   "packages": [
     {
       "id": "com.jorishoef.core-state",
@@ -39,6 +39,15 @@
       "dependencies": []
     },
     {
+      "id": "com.jorishoef.object-selection",
+      "displayName": "JorisHoef Object Selection",
+      "category": "World",
+      "description": "Keyed world-object selection, raycast input adapters, hover tracking, and highlight hooks for Unity.",
+      "stableUrl": "https://github.com/JorisHoef/Object-Selection.git#main",
+      "developmentUrl": "",
+      "dependencies": []
+    },
+    {
       "id": "com.jorishoef.session-helper.api-helper-bridge",
       "displayName": "Session Helper + API Helper Bridge",
       "category": "Bridge",
@@ -60,6 +69,33 @@
       "dependencies": [
         "com.jorishoef.generic-ui-items",
         "com.jorishoef.core-state"
+      ]
+    },
+    {
+      "id": "com.jorishoef.objectselection-corestate-bridge",
+      "displayName": "ObjectSelection + CoreState Bridge",
+      "category": "Bridge",
+      "description": "Integration package synchronizing Object Selection and Core State selections through shared keys.",
+      "stableUrl": "https://github.com/JorisHoef/Object-Selection-Bridge.git#main",
+      "developmentUrl": "",
+      "dependencies": [
+        "com.jorishoef.object-selection",
+        "com.jorishoef.core-state"
+      ]
+    },
+    {
+      "id": "com.jorishoef.selection-suite",
+      "displayName": "Selection Suite",
+      "category": "Suites",
+      "description": "Curated bundle that installs Core State, Generic UI Items, Object Selection, and both Core State selection bridges.",
+      "stableUrl": "https://github.com/JorisHoef/Selection-Suite.git#main",
+      "developmentUrl": "",
+      "dependencies": [
+        "com.jorishoef.core-state",
+        "com.jorishoef.generic-ui-items",
+        "com.jorishoef.object-selection",
+        "com.jorishoef.generic-ui-items.core-state-bridge",
+        "com.jorishoef.objectselection-corestate-bridge"
       ]
     }
   ]

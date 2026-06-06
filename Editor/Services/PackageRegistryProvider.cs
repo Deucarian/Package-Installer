@@ -245,12 +245,22 @@ namespace JorisHoef.PackageInstaller.Editor
                 return 1;
             }
 
-            if (string.Equals(category, "Bridge", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(category, "World", StringComparison.OrdinalIgnoreCase))
             {
                 return 2;
             }
 
-            return 3;
+            if (string.Equals(category, "Bridge", StringComparison.OrdinalIgnoreCase))
+            {
+                return 3;
+            }
+
+            if (string.Equals(category, "Suites", StringComparison.OrdinalIgnoreCase))
+            {
+                return 4;
+            }
+
+            return 5;
         }
     }
 }

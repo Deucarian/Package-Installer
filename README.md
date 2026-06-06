@@ -55,16 +55,21 @@ The current registry includes these package entries:
 
 - Core: Core State, API Helper, Session Helper
 - UI: Generic UI Items
-- Bridge: Generic UI Items + Core State Bridge, Session Helper + API Helper Bridge
+- World: Object Selection
+- Bridge: Generic UI Items + Core State Bridge, ObjectSelection + CoreState Bridge, Session Helper + API Helper Bridge
+- Suites: Selection Suite
 
-Bridge packages are first-class UPM packages with their own package IDs:
+Registered packages are first-class UPM packages with their own package IDs:
 
 - `com.jorishoef.core-state`
 - `com.jorishoef.api-helper`
 - `com.jorishoef.session-helper`
 - `com.jorishoef.generic-ui-items`
+- `com.jorishoef.object-selection`
 - `com.jorishoef.generic-ui-items.core-state-bridge`
+- `com.jorishoef.objectselection-corestate-bridge`
 - `com.jorishoef.session-helper.api-helper-bridge`
+- `com.jorishoef.selection-suite`
 
 `Install All` installs all missing registered packages in dependency order. Installing one bridge package automatically installs its missing dependencies first, then installs the bridge.
 
@@ -84,7 +89,7 @@ The registry schema uses `schemaVersion` 1 and contains:
 
 - `id`: the Unity package name, such as `com.jorishoef.api-helper`.
 - `displayName`: the name shown in the installer window.
-- `category`: grouping shown in the sidebar. Core, UI, and Bridge are ordered first; unknown categories are shown alphabetically after them.
+- `category`: grouping shown in the sidebar. Core, UI, World, Bridge, and Suites are ordered first; unknown categories are shown alphabetically after them.
 - `description`: explanatory text shown in the detail pane.
 - `stableUrl`: the stable Git URL or UPM identifier passed to `UnityEditor.PackageManager.Client.Add`.
 - `developmentUrl`: optional development-channel Git URL or UPM identifier. If this is empty, the Development channel is disabled for that package.
@@ -129,6 +134,7 @@ Bridge packages keep the core packages standalone while providing explicit compo
 Current bridge package dependencies:
 
 - GenericUIItems CoreState Bridge depends on Generic UI Items and Core State.
+- ObjectSelection CoreState Bridge depends on Object Selection and Core State.
 - SessionHelper APIHelper Bridge depends on Session Helper and API Helper.
 
 Installing a bridge only requires one click. The installer computes the dependency-first install plan from `PackageDefinition.Dependencies` and sends that ordered package list to Unity Package Manager.
