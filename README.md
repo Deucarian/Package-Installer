@@ -51,6 +51,8 @@ The installer loads the bundled `PackageRegistry.json` first so it works offline
 
 If the remote registry succeeds and validates, the window uses it. If it fails, the bundled registry stays active and the header shows that the remote registry failed.
 
+Remote registry validation also checks each package entry against the target package's `package.json` name so installed-package detection uses Unity's exact package IDs.
+
 The current registry includes these package entries:
 
 - Core: Core State, API Helper, Session Helper
@@ -61,7 +63,7 @@ The current registry includes these package entries:
 
 Registered packages are first-class UPM packages with their own package IDs:
 
-- `com.jorishoef.core-state`
+- `com.jorishoef.core.state`
 - `com.jorishoef.api-helper`
 - `com.jorishoef.session-helper`
 - `com.jorishoef.generic-ui-items`
@@ -87,7 +89,7 @@ To add or change packages, update the remote registry repository and keep the bu
 
 The registry schema uses `schemaVersion` 1 and contains:
 
-- `id`: the Unity package name, such as `com.jorishoef.api-helper`.
+- `id`: the Unity package name, such as `com.jorishoef.api-helper`. This must exactly match the target package's `package.json` `name` value.
 - `displayName`: the name shown in the installer window.
 - `category`: grouping shown in the sidebar. Core, UI, World, Bridge, and Suites are ordered first; unknown categories are shown alphabetically after them.
 - `description`: explanatory text shown in the detail pane.
@@ -101,11 +103,11 @@ When an installed Git package can be matched to `#main` or `#develop`, the insta
 
 ## Samples and Extras
 
-UPM packages can include `Samples~` folders, but Unity does not import those samples automatically. The installer keeps package installation clean and only imports samples when an explicit sample extra is available and clicked.
+UPM packages can include `Samples~` folders, but Unity does not import those samples automatically. The installer keeps package installation clean and only imports samples when a sample's `Import` button is clicked.
 
-The current registry schema does not declare sample extras. Packages without declared extras show no fake samples.
+For installed packages, the installer resolves the package through Unity Package Manager metadata, reads its `package.json`, and displays entries from the `samples` array under the package detail view. Each row shows the sample `displayName`, `description`, import status, and an explicit import action.
 
-Sample imports are explicit. The installer first tries Unity's Package Manager sample import API, then falls back to copying from the installed package's `Samples~` folder into `Assets/Samples/<Package Display Name>/<Sample Name>`.
+Sample imports are explicit. The installer first tries Unity's Package Manager sample import API, then falls back to a bounded copy from the installed package's `Samples~` folder into `Assets/Samples/<Package Display Name>/<Version>/<Sample Name>`.
 
 If a sample destination already exists, the installer shows it as already imported and does not overwrite it silently.
 
@@ -176,7 +178,7 @@ Keeping the installer editor-only ensures:
 
 ## Versioning
 
-Current package version: `0.1.0`.
+Current package version: `1.0.0`.
 
 Branch strategy:
 

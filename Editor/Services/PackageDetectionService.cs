@@ -62,6 +62,24 @@ namespace JorisHoef.PackageInstaller.Editor
             return !string.IsNullOrWhiteSpace(packageId) && _installedPackages.ContainsKey(packageId);
         }
 
+        internal void ReplaceInstalledPackageNamesForTests(IEnumerable<string> packageIds)
+        {
+            _installedPackages.Clear();
+
+            if (packageIds == null)
+            {
+                return;
+            }
+
+            foreach (string packageId in packageIds)
+            {
+                if (!string.IsNullOrWhiteSpace(packageId))
+                {
+                    _installedPackages[packageId.Trim()] = null;
+                }
+            }
+        }
+
         public bool TryGetInstalledPackage(string packageId, out PackageManagerPackageInfo packageInfo)
         {
             if (string.IsNullOrWhiteSpace(packageId))

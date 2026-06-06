@@ -14,13 +14,16 @@ namespace JorisHoef.PackageInstaller.Editor
         public const string BundledRegistryFileName = "PackageRegistry.json";
 
         private readonly Func<string, Task<string>> _remoteFetcher;
+        private readonly Func<string, Task<string>> _packageManifestFetcher;
         private readonly string _remoteRegistryUrl;
 
         public PackageRegistryLoader(
             Func<string, Task<string>> remoteFetcher = null,
-            string remoteRegistryUrl = RemoteRegistryUrl)
+            string remoteRegistryUrl = RemoteRegistryUrl,
+            Func<string, Task<string>> packageManifestFetcher = null)
         {
             _remoteFetcher = remoteFetcher ?? FetchRemoteJsonAsync;
+            _packageManifestFetcher = packageManifestFetcher ?? FetchRemoteJsonAsync;
             _remoteRegistryUrl = string.IsNullOrWhiteSpace(remoteRegistryUrl)
                 ? RemoteRegistryUrl
                 : remoteRegistryUrl;
@@ -43,11 +46,26 @@ namespace JorisHoef.PackageInstaller.Editor
                 string json = await _remoteFetcher(_remoteRegistryUrl);
                 PackageRegistryLoadResult result = LoadFromJson(json, PackageRegistrySource.Remote);
 
-                return result.IsValid
-                    ? result
-                    : PackageRegistryLoadResult.RemoteFailureUsingBundled(
+                if (!result.IsValid)
+                {
+                    return PackageRegistryLoadResult.RemoteFailureUsingBundled(
                         bundledRegistry,
                         result.ErrorMessage);
+                }
+
+                string packageNameValidationMessage =
+                    await PackageRegistryPackageNameValidator.ValidateRemotePackageNamesAsync(
+                        result.Registry,
+                        _packageManifestFetcher);
+
+                if (!string.IsNullOrWhiteSpace(packageNameValidationMessage))
+                {
+                    return PackageRegistryLoadResult.RemoteFailureUsingBundled(
+                        bundledRegistry,
+                        packageNameValidationMessage);
+                }
+
+                return result;
             }
             catch (Exception exception)
             {

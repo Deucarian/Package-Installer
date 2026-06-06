@@ -69,6 +69,7 @@ namespace JorisHoef.PackageInstaller.Editor
         private PackageDetectionService _packageDetectionService;
         private PackageUpdateCheckService _packageUpdateCheckService;
         private PackageSampleImportService _packageSampleImportService;
+        private PackageSampleDiscoveryService _packageSampleDiscoveryService;
         private PackageDependencyInstaller _packageDependencyInstaller;
         private readonly Dictionary<string, PackageChannel> _selectedChannels =
             new Dictionary<string, PackageChannel>();
@@ -146,6 +147,7 @@ namespace JorisHoef.PackageInstaller.Editor
             _packageDetectionService = new PackageDetectionService();
             _packageUpdateCheckService = new PackageUpdateCheckService(_packageDetectionService);
             _packageSampleImportService = new PackageSampleImportService();
+            _packageSampleDiscoveryService = new PackageSampleDiscoveryService();
             _packageDependencyInstaller = new PackageDependencyInstaller(
                 _packageInstallService,
                 _packageDetectionService);
@@ -1014,24 +1016,40 @@ namespace JorisHoef.PackageInstaller.Editor
         {
             DrawPanel("Extras / Samples", () =>
             {
-                if (packageDefinition.Extras.Count == 0)
+                bool installed = _packageDetectionService.TryGetInstalledPackage(
+                    packageDefinition.PackageId,
+                    out PackageManagerPackageInfo packageInfo);
+                IReadOnlyList<PackageExtraDefinition> packageSamples = installed
+                    ? _packageSampleDiscoveryService.GetSamples(packageInfo)
+                    : Array.Empty<PackageExtraDefinition>();
+                PackageExtraDefinition[] sampleDefinitions = MergeSampleDefinitions(
+                    packageDefinition.Extras,
+                    packageSamples);
+
+                if (!installed)
                 {
-                    EditorGUILayout.LabelField("No extras available.", _mutedMiniLabelStyle);
+                    if (packageDefinition.Extras.Count == 0)
+                    {
+                        EditorGUILayout.LabelField("Install this package to discover package samples.", _mutedMiniLabelStyle);
+                    }
+                    else
+                    {
+                        DrawInlineHelp("Install this package before importing samples.", VisualStatusKind.Info);
+                    }
+
                     return;
                 }
 
-                if (!_packageDetectionService.TryGetInstalledPackage(
-                        packageDefinition.PackageId,
-                        out PackageManagerPackageInfo packageInfo))
+                if (sampleDefinitions.Length == 0)
                 {
-                    DrawInlineHelp("Install this package before importing samples.", VisualStatusKind.Info);
+                    EditorGUILayout.LabelField("No package samples declared in package.json.", _mutedMiniLabelStyle);
                     return;
                 }
 
                 EditorGUILayout.LabelField("Import optional samples and examples for this package.", _mutedMiniLabelStyle);
                 GUILayout.Space(6f);
 
-                foreach (PackageExtraDefinition extraDefinition in packageDefinition.Extras)
+                foreach (PackageExtraDefinition extraDefinition in sampleDefinitions)
                 {
                     DrawPackageSampleRow(packageDefinition, extraDefinition, packageInfo);
                 }
@@ -1043,6 +1061,10 @@ namespace JorisHoef.PackageInstaller.Editor
             PackageExtraDefinition extraDefinition,
             PackageManagerPackageInfo packageInfo)
         {
+            PackageSampleImportStatus status = _packageSampleImportService.GetStatus(
+                packageDefinition,
+                extraDefinition,
+                packageInfo);
             Rect rect = BeginSurface(
                 _sampleRowStyle,
                 _sampleRowBackgroundColor,
@@ -1065,27 +1087,22 @@ namespace JorisHoef.PackageInstaller.Editor
                         EditorGUILayout.LabelField(extraDefinition.Description, _mutedMiniLabelStyle);
                     }
 
-                    PackageSampleImportStatus status = _packageSampleImportService.GetStatus(
-                        packageDefinition,
-                        extraDefinition,
-                        packageInfo);
                     string statusText = GetSampleImportStatusText(status);
 
                     if (!string.IsNullOrWhiteSpace(statusText))
                     {
-                        VisualStatusKind statusKind = status.State == PackageSampleImportState.Failed
-                            ? VisualStatusKind.Failed
-                            : status.State == PackageSampleImportState.Importing
-                                ? VisualStatusKind.Busy
-                                : VisualStatusKind.Info;
-                        DrawColoredLabel(statusText, _mutedMiniLabelStyle, GetStatusColor(statusKind));
+                        DrawColoredLabel(
+                            statusText,
+                            _mutedMiniLabelStyle,
+                            GetStatusColor(GetSampleImportStatusKind(status)));
                     }
                 }
 
-                bool alreadyImported = _packageSampleImportService.IsSampleImported(
-                    packageDefinition,
-                    extraDefinition,
-                    packageInfo);
+                bool alreadyImported = IsImportedSampleStatus(status) ||
+                                       _packageSampleImportService.IsSampleImported(
+                                           packageDefinition,
+                                           extraDefinition,
+                                           packageInfo);
 
                 using (new EditorGUI.DisabledScope(alreadyImported || IsAnyOperationBusy()))
                 {
@@ -1102,6 +1119,57 @@ namespace JorisHoef.PackageInstaller.Editor
             }
 
             EditorGUILayout.EndVertical();
+        }
+
+        private static PackageExtraDefinition[] MergeSampleDefinitions(
+            IReadOnlyList<PackageExtraDefinition> registrySamples,
+            IReadOnlyList<PackageExtraDefinition> packageSamples)
+        {
+            List<PackageExtraDefinition> samples = new List<PackageExtraDefinition>();
+            HashSet<string> seenSamples = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            AddSampleDefinitions(registrySamples, samples, seenSamples);
+            AddSampleDefinitions(packageSamples, samples, seenSamples);
+
+            return samples.ToArray();
+        }
+
+        private static void AddSampleDefinitions(
+            IReadOnlyList<PackageExtraDefinition> sourceSamples,
+            ICollection<PackageExtraDefinition> destinationSamples,
+            ISet<string> seenSamples)
+        {
+            if (sourceSamples == null)
+            {
+                return;
+            }
+
+            foreach (PackageExtraDefinition sample in sourceSamples)
+            {
+                if (sample == null || !seenSamples.Add(GetSampleDefinitionKey(sample)))
+                {
+                    continue;
+                }
+
+                destinationSamples.Add(sample);
+            }
+        }
+
+        private static string GetSampleDefinitionKey(PackageExtraDefinition sample)
+        {
+            if (sample == null)
+            {
+                return string.Empty;
+            }
+
+            string samplePath = (sample.SamplePath ?? string.Empty).Replace('\\', '/').Trim().TrimEnd('/');
+
+            if (!string.IsNullOrWhiteSpace(samplePath))
+            {
+                return "path:" + samplePath;
+            }
+
+            return "name:" + (sample.SampleName ?? string.Empty).Trim() + "|" + (sample.DisplayName ?? string.Empty).Trim();
         }
 
         private void DrawAdvancedPanel(PackageDefinition packageDefinition)
@@ -2010,8 +2078,36 @@ namespace JorisHoef.PackageInstaller.Editor
                 case PackageSampleImportState.Failed:
                     return string.IsNullOrWhiteSpace(status.Message) ? "Import failed." : status.Message;
                 default:
-                    return string.Empty;
+                    return "Not imported.";
             }
+        }
+
+        private static VisualStatusKind GetSampleImportStatusKind(PackageSampleImportStatus status)
+        {
+            if (status == null)
+            {
+                return VisualStatusKind.NotInstalled;
+            }
+
+            switch (status.State)
+            {
+                case PackageSampleImportState.Importing:
+                    return VisualStatusKind.Busy;
+                case PackageSampleImportState.Imported:
+                case PackageSampleImportState.AlreadyImported:
+                    return VisualStatusKind.Installed;
+                case PackageSampleImportState.Failed:
+                    return VisualStatusKind.Failed;
+                default:
+                    return VisualStatusKind.NotInstalled;
+            }
+        }
+
+        private static bool IsImportedSampleStatus(PackageSampleImportStatus status)
+        {
+            return status != null &&
+                   (status.State == PackageSampleImportState.Imported ||
+                    status.State == PackageSampleImportState.AlreadyImported);
         }
 
         private void HandleRegistryChanged()
@@ -2033,6 +2129,7 @@ namespace JorisHoef.PackageInstaller.Editor
 
         private void HandlePackageDetectionRefreshCompleted()
         {
+            _packageSampleDiscoveryService?.ClearCache();
             SynchronizeSelectedChannelsFromInstalledPackages();
 
             if (!_checkUpdatesAfterDetectionRefresh)

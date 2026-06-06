@@ -90,7 +90,7 @@ namespace JorisHoef.PackageInstaller.Editor
                 return true;
             }
 
-            return DestinationExists(GetDestinationPath(packageDefinition, extraDefinition));
+            return DestinationExists(GetDestinationPath(packageDefinition, extraDefinition, packageInfo));
         }
 
         public void ImportSample(
@@ -156,17 +156,29 @@ namespace JorisHoef.PackageInstaller.Editor
 
         public string GetDestinationPath(PackageDefinition packageDefinition, PackageExtraDefinition extraDefinition)
         {
+            return GetDestinationPath(packageDefinition, extraDefinition, null);
+        }
+
+        public string GetDestinationPath(
+            PackageDefinition packageDefinition,
+            PackageExtraDefinition extraDefinition,
+            PackageManagerPackageInfo packageInfo)
+        {
             if (extraDefinition != null && !string.IsNullOrWhiteSpace(extraDefinition.DestinationPath))
             {
                 return NormalizeAssetPath(extraDefinition.DestinationPath);
             }
 
-            string packageFolder = SanitizeAssetPathSegment(packageDefinition != null
-                ? packageDefinition.DisplayName
-                : "Package");
+            string packageFolder = SanitizeAssetPathSegment(GetPackageDisplayName(packageDefinition, packageInfo), "Package");
             string sampleFolder = SanitizeAssetPathSegment(extraDefinition != null
                 ? extraDefinition.DisplayName
-                : "Sample");
+                : "Sample", "Sample");
+
+            if (packageInfo != null)
+            {
+                string versionFolder = SanitizeAssetPathSegment(GetPackageVersion(packageDefinition, packageInfo), "Unknown Version");
+                return "Assets/Samples/" + packageFolder + "/" + versionFolder + "/" + sampleFolder;
+            }
 
             return "Assets/Samples/" + packageFolder + "/" + sampleFolder;
         }
@@ -247,11 +259,29 @@ namespace JorisHoef.PackageInstaller.Editor
                 return false;
             }
 
-            string sourcePath = GetSourcePath(packageInfo, extraDefinition);
-            string destinationAssetPath = GetDestinationPath(packageDefinition, extraDefinition);
-            string destinationPath = GetAbsoluteProjectPath(destinationAssetPath);
+            if (!TryGetSourcePath(packageInfo, extraDefinition, out string sourcePath, out message))
+            {
+                return false;
+            }
 
-            if (string.IsNullOrWhiteSpace(sourcePath) || !Directory.Exists(sourcePath))
+            string destinationAssetPath = GetDestinationPath(packageDefinition, extraDefinition, packageInfo);
+
+            if (!IsSafeAssetPath(destinationAssetPath))
+            {
+                message = "Sample destination must be inside the project's Assets folder.";
+                return false;
+            }
+
+            string destinationPath = GetAbsoluteProjectPath(destinationAssetPath);
+            string assetsRootPath = Path.Combine(GetProjectRootPath(), "Assets");
+
+            if (!IsPathInsideDirectory(destinationPath, assetsRootPath))
+            {
+                message = "Sample destination resolves outside the project's Assets folder.";
+                return false;
+            }
+
+            if (!Directory.Exists(sourcePath))
             {
                 message = "Sample folder was not found: " + sourcePath;
                 return false;
@@ -316,7 +346,11 @@ namespace JorisHoef.PackageInstaller.Editor
                 return false;
             }
 
-            object samples = findByPackageMethod.Invoke(null, new object[] { packageDefinition.PackageId, packageInfo.version });
+            string packageName = !string.IsNullOrWhiteSpace(packageInfo.name)
+                ? packageInfo.name
+                : packageDefinition.PackageId;
+
+            object samples = findByPackageMethod.Invoke(null, new object[] { packageName, packageInfo.version });
 
             if (!(samples is IEnumerable enumerableSamples))
             {
@@ -420,25 +454,55 @@ namespace JorisHoef.PackageInstaller.Editor
             return property.GetValue(target, null) as string ?? string.Empty;
         }
 
-        private static string GetSourcePath(
+        private static bool TryGetSourcePath(
             PackageManagerPackageInfo packageInfo,
-            PackageExtraDefinition extraDefinition)
+            PackageExtraDefinition extraDefinition,
+            out string sourcePath,
+            out string message)
         {
+            sourcePath = string.Empty;
+            message = string.Empty;
+
             if (packageInfo == null || extraDefinition == null)
             {
-                return string.Empty;
+                message = "Installed package information is unavailable.";
+                return false;
             }
 
-            string packagePath = packageInfo.resolvedPath ?? string.Empty;
+            string normalizedSamplePath = NormalizeAssetPath(extraDefinition.SamplePath);
 
-            if (!Path.IsPathRooted(packagePath))
+            if (string.IsNullOrWhiteSpace(normalizedSamplePath))
             {
-                packagePath = GetAbsoluteProjectPath(packagePath);
+                message = "Sample path is missing from package.json.";
+                return false;
             }
 
-            return Path.GetFullPath(Path.Combine(
+            if (!IsSamplesFolderPath(normalizedSamplePath))
+            {
+                message = "Sample path must be inside the package's Samples~ folder.";
+                return false;
+            }
+
+            string packagePath = GetPackageRootPath(packageInfo.resolvedPath);
+
+            if (string.IsNullOrWhiteSpace(packagePath))
+            {
+                message = "Installed package path is unavailable.";
+                return false;
+            }
+
+            sourcePath = Path.GetFullPath(Path.Combine(
                 packagePath,
-                NormalizeAssetPath(extraDefinition.SamplePath)));
+                normalizedSamplePath.Replace('/', Path.DirectorySeparatorChar)));
+
+            if (!IsPathInsideDirectory(sourcePath, packagePath))
+            {
+                message = "Sample path resolves outside the installed package.";
+                sourcePath = string.Empty;
+                return false;
+            }
+
+            return true;
         }
 
         private static bool DestinationExists(string destinationAssetPath)
@@ -450,18 +514,27 @@ namespace JorisHoef.PackageInstaller.Editor
                 return false;
             }
 
+            if (!IsSafeAssetPath(normalizedPath))
+            {
+                return false;
+            }
+
+            string absolutePath = GetAbsoluteProjectPath(normalizedPath);
+            string assetsRootPath = Path.Combine(GetProjectRootPath(), "Assets");
+
+            if (!IsPathInsideDirectory(absolutePath, assetsRootPath))
+            {
+                return false;
+            }
+
             return AssetDatabase.IsValidFolder(normalizedPath) ||
-                   Directory.Exists(GetAbsoluteProjectPath(normalizedPath)) ||
-                   File.Exists(GetAbsoluteProjectPath(normalizedPath));
+                   Directory.Exists(absolutePath) ||
+                   File.Exists(absolutePath);
         }
 
         private static string GetAbsoluteProjectPath(string assetPath)
         {
-            string projectRoot = Directory.GetParent(Application.dataPath) != null
-                ? Directory.GetParent(Application.dataPath).FullName
-                : Application.dataPath;
-
-            return Path.GetFullPath(Path.Combine(projectRoot, NormalizeAssetPath(assetPath)));
+            return Path.GetFullPath(Path.Combine(GetProjectRootPath(), NormalizeAssetPath(assetPath)));
         }
 
         private static void CopyDirectory(string sourceDirectory, string destinationDirectory)
@@ -483,6 +556,11 @@ namespace JorisHoef.PackageInstaller.Editor
 
         private static string SanitizeAssetPathSegment(string segment)
         {
+            return SanitizeAssetPathSegment(segment, "Sample");
+        }
+
+        private static string SanitizeAssetPathSegment(string segment, string fallback)
+        {
             string sanitized = segment ?? string.Empty;
 
             foreach (char invalidCharacter in Path.GetInvalidFileNameChars())
@@ -490,12 +568,105 @@ namespace JorisHoef.PackageInstaller.Editor
                 sanitized = sanitized.Replace(invalidCharacter.ToString(), string.Empty);
             }
 
-            return string.IsNullOrWhiteSpace(sanitized) ? "Sample" : sanitized.Trim();
+            return string.IsNullOrWhiteSpace(sanitized) ? fallback : sanitized.Trim();
         }
 
         private static string NormalizeAssetPath(string assetPath)
         {
             return (assetPath ?? string.Empty).Replace('\\', '/').Trim().TrimEnd('/');
+        }
+
+        private static string GetPackageDisplayName(
+            PackageDefinition packageDefinition,
+            PackageManagerPackageInfo packageInfo)
+        {
+            if (packageInfo != null && !string.IsNullOrWhiteSpace(packageInfo.displayName))
+            {
+                return packageInfo.displayName;
+            }
+
+            return packageDefinition != null ? packageDefinition.DisplayName : "Package";
+        }
+
+        private static string GetPackageVersion(
+            PackageDefinition packageDefinition,
+            PackageManagerPackageInfo packageInfo)
+        {
+            if (packageInfo != null && !string.IsNullOrWhiteSpace(packageInfo.version))
+            {
+                return packageInfo.version;
+            }
+
+            return packageDefinition != null ? packageDefinition.DisplayVersion : string.Empty;
+        }
+
+        private static string GetPackageRootPath(string resolvedPath)
+        {
+            string packagePath = resolvedPath ?? string.Empty;
+
+            if (string.IsNullOrWhiteSpace(packagePath))
+            {
+                return string.Empty;
+            }
+
+            if (!Path.IsPathRooted(packagePath))
+            {
+                packagePath = Path.Combine(GetProjectRootPath(), packagePath);
+            }
+
+            return Path.GetFullPath(packagePath);
+        }
+
+        private static string GetProjectRootPath()
+        {
+            DirectoryInfo projectRoot = Directory.GetParent(Application.dataPath);
+            return projectRoot != null ? projectRoot.FullName : Application.dataPath;
+        }
+
+        private static bool IsSafeAssetPath(string assetPath)
+        {
+            string normalizedPath = NormalizeAssetPath(assetPath);
+
+            if (string.IsNullOrWhiteSpace(normalizedPath))
+            {
+                return false;
+            }
+
+            return string.Equals(normalizedPath, "Assets", StringComparison.OrdinalIgnoreCase) ||
+                   normalizedPath.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsSamplesFolderPath(string samplePath)
+        {
+            string normalizedPath = NormalizeAssetPath(samplePath);
+
+            return string.Equals(normalizedPath, "Samples~", StringComparison.OrdinalIgnoreCase) ||
+                   normalizedPath.StartsWith("Samples~/", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsPathInsideDirectory(string path, string directory)
+        {
+            if (string.IsNullOrWhiteSpace(path) || string.IsNullOrWhiteSpace(directory))
+            {
+                return false;
+            }
+
+            string fullPath = AppendDirectorySeparator(Path.GetFullPath(path));
+            string fullDirectory = AppendDirectorySeparator(Path.GetFullPath(directory));
+
+            return fullPath.StartsWith(fullDirectory, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string AppendDirectorySeparator(string path)
+        {
+            if (string.IsNullOrEmpty(path) ||
+                path.EndsWith(Path.DirectorySeparatorChar.ToString(), StringComparison.Ordinal) ||
+                path.EndsWith(Path.AltDirectorySeparatorChar.ToString(), StringComparison.Ordinal))
+            {
+                return path;
+            }
+
+            return path + Path.DirectorySeparatorChar;
         }
 
         private static string GetStatusKey(PackageDefinition packageDefinition, PackageExtraDefinition extraDefinition)

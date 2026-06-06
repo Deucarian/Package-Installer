@@ -3,7 +3,7 @@
   "updatedAt": "2026-06-06",
   "packages": [
     {
-      "id": "com.jorishoef.core-state",
+      "id": "com.jorishoef.core.state",
       "displayName": "JorisHoef Core State",
       "category": "Core",
       "description": "Generic repository and selection state services for Unity.",
@@ -68,7 +68,7 @@
       "developmentUrl": "https://github.com/JorisHoef/GenericUIItems-CoreState-Bridge.git#develop",
       "dependencies": [
         "com.jorishoef.generic-ui-items",
-        "com.jorishoef.core-state"
+        "com.jorishoef.core.state"
       ]
     },
     {
@@ -80,7 +80,7 @@
       "developmentUrl": "",
       "dependencies": [
         "com.jorishoef.object-selection",
-        "com.jorishoef.core-state"
+        "com.jorishoef.core.state"
       ]
     },
     {
@@ -91,7 +91,7 @@
       "stableUrl": "https://github.com/JorisHoef/Selection-Suite.git#main",
       "developmentUrl": "",
       "dependencies": [
-        "com.jorishoef.core-state",
+        "com.jorishoef.core.state",
         "com.jorishoef.generic-ui-items",
         "com.jorishoef.object-selection",
         "com.jorishoef.generic-ui-items.core-state-bridge",
