@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-06-06",
+  "updatedAt": "2026-06-08",
   "packages": [
     {
       "id": "com.jorishoef.core.state",
@@ -18,6 +18,15 @@
       "description": "Reusable API client helpers for Unity.",
       "stableUrl": "https://github.com/JorisHoef/API-Helper.git#main",
       "developmentUrl": "https://github.com/JorisHoef/API-Helper.git#develop",
+      "dependencies": []
+    },
+    {
+      "id": "com.jorishoef.object-loading",
+      "displayName": "JorisHoef Object Loading",
+      "category": "Core",
+      "description": "Reusable runtime loading pipeline for resolved object and scene content sources.",
+      "stableUrl": "https://github.com/JorisHoef/Object-Loading.git#main",
+      "developmentUrl": "https://github.com/JorisHoef/Object-Loading.git#develop",
       "dependencies": []
     },
     {
@@ -56,6 +65,18 @@
       "developmentUrl": "https://github.com/JorisHoef/SessionHelper-APIHelper-Bridge.git#develop",
       "dependencies": [
         "com.jorishoef.session-helper",
+        "com.jorishoef.api-helper"
+      ]
+    },
+    {
+      "id": "com.jorishoef.object-loading.api-helper-bridge",
+      "displayName": "JorisHoef Object Loading API Helper Bridge",
+      "category": "Bridge",
+      "description": "Optional integration package that lets Object Loading downloads go through API Helper.",
+      "stableUrl": "https://github.com/JorisHoef/Object-Loading-APIHelper-Bridge.git#main",
+      "developmentUrl": "https://github.com/JorisHoef/Object-Loading-APIHelper-Bridge.git#develop",
+      "dependencies": [
+        "com.jorishoef.object-loading",
         "com.jorishoef.api-helper"
       ]
     },

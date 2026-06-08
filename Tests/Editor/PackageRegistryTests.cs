@@ -229,6 +229,34 @@ namespace JorisHoef.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void BundledRegistryIncludesObjectLoadingAndApiHelperBridge()
+        {
+            string registryJson = File.ReadAllText(GetBundledRegistryPath());
+            PackageRegistryLoadResult result = new PackageRegistryLoader()
+                .LoadFromJson(registryJson, PackageRegistrySource.Bundled);
+
+            Assert.IsTrue(result.IsValid, result.ErrorMessage);
+
+            PackageRegistryEntry objectLoading = result.Registry.packages
+                .Single(package => package.id == "com.jorishoef.object-loading");
+            Assert.AreEqual("JorisHoef Object Loading", objectLoading.displayName);
+            Assert.AreEqual("Core", objectLoading.category);
+            Assert.IsEmpty(objectLoading.dependencies);
+
+            PackageRegistryEntry bridge = result.Registry.packages
+                .Single(package => package.id == "com.jorishoef.object-loading.api-helper-bridge");
+            Assert.AreEqual("JorisHoef Object Loading API Helper Bridge", bridge.displayName);
+            Assert.AreEqual("Bridge", bridge.category);
+            CollectionAssert.AreEqual(
+                new[]
+                {
+                    "com.jorishoef.object-loading",
+                    "com.jorishoef.api-helper"
+                },
+                bridge.dependencies);
+        }
+
+        [Test]
         public void CoreStateInstalledDetectionUsesRealPackageId()
         {
             PackageDefinition coreState = PackageRegistryProvider

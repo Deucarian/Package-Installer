@@ -55,20 +55,22 @@ Remote registry validation also checks each package entry against the target pac
 
 The current registry includes these package entries:
 
-- Core: Core State, API Helper, Session Helper
+- Core: Core State, API Helper, Object Loading, Session Helper
 - UI: Generic UI Items
 - World: Object Selection
-- Bridge: Generic UI Items + Core State Bridge, ObjectSelection + CoreState Bridge, Session Helper + API Helper Bridge
+- Bridge: Generic UI Items + Core State Bridge, Object Loading API Helper Bridge, ObjectSelection + CoreState Bridge, Session Helper + API Helper Bridge
 - Suites: Selection Suite
 
 Registered packages are first-class UPM packages with their own package IDs:
 
 - `com.jorishoef.core.state`
 - `com.jorishoef.api-helper`
+- `com.jorishoef.object-loading`
 - `com.jorishoef.session-helper`
 - `com.jorishoef.generic-ui-items`
 - `com.jorishoef.object-selection`
 - `com.jorishoef.generic-ui-items.core-state-bridge`
+- `com.jorishoef.object-loading.api-helper-bridge`
 - `com.jorishoef.objectselection-corestate-bridge`
 - `com.jorishoef.session-helper.api-helper-bridge`
 - `com.jorishoef.selection-suite`
@@ -136,6 +138,7 @@ Bridge packages keep the core packages standalone while providing explicit compo
 Current bridge package dependencies:
 
 - GenericUIItems CoreState Bridge depends on Generic UI Items and Core State.
+- Object Loading API Helper Bridge depends on Object Loading and API Helper.
 - ObjectSelection CoreState Bridge depends on Object Selection and Core State.
 - SessionHelper APIHelper Bridge depends on Session Helper and API Helper.
 
@@ -172,7 +175,7 @@ This package exists only to help developers install and compose packages inside 
 
 Keeping the installer editor-only ensures:
 
-- Core State, Generic UI Items, API Helper, and Session Helper remain standalone.
+- Core State, Generic UI Items, API Helper, Object Loading, and Session Helper remain standalone.
 - Projects do not ship installer code in builds.
 - No package gains a runtime dependency on this installer.
 
