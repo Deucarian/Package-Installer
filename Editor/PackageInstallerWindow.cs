@@ -168,9 +168,17 @@ namespace Deucarian.PackageInstaller.Editor
             _packageUpdateCheckService.StateChanged += Repaint;
             _packageSampleImportService.StateChanged += Repaint;
 
+            bool checkUpdatesAfterDetectionRefresh =
+                PackageUpdateCheckPreferences.ShouldCheckOnWindowOpen(DateTime.UtcNow);
+
             if (!_packageInstallService.ResumeSavedOperation())
             {
+                _checkUpdatesAfterDetectionRefresh = checkUpdatesAfterDetectionRefresh;
                 _packageDetectionService.Refresh();
+            }
+            else if (checkUpdatesAfterDetectionRefresh)
+            {
+                _checkUpdatesAfterDetectionRefresh = true;
             }
         }
 
@@ -365,7 +373,7 @@ namespace Deucarian.PackageInstaller.Editor
                 _headerStyle,
                 _headerBackgroundColor,
                 _panelBorderColor,
-                GUILayout.MinHeight(compact ? 96f : 76f),
+                GUILayout.MinHeight(compact ? 148f : 112f),
                 GUILayout.ExpandWidth(true));
 
             using (new EditorGUILayout.HorizontalScope())
@@ -385,6 +393,7 @@ namespace Deucarian.PackageInstaller.Editor
                     if (compact)
                     {
                         DrawRegistrySummary();
+                        DrawUpdateSummary(true);
 
                         using (new EditorGUILayout.HorizontalScope())
                         {
@@ -414,6 +423,8 @@ namespace Deucarian.PackageInstaller.Editor
                             DrawHeaderButton("Update All", 92f, packagesWithUpdates.Length == 0 || IsAnyOperationBusy(), UpdateAllPackages);
                             DrawHeaderButton("Install All", 86f, IsAnyOperationBusy(), InstallAllPackages);
                         }
+
+                        DrawUpdateSummary(false);
                     }
                 }
             }
@@ -617,6 +628,117 @@ namespace Deucarian.PackageInstaller.Editor
                     : "No package entries are available in the active registry.";
                 DrawInlineHelp(message, VisualStatusKind.Failed);
             }
+        }
+
+        private void DrawUpdateSummary(bool compact)
+        {
+            PackageDefinition[] packagesWithUpdates = GetPackagesWithUpdates();
+            int updateCount = packagesWithUpdates.Length;
+            bool checking = _packageUpdateCheckService.IsChecking;
+            VisualStatusKind updateKind = checking
+                ? VisualStatusKind.Busy
+                : updateCount > 0
+                    ? VisualStatusKind.UpdateAvailable
+                    : VisualStatusKind.Installed;
+
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                DrawStatusBadge(
+                    checking ? "Checking updates" : "Updates Available: " + updateCount,
+                    updateKind,
+                    GUILayout.Width(compact ? 132f : 146f));
+
+                EditorGUILayout.LabelField(
+                    new GUIContent(
+                        "Last Checked: " + GetLastUpdateCheckLabel(),
+                        GetLastUpdateCheckTooltip()),
+                    _mutedMiniLabelStyle,
+                    GUILayout.MinWidth(compact ? 120f : 170f));
+            }
+
+            if (!string.IsNullOrWhiteSpace(_packageUpdateCheckService.LastFailureMessage))
+            {
+                EditorGUILayout.LabelField(
+                    new GUIContent(
+                        _packageUpdateCheckService.LastFailureMessage,
+                        _packageUpdateCheckService.LastFailureMessage),
+                    _mutedMiniLabelStyle);
+            }
+
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                bool checkOnOpen = PackageUpdateCheckPreferences.CheckOnWindowOpen;
+                bool nextCheckOnOpen = EditorGUILayout.ToggleLeft(
+                    new GUIContent(
+                        "Check on Open",
+                        "Check for updates when the Package Installer window opens. Throttled to once every 30 minutes."),
+                    checkOnOpen,
+                    GUILayout.Width(compact ? 116f : 124f));
+
+                if (nextCheckOnOpen != checkOnOpen)
+                {
+                    PackageUpdateCheckPreferences.CheckOnWindowOpen = nextCheckOnOpen;
+                }
+
+                bool checkOnStartup = PackageUpdateCheckPreferences.CheckOnStartup;
+                bool nextCheckOnStartup = EditorGUILayout.ToggleLeft(
+                    new GUIContent(
+                        "Check on Startup",
+                        "Check for updates once per Unity editor session after startup."),
+                    checkOnStartup,
+                    GUILayout.Width(compact ? 126f : 136f));
+
+                if (nextCheckOnStartup != checkOnStartup)
+                {
+                    PackageUpdateCheckPreferences.CheckOnStartup = nextCheckOnStartup;
+                }
+            }
+        }
+
+        private string GetLastUpdateCheckLabel()
+        {
+            DateTime? lastCheckedUtc = _packageUpdateCheckService.LastCheckedUtc;
+
+            if (!lastCheckedUtc.HasValue)
+            {
+                return "Never";
+            }
+
+            TimeSpan elapsed = DateTime.UtcNow - lastCheckedUtc.Value.ToUniversalTime();
+
+            if (elapsed.TotalSeconds < 60d)
+            {
+                return "Just now";
+            }
+
+            if (elapsed.TotalMinutes < 60d)
+            {
+                int minutes = Mathf.Max(1, Mathf.FloorToInt((float)elapsed.TotalMinutes));
+                return minutes == 1 ? "1 minute ago" : minutes + " minutes ago";
+            }
+
+            if (elapsed.TotalHours < 24d)
+            {
+                int hours = Mathf.Max(1, Mathf.FloorToInt((float)elapsed.TotalHours));
+                return hours == 1 ? "1 hour ago" : hours + " hours ago";
+            }
+
+            int days = Mathf.Max(1, Mathf.FloorToInt((float)elapsed.TotalDays));
+            return days == 1 ? "1 day ago" : days + " days ago";
+        }
+
+        private string GetLastUpdateCheckTooltip()
+        {
+            DateTime? lastCheckedUtc = _packageUpdateCheckService.LastCheckedUtc;
+
+            if (!lastCheckedUtc.HasValue)
+            {
+                return "Updates have not been checked yet.";
+            }
+
+            return "Last checked at " +
+                   lastCheckedUtc.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") +
+                   ".";
         }
 
         private void DrawSidebarSection(
@@ -2398,6 +2520,14 @@ namespace Deucarian.PackageInstaller.Editor
         {
             _packageUpdateCheckService?.InvalidateAll();
             EnsureValidSelection();
+
+            if (_checkUpdatesAfterDetectionRefresh &&
+                !_packageDetectionService.IsRefreshing &&
+                !PackageRegistryProvider.IsRemoteRefreshing)
+            {
+                RunDeferredUpdateCheck();
+            }
+
             Repaint();
         }
 
@@ -2421,6 +2551,17 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
+            if (PackageRegistryProvider.IsRemoteRefreshing)
+            {
+                Repaint();
+                return;
+            }
+
+            RunDeferredUpdateCheck();
+        }
+
+        private void RunDeferredUpdateCheck()
+        {
             _checkUpdatesAfterDetectionRefresh = false;
             _packageUpdateCheckService.CheckForUpdates(PackageRegistryProvider.All, GetSelectedChannel);
         }

@@ -21,24 +21,35 @@ namespace Deucarian.PackageInstaller.Editor
             new Regex("(?<![0-9a-fA-F])([0-9a-fA-F]{40})(?![0-9a-fA-F])", RegexOptions.Compiled);
 
         private readonly PackageDetectionService _packageDetectionService;
-        private readonly Dictionary<string, PackageUpdateStatus> _statuses =
+        private static readonly Dictionary<string, PackageUpdateStatus> Statuses =
             new Dictionary<string, PackageUpdateStatus>(StringComparer.OrdinalIgnoreCase);
         private readonly IReadOnlyList<string> _packageLockPaths;
+        private readonly Action _sharedStateChangedHandler;
 
-        private Task<PackageUpdateStatus[]> _checkTask;
-        private IReadOnlyList<UpdateCheckItem> _activeCheckItems = Array.Empty<UpdateCheckItem>();
+        private static Task<PackageUpdateStatus[]> CheckTask;
+        private static IReadOnlyList<UpdateCheckItem> ActiveCheckItems = Array.Empty<UpdateCheckItem>();
+        private static string LastFailureMessageValue = string.Empty;
+        private static event Action SharedStateChanged;
 
         public PackageUpdateCheckService(PackageDetectionService packageDetectionService)
         {
             _packageDetectionService = packageDetectionService ?? throw new ArgumentNullException(nameof(packageDetectionService));
             _packageLockPaths = GetPackageLockPaths();
+            _sharedStateChangedHandler = NotifyStateChanged;
+            SharedStateChanged += _sharedStateChangedHandler;
         }
 
         public event Action StateChanged;
 
-        public bool IsChecking => _checkTask != null;
+        public bool IsChecking => CheckTask != null;
 
-        public bool HasStatuses => _statuses.Count > 0;
+        public static bool IsAnyCheckRunning => CheckTask != null;
+
+        public bool HasStatuses => Statuses.Count > 0;
+
+        public DateTime? LastCheckedUtc => PackageUpdateCheckPreferences.LastCheckedUtc;
+
+        public string LastFailureMessage => LastFailureMessageValue;
 
         public void CheckForUpdates(
             IEnumerable<PackageDefinition> packageDefinitions,
@@ -59,7 +70,7 @@ namespace Deucarian.PackageInstaller.Editor
 
                 if (channel == PackageChannel.Custom)
                 {
-                    _statuses[packageDefinition.PackageId] =
+                    Statuses[packageDefinition.PackageId] =
                         PackageUpdateStatus.Unknown(packageDefinition, channel);
                     continue;
                 }
@@ -68,12 +79,12 @@ namespace Deucarian.PackageInstaller.Editor
                         packageDefinition.PackageId,
                         out PackageManagerPackageInfo packageInfo))
                 {
-                    _statuses[packageDefinition.PackageId] =
+                    Statuses[packageDefinition.PackageId] =
                         PackageUpdateStatus.NotInstalled(packageDefinition, channel, selectedUrl);
                     continue;
                 }
 
-                _statuses[packageDefinition.PackageId] =
+                Statuses[packageDefinition.PackageId] =
                     PackageUpdateStatus.Checking(packageDefinition, channel, selectedUrl);
 
                 checkItems.Add(new UpdateCheckItem(
@@ -85,19 +96,21 @@ namespace Deucarian.PackageInstaller.Editor
                     _packageLockPaths));
             }
 
-            NotifyStateChanged();
+            LastFailureMessageValue = string.Empty;
 
             if (checkItems.Count == 0)
             {
                 UnityEngine.Debug.Log(LogPrefix + " No installed registry packages found for update checking.");
+                RecordCheckCompleted(Array.Empty<PackageUpdateStatus>());
                 return;
             }
 
-            _activeCheckItems = checkItems;
-            _checkTask = Task.Run(() => checkItems.Select(CheckItem).ToArray());
+            ActiveCheckItems = checkItems;
+            CheckTask = Task.Run(() => checkItems.Select(CheckItem).ToArray());
 
-            EditorApplication.update -= Update;
-            EditorApplication.update += Update;
+            EditorApplication.update -= UpdateShared;
+            EditorApplication.update += UpdateShared;
+            NotifySharedStateChanged();
         }
 
         public PackageUpdateStatus GetStatus(PackageDefinition packageDefinition, PackageChannel channel)
@@ -109,7 +122,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             string selectedUrl = packageDefinition.GetUrl(channel);
 
-            if (_statuses.TryGetValue(packageDefinition.PackageId, out PackageUpdateStatus status) &&
+            if (Statuses.TryGetValue(packageDefinition.PackageId, out PackageUpdateStatus status) &&
                 status.Channel == channel &&
                 string.Equals(status.SelectedUrl, selectedUrl, StringComparison.Ordinal))
             {
@@ -146,26 +159,27 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            if (_statuses.Remove(packageId))
+            if (Statuses.Remove(packageId))
             {
-                NotifyStateChanged();
+                NotifySharedStateChanged();
             }
         }
 
         public void InvalidateAll()
         {
-            if (_statuses.Count == 0)
+            if (Statuses.Count == 0)
             {
                 return;
             }
 
-            _statuses.Clear();
-            NotifyStateChanged();
+            Statuses.Clear();
+            LastFailureMessageValue = string.Empty;
+            NotifySharedStateChanged();
         }
 
         public void Dispose()
         {
-            EditorApplication.update -= Update;
+            SharedStateChanged -= _sharedStateChangedHandler;
         }
 
         private static IEnumerable<PackageDefinition> GetInstallablePackages(IEnumerable<PackageDefinition> packageDefinitions)
@@ -260,24 +274,24 @@ namespace Deucarian.PackageInstaller.Editor
             }
         }
 
-        private void Update()
+        private static void UpdateShared()
         {
-            if (_checkTask == null || !_checkTask.IsCompleted)
+            if (CheckTask == null || !CheckTask.IsCompleted)
             {
                 return;
             }
 
-            EditorApplication.update -= Update;
+            EditorApplication.update -= UpdateShared;
 
             PackageUpdateStatus[] results;
 
             try
             {
-                results = _checkTask.Result;
+                results = CheckTask.Result;
             }
             catch (Exception exception)
             {
-                results = _activeCheckItems
+                results = ActiveCheckItems
                     .Select(item => PackageUpdateStatus.Failed(
                         item.PackageDefinition,
                         item.Channel,
@@ -287,15 +301,24 @@ namespace Deucarian.PackageInstaller.Editor
                     .ToArray();
             }
 
+            RecordCheckCompleted(results);
+        }
+
+        private static void RecordCheckCompleted(PackageUpdateStatus[] results)
+        {
+            results = results ?? Array.Empty<PackageUpdateStatus>();
+
             foreach (PackageUpdateStatus status in results)
             {
-                _statuses[status.PackageId] = status;
+                Statuses[status.PackageId] = status;
                 LogStatus(status);
             }
 
-            _checkTask = null;
-            _activeCheckItems = Array.Empty<UpdateCheckItem>();
-            NotifyStateChanged();
+            LastFailureMessageValue = GetFailureSummary(results);
+            PackageUpdateCheckPreferences.LastCheckedUtc = DateTime.UtcNow;
+            CheckTask = null;
+            ActiveCheckItems = Array.Empty<UpdateCheckItem>();
+            NotifySharedStateChanged();
         }
 
         private static bool TryParseGitPackageReference(
@@ -595,7 +618,7 @@ namespace Deucarian.PackageInstaller.Editor
                    Regex.IsMatch(value, "^[0-9a-fA-F]{7,40}$");
         }
 
-        private static bool RevisionsMatch(string installedRevision, string latestRevision)
+        internal static bool RevisionsMatch(string installedRevision, string latestRevision)
         {
             string installed = NormalizeRevision(installedRevision);
             string latest = NormalizeRevision(latestRevision);
@@ -667,6 +690,31 @@ namespace Deucarian.PackageInstaller.Editor
         private void NotifyStateChanged()
         {
             StateChanged?.Invoke();
+        }
+
+        private static void NotifySharedStateChanged()
+        {
+            SharedStateChanged?.Invoke();
+        }
+
+        private static string GetFailureSummary(IEnumerable<PackageUpdateStatus> statuses)
+        {
+            PackageUpdateStatus[] failures = statuses
+                .Where(status => status != null && status.Kind == PackageUpdateStatusKind.Failed)
+                .ToArray();
+
+            if (failures.Length == 0)
+            {
+                return string.Empty;
+            }
+
+            if (failures.Length == 1)
+            {
+                return failures[0].DisplayName + ": " + failures[0].Message;
+            }
+
+            return failures.Length + " update checks failed. First: " +
+                   failures[0].DisplayName + ": " + failures[0].Message;
         }
 
         private sealed class UpdateCheckItem

@@ -7,7 +7,7 @@ Deucarian Package Installer is a small editor-only Unity Package Manager package
 Open it from:
 
 ```text
-Tools > Deucarian > Package Installer
+Deucarian > Package Installer
 ```
 
 The installer can install standalone packages, bridge packages, and explicitly declared package samples without making this package a runtime dependency of any other package.
@@ -37,7 +37,7 @@ You can also use Unity's Package Manager window:
 1. Open `Window > Package Manager`.
 2. Select `+ > Add package from git URL...`.
 3. Enter the installer Git URL.
-4. Open `Tools > Deucarian > Package Installer`.
+4. Open `Deucarian > Package Installer`.
 
 The package requires Unity `2021.3` or newer and has no package dependencies.
 
@@ -59,6 +59,7 @@ The current registry includes these package entries:
 - UI: UI Binding
 - World: Object Selection
 - Bridge: UI Binding + Core State Bridge, Object Loading API Bridge, ObjectSelection + CoreState Bridge, Session + API Bridge
+- Tools: Package Installer
 - Suites: Selection Suite
 
 Registered packages are first-class UPM packages with their own package IDs:
@@ -74,6 +75,7 @@ Registered packages are first-class UPM packages with their own package IDs:
 - `com.deucarian.object-selection.core-state-bridge`
 - `com.deucarian.session.api-bridge`
 - `com.deucarian.selection-suite`
+- `com.deucarian.package-installer`
 
 `Install All` installs all missing registered packages in dependency order. Installing one bridge package automatically installs its missing dependencies first, then installs the bridge.
 
@@ -119,9 +121,11 @@ If a sample destination already exists, the installer shows it as already import
 
 Unknown revisions, missing Git, network failures, local/file packages, and non-Git UPM identifiers are reported as check failures instead of blocking the installer.
 
+The installer can also check for updates automatically when Unity starts and when the Package Installer window opens. Startup checks run at most once per editor session, and window-open checks are throttled so reopening the window does not repeatedly hit remotes. These settings are stored in `EditorPrefs` and can be toggled from the window header.
+
 `Update` and `Update All Installed Packages` reuse Unity Package Manager installation through `Client.Add` with the selected channel URL.
 
-TODO: installer self-update is intentionally out of scope for this version.
+The installer package itself is included in update discovery when it is installed in the current project.
 
 ## Progress Display
 
@@ -155,7 +159,7 @@ This package is editor-only and exposes no runtime API for game code.
 The user-facing entry point is the Unity menu item:
 
 ```text
-Tools/Deucarian/Package Installer
+Deucarian/Package Installer
 ```
 
 The implementation is split into internal editor classes:
@@ -181,7 +185,7 @@ Keeping the installer editor-only ensures:
 
 ## Versioning
 
-Current package version: `1.0.0`.
+Current package version: `1.1.0`.
 
 Branch strategy:
 

@@ -81,7 +81,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 .LoadFromJson(json, PackageRegistrySource.Bundled);
             PackageDefinition packageDefinition = PackageRegistryProvider
                 .CreatePackageDefinitions(result.Registry)
-                .Single();
+                .Single(package => package.PackageId == "com.deucarian.stable-only");
 
             Assert.IsTrue(result.IsValid, result.ErrorMessage);
             Assert.IsFalse(packageDefinition.HasDevelopmentUrl);
@@ -263,6 +263,21 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void BundledRegistryIncludesPackageInstaller()
+        {
+            string registryJson = File.ReadAllText(GetBundledRegistryPath());
+            PackageRegistryLoadResult result = new PackageRegistryLoader()
+                .LoadFromJson(registryJson, PackageRegistrySource.Bundled);
+
+            PackageDefinition packageInstaller = PackageRegistryProvider
+                .CreatePackageDefinitions(result.Registry)
+                .Single(package => package.PackageId == "com.deucarian.package-installer");
+
+            Assert.AreEqual("Tools", packageInstaller.Category);
+            StringAssert.Contains("Package-Installer.git#main", packageInstaller.StableUrl);
+        }
+
+        [Test]
         public void CoreStateInstalledDetectionUsesRealPackageId()
         {
             PackageDefinition coreState = PackageRegistryProvider
@@ -281,7 +296,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                         }
                     }
                 })
-                .Single();
+                .Single(package => package.PackageId == "com.deucarian.core-state");
 
             using (PackageDetectionService detectionService = new PackageDetectionService())
             {

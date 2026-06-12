@@ -2,7 +2,7 @@ using System;
 using System.Linq;
 using NUnit.Framework;
 
-namespace JorisHoef.PackageInstaller.Editor.Tests
+namespace Deucarian.PackageInstaller.Editor.Tests
 {
     internal sealed class PackageListFilterTests
     {
