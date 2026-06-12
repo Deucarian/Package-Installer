@@ -48,6 +48,15 @@
       "dependencies": []
     },
     {
+      "id": "com.jorishoef.package-installer",
+      "displayName": "JorisHoef Package Installer",
+      "category": "Tools",
+      "description": "Editor-only installer window for installing and composing Deucarian packages.",
+      "stableUrl": "https://github.com/Deucarian/Package-Installer.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Package-Installer.git#develop",
+      "dependencies": []
+    },
+    {
       "id": "com.jorishoef.session-helper.api-helper-bridge",
       "displayName": "Session Helper + API Helper Bridge",
       "category": "Bridge",

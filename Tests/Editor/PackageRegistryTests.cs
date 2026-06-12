@@ -81,7 +81,7 @@ namespace JorisHoef.PackageInstaller.Editor.Tests
                 .LoadFromJson(json, PackageRegistrySource.Bundled);
             PackageDefinition packageDefinition = PackageRegistryProvider
                 .CreatePackageDefinitions(result.Registry)
-                .Single();
+                .Single(package => package.PackageId == "com.jorishoef.stable-only");
 
             Assert.IsTrue(result.IsValid, result.ErrorMessage);
             Assert.IsFalse(packageDefinition.HasDevelopmentUrl);
@@ -229,6 +229,21 @@ namespace JorisHoef.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void BundledRegistryIncludesPackageInstaller()
+        {
+            string registryJson = File.ReadAllText(GetBundledRegistryPath());
+            PackageRegistryLoadResult result = new PackageRegistryLoader()
+                .LoadFromJson(registryJson, PackageRegistrySource.Bundled);
+
+            PackageDefinition packageInstaller = PackageRegistryProvider
+                .CreatePackageDefinitions(result.Registry)
+                .Single(package => package.PackageId == "com.jorishoef.package-installer");
+
+            Assert.AreEqual("Tools", packageInstaller.Category);
+            StringAssert.Contains("Package-Installer.git#main", packageInstaller.StableUrl);
+        }
+
+        [Test]
         public void CoreStateInstalledDetectionUsesRealPackageId()
         {
             PackageDefinition coreState = PackageRegistryProvider
@@ -247,7 +262,7 @@ namespace JorisHoef.PackageInstaller.Editor.Tests
                         }
                     }
                 })
-                .Single();
+                .Single(package => package.PackageId == "com.jorishoef.core.state");
 
             using (PackageDetectionService detectionService = new PackageDetectionService())
             {

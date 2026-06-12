@@ -58,6 +58,7 @@ The current registry includes these package entries:
 - Core: Core State, API Helper, Session Helper
 - UI: Generic UI Items
 - World: Object Selection
+- Tools: Package Installer
 - Bridge: Generic UI Items + Core State Bridge, ObjectSelection + CoreState Bridge, Session Helper + API Helper Bridge
 - Suites: Selection Suite
 
@@ -72,6 +73,7 @@ Registered packages are first-class UPM packages with their own package IDs:
 - `com.jorishoef.objectselection-corestate-bridge`
 - `com.jorishoef.session-helper.api-helper-bridge`
 - `com.jorishoef.selection-suite`
+- `com.jorishoef.package-installer`
 
 `Install All` installs all missing registered packages in dependency order. Installing one bridge package automatically installs its missing dependencies first, then installs the bridge.
 
@@ -117,9 +119,11 @@ If a sample destination already exists, the installer shows it as already import
 
 Unknown revisions, missing Git, network failures, local/file packages, and non-Git UPM identifiers are reported as check failures instead of blocking the installer.
 
+The installer can also check for updates automatically when Unity starts and when the Package Installer window opens. Startup checks run at most once per editor session, and window-open checks are throttled so reopening the window does not repeatedly hit remotes. These settings are stored in `EditorPrefs` and can be toggled from the window header.
+
 `Update` and `Update All Installed Packages` reuse Unity Package Manager installation through `Client.Add` with the selected channel URL.
 
-TODO: installer self-update is intentionally out of scope for this version.
+The installer package itself is included in update discovery when it is installed in the current project.
 
 ## Progress Display
 
@@ -178,7 +182,7 @@ Keeping the installer editor-only ensures:
 
 ## Versioning
 
-Current package version: `1.0.0`.
+Current package version: `1.1.0`.
 
 Branch strategy:
 

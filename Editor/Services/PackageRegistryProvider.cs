@@ -127,13 +127,15 @@ namespace JorisHoef.PackageInstaller.Editor
         {
             if (registry == null || registry.packages == null)
             {
-                return EmptyPackages;
+                return new[] { CreateInstallerPackageDefinition() };
             }
 
-            return registry.packages
+            PackageDefinition[] packageDefinitions = registry.packages
                 .Where(entry => entry != null)
                 .Select(CreatePackageDefinition)
                 .ToArray();
+
+            return EnsureInstallerPackageDefinition(packageDefinitions);
         }
 
         private static PackageDefinition CreatePackageDefinition(PackageRegistryEntry entry)
@@ -149,6 +151,35 @@ namespace JorisHoef.PackageInstaller.Editor
                 ParsePackageType(category),
                 entry.developmentUrl,
                 category: category);
+        }
+
+        private static IReadOnlyList<PackageDefinition> EnsureInstallerPackageDefinition(
+            IReadOnlyList<PackageDefinition> packageDefinitions)
+        {
+            if (packageDefinitions.Any(package => string.Equals(
+                    package.PackageId,
+                    "com.jorishoef.package-installer",
+                    StringComparison.OrdinalIgnoreCase)))
+            {
+                return packageDefinitions;
+            }
+
+            return packageDefinitions
+                .Concat(new[] { CreateInstallerPackageDefinition() })
+                .ToArray();
+        }
+
+        private static PackageDefinition CreateInstallerPackageDefinition()
+        {
+            return new PackageDefinition(
+                "JorisHoef Package Installer",
+                "com.jorishoef.package-installer",
+                "https://github.com/Deucarian/Package-Installer.git#main",
+                "Editor-only installer window for installing and composing Deucarian packages.",
+                Array.Empty<string>(),
+                PackageType.Core,
+                "https://github.com/Deucarian/Package-Installer.git#develop",
+                category: "Tools");
         }
 
         private static PackageType ParsePackageType(string category)
@@ -250,17 +281,22 @@ namespace JorisHoef.PackageInstaller.Editor
                 return 2;
             }
 
-            if (string.Equals(category, "Bridge", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(category, "Tools", StringComparison.OrdinalIgnoreCase))
             {
                 return 3;
             }
 
-            if (string.Equals(category, "Suites", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(category, "Bridge", StringComparison.OrdinalIgnoreCase))
             {
                 return 4;
             }
 
-            return 5;
+            if (string.Equals(category, "Suites", StringComparison.OrdinalIgnoreCase))
+            {
+                return 5;
+            }
+
+            return 6;
         }
     }
 }
