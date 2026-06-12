@@ -129,7 +129,7 @@ namespace Deucarian.PackageInstaller.Editor
         private GUIStyle _primaryButtonStyle;
         private GUIStyle _secondaryButtonStyle;
 
-        [MenuItem("Tools/Deucarian/Package Installer")]
+        [MenuItem("Deucarian/Package Installer")]
         public static void Open()
         {
             PackageInstallerWindow window = GetWindow<PackageInstallerWindow>();
