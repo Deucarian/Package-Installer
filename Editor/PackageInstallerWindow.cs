@@ -227,9 +227,16 @@ namespace Deucarian.PackageInstaller.Editor
                 {
                     DrawSidebar();
                     GUILayout.Space(8f);
-                    DrawDetailsPane();
+                    DrawRightPane();
                 }
+            }
+        }
 
+        private void DrawRightPane()
+        {
+            using (new EditorGUILayout.VerticalScope(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true)))
+            {
+                DrawDetailsPane();
                 DrawProgressFooter();
                 DrawLastOperationSummaryPanel();
             }
