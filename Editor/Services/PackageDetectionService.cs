@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEditor.PackageManager;
 using UnityEditor.PackageManager.Requests;
@@ -248,35 +247,11 @@ namespace Deucarian.PackageInstaller.Editor
                 return false;
             }
 
-            string lockJson = File.ReadAllText(packageLockPath);
-            Match packageMatch = Regex.Match(
-                lockJson,
-                "\"" + Regex.Escape(packageId) + "\"\\s*:\\s*\\{(?<body>.*?)\\n\\s*\\}",
-                RegexOptions.Singleline);
-
-            if (!packageMatch.Success)
-            {
-                return false;
-            }
-
-            return TryReadJsonStringField(packageMatch.Groups["body"].Value, "version", out packageReference);
-        }
-
-        private static bool TryReadJsonStringField(string jsonBody, string fieldName, out string value)
-        {
-            value = string.Empty;
-            Match match = Regex.Match(
-                jsonBody,
-                "\"" + Regex.Escape(fieldName) + "\"\\s*:\\s*\"(?<value>[^\"]+)\"",
-                RegexOptions.Singleline);
-
-            if (!match.Success)
-            {
-                return false;
-            }
-
-            value = match.Groups["value"].Value.Trim();
-            return !string.IsNullOrWhiteSpace(value);
+            return PackageLockJsonReader.TryReadPackageStringField(
+                packageLockPath,
+                packageId,
+                "version",
+                out packageReference);
         }
 
         private static bool TryExtractReferenceFromPackageManagerPackageId(

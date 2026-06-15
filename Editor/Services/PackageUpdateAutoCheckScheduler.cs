@@ -81,9 +81,17 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            _updateCheckService.CheckForUpdates(PackageRegistryProvider.All, GetAutoSelectedChannel);
+            PackageUpdateCheckService updateCheckService = _updateCheckService;
 
-            if (!_updateCheckService.IsChecking)
+            if (updateCheckService == null)
+            {
+                Cleanup();
+                return;
+            }
+
+            updateCheckService.CheckForUpdates(PackageRegistryProvider.All, GetAutoSelectedChannel);
+
+            if (_updateCheckService == updateCheckService && !updateCheckService.IsChecking)
             {
                 Cleanup();
             }

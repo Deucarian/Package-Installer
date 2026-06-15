@@ -119,7 +119,7 @@ If a sample destination already exists, the installer shows it as already import
 
 `Check for Updates` compares installed registry packages against the selected Stable or Development channel. Git packages are compared by installed revision and the latest revision returned by `git ls-remote`.
 
-Unknown revisions, missing Git, network failures, local/file packages, and non-Git UPM identifiers are reported as check failures instead of blocking the installer.
+Unknown installed revisions are shown as "Cannot determine update" while the package remains installed. Missing Git, network failures, local/file packages, and non-Git UPM identifiers are reported as update-check messages instead of blocking the installer.
 
 The installer can also check for updates automatically when Unity starts and when the Package Installer window opens. Startup checks run at most once per editor session, and window-open checks are throttled so reopening the window does not repeatedly hit remotes. These settings are stored in `EditorPrefs` and can be toggled from the window header.
 
@@ -185,7 +185,7 @@ Keeping the installer editor-only ensures:
 
 ## Versioning
 
-Current package version: `1.1.0`.
+Current package version: `1.1.1`.
 
 Branch strategy:
 

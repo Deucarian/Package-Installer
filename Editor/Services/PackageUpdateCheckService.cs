@@ -87,12 +87,17 @@ namespace Deucarian.PackageInstaller.Editor
                 Statuses[packageDefinition.PackageId] =
                     PackageUpdateStatus.Checking(packageDefinition, channel, selectedUrl);
 
+                _packageDetectionService.TryGetInstalledPackageReference(
+                    packageDefinition.PackageId,
+                    out string installedPackageReference);
+
                 checkItems.Add(new UpdateCheckItem(
                     packageDefinition,
                     channel,
                     selectedUrl,
-                    packageInfo.packageId,
-                    packageInfo.resolvedPath,
+                    packageInfo != null ? packageInfo.packageId : string.Empty,
+                    packageInfo != null ? packageInfo.resolvedPath : string.Empty,
+                    installedPackageReference,
                     _packageLockPaths));
             }
 
@@ -198,6 +203,25 @@ namespace Deucarian.PackageInstaller.Editor
             }
         }
 
+        internal static PackageUpdateStatus CheckItemForTests(
+            PackageDefinition packageDefinition,
+            PackageChannel channel,
+            string selectedUrl,
+            string packageManagerPackageId,
+            string resolvedPath,
+            string installedPackageReference,
+            IReadOnlyList<string> packageLockPaths)
+        {
+            return CheckItem(new UpdateCheckItem(
+                packageDefinition,
+                channel,
+                selectedUrl,
+                packageManagerPackageId,
+                resolvedPath,
+                installedPackageReference,
+                packageLockPaths));
+        }
+
         private static PackageUpdateStatus CheckItem(UpdateCheckItem item)
         {
             try
@@ -228,12 +252,12 @@ namespace Deucarian.PackageInstaller.Editor
 
                 if (!TryGetInstalledRevision(item, out string installedRevision))
                 {
-                    return PackageUpdateStatus.Failed(
+                    return PackageUpdateStatus.CannotDetermine(
                         item.PackageDefinition,
                         item.Channel,
                         item.SelectedUrl,
                         string.Empty,
-                        "Installed Git revision is unknown. Refresh package detection or reinstall the package from a Git URL.");
+                        "The package is installed, but Unity did not expose a Git revision for this package.");
                 }
 
                 if (!TryGetRemoteRevision(remoteUrl, reference, out string latestRevision, out string remoteMessage))
@@ -481,6 +505,11 @@ namespace Deucarian.PackageInstaller.Editor
                 return true;
             }
 
+            if (TryExtractRevision(item.InstalledPackageReference, out revision))
+            {
+                return true;
+            }
+
             foreach (string packageLockPath in item.PackageLockPaths)
             {
                 if (TryReadPackageLockRevision(packageLockPath, item.PackageDefinition.PackageId, out revision))
@@ -492,30 +521,20 @@ namespace Deucarian.PackageInstaller.Editor
             return TryReadGitHeadRevision(item.ResolvedPath, out revision);
         }
 
-        private static bool TryReadPackageLockRevision(string packageLockPath, string packageId, out string revision)
+        internal static bool TryReadPackageLockRevision(string packageLockPath, string packageId, out string revision)
         {
             revision = string.Empty;
 
-            if (string.IsNullOrWhiteSpace(packageLockPath) || !File.Exists(packageLockPath))
+            if (!PackageLockJsonReader.TryReadPackageObjectBody(
+                    packageLockPath,
+                    packageId,
+                    out string packageBody))
             {
                 return false;
             }
 
-            string lockJson = File.ReadAllText(packageLockPath);
-            Match packageMatch = Regex.Match(
-                lockJson,
-                "\"" + Regex.Escape(packageId) + "\"\\s*:\\s*\\{(?<body>.*?)\\n\\s*\\}",
-                RegexOptions.Singleline);
-
-            if (!packageMatch.Success)
-            {
-                return false;
-            }
-
-            string body = packageMatch.Groups["body"].Value;
-
-            return TryReadJsonField(body, "hash", out revision) ||
-                   TryExtractRevision(body, out revision);
+            return TryReadJsonField(packageBody, "hash", out revision) ||
+                   TryExtractRevision(packageBody, out revision);
         }
 
         private static bool TryReadJsonField(string jsonBody, string fieldName, out string value)
@@ -671,20 +690,56 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
+            LogType logType = GetLogType(status);
+            string message;
+
             if (status.IsUpdateAvailable)
             {
-                UnityEngine.Debug.Log(LogPrefix + " Update available for " + status.DisplayName + ": " +
-                                      status.ShortInstalledRevision + " -> " + status.ShortLatestRevision + ".");
-                return;
+                message = LogPrefix + " Update available for " + status.DisplayName + ": " +
+                          status.ShortInstalledRevision + " -> " + status.ShortLatestRevision + ".";
             }
-
-            if (status.Kind == PackageUpdateStatusKind.Failed)
+            else if (status.Kind == PackageUpdateStatusKind.Failed)
             {
-                UnityEngine.Debug.LogWarning(LogPrefix + " Update check failed for " + status.DisplayName + ": " + status.Message);
+                message = LogPrefix + " Update check failed for " + status.DisplayName + ": " + status.Message;
+            }
+            else if (status.Kind == PackageUpdateStatusKind.CannotDetermine)
+            {
+                message = LogPrefix + " Update check failed for " + status.DisplayName + ": " + status.Label + ". " + status.Message;
+            }
+            else
+            {
+                message = LogPrefix + " Update check for " + status.DisplayName + ": " + status.Label + ".";
+            }
+
+            LogMessage(logType, message);
+        }
+
+        internal static LogType GetLogType(PackageUpdateStatus status)
+        {
+            if (status == null)
+            {
+                return LogType.Log;
+            }
+
+            switch (status.Kind)
+            {
+                case PackageUpdateStatusKind.Failed:
+                case PackageUpdateStatusKind.CannotDetermine:
+                    return LogType.Error;
+                default:
+                    return LogType.Log;
+            }
+        }
+
+        private static void LogMessage(LogType logType, string message)
+        {
+            if (logType == LogType.Error)
+            {
+                UnityEngine.Debug.LogError(message);
                 return;
             }
 
-            UnityEngine.Debug.Log(LogPrefix + " Update check for " + status.DisplayName + ": " + status.Label + ".");
+            UnityEngine.Debug.Log(message);
         }
 
         private void NotifyStateChanged()
@@ -725,6 +780,7 @@ namespace Deucarian.PackageInstaller.Editor
                 string selectedUrl,
                 string packageManagerPackageId,
                 string resolvedPath,
+                string installedPackageReference,
                 IReadOnlyList<string> packageLockPaths)
             {
                 PackageDefinition = packageDefinition;
@@ -732,6 +788,7 @@ namespace Deucarian.PackageInstaller.Editor
                 SelectedUrl = selectedUrl ?? string.Empty;
                 PackageManagerPackageId = packageManagerPackageId ?? string.Empty;
                 ResolvedPath = resolvedPath ?? string.Empty;
+                InstalledPackageReference = installedPackageReference ?? string.Empty;
                 PackageLockPaths = packageLockPaths ?? Array.Empty<string>();
             }
 
@@ -744,6 +801,8 @@ namespace Deucarian.PackageInstaller.Editor
             public string PackageManagerPackageId { get; }
 
             public string ResolvedPath { get; }
+
+            public string InstalledPackageReference { get; }
 
             public IReadOnlyList<string> PackageLockPaths { get; }
         }
