@@ -7,6 +7,7 @@ namespace Deucarian.PackageInstaller.Editor
         Checking,
         UpToDate,
         UpdateAvailable,
+        CannotDetermine,
         Failed
     }
 
@@ -72,10 +73,12 @@ namespace Deucarian.PackageInstaller.Editor
                         return "Up to date";
                     case PackageUpdateStatusKind.UpdateAvailable:
                         return "Update available";
+                    case PackageUpdateStatusKind.CannotDetermine:
+                        return "Cannot determine update";
                     case PackageUpdateStatusKind.Failed:
                         return "Check failed";
                     default:
-                        return "Unknown";
+                        return "Not checked";
                 }
             }
         }
@@ -148,6 +151,23 @@ namespace Deucarian.PackageInstaller.Editor
                 installedRevision,
                 latestRevision,
                 "Installed revision differs from the selected channel.");
+        }
+
+        public static PackageUpdateStatus CannotDetermine(
+            PackageDefinition packageDefinition,
+            PackageChannel channel,
+            string selectedUrl,
+            string installedRevision,
+            string message)
+        {
+            return Create(
+                PackageUpdateStatusKind.CannotDetermine,
+                packageDefinition,
+                channel,
+                selectedUrl,
+                installedRevision,
+                string.Empty,
+                message);
         }
 
         public static PackageUpdateStatus Failed(

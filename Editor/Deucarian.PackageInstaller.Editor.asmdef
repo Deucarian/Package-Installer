@@ -1,7 +1,10 @@
 {
   "name": "Deucarian.PackageInstaller.Editor",
   "rootNamespace": "Deucarian.PackageInstaller.Editor",
-  "references": [],
+  "references": [
+    "Deucarian.Editor",
+    "Deucarian.Logging"
+  ],
   "includePlatforms": [
     "Editor"
   ],

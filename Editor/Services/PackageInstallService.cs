@@ -4,7 +4,6 @@ using System.Linq;
 using UnityEditor;
 using UnityEditor.PackageManager;
 using UnityEditor.PackageManager.Requests;
-using UnityEngine;
 
 namespace Deucarian.PackageInstaller.Editor
 {
@@ -45,7 +44,6 @@ namespace Deucarian.PackageInstaller.Editor
 
     internal sealed class PackageInstallService : IDisposable
     {
-        private const string LogPrefix = "[Deucarian Package Installer]";
         private const string PendingOperationNameKey = "Deucarian.PackageInstaller.PendingOperationName";
         private const string PendingQueueKey = "Deucarian.PackageInstaller.PendingQueue";
 
@@ -161,14 +159,14 @@ namespace Deucarian.PackageInstaller.Editor
         {
             if (packageDefinition == null)
             {
-                Debug.LogError(LogPrefix + " Cannot install a null package definition.");
+                PackageInstallerLog.Install.Error("Cannot install a null package definition.");
                 return false;
             }
 
             if (IsBusy)
             {
                 _lastErrorMessage = "Cannot start " + packageDefinition.DisplayName + " because another package operation is already running.";
-                Debug.LogWarning(LogPrefix + " " + _lastErrorMessage);
+                PackageInstallerLog.Install.Warning(_lastErrorMessage);
                 NotifyStateChanged();
                 return false;
             }
@@ -194,7 +192,7 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 string message = packageDefinition.DisplayName + " has no package URL to install.";
                 MarkProgressItem(packageDefinition, PackageInstallProgressItemState.Failed, message);
-                Debug.LogWarning(LogPrefix + " " + message);
+                PackageInstallerLog.Install.Warning(message);
                 return false;
             }
 
@@ -202,14 +200,14 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 string message = packageDefinition.DisplayName + " is already queued or installing.";
                 MarkProgressItem(packageDefinition, PackageInstallProgressItemState.Skipped, message);
-                Debug.Log(LogPrefix + " " + message);
+                PackageInstallerLog.Install.Info(message);
                 return false;
             }
 
             _installQueue.Enqueue(new QueuedPackageInstall(packageDefinition, channel, packageUrl));
             _queuedOrInstallingPackageIds.Add(packageDefinition.PackageId);
             _lastStatusMessage = "Queued " + packageDefinition.DisplayName + ".";
-            Debug.Log(LogPrefix + " Queued " + packageDefinition.DisplayName + " from " + packageUrl + " (" + channel + ").");
+            PackageInstallerLog.Install.Info("Queued " + packageDefinition.DisplayName + " from " + packageUrl + " (" + channel + ").");
 
             return true;
         }
@@ -253,7 +251,7 @@ namespace Deucarian.PackageInstaller.Editor
             if (IsBusy)
             {
                 _lastErrorMessage = "Cannot start " + operationName + " because another package operation is already running.";
-                Debug.LogWarning(LogPrefix + " " + _lastErrorMessage);
+                PackageInstallerLog.Install.Warning(_lastErrorMessage);
                 NotifyStateChanged();
                 return;
             }
@@ -287,14 +285,14 @@ namespace Deucarian.PackageInstaller.Editor
         {
             if (packageDefinition == null)
             {
-                Debug.LogError(LogPrefix + " Cannot remove a null package definition.");
+                PackageInstallerLog.Install.Error("Cannot remove a null package definition.");
                 return false;
             }
 
             if (IsBusy)
             {
                 _lastErrorMessage = "Cannot start " + packageDefinition.DisplayName + " removal because another package operation is already running.";
-                Debug.LogWarning(LogPrefix + " " + _lastErrorMessage);
+                PackageInstallerLog.Install.Warning(_lastErrorMessage);
                 NotifyStateChanged();
                 return false;
             }
@@ -317,11 +315,11 @@ namespace Deucarian.PackageInstaller.Editor
                 _currentRemoveRequest = Client.Remove(packageDefinition.PackageId);
                 EditorApplication.update -= Update;
                 EditorApplication.update += Update;
-                Debug.Log(LogPrefix + " Removing " + packageDefinition.DisplayName + " (" + packageDefinition.PackageId + ").");
+                PackageInstallerLog.Install.Info("Removing " + packageDefinition.DisplayName + " (" + packageDefinition.PackageId + ").");
             }
             catch (Exception exception)
             {
-                Debug.LogError(LogPrefix + " Failed to start remove for " + packageDefinition.DisplayName + ": " + exception.Message);
+                PackageInstallerLog.Install.Error("Failed to start remove for " + packageDefinition.DisplayName + ": " + exception.Message);
                 CompleteCurrentRemoveRequest(false, exception.Message);
             }
 
@@ -361,11 +359,11 @@ namespace Deucarian.PackageInstaller.Editor
                 EditorApplication.update += Update;
                 SavePendingOperationState();
 
-                Debug.Log(LogPrefix + " Installing " + _currentInstall.PackageDefinition.DisplayName + " using " + _currentInstall.Url + " (" + _currentInstall.Channel + ").");
+                PackageInstallerLog.Install.Info("Installing " + _currentInstall.PackageDefinition.DisplayName + " using " + _currentInstall.Url + " (" + _currentInstall.Channel + ").");
             }
             catch (Exception exception)
             {
-                Debug.LogError(LogPrefix + " Failed to start install for " + _currentInstall.PackageDefinition.DisplayName + ": " + exception.Message);
+                PackageInstallerLog.Install.Error("Failed to start install for " + _currentInstall.PackageDefinition.DisplayName + ": " + exception.Message);
                 CompleteCurrentRequest(false, exception.Message);
             }
         }
@@ -391,7 +389,7 @@ namespace Deucarian.PackageInstaller.Editor
                 string message = "Installed " + packageDefinition.DisplayName + " (" + packageName + "@" + version + ") from " + _currentInstall.Channel + ".";
 
                 CompleteCurrentRequest(true, message);
-                Debug.Log(LogPrefix + " " + message);
+                PackageInstallerLog.Install.Info(message);
                 return;
             }
 
@@ -403,7 +401,7 @@ namespace Deucarian.PackageInstaller.Editor
                 : "package";
 
             CompleteCurrentRequest(false, errorMessage);
-            Debug.LogError(LogPrefix + " Failed to install " + failedPackageName + ": " + errorMessage);
+            PackageInstallerLog.Install.Error("Failed to install " + failedPackageName + ": " + errorMessage);
         }
 
         private void UpdateRemoveRequest()
@@ -420,7 +418,7 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 string message = "Removed " + packageName + ".";
                 CompleteCurrentRemoveRequest(true, message);
-                Debug.Log(LogPrefix + " " + message);
+                PackageInstallerLog.Install.Info(message);
                 return;
             }
 
@@ -429,7 +427,7 @@ namespace Deucarian.PackageInstaller.Editor
                 : "Package Manager returned an unknown error.";
 
             CompleteCurrentRemoveRequest(false, errorMessage);
-            Debug.LogError(LogPrefix + " Failed to remove " + packageName + ": " + errorMessage);
+            PackageInstallerLog.Install.Error("Failed to remove " + packageName + ": " + errorMessage);
         }
 
         private void CompleteCurrentRequest(bool success, string message)

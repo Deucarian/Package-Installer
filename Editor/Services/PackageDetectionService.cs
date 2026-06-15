@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEditor.PackageManager;
 using UnityEditor.PackageManager.Requests;
@@ -12,8 +11,6 @@ namespace Deucarian.PackageInstaller.Editor
 {
     internal sealed class PackageDetectionService : IDisposable
     {
-        private const string LogPrefix = "[Deucarian Package Installer]";
-
         private readonly Dictionary<string, PackageManagerPackageInfo> _installedPackages =
             new Dictionary<string, PackageManagerPackageInfo>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, string> _installedPackageReferences =
@@ -50,7 +47,7 @@ namespace Deucarian.PackageInstaller.Editor
             }
             catch (Exception exception)
             {
-                Debug.LogError(LogPrefix + " Failed to start installed-package refresh: " + exception.Message);
+                PackageInstallerLog.Registry.Error("Failed to start installed-package refresh: " + exception.Message);
                 _listRequest = null;
                 ScheduleRefreshRetry();
                 NotifyStateChanged();
@@ -65,6 +62,7 @@ namespace Deucarian.PackageInstaller.Editor
         internal void ReplaceInstalledPackageNamesForTests(IEnumerable<string> packageIds)
         {
             _installedPackages.Clear();
+            _installedPackageReferences.Clear();
 
             if (packageIds == null)
             {
@@ -78,6 +76,24 @@ namespace Deucarian.PackageInstaller.Editor
                     _installedPackages[packageId.Trim()] = null;
                 }
             }
+        }
+
+        internal void ReplaceInstalledPackageReferenceForTests(string packageId, string packageReference)
+        {
+            if (string.IsNullOrWhiteSpace(packageId))
+            {
+                return;
+            }
+
+            _installedPackages[packageId.Trim()] = null;
+
+            if (string.IsNullOrWhiteSpace(packageReference))
+            {
+                _installedPackageReferences.Remove(packageId.Trim());
+                return;
+            }
+
+            _installedPackageReferences[packageId.Trim()] = packageReference.Trim();
         }
 
         public bool TryGetInstalledPackage(string packageId, out PackageManagerPackageInfo packageInfo)
@@ -189,7 +205,7 @@ namespace Deucarian.PackageInstaller.Editor
                     ? _listRequest.Error.message
                     : "Package Manager returned an unknown error.";
 
-                Debug.LogError(LogPrefix + " Failed to refresh installed-package state: " + errorMessage);
+                PackageInstallerLog.Registry.Error("Failed to refresh installed-package state: " + errorMessage);
             }
 
             _listRequest = null;
@@ -248,35 +264,11 @@ namespace Deucarian.PackageInstaller.Editor
                 return false;
             }
 
-            string lockJson = File.ReadAllText(packageLockPath);
-            Match packageMatch = Regex.Match(
-                lockJson,
-                "\"" + Regex.Escape(packageId) + "\"\\s*:\\s*\\{(?<body>.*?)\\n\\s*\\}",
-                RegexOptions.Singleline);
-
-            if (!packageMatch.Success)
-            {
-                return false;
-            }
-
-            return TryReadJsonStringField(packageMatch.Groups["body"].Value, "version", out packageReference);
-        }
-
-        private static bool TryReadJsonStringField(string jsonBody, string fieldName, out string value)
-        {
-            value = string.Empty;
-            Match match = Regex.Match(
-                jsonBody,
-                "\"" + Regex.Escape(fieldName) + "\"\\s*:\\s*\"(?<value>[^\"]+)\"",
-                RegexOptions.Singleline);
-
-            if (!match.Success)
-            {
-                return false;
-            }
-
-            value = match.Groups["value"].Value.Trim();
-            return !string.IsNullOrWhiteSpace(value);
+            return PackageLockJsonReader.TryReadPackageStringField(
+                packageLockPath,
+                packageId,
+                "version",
+                out packageReference);
         }
 
         private static bool TryExtractReferenceFromPackageManagerPackageId(
@@ -320,7 +312,10 @@ namespace Deucarian.PackageInstaller.Editor
 
             return TryGetReferenceName(installedReference, out string installedReferenceName) &&
                    TryGetReferenceName(channelUrl, out string channelReferenceName) &&
-                   string.Equals(installedReferenceName, channelReferenceName, StringComparison.OrdinalIgnoreCase);
+                   string.Equals(
+                       NormalizeReferenceName(installedReferenceName),
+                       NormalizeReferenceName(channelReferenceName),
+                       StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool TryGetReferenceName(string packageReference, out string referenceName)
@@ -346,6 +341,32 @@ namespace Deucarian.PackageInstaller.Editor
         private static string NormalizePackageReference(string packageReference)
         {
             return (packageReference ?? string.Empty).Trim();
+        }
+
+        private static string NormalizeReferenceName(string referenceName)
+        {
+            referenceName = (referenceName ?? string.Empty).Trim();
+
+            const string refsHeadsPrefix = "refs/heads/";
+            const string headsPrefix = "heads/";
+            const string originPrefix = "origin/";
+
+            if (referenceName.StartsWith(refsHeadsPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                return referenceName.Substring(refsHeadsPrefix.Length);
+            }
+
+            if (referenceName.StartsWith(headsPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                return referenceName.Substring(headsPrefix.Length);
+            }
+
+            if (referenceName.StartsWith(originPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                return referenceName.Substring(originPrefix.Length);
+            }
+
+            return referenceName;
         }
 
         private static IReadOnlyList<string> GetPackageLockPaths()

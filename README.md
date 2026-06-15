@@ -7,8 +7,12 @@ Deucarian Package Installer is a small editor-only Unity Package Manager package
 Open it from:
 
 ```text
-Deucarian > Package Installer
+Tools > Deucarian > Package Installer
 ```
+
+## Deucarian Menu
+
+The installer keeps its Unity Editor entry point at `Tools > Deucarian > Package Installer`. This package does not own the Theming, Logging, Object Loading, Session, or Selection menu groups; those packages provide their own package-local menu items under the shared `Tools > Deucarian` menu.
 
 The UI Toolkit preview foundation is available from:
 
@@ -45,9 +49,19 @@ You can also use Unity's Package Manager window:
 1. Open `Window > Package Manager`.
 2. Select `+ > Add package from git URL...`.
 3. Enter the installer Git URL.
-4. Open `Deucarian > Package Installer`.
+4. Open `Tools > Deucarian > Package Installer`.
 
-The package requires Unity `2021.3` or newer and has no package dependencies.
+The package requires Unity `2021.3` or newer and depends on `com.deucarian.editor` and `com.deucarian.logging`.
+
+## Logging
+
+This package uses `com.deucarian.logging` for diagnostics and `com.deucarian.editor` for shared Deucarian editor chrome, styles, icons, and status badges.
+
+Package Installer diagnostics use stable package categories: `PackageInstaller`, `PackageInstaller.Registry`, `PackageInstaller.Install`, `PackageInstaller.Samples`, and `PackageInstaller.UpdateChecks`. Configure Deucarian Logging filters by category and level to isolate registry loading, install/remove operations, sample imports, or update checks. Entries flow through the shared ring buffer for recent-diagnostic inspection and remain compatible with future telemetry sinks.
+
+## Usage
+
+Use the installer window to install standalone packages, install packages with their registered dependencies, import package samples explicitly, and check installed Git packages for updates.
 
 ## Package Registry
 
@@ -59,31 +73,37 @@ The installer loads the bundled `PackageRegistry.json` first so it works offline
 
 If the remote registry succeeds and validates, the window uses it. If it fails, the bundled registry stays active and the header shows that the remote registry failed.
 
-Remote registry validation also checks each package entry against the target package's `package.json` name so installed-package detection uses Unity's exact package IDs.
+Remote registry validation also checks each package entry against the target package's `package.json` name so installed-package detection uses Unity's exact package IDs. If a target manifest cannot be fetched, the validation message includes the exact `package.json` URL that failed.
 
-The current registry includes these package entries:
+The current bundled fallback registry includes these package entries:
 
-- Core: Core State, API, Object Loading, Session
-- UI: UI Binding
+- Editor: Deucarian Editor
+- Core: Core State, API, Logging, Object Loading, Session
+- UI: UI Binding, Theming
 - World: Object Selection
 - Bridge: UI Binding + Core State Bridge, Object Loading API Bridge, ObjectSelection + CoreState Bridge, Session + API Bridge
+- Tools: Package Installer
 - Suites: Selection Suite
 
 Registered packages are first-class UPM packages with their own package IDs:
 
 - `com.deucarian.core-state`
 - `com.deucarian.api`
+- `com.deucarian.logging`
 - `com.deucarian.object-loading`
 - `com.deucarian.session`
 - `com.deucarian.ui-binding`
+- `com.deucarian.theming`
 - `com.deucarian.object-selection`
+- `com.deucarian.editor`
 - `com.deucarian.ui-binding.core-state-bridge`
 - `com.deucarian.object-loading.api-bridge`
 - `com.deucarian.object-selection.core-state-bridge`
 - `com.deucarian.session.api-bridge`
 - `com.deucarian.selection-suite`
+- `com.deucarian.package-installer`
 
-`Install All` installs all missing registered packages in dependency order. Installing one bridge package automatically installs its missing dependencies first, then installs the bridge.
+`Install All` installs all missing registered packages in dependency order. Single install, reinstall, single update, and update-all operations install missing registered Deucarian dependencies first, then install the requested package.
 
 Package IDs remain branded as `com.deucarian.*`. Display names are supplied by the registry and used by the installer UI.
 Technical details such as package IDs, selected references, installed references, revisions, and raw update messages are available from each row's Advanced foldout.
@@ -105,11 +125,11 @@ The registry schema uses `schemaVersion` 1 and contains:
 - `description`: explanatory text shown in the detail pane.
 - `stableUrl`: the stable Git URL or UPM identifier passed to `UnityEditor.PackageManager.Client.Add`.
 - `developmentUrl`: optional development-channel Git URL or UPM identifier. If this is empty, the Development channel is disabled for that package.
-- `dependencies`: package IDs that should be installed before this package is installed. Bridge packages are just packages in the `Bridge` category with dependencies.
+- `dependencies`: package IDs that should be installed before this package is installed, reinstalled, or updated. Bridge packages are just packages in the `Bridge` category with dependencies.
 
 Set `stableUrl` and, when available, `developmentUrl` to the UPM identifier or Git URL. Bridge packages should also list their dependency package IDs in `dependencies`.
 
-When an installed Git package can be matched to `#main` or `#develop`, the installer infers the visible channel from the installed package reference. If the installed reference does not match a known channel, the row shows a Custom channel until the user selects Stable or Development.
+When an installed Git package can be matched to `#main` or `#develop`, including common forms such as `#refs/heads/main`, the installer infers the visible channel from the installed package reference. If the installed reference does not match a known channel, the row shows a Custom channel until the user selects Stable or Development.
 
 ## Samples and Extras
 
@@ -121,15 +141,21 @@ Sample imports are explicit. The installer first tries Unity's Package Manager s
 
 If a sample destination already exists, the installer shows it as already imported and does not overwrite it silently.
 
+## Tests
+
+Run the package's EditMode tests in Unity. The registry tests validate bundled fallback parsing, package ID consistency, dependency references, and the explicit package entries needed for bootstrap installs.
+
 ## Update Checks
 
 `Check for Updates` compares installed registry packages against the selected Stable or Development channel. Git packages are compared by installed revision and the latest revision returned by `git ls-remote`.
 
-Unknown revisions, missing Git, network failures, local/file packages, and non-Git UPM identifiers are reported as check failures instead of blocking the installer.
+Unknown installed revisions are shown as "Cannot determine update" while the package remains installed. Missing Git, network failures, local/file packages, and non-Git UPM identifiers are reported as update-check messages instead of blocking the installer.
 
-`Update` and `Update All Installed Packages` reuse Unity Package Manager installation through `Client.Add` with the selected channel URL.
+The installer can also check for updates automatically when Unity starts and when the Package Installer window opens. Startup checks run at most once per editor session, and window-open checks are throttled so reopening the window does not repeatedly hit remotes. These settings are stored in `EditorPrefs` and can be toggled from the window header.
 
-TODO: installer self-update is intentionally out of scope for this version.
+`Update` and `Update All Installed Packages` reuse Unity Package Manager installation through `Client.Add` with the selected channel URL after dependency-first planning has installed any missing registered Deucarian dependencies.
+
+The installer package itself is included in update discovery when it is installed in the current project.
 
 ## Progress Display
 
@@ -150,7 +176,7 @@ Current bridge package dependencies:
 - ObjectSelection CoreState Bridge depends on Object Selection and Core State.
 - Session API Bridge depends on Session and API.
 
-Installing a bridge only requires one click. The installer computes the dependency-first install plan from `PackageDefinition.Dependencies` and sends that ordered package list to Unity Package Manager.
+Installing a package only requires one click. The installer computes the dependency-first install plan from `PackageDefinition.Dependencies`, skips dependencies that are already installed, fails clearly on unavailable or circular dependencies, and sends the ordered package list to Unity Package Manager.
 
 Bridge packages are regular UPM packages, so no scripting define symbols are required for these bridge installs.
 
@@ -205,7 +231,7 @@ Keeping the installer editor-only ensures:
 
 ## Versioning
 
-Current package version: `1.0.0`.
+Current package version: `1.1.13`.
 
 Branch strategy:
 
@@ -231,3 +257,7 @@ After installing, updating, or removing a package, the installer refreshes insta
 - Only Git branch update checks are supported today.
 - The installer cannot know download-byte progress for Git packages.
 - Sample import avoids silent overwrite; there is no overwrite UI in this version.
+
+## License
+
+See [LICENSE.md](LICENSE.md).

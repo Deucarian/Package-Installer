@@ -81,7 +81,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 .LoadFromJson(json, PackageRegistrySource.Bundled);
             PackageDefinition packageDefinition = PackageRegistryProvider
                 .CreatePackageDefinitions(result.Registry)
-                .Single();
+                .Single(package => package.PackageId == "com.deucarian.stable-only");
 
             Assert.IsTrue(result.IsValid, result.ErrorMessage);
             Assert.IsFalse(packageDefinition.HasDevelopmentUrl);
@@ -215,6 +215,38 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void RemoteRegistryPackageFetchFailureReportsPackageJsonUrl()
+        {
+            RunAsync(async () =>
+            {
+            PackageRegistry registry = new PackageRegistry
+            {
+                schemaVersion = 1,
+                packages = new[]
+                {
+                    new PackageRegistryEntry
+                    {
+                        id = "com.deucarian.editor",
+                        displayName = "Deucarian Editor",
+                        category = "Editor",
+                        stableUrl = "https://github.com/Deucarian/Editor.git#main",
+                        dependencies = Array.Empty<string>()
+                    }
+                }
+            };
+
+            string message = await PackageRegistryPackageNameValidator.ValidateRemotePackageNamesAsync(
+                registry,
+                _ => Task.FromException<string>(new InvalidOperationException("404 Not Found")));
+
+            StringAssert.Contains(
+                "https://raw.githubusercontent.com/Deucarian/Editor/main/package.json",
+                message);
+            StringAssert.Contains("404 Not Found", message);
+            });
+        }
+
+        [Test]
         public void BundledRegistryUsesRealCoreStatePackageId()
         {
             string registryJson = File.ReadAllText(GetBundledRegistryPath());
@@ -247,7 +279,12 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 .Single(package => package.id == "com.deucarian.object-loading");
             Assert.AreEqual("Deucarian Object Loading", objectLoading.displayName);
             Assert.AreEqual("Core", objectLoading.category);
-            Assert.IsEmpty(objectLoading.dependencies);
+            CollectionAssert.AreEqual(
+                new[]
+                {
+                    "com.deucarian.logging"
+                },
+                objectLoading.dependencies);
 
             PackageRegistryEntry bridge = result.Registry.packages
                 .Single(package => package.id == "com.deucarian.object-loading.api-bridge");
@@ -260,6 +297,46 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                     "com.deucarian.api"
                 },
                 bridge.dependencies);
+        }
+
+        [Test]
+        public void BundledRegistryIncludesPackageInstaller()
+        {
+            string registryJson = File.ReadAllText(GetBundledRegistryPath());
+            PackageRegistryLoadResult result = new PackageRegistryLoader()
+                .LoadFromJson(registryJson, PackageRegistrySource.Bundled);
+
+            PackageDefinition packageInstaller = PackageRegistryProvider
+                .CreatePackageDefinitions(result.Registry)
+                .Single(package => package.PackageId == "com.deucarian.package-installer");
+
+            Assert.AreEqual("Tools", packageInstaller.Category);
+            StringAssert.Contains("Package-Installer.git#main", packageInstaller.StableUrl);
+        }
+
+        [Test]
+        public void BundledRegistryIncludesEditorBackedTools()
+        {
+            string registryJson = File.ReadAllText(GetBundledRegistryPath());
+            PackageRegistryLoadResult result = new PackageRegistryLoader()
+                .LoadFromJson(registryJson, PackageRegistrySource.Bundled);
+
+            Assert.IsTrue(result.IsValid, result.ErrorMessage);
+
+            PackageRegistryEntry editor = result.Registry.packages
+                .Single(package => package.id == "com.deucarian.editor");
+            PackageRegistryEntry logging = result.Registry.packages
+                .Single(package => package.id == "com.deucarian.logging");
+            PackageRegistryEntry theming = result.Registry.packages
+                .Single(package => package.id == "com.deucarian.theming");
+            PackageRegistryEntry packageInstaller = result.Registry.packages
+                .Single(package => package.id == "com.deucarian.package-installer");
+
+            Assert.AreEqual("Editor", editor.category);
+            StringAssert.Contains("Editor.git#main", editor.stableUrl);
+            CollectionAssert.AreEqual(new[] { "com.deucarian.editor" }, logging.dependencies);
+            CollectionAssert.AreEqual(new[] { "com.deucarian.editor", "com.deucarian.logging" }, theming.dependencies);
+            CollectionAssert.AreEqual(new[] { "com.deucarian.editor", "com.deucarian.logging" }, packageInstaller.dependencies);
         }
 
         [Test]
@@ -281,7 +358,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                         }
                     }
                 })
-                .Single();
+                .Single(package => package.PackageId == "com.deucarian.core-state");
 
             using (PackageDetectionService detectionService = new PackageDetectionService())
             {

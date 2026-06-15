@@ -14,31 +14,41 @@ namespace Deucarian.PackageInstaller.Editor
 {
     internal sealed class PackageUpdateCheckService : IDisposable
     {
-        private const string LogPrefix = "[Deucarian Package Installer]";
         private const int GitTimeoutMilliseconds = 15000;
 
         private static readonly Regex ShaRegex =
             new Regex("(?<![0-9a-fA-F])([0-9a-fA-F]{40})(?![0-9a-fA-F])", RegexOptions.Compiled);
 
         private readonly PackageDetectionService _packageDetectionService;
-        private readonly Dictionary<string, PackageUpdateStatus> _statuses =
+        private static readonly Dictionary<string, PackageUpdateStatus> Statuses =
             new Dictionary<string, PackageUpdateStatus>(StringComparer.OrdinalIgnoreCase);
         private readonly IReadOnlyList<string> _packageLockPaths;
+        private readonly Action _sharedStateChangedHandler;
 
-        private Task<PackageUpdateStatus[]> _checkTask;
-        private IReadOnlyList<UpdateCheckItem> _activeCheckItems = Array.Empty<UpdateCheckItem>();
+        private static Task<PackageUpdateStatus[]> CheckTask;
+        private static IReadOnlyList<UpdateCheckItem> ActiveCheckItems = Array.Empty<UpdateCheckItem>();
+        private static string LastFailureMessageValue = string.Empty;
+        private static event Action SharedStateChanged;
 
         public PackageUpdateCheckService(PackageDetectionService packageDetectionService)
         {
             _packageDetectionService = packageDetectionService ?? throw new ArgumentNullException(nameof(packageDetectionService));
             _packageLockPaths = GetPackageLockPaths();
+            _sharedStateChangedHandler = NotifyStateChanged;
+            SharedStateChanged += _sharedStateChangedHandler;
         }
 
         public event Action StateChanged;
 
-        public bool IsChecking => _checkTask != null;
+        public bool IsChecking => CheckTask != null;
 
-        public bool HasStatuses => _statuses.Count > 0;
+        public static bool IsAnyCheckRunning => CheckTask != null;
+
+        public bool HasStatuses => Statuses.Count > 0;
+
+        public DateTime? LastCheckedUtc => PackageUpdateCheckPreferences.LastCheckedUtc;
+
+        public string LastFailureMessage => LastFailureMessageValue;
 
         public void CheckForUpdates(
             IEnumerable<PackageDefinition> packageDefinitions,
@@ -46,7 +56,7 @@ namespace Deucarian.PackageInstaller.Editor
         {
             if (IsChecking)
             {
-                UnityEngine.Debug.Log(LogPrefix + " Update check is already running.");
+                PackageInstallerLog.UpdateChecks.Info("Update check is already running.");
                 return;
             }
 
@@ -59,7 +69,7 @@ namespace Deucarian.PackageInstaller.Editor
 
                 if (channel == PackageChannel.Custom)
                 {
-                    _statuses[packageDefinition.PackageId] =
+                    Statuses[packageDefinition.PackageId] =
                         PackageUpdateStatus.Unknown(packageDefinition, channel);
                     continue;
                 }
@@ -68,36 +78,43 @@ namespace Deucarian.PackageInstaller.Editor
                         packageDefinition.PackageId,
                         out PackageManagerPackageInfo packageInfo))
                 {
-                    _statuses[packageDefinition.PackageId] =
+                    Statuses[packageDefinition.PackageId] =
                         PackageUpdateStatus.NotInstalled(packageDefinition, channel, selectedUrl);
                     continue;
                 }
 
-                _statuses[packageDefinition.PackageId] =
+                Statuses[packageDefinition.PackageId] =
                     PackageUpdateStatus.Checking(packageDefinition, channel, selectedUrl);
+
+                _packageDetectionService.TryGetInstalledPackageReference(
+                    packageDefinition.PackageId,
+                    out string installedPackageReference);
 
                 checkItems.Add(new UpdateCheckItem(
                     packageDefinition,
                     channel,
                     selectedUrl,
-                    packageInfo.packageId,
-                    packageInfo.resolvedPath,
+                    packageInfo != null ? packageInfo.packageId : string.Empty,
+                    packageInfo != null ? packageInfo.resolvedPath : string.Empty,
+                    installedPackageReference,
                     _packageLockPaths));
             }
 
-            NotifyStateChanged();
+            LastFailureMessageValue = string.Empty;
 
             if (checkItems.Count == 0)
             {
-                UnityEngine.Debug.Log(LogPrefix + " No installed registry packages found for update checking.");
+                PackageInstallerLog.UpdateChecks.Info("No installed registry packages found for update checking.");
+                RecordCheckCompleted(Array.Empty<PackageUpdateStatus>());
                 return;
             }
 
-            _activeCheckItems = checkItems;
-            _checkTask = Task.Run(() => checkItems.Select(CheckItem).ToArray());
+            ActiveCheckItems = checkItems;
+            CheckTask = Task.Run(() => checkItems.Select(CheckItem).ToArray());
 
-            EditorApplication.update -= Update;
-            EditorApplication.update += Update;
+            EditorApplication.update -= UpdateShared;
+            EditorApplication.update += UpdateShared;
+            NotifySharedStateChanged();
         }
 
         public PackageUpdateStatus GetStatus(PackageDefinition packageDefinition, PackageChannel channel)
@@ -109,7 +126,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             string selectedUrl = packageDefinition.GetUrl(channel);
 
-            if (_statuses.TryGetValue(packageDefinition.PackageId, out PackageUpdateStatus status) &&
+            if (Statuses.TryGetValue(packageDefinition.PackageId, out PackageUpdateStatus status) &&
                 status.Channel == channel &&
                 string.Equals(status.SelectedUrl, selectedUrl, StringComparison.Ordinal))
             {
@@ -146,26 +163,27 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            if (_statuses.Remove(packageId))
+            if (Statuses.Remove(packageId))
             {
-                NotifyStateChanged();
+                NotifySharedStateChanged();
             }
         }
 
         public void InvalidateAll()
         {
-            if (_statuses.Count == 0)
+            if (Statuses.Count == 0)
             {
                 return;
             }
 
-            _statuses.Clear();
-            NotifyStateChanged();
+            Statuses.Clear();
+            LastFailureMessageValue = string.Empty;
+            NotifySharedStateChanged();
         }
 
         public void Dispose()
         {
-            EditorApplication.update -= Update;
+            SharedStateChanged -= _sharedStateChangedHandler;
         }
 
         private static IEnumerable<PackageDefinition> GetInstallablePackages(IEnumerable<PackageDefinition> packageDefinitions)
@@ -182,6 +200,25 @@ namespace Deucarian.PackageInstaller.Editor
                     yield return packageDefinition;
                 }
             }
+        }
+
+        internal static PackageUpdateStatus CheckItemForTests(
+            PackageDefinition packageDefinition,
+            PackageChannel channel,
+            string selectedUrl,
+            string packageManagerPackageId,
+            string resolvedPath,
+            string installedPackageReference,
+            IReadOnlyList<string> packageLockPaths)
+        {
+            return CheckItem(new UpdateCheckItem(
+                packageDefinition,
+                channel,
+                selectedUrl,
+                packageManagerPackageId,
+                resolvedPath,
+                installedPackageReference,
+                packageLockPaths));
         }
 
         private static PackageUpdateStatus CheckItem(UpdateCheckItem item)
@@ -214,12 +251,12 @@ namespace Deucarian.PackageInstaller.Editor
 
                 if (!TryGetInstalledRevision(item, out string installedRevision))
                 {
-                    return PackageUpdateStatus.Failed(
+                    return PackageUpdateStatus.CannotDetermine(
                         item.PackageDefinition,
                         item.Channel,
                         item.SelectedUrl,
                         string.Empty,
-                        "Installed Git revision is unknown. Refresh package detection or reinstall the package from a Git URL.");
+                        "The package is installed, but Unity did not expose a Git revision for this package.");
                 }
 
                 if (!TryGetRemoteRevision(remoteUrl, reference, out string latestRevision, out string remoteMessage))
@@ -260,24 +297,24 @@ namespace Deucarian.PackageInstaller.Editor
             }
         }
 
-        private void Update()
+        private static void UpdateShared()
         {
-            if (_checkTask == null || !_checkTask.IsCompleted)
+            if (CheckTask == null || !CheckTask.IsCompleted)
             {
                 return;
             }
 
-            EditorApplication.update -= Update;
+            EditorApplication.update -= UpdateShared;
 
             PackageUpdateStatus[] results;
 
             try
             {
-                results = _checkTask.Result;
+                results = CheckTask.Result;
             }
             catch (Exception exception)
             {
-                results = _activeCheckItems
+                results = ActiveCheckItems
                     .Select(item => PackageUpdateStatus.Failed(
                         item.PackageDefinition,
                         item.Channel,
@@ -287,15 +324,24 @@ namespace Deucarian.PackageInstaller.Editor
                     .ToArray();
             }
 
+            RecordCheckCompleted(results);
+        }
+
+        private static void RecordCheckCompleted(PackageUpdateStatus[] results)
+        {
+            results = results ?? Array.Empty<PackageUpdateStatus>();
+
             foreach (PackageUpdateStatus status in results)
             {
-                _statuses[status.PackageId] = status;
+                Statuses[status.PackageId] = status;
                 LogStatus(status);
             }
 
-            _checkTask = null;
-            _activeCheckItems = Array.Empty<UpdateCheckItem>();
-            NotifyStateChanged();
+            LastFailureMessageValue = GetFailureSummary(results);
+            PackageUpdateCheckPreferences.LastCheckedUtc = DateTime.UtcNow;
+            CheckTask = null;
+            ActiveCheckItems = Array.Empty<UpdateCheckItem>();
+            NotifySharedStateChanged();
         }
 
         private static bool TryParseGitPackageReference(
@@ -458,6 +504,11 @@ namespace Deucarian.PackageInstaller.Editor
                 return true;
             }
 
+            if (TryExtractRevision(item.InstalledPackageReference, out revision))
+            {
+                return true;
+            }
+
             foreach (string packageLockPath in item.PackageLockPaths)
             {
                 if (TryReadPackageLockRevision(packageLockPath, item.PackageDefinition.PackageId, out revision))
@@ -469,30 +520,20 @@ namespace Deucarian.PackageInstaller.Editor
             return TryReadGitHeadRevision(item.ResolvedPath, out revision);
         }
 
-        private static bool TryReadPackageLockRevision(string packageLockPath, string packageId, out string revision)
+        internal static bool TryReadPackageLockRevision(string packageLockPath, string packageId, out string revision)
         {
             revision = string.Empty;
 
-            if (string.IsNullOrWhiteSpace(packageLockPath) || !File.Exists(packageLockPath))
+            if (!PackageLockJsonReader.TryReadPackageObjectBody(
+                    packageLockPath,
+                    packageId,
+                    out string packageBody))
             {
                 return false;
             }
 
-            string lockJson = File.ReadAllText(packageLockPath);
-            Match packageMatch = Regex.Match(
-                lockJson,
-                "\"" + Regex.Escape(packageId) + "\"\\s*:\\s*\\{(?<body>.*?)\\n\\s*\\}",
-                RegexOptions.Singleline);
-
-            if (!packageMatch.Success)
-            {
-                return false;
-            }
-
-            string body = packageMatch.Groups["body"].Value;
-
-            return TryReadJsonField(body, "hash", out revision) ||
-                   TryExtractRevision(body, out revision);
+            return TryReadJsonField(packageBody, "hash", out revision) ||
+                   TryExtractRevision(packageBody, out revision);
         }
 
         private static bool TryReadJsonField(string jsonBody, string fieldName, out string value)
@@ -595,7 +636,7 @@ namespace Deucarian.PackageInstaller.Editor
                    Regex.IsMatch(value, "^[0-9a-fA-F]{7,40}$");
         }
 
-        private static bool RevisionsMatch(string installedRevision, string latestRevision)
+        internal static bool RevisionsMatch(string installedRevision, string latestRevision)
         {
             string installed = NormalizeRevision(installedRevision);
             string latest = NormalizeRevision(latestRevision);
@@ -648,25 +689,86 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
+            LogType logType = GetLogType(status);
+            string message;
+
             if (status.IsUpdateAvailable)
             {
-                UnityEngine.Debug.Log(LogPrefix + " Update available for " + status.DisplayName + ": " +
-                                      status.ShortInstalledRevision + " -> " + status.ShortLatestRevision + ".");
-                return;
+                message = "Update available for " + status.DisplayName + ": " +
+                          status.ShortInstalledRevision + " -> " + status.ShortLatestRevision + ".";
             }
-
-            if (status.Kind == PackageUpdateStatusKind.Failed)
+            else if (status.Kind == PackageUpdateStatusKind.Failed)
             {
-                UnityEngine.Debug.LogWarning(LogPrefix + " Update check failed for " + status.DisplayName + ": " + status.Message);
+                message = "Update check failed for " + status.DisplayName + ": " + status.Message;
+            }
+            else if (status.Kind == PackageUpdateStatusKind.CannotDetermine)
+            {
+                message = "Update check failed for " + status.DisplayName + ": " + status.Label + ". " + status.Message;
+            }
+            else
+            {
+                message = "Update check for " + status.DisplayName + ": " + status.Label + ".";
+            }
+
+            LogMessage(logType, message);
+        }
+
+        internal static LogType GetLogType(PackageUpdateStatus status)
+        {
+            if (status == null)
+            {
+                return LogType.Log;
+            }
+
+            switch (status.Kind)
+            {
+                case PackageUpdateStatusKind.Failed:
+                case PackageUpdateStatusKind.CannotDetermine:
+                    return LogType.Error;
+                default:
+                    return LogType.Log;
+            }
+        }
+
+        private static void LogMessage(LogType logType, string message)
+        {
+            if (logType == LogType.Error)
+            {
+                PackageInstallerLog.UpdateChecks.Error(message);
                 return;
             }
 
-            UnityEngine.Debug.Log(LogPrefix + " Update check for " + status.DisplayName + ": " + status.Label + ".");
+            PackageInstallerLog.UpdateChecks.Info(message);
         }
 
         private void NotifyStateChanged()
         {
             StateChanged?.Invoke();
+        }
+
+        private static void NotifySharedStateChanged()
+        {
+            SharedStateChanged?.Invoke();
+        }
+
+        private static string GetFailureSummary(IEnumerable<PackageUpdateStatus> statuses)
+        {
+            PackageUpdateStatus[] failures = statuses
+                .Where(status => status != null && status.Kind == PackageUpdateStatusKind.Failed)
+                .ToArray();
+
+            if (failures.Length == 0)
+            {
+                return string.Empty;
+            }
+
+            if (failures.Length == 1)
+            {
+                return failures[0].DisplayName + ": " + failures[0].Message;
+            }
+
+            return failures.Length + " update checks failed. First: " +
+                   failures[0].DisplayName + ": " + failures[0].Message;
         }
 
         private sealed class UpdateCheckItem
@@ -677,6 +779,7 @@ namespace Deucarian.PackageInstaller.Editor
                 string selectedUrl,
                 string packageManagerPackageId,
                 string resolvedPath,
+                string installedPackageReference,
                 IReadOnlyList<string> packageLockPaths)
             {
                 PackageDefinition = packageDefinition;
@@ -684,6 +787,7 @@ namespace Deucarian.PackageInstaller.Editor
                 SelectedUrl = selectedUrl ?? string.Empty;
                 PackageManagerPackageId = packageManagerPackageId ?? string.Empty;
                 ResolvedPath = resolvedPath ?? string.Empty;
+                InstalledPackageReference = installedPackageReference ?? string.Empty;
                 PackageLockPaths = packageLockPaths ?? Array.Empty<string>();
             }
 
@@ -696,6 +800,8 @@ namespace Deucarian.PackageInstaller.Editor
             public string PackageManagerPackageId { get; }
 
             public string ResolvedPath { get; }
+
+            public string InstalledPackageReference { get; }
 
             public IReadOnlyList<string> PackageLockPaths { get; }
         }

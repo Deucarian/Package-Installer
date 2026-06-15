@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Deucarian.Editor;
 using UnityEditor;
 using UnityEngine;
 using PackageManagerPackageInfo = UnityEditor.PackageManager.PackageInfo;
@@ -10,13 +11,18 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed class PackageInstallerWindow : EditorWindow
     {
         private const string WindowTitle = "Package Installer";
+        private const string PackageVersion = "1.1.12";
         private const float MinWindowWidth = 850f;
         private const float MinWindowHeight = 650f;
-        private const float SidebarWidth = 260f;
-        private const float SidebarRowHeight = 52f;
-        private const float ProgressAreaHeight = 96f;
-        private const float SummaryAreaHeight = 106f;
+        private const float SidebarWidth = 340f;
+        private const float SidebarRowMinHeight = 94f;
+        private const float SidebarRowMaxHeight = 150f;
+        private const float DetailLabelWidth = 118f;
+        private const float OperationDrawerHeight = 132f;
         private const string ChannelPreferencePrefix = "Deucarian.PackageInstaller.SelectedChannel.";
+        private const string AdvancedFoldoutPreferencePrefix = "Deucarian.PackageInstaller.AdvancedFoldout.";
+        private const string CategoryFoldoutPreferencePrefix = "Deucarian.PackageInstaller.CategoryFoldout.";
+        private const string OperationDrawerPreferencePrefix = "Deucarian.PackageInstaller.OperationDrawer.";
 
         private enum SelectionKind
         {
@@ -73,22 +79,29 @@ namespace Deucarian.PackageInstaller.Editor
         private PackageDependencyInstaller _packageDependencyInstaller;
         private readonly Dictionary<string, PackageChannel> _selectedChannels =
             new Dictionary<string, PackageChannel>();
+        private readonly HashSet<string> _autoSelectedChannelPackageIds =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, bool> _advancedFoldouts =
             new Dictionary<string, bool>();
+        private readonly Dictionary<string, bool> _categoryFoldouts =
+            new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
 
         private Vector2 _sidebarScrollPosition;
         private Vector2 _detailsScrollPosition;
+        private Vector2 _operationDetailsScrollPosition;
         private SelectionKind _selectionKind = SelectionKind.Package;
         private string _selectedPackageId = string.Empty;
+        private string _packageSearchText = string.Empty;
+        private bool _showInstalledPackages = true;
+        private bool _showNotInstalledPackages = true;
         private bool _checkUpdatesAfterDetectionRefresh;
+        private bool _operationDetailsExpanded;
 
         private bool _stylesInitialized;
         private bool _lastProSkin;
         private Color _mainBackgroundColor;
-        private Color _headerBackgroundColor;
         private Color _sidebarBackgroundColor;
         private Color _detailsBackgroundColor;
-        private Color _panelBackgroundColor;
         private Color _sampleRowBackgroundColor;
         private Color _panelBorderColor;
         private Color _separatorColor;
@@ -97,39 +110,26 @@ namespace Deucarian.PackageInstaller.Editor
         private Color _rowSelectedColor;
         private Color _textColor;
         private Color _mutedTextColor;
-        private Color _installedColor;
-        private Color _notInstalledColor;
-        private Color _updateColor;
-        private Color _failedColor;
-        private Color _busyColor;
-        private Color _infoColor;
-        private Color _bridgeColor;
 
         private GUIStyle _windowStyle;
-        private GUIStyle _headerStyle;
         private GUIStyle _sidebarStyle;
         private GUIStyle _detailsStyle;
-        private GUIStyle _panelStyle;
-        private GUIStyle _detailHeaderStyle;
         private GUIStyle _sampleRowStyle;
         private GUIStyle _titleStyle;
         private GUIStyle _subtitleStyle;
         private GUIStyle _sectionTitleStyle;
-        private GUIStyle _sectionSmallTitleStyle;
-        private GUIStyle _panelTitleStyle;
-        private GUIStyle _labelStyle;
         private GUIStyle _miniLabelStyle;
         private GUIStyle _mutedMiniLabelStyle;
+        private GUIStyle _operationLineStyle;
         private GUIStyle _rowTitleStyle;
         private GUIStyle _rowSubLabelStyle;
         private GUIStyle _rowStatusStyle;
-        private GUIStyle _badgeStyle;
         private GUIStyle _markerStyle;
         private GUIStyle _foldoutStyle;
         private GUIStyle _primaryButtonStyle;
         private GUIStyle _secondaryButtonStyle;
 
-        [MenuItem("Deucarian/Package Installer")]
+        [MenuItem("Tools/Deucarian/Package Installer")]
         public static void Open()
         {
             PackageInstallerWindow window = GetWindow<PackageInstallerWindow>();
@@ -153,6 +153,7 @@ namespace Deucarian.PackageInstaller.Editor
                 _packageDetectionService);
             PackageRegistryProvider.EnsureLoaded();
             EnsureValidSelection();
+            _operationDetailsExpanded = EditorPrefs.GetBool(GetOperationDrawerPreferenceKey(), false);
 
             PackageRegistryProvider.RegistryChanged += HandleRegistryChanged;
             _packageInstallService.StateChanged += Repaint;
@@ -162,9 +163,17 @@ namespace Deucarian.PackageInstaller.Editor
             _packageUpdateCheckService.StateChanged += Repaint;
             _packageSampleImportService.StateChanged += Repaint;
 
+            bool checkUpdatesAfterDetectionRefresh =
+                PackageUpdateCheckPreferences.ShouldCheckOnWindowOpen(DateTime.UtcNow);
+
             if (!_packageInstallService.ResumeSavedOperation())
             {
+                _checkUpdatesAfterDetectionRefresh = checkUpdatesAfterDetectionRefresh;
                 _packageDetectionService.Refresh();
+            }
+            else if (checkUpdatesAfterDetectionRefresh)
+            {
+                _checkUpdatesAfterDetectionRefresh = true;
             }
         }
 
@@ -215,8 +224,8 @@ namespace Deucarian.PackageInstaller.Editor
                     DrawDetailsPane();
                 }
 
-                DrawProgressFooter();
-                DrawLastOperationSummaryPanel();
+                DrawGlobalOperationArea();
+                DeucarianEditorChrome.DrawFooterVersion("com.deucarian.package-installer", PackageVersion);
             }
         }
 
@@ -232,33 +241,20 @@ namespace Deucarian.PackageInstaller.Editor
             _stylesInitialized = true;
             _lastProSkin = proSkin;
 
-            _mainBackgroundColor = new Color(0.105f, 0.115f, 0.125f);
-            _headerBackgroundColor = new Color(0.145f, 0.155f, 0.165f);
-            _sidebarBackgroundColor = new Color(0.115f, 0.125f, 0.135f);
-            _detailsBackgroundColor = new Color(0.12f, 0.13f, 0.14f);
-            _panelBackgroundColor = new Color(0.16f, 0.17f, 0.18f);
-            _sampleRowBackgroundColor = new Color(0.135f, 0.145f, 0.155f);
-            _panelBorderColor = new Color(0.30f, 0.32f, 0.35f);
-            _separatorColor = new Color(0.26f, 0.28f, 0.30f);
-            _rowBackgroundColor = new Color(0.14f, 0.15f, 0.16f);
-            _rowHoverColor = new Color(0.18f, 0.20f, 0.22f);
-            _rowSelectedColor = new Color(0.18f, 0.28f, 0.39f);
-            _textColor = new Color(0.88f, 0.90f, 0.92f);
-            _mutedTextColor = new Color(0.58f, 0.63f, 0.68f);
-            _installedColor = new Color(0.34f, 0.78f, 0.50f);
-            _notInstalledColor = new Color(0.56f, 0.60f, 0.64f);
-            _updateColor = new Color(0.96f, 0.68f, 0.25f);
-            _failedColor = new Color(0.95f, 0.34f, 0.34f);
-            _busyColor = new Color(0.35f, 0.62f, 0.95f);
-            _infoColor = new Color(0.42f, 0.72f, 0.90f);
-            _bridgeColor = new Color(0.44f, 0.67f, 0.95f);
+            _mainBackgroundColor = DeucarianEditorColors.HeaderBackground;
+            _sidebarBackgroundColor = DeucarianEditorColors.SectionBackground;
+            _detailsBackgroundColor = DeucarianEditorColors.SectionBackground;
+            _sampleRowBackgroundColor = DeucarianEditorColors.WithAlpha(DeucarianEditorColors.SectionBackground, 0.92f);
+            _panelBorderColor = DeucarianEditorColors.Border;
+            _separatorColor = DeucarianEditorColors.Border;
+            _rowBackgroundColor = DeucarianEditorColors.WithAlpha(DeucarianEditorColors.SectionBackground, 0.88f);
+            _rowHoverColor = DeucarianEditorColors.WithAlpha(DeucarianEditorColors.Blue, proSkin ? 0.24f : 0.14f);
+            _rowSelectedColor = DeucarianEditorColors.WithAlpha(DeucarianEditorColors.Teal, proSkin ? 0.34f : 0.20f);
+            _textColor = DeucarianEditorColors.BodyText;
+            _mutedTextColor = DeucarianEditorColors.MutedText;
 
             _windowStyle = new GUIStyle();
             _windowStyle.padding = new RectOffset(12, 12, 10, 10);
-
-            _headerStyle = new GUIStyle();
-            _headerStyle.padding = new RectOffset(14, 14, 10, 10);
-            _headerStyle.margin = new RectOffset(0, 0, 0, 8);
 
             _sidebarStyle = new GUIStyle();
             _sidebarStyle.padding = new RectOffset(10, 10, 10, 10);
@@ -266,63 +262,42 @@ namespace Deucarian.PackageInstaller.Editor
             _detailsStyle = new GUIStyle();
             _detailsStyle.padding = new RectOffset(10, 10, 10, 10);
 
-            _panelStyle = new GUIStyle();
-            _panelStyle.padding = new RectOffset(12, 12, 10, 10);
-            _panelStyle.margin = new RectOffset(0, 0, 0, 8);
-
-            _detailHeaderStyle = new GUIStyle();
-            _detailHeaderStyle.padding = new RectOffset(14, 14, 12, 12);
-            _detailHeaderStyle.margin = new RectOffset(0, 0, 0, 8);
-
             _sampleRowStyle = new GUIStyle();
             _sampleRowStyle.padding = new RectOffset(10, 10, 8, 8);
             _sampleRowStyle.margin = new RectOffset(0, 0, 2, 6);
 
-            _titleStyle = new GUIStyle(EditorStyles.boldLabel);
-            _titleStyle.fontSize = 18;
-            _titleStyle.normal.textColor = _textColor;
+            _titleStyle = new GUIStyle(DeucarianEditorStyles.PackageHeaderTitle);
+            _titleStyle.fontSize = 15;
+            _titleStyle.wordWrap = true;
 
-            _subtitleStyle = new GUIStyle(EditorStyles.wordWrappedMiniLabel);
-            _subtitleStyle.fontSize = 11;
-            _subtitleStyle.normal.textColor = _mutedTextColor;
+            _subtitleStyle = new GUIStyle(DeucarianEditorStyles.PackageHeaderSubtitle);
 
-            _sectionTitleStyle = new GUIStyle(EditorStyles.boldLabel);
-            _sectionTitleStyle.fontSize = 12;
-            _sectionTitleStyle.normal.textColor = _textColor;
-
-            _sectionSmallTitleStyle = new GUIStyle(EditorStyles.miniBoldLabel);
-            _sectionSmallTitleStyle.normal.textColor = _mutedTextColor;
-
-            _panelTitleStyle = new GUIStyle(EditorStyles.boldLabel);
-            _panelTitleStyle.fontSize = 12;
-            _panelTitleStyle.normal.textColor = _textColor;
-
-            _labelStyle = new GUIStyle(EditorStyles.label);
-            _labelStyle.normal.textColor = _textColor;
-            _labelStyle.wordWrap = true;
+            _sectionTitleStyle = new GUIStyle(DeucarianEditorStyles.SectionTitle);
 
             _miniLabelStyle = new GUIStyle(EditorStyles.wordWrappedMiniLabel);
             _miniLabelStyle.normal.textColor = _textColor;
 
-            _mutedMiniLabelStyle = new GUIStyle(EditorStyles.wordWrappedMiniLabel);
-            _mutedMiniLabelStyle.normal.textColor = _mutedTextColor;
+            _mutedMiniLabelStyle = new GUIStyle(DeucarianEditorStyles.MutedLabel);
+            _mutedMiniLabelStyle.fontSize = EditorStyles.wordWrappedMiniLabel.fontSize;
+
+            _operationLineStyle = new GUIStyle(EditorStyles.miniLabel);
+            _operationLineStyle.normal.textColor = _textColor;
+            _operationLineStyle.clipping = TextClipping.Clip;
+            _operationLineStyle.wordWrap = false;
 
             _rowTitleStyle = new GUIStyle(EditorStyles.miniBoldLabel);
             _rowTitleStyle.normal.textColor = _textColor;
+            _rowTitleStyle.wordWrap = true;
             _rowTitleStyle.clipping = TextClipping.Clip;
 
-            _rowSubLabelStyle = new GUIStyle(EditorStyles.miniLabel);
+            _rowSubLabelStyle = new GUIStyle(EditorStyles.wordWrappedMiniLabel);
             _rowSubLabelStyle.normal.textColor = _mutedTextColor;
+            _rowSubLabelStyle.wordWrap = true;
             _rowSubLabelStyle.clipping = TextClipping.Clip;
 
-            _rowStatusStyle = new GUIStyle(EditorStyles.miniBoldLabel);
-            _rowStatusStyle.alignment = TextAnchor.UpperRight;
+            _rowStatusStyle = new GUIStyle(DeucarianEditorStyles.StatusBadge);
+            _rowStatusStyle.alignment = TextAnchor.MiddleCenter;
             _rowStatusStyle.clipping = TextClipping.Clip;
-
-            _badgeStyle = new GUIStyle(EditorStyles.miniBoldLabel);
-            _badgeStyle.alignment = TextAnchor.MiddleCenter;
-            _badgeStyle.normal.textColor = _textColor;
-            _badgeStyle.clipping = TextClipping.Clip;
 
             _markerStyle = new GUIStyle(EditorStyles.miniBoldLabel);
             _markerStyle.alignment = TextAnchor.MiddleCenter;
@@ -340,7 +315,7 @@ namespace Deucarian.PackageInstaller.Editor
             _primaryButtonStyle.fontStyle = FontStyle.Bold;
             _primaryButtonStyle.fixedHeight = 24f;
 
-            _secondaryButtonStyle = new GUIStyle(EditorStyles.miniButton);
+            _secondaryButtonStyle = new GUIStyle(DeucarianEditorStyles.ToolbarButton);
             _secondaryButtonStyle.fixedHeight = 24f;
         }
 
@@ -354,65 +329,43 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void DrawHeader()
         {
-            bool compact = position.width < 980f;
-            Rect rect = BeginSurface(
-                _headerStyle,
-                _headerBackgroundColor,
-                _panelBorderColor,
-                GUILayout.MinHeight(compact ? 96f : 76f),
-                GUILayout.ExpandWidth(true));
+            bool compact = position.width < 1100f;
+
+            DeucarianEditorChrome.DrawPackageHeader(
+                "package-installer",
+                "Deucarian Package Installer",
+                "Install, update, remove, and compose Deucarian packages through first-class bridge packages.");
+
+            DeucarianEditorChrome.BeginSection();
 
             using (new EditorGUILayout.HorizontalScope())
             {
-                using (new EditorGUILayout.VerticalScope(GUILayout.MinWidth(280f), GUILayout.ExpandWidth(true)))
+                using (new EditorGUILayout.VerticalScope(GUILayout.ExpandWidth(true)))
                 {
-                    EditorGUILayout.LabelField("Deucarian Package Installer", _titleStyle);
-                    EditorGUILayout.LabelField(
-                        "Install, update, remove, and compose Deucarian packages through first-class bridge packages.",
-                        _subtitleStyle);
-                }
+                    DrawRegistrySummary();
 
-                GUILayout.Space(12f);
-
-                using (new EditorGUILayout.VerticalScope(GUILayout.Width(compact ? 330f : 560f)))
-                {
                     if (compact)
                     {
-                        DrawRegistrySummary();
-
-                        using (new EditorGUILayout.HorizontalScope())
-                        {
-                            DrawHeaderButton("Refresh", 88f, IsAnyOperationBusy(), RefreshPackages);
-                            DrawHeaderButton("Check Updates", 118f, IsAnyOperationBusy(), CheckForUpdates);
-                            GUILayout.FlexibleSpace();
-                        }
-
-                        using (new EditorGUILayout.HorizontalScope())
-                        {
-                            PackageDefinition[] packagesWithUpdates = GetPackagesWithUpdates();
-                            DrawHeaderButton("Update All", 94f, packagesWithUpdates.Length == 0 || IsAnyOperationBusy(), UpdateAllPackages);
-                            DrawHeaderButton("Install All", 88f, IsAnyOperationBusy(), InstallAllPackages);
-                            GUILayout.FlexibleSpace();
-                        }
+                        GUILayout.Space(4f);
+                        DrawUpdateSummary(true);
                     }
-                    else
-                    {
-                        using (new EditorGUILayout.HorizontalScope())
-                        {
-                            DrawRegistrySummary();
-                            GUILayout.FlexibleSpace();
-                            DrawHeaderButton("Refresh", 80f, IsAnyOperationBusy(), RefreshPackages);
-                            DrawHeaderButton("Check for Updates", 126f, IsAnyOperationBusy(), CheckForUpdates);
+                }
 
-                            PackageDefinition[] packagesWithUpdates = GetPackagesWithUpdates();
-                            DrawHeaderButton("Update All", 92f, packagesWithUpdates.Length == 0 || IsAnyOperationBusy(), UpdateAllPackages);
-                            DrawHeaderButton("Install All", 86f, IsAnyOperationBusy(), InstallAllPackages);
-                        }
+                if (!compact)
+                {
+                    GUILayout.Space(12f);
+
+                    using (new EditorGUILayout.VerticalScope(GUILayout.Width(420f)))
+                    {
+                        DrawUpdateSummary(false);
                     }
                 }
             }
 
-            EditorGUILayout.EndVertical();
+            GUILayout.Space(6f);
+            DrawHeaderUpdateControls(compact);
+
+            DeucarianEditorChrome.EndSection();
             GUILayout.Space(8f);
         }
 
@@ -429,8 +382,75 @@ namespace Deucarian.PackageInstaller.Editor
                 }
                 else
                 {
-                    EditorGUILayout.LabelField(PackageRegistryProvider.StatusMessage, _mutedMiniLabelStyle, GUILayout.MinWidth(170f));
+                    EditorGUILayout.LabelField(
+                        new GUIContent(PackageRegistryProvider.StatusMessage, PackageRegistryProvider.StatusMessage),
+                        _mutedMiniLabelStyle,
+                        GUILayout.ExpandWidth(true));
                 }
+            }
+        }
+
+        private void DrawHeaderUpdateControls(bool compact)
+        {
+            if (compact)
+            {
+                DrawUpdatePreferenceToggles(compact);
+                GUILayout.Space(2f);
+                DrawHeaderButtonRow();
+                return;
+            }
+
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                DrawUpdatePreferenceToggles(compact);
+                GUILayout.FlexibleSpace();
+                DrawHeaderButtonRow();
+            }
+        }
+
+        private void DrawUpdatePreferenceToggles(bool compact)
+        {
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                bool checkOnOpen = PackageUpdateCheckPreferences.CheckOnWindowOpen;
+                bool nextCheckOnOpen = EditorGUILayout.ToggleLeft(
+                    new GUIContent(
+                        "Check on Open",
+                        "Check for updates when the Package Installer window opens. Throttled to once every 30 minutes."),
+                    checkOnOpen,
+                    GUILayout.Width(compact ? 118f : 124f));
+
+                if (nextCheckOnOpen != checkOnOpen)
+                {
+                    PackageUpdateCheckPreferences.CheckOnWindowOpen = nextCheckOnOpen;
+                }
+
+                bool checkOnStartup = PackageUpdateCheckPreferences.CheckOnStartup;
+                bool nextCheckOnStartup = EditorGUILayout.ToggleLeft(
+                    new GUIContent(
+                        "Check on Startup",
+                        "Check for updates once per Unity editor session after startup."),
+                    checkOnStartup,
+                    GUILayout.Width(compact ? 136f : 142f));
+
+                if (nextCheckOnStartup != checkOnStartup)
+                {
+                    PackageUpdateCheckPreferences.CheckOnStartup = nextCheckOnStartup;
+                }
+            }
+        }
+
+        private void DrawHeaderButtonRow()
+        {
+            PackageDefinition[] packagesWithUpdates = GetPackagesWithUpdates();
+
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                DrawHeaderButton("Refresh", 82f, IsAnyOperationBusy(), RefreshPackages);
+                DrawHeaderButton("Check Updates", 118f, IsAnyOperationBusy(), CheckForUpdates);
+                DrawHeaderButton("Update All", 92f, packagesWithUpdates.Length == 0 || IsAnyOperationBusy(), UpdateAllPackages);
+                DrawHeaderButton("Install All", 86f, IsAnyOperationBusy(), InstallAllPackages);
+                GUILayout.FlexibleSpace();
             }
         }
 
@@ -453,15 +473,24 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void CheckForUpdates()
         {
-            _packageUpdateCheckService.CheckForUpdates(PackageRegistryProvider.All, GetSelectedChannel);
+            _checkUpdatesAfterDetectionRefresh = true;
+            _packageUpdateCheckService.InvalidateAll();
+
+            if (!_packageDetectionService.IsRefreshing)
+            {
+                _packageDetectionService.Refresh();
+            }
+            else
+            {
+                Repaint();
+            }
         }
 
         private void UpdateAllPackages()
         {
-            _packageInstallService.InstallMany(
+            _packageDependencyInstaller.UpdateAll(
                 GetPackagesWithUpdates(),
-                GetSelectedChannel,
-                "Update All Installed Packages");
+                GetSelectedChannel);
             _packageUpdateCheckService.InvalidateAll();
         }
 
@@ -479,29 +508,107 @@ namespace Deucarian.PackageInstaller.Editor
                 GUILayout.Width(SidebarWidth),
                 GUILayout.ExpandHeight(true));
 
+            IReadOnlyList<PackageCategoryListView> categoryViews = GetPackageCategoryViews();
+            DrawSidebarFilterControls(categoryViews);
+            GUILayout.Space(8f);
+            DrawHorizontalSeparator();
+            GUILayout.Space(8f);
+
             _sidebarScrollPosition = EditorGUILayout.BeginScrollView(_sidebarScrollPosition);
-            DrawRegistrySidebarSections();
+            DrawRegistrySidebarSections(categoryViews);
             EditorGUILayout.EndScrollView();
 
             EditorGUILayout.EndVertical();
         }
 
-        private void DrawRegistrySidebarSections()
+        private IReadOnlyList<PackageCategoryListView> GetPackageCategoryViews()
+        {
+            return PackageListFilter.CreateCategoryViews(
+                PackageRegistryProvider.All,
+                PackageRegistryProvider.Categories,
+                new PackageListFilterOptions(
+                    _packageSearchText,
+                    _showInstalledPackages,
+                    _showNotInstalledPackages),
+                package => _packageDetectionService.IsInstalled(package.PackageId),
+                IsCategoryExpanded);
+        }
+
+        private void DrawSidebarFilterControls(IReadOnlyList<PackageCategoryListView> categoryViews)
+        {
+            int totalCount = categoryViews.Sum(view => view.PackageCount);
+            int matchedCount = categoryViews.Sum(view => view.FilteredPackageCount);
+            int visibleCount = categoryViews.Sum(view => view.VisiblePackages.Count);
+
+            EditorGUILayout.LabelField("Package List", _sectionTitleStyle);
+
+            EditorGUI.BeginChangeCheck();
+            string nextSearchText = EditorGUILayout.TextField(
+                new GUIContent("Search", "Search package names, package IDs, descriptions, URLs, versions, and dependencies."),
+                _packageSearchText);
+
+            if (EditorGUI.EndChangeCheck() && nextSearchText != _packageSearchText)
+            {
+                _packageSearchText = nextSearchText ?? string.Empty;
+                Repaint();
+            }
+
+            EditorGUILayout.LabelField("Visibility", _mutedMiniLabelStyle);
+
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                bool nextShowInstalled = EditorGUILayout.ToggleLeft(
+                    new GUIContent("Installed", "Show packages that Unity reports as installed."),
+                    _showInstalledPackages,
+                    GUILayout.Width(92f));
+                bool nextShowNotInstalled = EditorGUILayout.ToggleLeft(
+                    new GUIContent("Not Installed", "Show packages that Unity does not report as installed."),
+                    _showNotInstalledPackages,
+                    GUILayout.Width(118f));
+
+                if (nextShowInstalled != _showInstalledPackages ||
+                    nextShowNotInstalled != _showNotInstalledPackages)
+                {
+                    _showInstalledPackages = nextShowInstalled;
+                    _showNotInstalledPackages = nextShowNotInstalled;
+                    Repaint();
+                }
+            }
+
+            EditorGUILayout.LabelField(
+                GetSidebarFilterSummary(totalCount, matchedCount, visibleCount),
+                _mutedMiniLabelStyle);
+        }
+
+        private string GetSidebarFilterSummary(int totalCount, int matchedCount, int visibleCount)
+        {
+            if (totalCount == 0)
+            {
+                return "No packages in the active registry.";
+            }
+
+            if (matchedCount == totalCount)
+            {
+                return visibleCount + " visible / " + totalCount + " packages";
+            }
+
+            return visibleCount + " visible / " + matchedCount + " matched / " + totalCount + " packages";
+        }
+
+        private void DrawRegistrySidebarSections(IReadOnlyList<PackageCategoryListView> categoryViews)
         {
             bool drewPackageHeader = false;
             bool drewBridgeHeader = false;
+            bool drewAnyCategory = false;
 
-            foreach (string category in PackageRegistryProvider.Categories)
+            foreach (PackageCategoryListView categoryView in categoryViews)
             {
-                IReadOnlyList<PackageDefinition> packageDefinitions =
-                    PackageRegistryProvider.GetPackagesByCategory(category);
-
-                if (packageDefinitions.Count == 0)
+                if (!categoryView.HasFilteredPackages)
                 {
                     continue;
                 }
 
-                bool bridgeCategory = string.Equals(category, "Bridge", StringComparison.OrdinalIgnoreCase);
+                bool bridgeCategory = string.Equals(categoryView.Category, "Bridge", StringComparison.OrdinalIgnoreCase);
 
                 if (bridgeCategory)
                 {
@@ -512,59 +619,203 @@ namespace Deucarian.PackageInstaller.Editor
                         GUILayout.Space(8f);
                     }
 
-                    DrawSidebarSection("Bridge Packages", packageDefinitions, SelectionKind.Bridge, category);
+                    DrawSidebarSection("Bridge Packages", categoryView, SelectionKind.Bridge);
                     drewBridgeHeader = true;
                 }
                 else
                 {
                     DrawSidebarSection(
                         drewPackageHeader ? null : "Packages",
-                        packageDefinitions,
-                        SelectionKind.Package,
-                        category);
+                        categoryView,
+                        SelectionKind.Package);
                     drewPackageHeader = true;
                 }
 
+                drewAnyCategory = true;
                 GUILayout.Space(8f);
             }
 
-            if (!drewPackageHeader && !drewBridgeHeader)
+            if (!drewAnyCategory)
             {
-                DrawInlineHelp("No package entries are available in the active registry.", VisualStatusKind.Failed);
+                string message = categoryViews.Any(view => view.PackageCount > 0)
+                    ? "No packages match the active filters."
+                    : "No package entries are available in the active registry.";
+                DrawInlineHelp(message, VisualStatusKind.Info);
             }
+        }
+
+        private void DrawUpdateSummary(bool compact)
+        {
+            PackageDefinition[] packagesWithUpdates = GetPackagesWithUpdates();
+            int updateCount = packagesWithUpdates.Length;
+            bool checking = _packageUpdateCheckService.IsChecking;
+            VisualStatusKind updateKind = checking
+                ? VisualStatusKind.Busy
+                : updateCount > 0
+                    ? VisualStatusKind.UpdateAvailable
+                    : VisualStatusKind.Installed;
+
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                DrawStatusBadge(
+                    checking ? "Checking updates" : "Updates Available: " + updateCount,
+                    updateKind,
+                    GUILayout.Width(compact ? 132f : 146f));
+
+                EditorGUILayout.LabelField(
+                    new GUIContent(
+                        "Last Checked: " + GetLastUpdateCheckLabel(),
+                        GetLastUpdateCheckTooltip()),
+                    _mutedMiniLabelStyle,
+                    GUILayout.MinWidth(compact ? 120f : 170f));
+            }
+
+            if (!string.IsNullOrWhiteSpace(_packageUpdateCheckService.LastFailureMessage))
+            {
+                EditorGUILayout.LabelField(
+                    new GUIContent(
+                        _packageUpdateCheckService.LastFailureMessage,
+                        _packageUpdateCheckService.LastFailureMessage),
+                    _mutedMiniLabelStyle);
+            }
+        }
+
+        private string GetLastUpdateCheckLabel()
+        {
+            DateTime? lastCheckedUtc = _packageUpdateCheckService.LastCheckedUtc;
+
+            if (!lastCheckedUtc.HasValue)
+            {
+                return "Never";
+            }
+
+            TimeSpan elapsed = DateTime.UtcNow - lastCheckedUtc.Value.ToUniversalTime();
+
+            if (elapsed.TotalSeconds < 60d)
+            {
+                return "Just now";
+            }
+
+            if (elapsed.TotalMinutes < 60d)
+            {
+                int minutes = Mathf.Max(1, Mathf.FloorToInt((float)elapsed.TotalMinutes));
+                return minutes == 1 ? "1 minute ago" : minutes + " minutes ago";
+            }
+
+            if (elapsed.TotalHours < 24d)
+            {
+                int hours = Mathf.Max(1, Mathf.FloorToInt((float)elapsed.TotalHours));
+                return hours == 1 ? "1 hour ago" : hours + " hours ago";
+            }
+
+            int days = Mathf.Max(1, Mathf.FloorToInt((float)elapsed.TotalDays));
+            return days == 1 ? "1 day ago" : days + " days ago";
+        }
+
+        private string GetLastUpdateCheckTooltip()
+        {
+            DateTime? lastCheckedUtc = _packageUpdateCheckService.LastCheckedUtc;
+
+            if (!lastCheckedUtc.HasValue)
+            {
+                return "Updates have not been checked yet.";
+            }
+
+            return "Last checked at " +
+                   lastCheckedUtc.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") +
+                   ".";
         }
 
         private void DrawSidebarSection(
             string title,
-            IEnumerable<PackageDefinition> packageDefinitions,
-            SelectionKind selectionKind,
-            string subtitle)
+            PackageCategoryListView categoryView,
+            SelectionKind selectionKind)
         {
             if (!string.IsNullOrWhiteSpace(title))
             {
                 EditorGUILayout.LabelField(title, _sectionTitleStyle);
             }
 
-            if (!string.IsNullOrWhiteSpace(subtitle))
-            {
-                EditorGUILayout.LabelField(subtitle, _sectionSmallTitleStyle);
-            }
-
             GUILayout.Space(4f);
 
-            foreach (PackageDefinition packageDefinition in packageDefinitions)
+            bool expanded = DrawCategoryFoldoutHeader(categoryView);
+
+            if (!expanded)
+            {
+                return;
+            }
+
+            IReadOnlyList<PackageDefinition> packagesToDraw = categoryView.FilteredPackages;
+
+            foreach (PackageDefinition packageDefinition in packagesToDraw)
             {
                 DrawSidebarRow(packageDefinition, selectionKind);
                 GUILayout.Space(5f);
             }
         }
 
+        private bool DrawCategoryFoldoutHeader(PackageCategoryListView categoryView)
+        {
+            if (categoryView == null)
+            {
+                return false;
+            }
+
+            bool expanded = IsCategoryExpanded(categoryView.Category);
+            GUIContent content = new GUIContent(
+                GetCategoryHeaderText(categoryView),
+                GetCategoryHeaderTooltip(categoryView));
+            bool nextExpanded = EditorGUILayout.Foldout(expanded, content, true, _foldoutStyle);
+
+            if (nextExpanded != expanded)
+            {
+                SetCategoryExpanded(categoryView.Category, nextExpanded);
+                Repaint();
+            }
+
+            return nextExpanded;
+        }
+
+        private string GetCategoryHeaderText(PackageCategoryListView categoryView)
+        {
+            string summary = categoryView.InstalledCount + "/" + categoryView.PackageCount + " installed";
+
+            if (categoryView.FilteredPackageCount != categoryView.PackageCount)
+            {
+                summary += ", " + categoryView.FilteredPackageCount + " shown";
+            }
+
+            return categoryView.Category + " (" + summary + ")";
+        }
+
+        private static string GetCategoryHeaderTooltip(PackageCategoryListView categoryView)
+        {
+            if (categoryView == null)
+            {
+                return string.Empty;
+            }
+
+            return categoryView.Category + "\n" +
+                   categoryView.InstalledCount + " installed out of " + categoryView.PackageCount + " packages.\n" +
+                   categoryView.FilteredPackageCount + " packages match the active filters.";
+        }
+
         private void DrawSidebarRow(PackageDefinition packageDefinition, SelectionKind selectionKind)
         {
             bool selected = IsSelected(packageDefinition, selectionKind);
-            Rect rowRect = GUILayoutUtility.GetRect(1f, SidebarRowHeight, GUILayout.ExpandWidth(true));
+            float rowHeight = GetSidebarRowHeight(packageDefinition);
+            Rect rowRect = GUILayoutUtility.GetRect(1f, rowHeight, GUILayout.ExpandWidth(true));
             bool hover = rowRect.Contains(Event.current.mousePosition);
             VisualStatus status = GetPackageVisualStatus(packageDefinition);
+            GUIContent displayNameContent = new GUIContent(
+                GetDisplayNameForSidebar(packageDefinition),
+                GetPackageTooltip(packageDefinition));
+            GUIContent packageIdContent = new GUIContent(
+                packageDefinition.PackageId,
+                packageDefinition.PackageId);
+            GUIContent metadataContent = new GUIContent(
+                GetSidebarMetadata(packageDefinition, selectionKind),
+                GetSidebarMetadataTooltip(packageDefinition, selectionKind));
 
             if (Event.current.type == EventType.Repaint)
             {
@@ -586,17 +837,73 @@ namespace Deucarian.PackageInstaller.Editor
 
             EditorGUIUtility.AddCursorRect(rowRect, MouseCursor.Link);
 
-            Rect markerRect = new Rect(rowRect.x + 8f, rowRect.y + 13f, 34f, 24f);
-            DrawInlineMarker(markerRect, selectionKind == SelectionKind.Bridge ? "LINK" : status.Marker, selectionKind == SelectionKind.Bridge ? VisualStatusKind.Bridge : status.Kind);
+            Rect titleRect = new Rect(
+                rowRect.x + 10f,
+                rowRect.y + 8f,
+                rowRect.width - 20f,
+                Mathf.Max(22f, rowHeight - 68f));
+            GUI.Label(titleRect, displayNameContent, _rowTitleStyle);
 
-            Rect statusRect = new Rect(rowRect.xMax - 94f, rowRect.y + 8f, 84f, 17f);
-            DrawColoredRectLabel(statusRect, status.Label, _rowStatusStyle, GetStatusColor(status.Kind));
+            Rect packageIdRect = new Rect(rowRect.x + 10f, titleRect.yMax + 4f, rowRect.width - 20f, 16f);
+            GUI.Label(packageIdRect, packageIdContent, _rowSubLabelStyle);
 
-            Rect titleRect = new Rect(rowRect.x + 50f, rowRect.y + 8f, rowRect.width - 150f, 18f);
-            GUI.Label(titleRect, GetDisplayNameForSidebar(packageDefinition), _rowTitleStyle);
+            Rect statusRect = new Rect(rowRect.xMax - 112f, rowRect.yMax - 28f, 102f, 20f);
+            DrawStatusBadge(statusRect, status.Label, status.Kind, _rowStatusStyle);
 
-            Rect detailRect = new Rect(rowRect.x + 50f, rowRect.y + 29f, rowRect.width - 60f, 16f);
-            GUI.Label(detailRect, selectionKind == SelectionKind.Bridge ? "Bridge package" : GetChannelSummary(packageDefinition), _rowSubLabelStyle);
+            Rect metadataRect = new Rect(rowRect.x + 10f, rowRect.yMax - 26f, rowRect.width - 132f, 18f);
+            GUI.Label(metadataRect, metadataContent, _rowSubLabelStyle);
+        }
+
+        private float GetSidebarRowHeight(PackageDefinition packageDefinition)
+        {
+            float titleWidth = Mathf.Max(160f, SidebarWidth - 42f);
+            float titleHeight = _rowTitleStyle.CalcHeight(
+                new GUIContent(GetDisplayNameForSidebar(packageDefinition)),
+                titleWidth);
+
+            return Mathf.Clamp(70f + titleHeight, SidebarRowMinHeight, SidebarRowMaxHeight);
+        }
+
+        private string GetSidebarMetadata(PackageDefinition packageDefinition, SelectionKind selectionKind)
+        {
+            if (packageDefinition == null)
+            {
+                return string.Empty;
+            }
+
+            string channelSummary = GetChannelSummary(packageDefinition);
+            string typeSummary = selectionKind == SelectionKind.Bridge ? "Bridge package" : packageDefinition.Category;
+
+            if (packageDefinition.HasDisplayVersion)
+            {
+                return typeSummary + " | " + channelSummary + " | " + packageDefinition.DisplayVersion;
+            }
+
+            return typeSummary + " | " + channelSummary;
+        }
+
+        private string GetSidebarMetadataTooltip(PackageDefinition packageDefinition, SelectionKind selectionKind)
+        {
+            if (packageDefinition == null)
+            {
+                return string.Empty;
+            }
+
+            return GetSidebarMetadata(packageDefinition, selectionKind) + "\n" +
+                   "Stable URL: " + (string.IsNullOrWhiteSpace(packageDefinition.StableUrl) ? "Not configured" : packageDefinition.StableUrl) + "\n" +
+                   "Development URL: " + (string.IsNullOrWhiteSpace(packageDefinition.DevelopmentUrl) ? "Not configured" : packageDefinition.DevelopmentUrl);
+        }
+
+        private static string GetPackageTooltip(PackageDefinition packageDefinition)
+        {
+            if (packageDefinition == null)
+            {
+                return string.Empty;
+            }
+
+            return packageDefinition.DisplayName + "\n" +
+                   packageDefinition.PackageId + "\n" +
+                   packageDefinition.Description;
         }
 
         private string GetDisplayNameForSidebar(PackageDefinition packageDefinition)
@@ -630,7 +937,7 @@ namespace Deucarian.PackageInstaller.Editor
                 GUILayout.ExpandWidth(true),
                 GUILayout.ExpandHeight(true));
 
-            _detailsScrollPosition = EditorGUILayout.BeginScrollView(_detailsScrollPosition);
+            _detailsScrollPosition = EditorGUILayout.BeginScrollView(_detailsScrollPosition, false, false);
 
             PackageDefinition selectedDefinition = GetSelectedDefinition();
 
@@ -657,21 +964,8 @@ namespace Deucarian.PackageInstaller.Editor
         private void DrawPackageDetails(PackageDefinition packageDefinition)
         {
             DrawDetailHeader(packageDefinition);
-
-            if (GetDetailsContentWidth() > 620f)
-            {
-                using (new EditorGUILayout.HorizontalScope())
-                {
-                    DrawStatusPanel(packageDefinition);
-                    DrawChannelPanel(packageDefinition);
-                }
-            }
-            else
-            {
-                DrawStatusPanel(packageDefinition);
-                DrawChannelPanel(packageDefinition);
-            }
-
+            DrawStatusPanel(packageDefinition);
+            DrawChannelPanel(packageDefinition);
             DrawActionsPanel(packageDefinition);
             DrawExtrasPanel(packageDefinition);
             DrawAdvancedPanel(packageDefinition);
@@ -680,21 +974,9 @@ namespace Deucarian.PackageInstaller.Editor
         private void DrawBridgeDetails(PackageDefinition packageDefinition)
         {
             DrawDetailHeader(packageDefinition);
-
-            if (GetDetailsContentWidth() > 620f)
-            {
-                using (new EditorGUILayout.HorizontalScope())
-                {
-                    DrawStatusPanel(packageDefinition);
-                    DrawRequirementsPanel(packageDefinition);
-                }
-            }
-            else
-            {
-                DrawStatusPanel(packageDefinition);
-                DrawRequirementsPanel(packageDefinition);
-            }
-
+            DrawStatusPanel(packageDefinition);
+            DrawRequirementsPanel(packageDefinition);
+            DrawChannelPanel(packageDefinition);
             DrawActionsPanel(packageDefinition);
             DrawExtrasPanel(packageDefinition);
             DrawAdvancedPanel(packageDefinition);
@@ -708,53 +990,72 @@ namespace Deucarian.PackageInstaller.Editor
         private void DrawDetailHeader(PackageDefinition packageDefinition)
         {
             VisualStatus status = GetPackageVisualStatus(packageDefinition);
-            Color accentColor = packageDefinition.IsBridge ? _bridgeColor : GetStatusColor(status.Kind);
 
-            Rect rect = BeginSurface(
-                _detailHeaderStyle,
-                _panelBackgroundColor,
-                accentColor,
-                GUILayout.ExpandWidth(true));
-
-            using (new EditorGUILayout.HorizontalScope())
+            DrawPanel("Overview", () =>
             {
-                Rect markerRect = GUILayoutUtility.GetRect(48f, 42f, GUILayout.Width(48f), GUILayout.Height(42f));
-                DrawInlineMarker(markerRect, packageDefinition.IsBridge ? "LINK" : status.Marker, packageDefinition.IsBridge ? VisualStatusKind.Bridge : status.Kind);
-
-                GUILayout.Space(8f);
-
-                using (new EditorGUILayout.VerticalScope(GUILayout.ExpandWidth(true)))
+                using (new EditorGUILayout.HorizontalScope())
                 {
-                    using (new EditorGUILayout.HorizontalScope())
-                    {
-                        EditorGUILayout.LabelField(GetDetailDisplayName(packageDefinition), _titleStyle, GUILayout.MinWidth(200f));
+                    Rect iconRect = GUILayoutUtility.GetRect(48f, 42f, GUILayout.Width(48f), GUILayout.Height(42f));
+                    DrawPackageIcon(
+                        iconRect,
+                        packageDefinition,
+                        packageDefinition.IsBridge ? VisualStatusKind.Bridge : status.Kind);
 
-                        DrawChannelPopup(packageDefinition);
+                    GUILayout.Space(8f);
+
+                    using (new EditorGUILayout.VerticalScope(GUILayout.ExpandWidth(true)))
+                    {
+                        string displayName = GetDetailDisplayName(packageDefinition);
+                        EditorGUILayout.LabelField(
+                            new GUIContent(displayName, displayName),
+                            _titleStyle,
+                            GUILayout.ExpandWidth(true));
+
+                        if (!string.IsNullOrWhiteSpace(packageDefinition.Description))
+                        {
+                            EditorGUILayout.LabelField(
+                                new GUIContent(packageDefinition.Description, packageDefinition.Description),
+                                _subtitleStyle);
+                        }
+
+                        if (packageDefinition.HasDisplayVersion)
+                        {
+                            DrawKeyValueRow("Version", packageDefinition.DisplayVersion);
+                        }
                     }
 
-                    if (!string.IsNullOrWhiteSpace(packageDefinition.Description))
-                    {
-                        EditorGUILayout.LabelField(packageDefinition.Description, _subtitleStyle);
-                    }
-
-                    if (packageDefinition.HasDisplayVersion)
-                    {
-                        DrawKeyValueRow("Version", packageDefinition.DisplayVersion);
-                    }
+                    GUILayout.Space(8f);
+                    DrawStatusBadge(status.Label, status.Kind, GUILayout.Width(132f));
                 }
+            }, GUILayout.ExpandWidth(true));
+        }
 
-                GUILayout.Space(12f);
-
-                using (new EditorGUILayout.VerticalScope(GUILayout.Width(packageDefinition.IsBridge ? 176f : 188f)))
-                {
-                    DrawStatusBadge(status.Label, status.Kind, GUILayout.ExpandWidth(true));
-                    GUILayout.Space(6f);
-                    DrawPackageActionButtons(packageDefinition, false);
-                }
+        private void DrawPackageIcon(Rect rect, PackageDefinition packageDefinition, VisualStatusKind statusKind)
+        {
+            if (Event.current.type == EventType.Repaint)
+            {
+                Color color = GetStatusColor(statusKind);
+                EditorGUI.DrawRect(rect, DeucarianEditorColors.WithAlpha(color, 0.12f));
+                DrawBorder(rect, DeucarianEditorColors.WithAlpha(color, 0.58f));
             }
 
-            EditorGUILayout.EndVertical();
-            GUILayout.Space(8f);
+            Texture2D icon = DeucarianEditorIcons.GetPackageIcon(GetPackageIconKey(packageDefinition));
+            Rect iconRect = new Rect(rect.x + 6f, rect.y + 3f, rect.width - 12f, rect.height - 6f);
+            GUI.DrawTexture(iconRect, icon, ScaleMode.ScaleToFit, true);
+        }
+
+        private static string GetPackageIconKey(PackageDefinition packageDefinition)
+        {
+            if (packageDefinition == null || string.IsNullOrWhiteSpace(packageDefinition.PackageId))
+            {
+                return "package-installer";
+            }
+
+            const string prefix = "com.deucarian.";
+            string packageId = packageDefinition.PackageId.Trim();
+            return packageId.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                ? packageId.Substring(prefix.Length)
+                : packageId;
         }
 
         private static string GetDetailDisplayName(PackageDefinition packageDefinition)
@@ -790,14 +1091,15 @@ namespace Deucarian.PackageInstaller.Editor
                     packageDefinition.PackageId,
                     out PackageManagerPackageInfo packageInfo))
             {
-                DrawKeyValueRow("Installed", packageInfo.version);
+                DrawKeyValueRow("Package", "Installed");
+                DrawKeyValueRow("Version", packageInfo.version);
             }
             else
             {
-                DrawKeyValueRow("Installed", "No");
+                DrawKeyValueRow("Package", "Not installed");
+                DrawKeyValueRow("Version", "-");
             }
 
-            DrawKeyValueRow("Package", GetPackageStatusText(packageDefinition));
             DrawKeyValueRow("Update", GetUpdateStatusText(updateStatus));
             DrawKeyValueRow("Installed rev", string.IsNullOrWhiteSpace(updateStatus.ShortInstalledRevision) ? "-" : updateStatus.ShortInstalledRevision);
             DrawKeyValueRow("Latest rev", string.IsNullOrWhiteSpace(updateStatus.ShortLatestRevision) ? "-" : updateStatus.ShortLatestRevision);
@@ -807,7 +1109,11 @@ namespace Deucarian.PackageInstaller.Editor
                 DrawKeyValueRow("Dependencies", GetDependencyDisplayNames(packageDefinition));
             }
 
-            if (updateStatus.Kind == PackageUpdateStatusKind.Failed && !string.IsNullOrWhiteSpace(updateStatus.Message))
+            if (updateStatus.Kind == PackageUpdateStatusKind.CannotDetermine && !string.IsNullOrWhiteSpace(updateStatus.Message))
+            {
+                DrawInlineHelp(updateStatus.Message, VisualStatusKind.Info);
+            }
+            else if (updateStatus.Kind == PackageUpdateStatusKind.Failed && !string.IsNullOrWhiteSpace(updateStatus.Message))
             {
                 DrawInlineHelp(updateStatus.Message, VisualStatusKind.Failed);
             }
@@ -822,7 +1128,7 @@ namespace Deucarian.PackageInstaller.Editor
 
                 using (new EditorGUILayout.HorizontalScope())
                 {
-                    EditorGUILayout.LabelField("Selected", _mutedMiniLabelStyle, GUILayout.Width(92f));
+                    EditorGUILayout.LabelField("Selected", _mutedMiniLabelStyle, GUILayout.Width(DetailLabelWidth));
                     DrawChannelPopup(packageDefinition);
                     GUILayout.Space(6f);
                     DrawStatusBadge(GetChannelLabel(selectedChannel), VisualStatusKind.Info, GUILayout.Width(104f));
@@ -885,10 +1191,13 @@ namespace Deucarian.PackageInstaller.Editor
             DrawInlineMarker(markerRect, status.Marker, status.Kind);
 
             Rect nameRect = new Rect(rowRect.x + 44f, rowRect.y + 5f, rowRect.width - 164f, 18f);
-            GUI.Label(nameRect, dependencyDefinition.DisplayName, _rowTitleStyle);
+            GUI.Label(
+                nameRect,
+                new GUIContent(dependencyDefinition.DisplayName, GetPackageTooltip(dependencyDefinition)),
+                _rowTitleStyle);
 
             Rect statusRect = new Rect(rowRect.xMax - 108f, rowRect.y + 5f, 96f, 18f);
-            DrawColoredRectLabel(statusRect, status.Label, _rowStatusStyle, GetStatusColor(status.Kind));
+            DrawStatusBadge(statusRect, status.Label, status.Kind, _rowStatusStyle);
         }
 
         private void DrawActionsPanel(PackageDefinition packageDefinition)
@@ -904,6 +1213,7 @@ namespace Deucarian.PackageInstaller.Editor
             bool installed = _packageDetectionService.IsInstalled(packageDefinition.PackageId);
             bool queuedOrInstalling = _packageInstallService.IsQueuedOrInstalling(packageDefinition.PackageId);
             bool actionsBusy = IsAnyOperationBusy();
+            bool stackActions = GetDetailsContentWidth() < 460f;
             PackageUpdateStatus updateStatus = _packageUpdateCheckService.GetStatus(
                 packageDefinition,
                 GetSelectedChannel(packageDefinition));
@@ -928,13 +1238,13 @@ namespace Deucarian.PackageInstaller.Editor
                 }
                 else
                 {
-                    PackageDefinition[] installedDependents = _packageDependencyInstaller.GetInstalledDependents(packageDefinition);
+                    PackageDefinition[] dependentPackages = _packageDependencyInstaller.GetInstalledDependents(packageDefinition);
 
-                    if (installedDependents.Length > 0)
+                    if (dependentPackages.Length > 0)
                     {
                         DrawInlineHelp(
                             "This package is required by installed package(s): " +
-                            string.Join(", ", installedDependents.Select(package => package.DisplayName).ToArray()) +
+                            string.Join(", ", dependentPackages.Select(package => package.DisplayName).ToArray()) +
                             ". Remove those bridge packages first.",
                             VisualStatusKind.UpdateAvailable);
                     }
@@ -951,65 +1261,142 @@ namespace Deucarian.PackageInstaller.Editor
                 GUILayout.Space(6f);
             }
 
-            using (new EditorGUILayout.HorizontalScope())
+            if (!installed)
             {
-                GUILayout.FlexibleSpace();
-
-                if (!installed)
-                {
-                    using (new EditorGUI.DisabledScope(queuedOrInstalling || actionsBusy))
-                    {
-                        string buttonLabel = packageDefinition.IsBridge ? "Install Bridge" : "Install";
-
-                        if (GUILayout.Button(buttonLabel, _primaryButtonStyle, GUILayout.Width(124f)))
-                        {
-                            _packageDependencyInstaller.InstallWithDependencies(packageDefinition, GetSelectedChannel);
-                        }
-                    }
-
-                    return;
-                }
-
-                PackageDefinition[] installedDependents = _packageDependencyInstaller.GetInstalledDependents(packageDefinition);
-
-                using (new EditorGUI.DisabledScope(!updateStatus.IsUpdateAvailable || queuedOrInstalling || actionsBusy))
-                {
-                    if (GUILayout.Button("Update", _primaryButtonStyle, GUILayout.Width(104f)))
-                    {
-                        _packageInstallService.Install(
-                            packageDefinition,
-                            GetSelectedChannel(packageDefinition),
-                            "Update " + packageDefinition.DisplayName);
-                        _packageUpdateCheckService.Invalidate(packageDefinition.PackageId);
-                    }
-                }
-
                 using (new EditorGUI.DisabledScope(queuedOrInstalling || actionsBusy))
                 {
-                    if (GUILayout.Button("Reinstall", _secondaryButtonStyle, GUILayout.Width(104f)))
+                    string buttonLabel = packageDefinition.IsBridge ? "Install Bridge" : "Install";
+
+                    if (GUILayout.Button(
+                            buttonLabel,
+                            _primaryButtonStyle,
+                            stackActions ? GUILayout.ExpandWidth(true) : GUILayout.Width(124f)))
                     {
-                        _packageInstallService.Install(
-                            packageDefinition,
-                            GetSelectedChannel(packageDefinition),
-                            "Reinstall " + packageDefinition.DisplayName);
-                        _packageUpdateCheckService.Invalidate(packageDefinition.PackageId);
+                        _packageDependencyInstaller.InstallWithDependencies(packageDefinition, GetSelectedChannel);
                     }
                 }
 
-                using (new EditorGUI.DisabledScope(installedDependents.Length > 0 || queuedOrInstalling || actionsBusy))
+                return;
+            }
+
+            PackageDefinition[] installedDependents = _packageDependencyInstaller.GetInstalledDependents(packageDefinition);
+
+            if (stackActions)
+            {
+                DrawInstalledActionButtonsStacked(
+                    packageDefinition,
+                    updateStatus,
+                    installedDependents,
+                    queuedOrInstalling,
+                    actionsBusy);
+                return;
+            }
+
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                DrawInstalledActionButtonsInline(
+                    packageDefinition,
+                    updateStatus,
+                    installedDependents,
+                    queuedOrInstalling,
+                    actionsBusy);
+                GUILayout.FlexibleSpace();
+            }
+        }
+
+        private void DrawInstalledActionButtonsInline(
+            PackageDefinition packageDefinition,
+            PackageUpdateStatus updateStatus,
+            PackageDefinition[] installedDependents,
+            bool queuedOrInstalling,
+            bool actionsBusy)
+        {
+            using (new EditorGUI.DisabledScope(!updateStatus.IsUpdateAvailable || queuedOrInstalling || actionsBusy))
+            {
+                if (GUILayout.Button("Update", _primaryButtonStyle, GUILayout.Width(104f)))
                 {
-                    if (GUILayout.Button("Remove", _secondaryButtonStyle, GUILayout.Width(104f)) &&
-                        EditorUtility.DisplayDialog(
-                            "Remove Package",
-                            "Remove " + packageDefinition.DisplayName + " from this Unity project?",
-                            "Remove",
-                            "Cancel"))
-                    {
-                        _packageInstallService.Remove(packageDefinition);
-                        _packageUpdateCheckService.Invalidate(packageDefinition.PackageId);
-                    }
+                    UpdatePackage(packageDefinition);
                 }
             }
+
+            using (new EditorGUI.DisabledScope(queuedOrInstalling || actionsBusy))
+            {
+                if (GUILayout.Button("Reinstall", _secondaryButtonStyle, GUILayout.Width(104f)))
+                {
+                    ReinstallPackage(packageDefinition);
+                }
+            }
+
+            using (new EditorGUI.DisabledScope(installedDependents.Length > 0 || queuedOrInstalling || actionsBusy))
+            {
+                if (GUILayout.Button("Remove", _secondaryButtonStyle, GUILayout.Width(104f)))
+                {
+                    RemovePackage(packageDefinition);
+                }
+            }
+        }
+
+        private void DrawInstalledActionButtonsStacked(
+            PackageDefinition packageDefinition,
+            PackageUpdateStatus updateStatus,
+            PackageDefinition[] installedDependents,
+            bool queuedOrInstalling,
+            bool actionsBusy)
+        {
+            using (new EditorGUI.DisabledScope(!updateStatus.IsUpdateAvailable || queuedOrInstalling || actionsBusy))
+            {
+                if (GUILayout.Button("Update", _primaryButtonStyle, GUILayout.ExpandWidth(true)))
+                {
+                    UpdatePackage(packageDefinition);
+                }
+            }
+
+            using (new EditorGUI.DisabledScope(queuedOrInstalling || actionsBusy))
+            {
+                if (GUILayout.Button("Reinstall", _secondaryButtonStyle, GUILayout.ExpandWidth(true)))
+                {
+                    ReinstallPackage(packageDefinition);
+                }
+            }
+
+            using (new EditorGUI.DisabledScope(installedDependents.Length > 0 || queuedOrInstalling || actionsBusy))
+            {
+                if (GUILayout.Button("Remove", _secondaryButtonStyle, GUILayout.ExpandWidth(true)))
+                {
+                    RemovePackage(packageDefinition);
+                }
+            }
+        }
+
+        private void UpdatePackage(PackageDefinition packageDefinition)
+        {
+            _packageDependencyInstaller.UpdateWithDependencies(
+                packageDefinition,
+                GetSelectedChannel);
+            _packageUpdateCheckService.Invalidate(packageDefinition.PackageId);
+        }
+
+        private void ReinstallPackage(PackageDefinition packageDefinition)
+        {
+            _packageDependencyInstaller.ReinstallWithDependencies(
+                packageDefinition,
+                GetSelectedChannel);
+            _packageUpdateCheckService.Invalidate(packageDefinition.PackageId);
+        }
+
+        private void RemovePackage(PackageDefinition packageDefinition)
+        {
+            if (!EditorUtility.DisplayDialog(
+                    "Remove Package",
+                    "Remove " + packageDefinition.DisplayName + " from this Unity project?",
+                    "Remove",
+                    "Cancel"))
+            {
+                return;
+            }
+
+            _packageInstallService.Remove(packageDefinition);
+            _packageUpdateCheckService.Invalidate(packageDefinition.PackageId);
         }
 
         private void DrawExtrasPanel(PackageDefinition packageDefinition)
@@ -1080,11 +1467,15 @@ namespace Deucarian.PackageInstaller.Editor
 
                 using (new EditorGUILayout.VerticalScope(GUILayout.ExpandWidth(true)))
                 {
-                    EditorGUILayout.LabelField(extraDefinition.DisplayName, _rowTitleStyle);
+                    EditorGUILayout.LabelField(
+                        new GUIContent(extraDefinition.DisplayName, extraDefinition.DisplayName),
+                        _rowTitleStyle);
 
                     if (!string.IsNullOrWhiteSpace(extraDefinition.Description))
                     {
-                        EditorGUILayout.LabelField(extraDefinition.Description, _mutedMiniLabelStyle);
+                        EditorGUILayout.LabelField(
+                            new GUIContent(extraDefinition.Description, extraDefinition.Description),
+                            _mutedMiniLabelStyle);
                     }
 
                     string statusText = GetSampleImportStatusText(status);
@@ -1199,10 +1590,19 @@ namespace Deucarian.PackageInstaller.Editor
 
             DrawSelectableValue("Package ID", packageDefinition.PackageId);
             DrawSelectableValue("Type", packageDefinition.Category);
-            DrawSelectableValue("Git URL", packageDefinition.GetUrl(selectedChannel));
+            DrawSelectableValue("Selected URL", packageDefinition.GetUrl(selectedChannel));
             DrawSelectableValue("Stable URL", packageDefinition.StableUrl);
             DrawSelectableValue("Development URL", packageDefinition.DevelopmentUrl);
             DrawSelectableValue("Selected ref", GetChannelLabel(selectedChannel));
+
+            if (_packageDetectionService.TryGetInstalledPackage(
+                    packageDefinition.PackageId,
+                    out PackageManagerPackageInfo packageInfo))
+            {
+                DrawSelectableValue("Installed source", packageInfo.source.ToString());
+                DrawSelectableValue("Installed version", packageInfo.version);
+                DrawSelectableValue("Installed path", packageInfo.resolvedPath);
+            }
 
             if (_packageDetectionService.TryGetInstalledPackageReference(
                     packageDefinition.PackageId,
@@ -1230,73 +1630,129 @@ namespace Deucarian.PackageInstaller.Editor
                 return false;
             }
 
-            _advancedFoldouts.TryGetValue(key, out bool expanded);
+            if (!_advancedFoldouts.TryGetValue(key, out bool expanded))
+            {
+                expanded = EditorPrefs.GetBool(GetAdvancedFoldoutPreferenceKey(key), false);
+                _advancedFoldouts[key] = expanded;
+            }
+
             bool nextExpanded = EditorGUILayout.Foldout(expanded, "Advanced", true, _foldoutStyle);
 
             if (nextExpanded != expanded)
             {
                 _advancedFoldouts[key] = nextExpanded;
+                EditorPrefs.SetBool(GetAdvancedFoldoutPreferenceKey(key), nextExpanded);
             }
 
             return nextExpanded;
         }
 
-        private void DrawProgressFooter()
+        private string GetAdvancedFoldoutPreferenceKey(string packageId)
         {
-            DrawPanel("Current Operation", () =>
-            {
-                OperationProgressView operation = GetCurrentOperationProgress();
-
-                if (operation == null)
-                {
-                    EditorGUILayout.LabelField("No operation running.", _mutedMiniLabelStyle);
-                    Rect idleRect = GUILayoutUtility.GetRect(1f, 18f, GUILayout.ExpandWidth(true));
-                    EditorGUI.ProgressBar(idleRect, 0f, "Idle");
-                    return;
-                }
-
-                using (new EditorGUILayout.HorizontalScope())
-                {
-                    using (new EditorGUILayout.VerticalScope(GUILayout.ExpandWidth(true)))
-                    {
-                        EditorGUILayout.LabelField(operation.OperationName, _labelStyle);
-                        EditorGUILayout.LabelField(GetProgressStepText(operation), _mutedMiniLabelStyle);
-                    }
-
-                    DrawStatusBadge(operation.IsBusy ? "Running" : "Complete", operation.IsBusy ? VisualStatusKind.Busy : VisualStatusKind.Installed, GUILayout.Width(92f));
-                }
-
-                Rect progressRect = GUILayoutUtility.GetRect(1f, 18f, GUILayout.ExpandWidth(true));
-                float progress = GetOperationProgress(operation);
-                EditorGUI.ProgressBar(progressRect, progress, Mathf.RoundToInt(progress * 100f) + "%");
-
-                DrawProgressMessage(operation.Message, operation.ErrorMessage, operation.FailedSteps);
-            }, GUILayout.Height(ProgressAreaHeight), GUILayout.ExpandWidth(true));
+            return AdvancedFoldoutPreferencePrefix +
+                   Application.dataPath.Replace("\\", "/") +
+                   "." +
+                   packageId;
         }
 
-        private void DrawLastOperationSummaryPanel()
+        private void DrawGlobalOperationArea()
         {
-            DrawPanel("Last Operation Summary", () =>
+            OperationProgressView operation = GetCurrentOperationProgress();
+            DeucarianEditorChrome.BeginSection();
+
+            DrawGlobalOperationBar(operation);
+
+            if (_operationDetailsExpanded)
             {
-                string summary = GetLastOperationSummary();
-                IReadOnlyList<PackageInstallProgressItem> progressItems = GetLastProgressItems();
+                GUILayout.Space(6f);
+                DrawHorizontalSeparator();
+                GUILayout.Space(6f);
+                DrawOperationSummaryDrawer();
+            }
 
-                if (string.IsNullOrWhiteSpace(summary) && (progressItems == null || progressItems.Count == 0))
+            DeucarianEditorChrome.EndSection();
+        }
+
+        private void DrawGlobalOperationBar(OperationProgressView operation)
+        {
+            string stateLabel = GetGlobalOperationStateLabel(operation);
+            VisualStatusKind stateKind = GetGlobalOperationStatusKind(operation);
+            string title = GetOperationBarTitle(operation);
+            string subtitle = GetOperationBarSubtitle(operation);
+
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                DrawStatusBadge(stateLabel, stateKind, GUILayout.Width(142f));
+                GUILayout.Space(8f);
+
+                string line = string.IsNullOrWhiteSpace(subtitle) ? title : title + " - " + subtitle;
+                EditorGUILayout.LabelField(
+                    new GUIContent(line, line),
+                    _operationLineStyle,
+                    GUILayout.ExpandWidth(true),
+                    GUILayout.Height(20f));
+
+                if (operation != null)
                 {
-                    EditorGUILayout.LabelField("No operations have completed yet.", _mutedMiniLabelStyle);
-                    return;
+                    GUILayout.Space(8f);
+                    float progress = GetOperationProgress(operation);
+                    Rect progressRect = GUILayoutUtility.GetRect(
+                        150f,
+                        18f,
+                        GUILayout.Width(150f),
+                        GUILayout.Height(18f));
+                    EditorGUI.ProgressBar(progressRect, progress, Mathf.RoundToInt(progress * 100f) + "%");
                 }
 
-                VisualStatusKind summaryKind = GetLastSummaryStatusKind(progressItems);
-                DrawStatusBadge(GetLastSummaryStatusLabel(summaryKind), summaryKind, GUILayout.Width(118f));
+                GUILayout.Space(8f);
 
-                if (!string.IsNullOrWhiteSpace(summary))
+                if (GUILayout.Button(
+                        _operationDetailsExpanded ? "Hide Details" : "Show Details",
+                        _secondaryButtonStyle,
+                        GUILayout.Width(96f)))
                 {
-                    EditorGUILayout.LabelField(summary, _miniLabelStyle);
+                    SetOperationDetailsExpanded(!_operationDetailsExpanded);
                 }
+            }
+        }
 
-                DrawProgressItemSummary(progressItems);
-            }, GUILayout.Height(SummaryAreaHeight), GUILayout.ExpandWidth(true));
+        private void DrawOperationSummaryDrawer()
+        {
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                EditorGUILayout.LabelField("Last Operation Summary", _sectionTitleStyle, GUILayout.ExpandWidth(true));
+                bool hasSummary = HasLastOperationDetails();
+                VisualStatusKind summaryKind = hasSummary ? GetLastSummaryStatusKind(GetLastProgressItems()) : VisualStatusKind.Info;
+                DrawStatusBadge(hasSummary ? GetLastSummaryStatusLabel(summaryKind) : "Idle", summaryKind, GUILayout.Width(118f));
+            }
+
+            _operationDetailsScrollPosition = EditorGUILayout.BeginScrollView(
+                _operationDetailsScrollPosition,
+                GUILayout.Height(OperationDrawerHeight),
+                GUILayout.ExpandWidth(true));
+            DrawLastOperationSummaryContent();
+            EditorGUILayout.EndScrollView();
+        }
+
+        private void DrawLastOperationSummaryContent()
+        {
+            string summary = GetLastOperationSummary();
+            IReadOnlyList<PackageInstallProgressItem> progressItems = GetLastProgressItems();
+
+            if (string.IsNullOrWhiteSpace(summary) && (progressItems == null || progressItems.Count == 0))
+            {
+                EditorGUILayout.LabelField(
+                    new GUIContent("No operations have completed yet.", "No operations have completed yet."),
+                    _mutedMiniLabelStyle);
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(summary))
+            {
+                EditorGUILayout.LabelField(new GUIContent(summary, summary), _miniLabelStyle);
+            }
+
+            DrawProgressItemSummary(progressItems, int.MaxValue);
         }
 
         private OperationProgressView GetCurrentOperationProgress()
@@ -1366,6 +1822,151 @@ namespace Deucarian.PackageInstaller.Editor
             return null;
         }
 
+        private string GetGlobalOperationStateLabel(OperationProgressView operation)
+        {
+            if (operation != null)
+            {
+                if (operation.FailedSteps > 0 && !operation.IsBusy)
+                {
+                    return "Failed";
+                }
+
+                if (_packageUpdateCheckService.IsChecking)
+                {
+                    return "Checking for updates";
+                }
+
+                if (_packageDetectionService.IsRefreshing)
+                {
+                    return "Refreshing";
+                }
+
+                if (_packageSampleImportService.IsBusy)
+                {
+                    return "Installing";
+                }
+
+                if (_packageInstallService.State == PackageInstallRequestState.Removing)
+                {
+                    return "Removing";
+                }
+
+                return IsUpdateOperation(operation.OperationName) ? "Updating" : "Installing";
+            }
+
+            if (HasLastOperationFailure())
+            {
+                return "Failed";
+            }
+
+            if (HasLastOperationDetails())
+            {
+                return "Complete";
+            }
+
+            return "Idle";
+        }
+
+        private VisualStatusKind GetGlobalOperationStatusKind(OperationProgressView operation)
+        {
+            string stateLabel = GetGlobalOperationStateLabel(operation);
+
+            if (string.Equals(stateLabel, "Failed", StringComparison.OrdinalIgnoreCase))
+            {
+                return VisualStatusKind.Failed;
+            }
+
+            if (string.Equals(stateLabel, "Idle", StringComparison.OrdinalIgnoreCase))
+            {
+                return VisualStatusKind.Info;
+            }
+
+            if (string.Equals(stateLabel, "Complete", StringComparison.OrdinalIgnoreCase))
+            {
+                return VisualStatusKind.Installed;
+            }
+
+            return VisualStatusKind.Busy;
+        }
+
+        private string GetOperationBarTitle(OperationProgressView operation)
+        {
+            if (operation != null)
+            {
+                return string.IsNullOrWhiteSpace(operation.OperationName)
+                    ? GetGlobalOperationStateLabel(operation)
+                    : operation.OperationName;
+            }
+
+            if (HasLastOperationFailure())
+            {
+                return "Last operation failed.";
+            }
+
+            if (HasLastOperationDetails())
+            {
+                return "Last operation complete.";
+            }
+
+            return "No operation running.";
+        }
+
+        private string GetOperationBarSubtitle(OperationProgressView operation)
+        {
+            if (operation != null)
+            {
+                if (!string.IsNullOrWhiteSpace(operation.ErrorMessage))
+                {
+                    return operation.ErrorMessage;
+                }
+
+                string progressStepText = GetProgressStepText(operation);
+
+                if (!string.IsNullOrWhiteSpace(progressStepText))
+                {
+                    return progressStepText;
+                }
+
+                return operation.Message;
+            }
+
+            return GetLastOperationSummary();
+        }
+
+        private bool HasLastOperationDetails()
+        {
+            IReadOnlyList<PackageInstallProgressItem> progressItems = GetLastProgressItems();
+
+            return !string.IsNullOrWhiteSpace(GetLastOperationSummary()) ||
+                   (progressItems != null && progressItems.Count > 0);
+        }
+
+        private bool HasLastOperationFailure()
+        {
+            IReadOnlyList<PackageInstallProgressItem> progressItems = GetLastProgressItems();
+
+            return !string.IsNullOrWhiteSpace(_packageSampleImportService.LastErrorMessage) ||
+                   !string.IsNullOrWhiteSpace(_packageInstallService.LastErrorMessage) ||
+                   (progressItems != null && progressItems.Any(item => item.State == PackageInstallProgressItemState.Failed));
+        }
+
+        private static bool IsUpdateOperation(string operationName)
+        {
+            return !string.IsNullOrWhiteSpace(operationName) &&
+                   operationName.IndexOf("Update", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private void SetOperationDetailsExpanded(bool expanded)
+        {
+            _operationDetailsExpanded = expanded;
+            EditorPrefs.SetBool(GetOperationDrawerPreferenceKey(), expanded);
+        }
+
+        private string GetOperationDrawerPreferenceKey()
+        {
+            return OperationDrawerPreferencePrefix + Application.dataPath.Replace("\\", "/");
+        }
+
         private string GetProgressStepText(OperationProgressView operation)
         {
             if (operation == null || operation.TotalSteps <= 0)
@@ -1395,19 +1996,6 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             return Mathf.Clamp01(operation.CompletedSteps / (float)Mathf.Max(operation.TotalSteps, 1));
-        }
-
-        private void DrawProgressMessage(string statusMessage, string errorMessage, int failedSteps)
-        {
-            if (!string.IsNullOrWhiteSpace(statusMessage))
-            {
-                EditorGUILayout.LabelField(statusMessage, _mutedMiniLabelStyle);
-            }
-
-            if (failedSteps > 0 && !string.IsNullOrWhiteSpace(errorMessage))
-            {
-                DrawInlineHelp(errorMessage, VisualStatusKind.Failed);
-            }
         }
 
         private IReadOnlyList<PackageInstallProgressItem> GetLastProgressItems()
@@ -1453,7 +2041,7 @@ namespace Deucarian.PackageInstaller.Editor
             }
         }
 
-        private void DrawProgressItemSummary(IReadOnlyList<PackageInstallProgressItem> progressItems)
+        private void DrawProgressItemSummary(IReadOnlyList<PackageInstallProgressItem> progressItems, int maxItems)
         {
             if (progressItems == null || progressItems.Count == 0)
             {
@@ -1476,7 +2064,7 @@ namespace Deucarian.PackageInstaller.Editor
                 DrawColoredLabel(GetProgressItemStateLabel(item.State) + ": " + item.DisplayName, _mutedMiniLabelStyle, GetStatusColor(kind));
                 drawn++;
 
-                if (drawn >= 3)
+                if (drawn >= maxItems)
                 {
                     break;
                 }
@@ -1519,14 +2107,12 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void DrawPanel(string title, Action content, params GUILayoutOption[] options)
         {
-            Rect rect = BeginSurface(_panelStyle, _panelBackgroundColor, _panelBorderColor, options);
-
             if (!string.IsNullOrWhiteSpace(title))
             {
-                EditorGUILayout.LabelField(title, _panelTitleStyle);
-                GUILayout.Space(4f);
+                DeucarianEditorChrome.DrawSectionHeader(title);
             }
 
+            EditorGUILayout.BeginVertical(DeucarianEditorStyles.SectionBox, options);
             content?.Invoke();
             EditorGUILayout.EndVertical();
             GUILayout.Space(8f);
@@ -1591,21 +2177,20 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void DrawStatusBadge(string text, VisualStatusKind statusKind, params GUILayoutOption[] options)
         {
-            Rect rect = GUILayoutUtility.GetRect(new GUIContent(text), _badgeStyle, options);
+            DeucarianEditorStatus status = ToEditorStatus(statusKind);
+            GUIStyle style = DeucarianEditorStatusBadge.CreateStyle(status);
+            GUIContent content = new GUIContent(text ?? string.Empty, text ?? string.Empty);
+            Rect rect = GUILayoutUtility.GetRect(content, style, options);
+            DeucarianEditorStatusBadge.Draw(rect, content, status, style);
+        }
 
-            if (rect.height < 20f)
-            {
-                rect.height = 20f;
-            }
-
-            if (Event.current.type == EventType.Repaint)
-            {
-                Color color = GetStatusColor(statusKind);
-                EditorGUI.DrawRect(rect, new Color(color.r, color.g, color.b, 0.14f));
-                DrawBorder(rect, new Color(color.r, color.g, color.b, 0.70f));
-            }
-
-            DrawColoredRectLabel(rect, text, _badgeStyle, GetStatusColor(statusKind));
+        private void DrawStatusBadge(Rect rect, string text, VisualStatusKind statusKind, GUIStyle style)
+        {
+            DeucarianEditorStatusBadge.Draw(
+                rect,
+                new GUIContent(text ?? string.Empty, text ?? string.Empty),
+                ToEditorStatus(statusKind),
+                style);
         }
 
         private void DrawInlineHelp(string message, VisualStatusKind statusKind)
@@ -1615,52 +2200,65 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            Rect rect = EditorGUILayout.BeginVertical(_sampleRowStyle, GUILayout.ExpandWidth(true));
-            DrawSurface(rect, _sampleRowBackgroundColor, GetStatusColor(statusKind));
-            DrawColoredLabel(message, _mutedMiniLabelStyle, GetStatusColor(statusKind));
-            EditorGUILayout.EndVertical();
+            DeucarianEditorChrome.DrawInlineHelp(message, ToMessageType(statusKind));
         }
 
         private void DrawKeyValueRow(string label, string value)
         {
+            string displayValue = string.IsNullOrWhiteSpace(value) ? "-" : value;
+
             using (new EditorGUILayout.HorizontalScope())
             {
-                EditorGUILayout.LabelField(label, _mutedMiniLabelStyle, GUILayout.Width(112f));
-                EditorGUILayout.LabelField(string.IsNullOrWhiteSpace(value) ? "-" : value, _miniLabelStyle);
+                EditorGUILayout.LabelField(new GUIContent(label, label), _mutedMiniLabelStyle, GUILayout.Width(DetailLabelWidth));
+                EditorGUILayout.LabelField(new GUIContent(displayValue, displayValue), _miniLabelStyle, GUILayout.ExpandWidth(true));
             }
         }
 
         private void DrawSelectableValue(string label, string value)
         {
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                EditorGUILayout.LabelField(label, _mutedMiniLabelStyle, GUILayout.Width(112f));
+            string displayValue = string.IsNullOrWhiteSpace(value) ? "-" : value;
 
-                GUIStyle selectableStyle = new GUIStyle(EditorStyles.textField);
-                selectableStyle.normal.textColor = _textColor;
-                selectableStyle.focused.textColor = _textColor;
-                selectableStyle.hover.textColor = _textColor;
+            EditorGUILayout.LabelField(new GUIContent(label, label), _mutedMiniLabelStyle);
 
-                EditorGUILayout.SelectableLabel(
-                    string.IsNullOrWhiteSpace(value) ? "-" : value,
-                    selectableStyle,
-                    GUILayout.Height(EditorGUIUtility.singleLineHeight));
-            }
+            GUIStyle selectableStyle = new GUIStyle(EditorStyles.textArea);
+            selectableStyle.normal.textColor = _textColor;
+            selectableStyle.focused.textColor = _textColor;
+            selectableStyle.hover.textColor = _textColor;
+            selectableStyle.wordWrap = true;
+
+            float width = Mathf.Max(220f, GetDetailsContentWidth() - 36f);
+            float height = Mathf.Clamp(
+                selectableStyle.CalcHeight(new GUIContent(displayValue), width) + 8f,
+                EditorGUIUtility.singleLineHeight + 8f,
+                92f);
+            Rect valueRect = GUILayoutUtility.GetRect(
+                1f,
+                height,
+                GUILayout.MinHeight(height),
+                GUILayout.ExpandWidth(true));
+            EditorGUI.TextArea(valueRect, displayValue, selectableStyle);
+            GUI.Label(valueRect, new GUIContent(string.Empty, displayValue), GUIStyle.none);
+            GUILayout.Space(4f);
         }
 
         private void DrawColoredLabel(string text, GUIStyle style, Color color, params GUILayoutOption[] options)
         {
             Color previousColor = GUI.contentColor;
             GUI.contentColor = color;
-            EditorGUILayout.LabelField(text, style, options);
+            EditorGUILayout.LabelField(new GUIContent(text, text), style, options);
             GUI.contentColor = previousColor;
         }
 
         private void DrawColoredRectLabel(Rect rect, string text, GUIStyle style, Color color)
         {
+            DrawColoredRectLabel(rect, new GUIContent(text, text), style, color);
+        }
+
+        private void DrawColoredRectLabel(Rect rect, GUIContent content, GUIStyle style, Color color)
+        {
             Color previousColor = GUI.contentColor;
             GUI.contentColor = color;
-            GUI.Label(rect, text, style);
+            GUI.Label(rect, content, style);
             GUI.contentColor = previousColor;
         }
 
@@ -1692,11 +2290,6 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (_packageDetectionService.IsInstalled(packageDefinition.PackageId))
             {
-                if (updateStatus.Kind == PackageUpdateStatusKind.Failed)
-                {
-                    return new VisualStatus("ERR", "Failed", VisualStatusKind.Failed);
-                }
-
                 if (updateStatus.IsUpdateAvailable)
                 {
                     return new VisualStatus("UP", "Update", VisualStatusKind.UpdateAvailable);
@@ -1710,53 +2303,40 @@ namespace Deucarian.PackageInstaller.Editor
 
         private Color GetStatusColor(VisualStatusKind statusKind)
         {
+            return DeucarianEditorStatusBadge.GetColor(ToEditorStatus(statusKind));
+        }
+
+        private static DeucarianEditorStatus ToEditorStatus(VisualStatusKind statusKind)
+        {
             switch (statusKind)
             {
                 case VisualStatusKind.Installed:
-                    return _installedColor;
+                    return DeucarianEditorStatus.Success;
                 case VisualStatusKind.UpdateAvailable:
-                    return _updateColor;
+                    return DeucarianEditorStatus.Warning;
                 case VisualStatusKind.Failed:
-                    return _failedColor;
+                    return DeucarianEditorStatus.Error;
+                case VisualStatusKind.NotInstalled:
+                    return DeucarianEditorStatus.Disabled;
                 case VisualStatusKind.Busy:
-                    return _busyColor;
                 case VisualStatusKind.Info:
-                    return _infoColor;
                 case VisualStatusKind.Bridge:
-                    return _bridgeColor;
                 default:
-                    return _notInstalledColor;
+                    return DeucarianEditorStatus.Info;
             }
         }
 
-        private string GetPackageStatusText(PackageDefinition packageDefinition)
+        private static MessageType ToMessageType(VisualStatusKind statusKind)
         {
-            if (packageDefinition == null)
+            switch (statusKind)
             {
-                return "Unknown";
+                case VisualStatusKind.Failed:
+                    return MessageType.Error;
+                case VisualStatusKind.UpdateAvailable:
+                    return MessageType.Warning;
+                default:
+                    return MessageType.Info;
             }
-
-            if (_packageInstallService.IsQueuedOrInstalling(packageDefinition.PackageId))
-            {
-                return "Queued";
-            }
-
-            if (_packageInstallService.IsBusy &&
-                _packageInstallService.CurrentPackage != null &&
-                string.Equals(
-                    _packageInstallService.CurrentPackage.PackageId,
-                    packageDefinition.PackageId,
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                return "Busy";
-            }
-
-            if (_packageDetectionService.TryGetInstalledPackage(packageDefinition.PackageId, out PackageManagerPackageInfo packageInfo))
-            {
-                return "Installed " + packageInfo.version;
-            }
-
-            return "Not installed";
         }
 
         private static string GetDependencyDisplayNames(PackageDefinition integrationDefinition)
@@ -1837,7 +2417,20 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             _selectedChannels[packageDefinition.PackageId] = channel;
+            _autoSelectedChannelPackageIds.Remove(packageDefinition.PackageId);
             EditorPrefs.SetInt(GetChannelPreferenceKey(packageDefinition.PackageId), (int)channel);
+            _packageUpdateCheckService.Invalidate(packageDefinition.PackageId);
+        }
+
+        private void SetAutoSelectedChannel(PackageDefinition packageDefinition, PackageChannel channel)
+        {
+            if (packageDefinition == null)
+            {
+                return;
+            }
+
+            _selectedChannels[packageDefinition.PackageId] = channel;
+            _autoSelectedChannelPackageIds.Add(packageDefinition.PackageId);
             _packageUpdateCheckService.Invalidate(packageDefinition.PackageId);
         }
 
@@ -1875,9 +2468,52 @@ namespace Deucarian.PackageInstaller.Editor
             return true;
         }
 
+        private bool HasStoredChannel(PackageDefinition packageDefinition)
+        {
+            return packageDefinition != null &&
+                   EditorPrefs.HasKey(GetChannelPreferenceKey(packageDefinition.PackageId));
+        }
+
         private string GetChannelPreferenceKey(string packageId)
         {
             return ChannelPreferencePrefix + Application.dataPath.Replace("\\", "/") + "." + packageId;
+        }
+
+        private bool IsCategoryExpanded(string category)
+        {
+            if (string.IsNullOrWhiteSpace(category))
+            {
+                return true;
+            }
+
+            if (_categoryFoldouts.TryGetValue(category, out bool expanded))
+            {
+                return expanded;
+            }
+
+            string key = GetCategoryFoldoutPreferenceKey(category);
+            expanded = EditorPrefs.GetBool(key, true);
+            _categoryFoldouts[category] = expanded;
+            return expanded;
+        }
+
+        private void SetCategoryExpanded(string category, bool expanded)
+        {
+            if (string.IsNullOrWhiteSpace(category))
+            {
+                return;
+            }
+
+            _categoryFoldouts[category] = expanded;
+            EditorPrefs.SetBool(GetCategoryFoldoutPreferenceKey(category), expanded);
+        }
+
+        private string GetCategoryFoldoutPreferenceKey(string category)
+        {
+            return CategoryFoldoutPreferencePrefix +
+                   Application.dataPath.Replace("\\", "/") +
+                   "." +
+                   category.Trim();
         }
 
         private static PackageChannel[] GetChannelOptions(
@@ -1928,12 +2564,32 @@ namespace Deucarian.PackageInstaller.Editor
                 }
 
                 PackageChannel currentChannel = GetSelectedChannel(packageDefinition);
+                bool hasSelectedChannel = _selectedChannels.ContainsKey(packageDefinition.PackageId);
+                bool hasStoredChannel = HasStoredChannel(packageDefinition);
+                bool wasAutoSelectedChannel =
+                    _autoSelectedChannelPackageIds.Contains(packageDefinition.PackageId);
+
+                if (!ShouldApplyInstalledChannelSelection(
+                        hasSelectedChannel,
+                        hasStoredChannel,
+                        wasAutoSelectedChannel))
+                {
+                    continue;
+                }
 
                 if (currentChannel != installedChannel)
                 {
-                    SetSelectedChannel(packageDefinition, installedChannel);
+                    SetAutoSelectedChannel(packageDefinition, installedChannel);
                 }
             }
+        }
+
+        internal static bool ShouldApplyInstalledChannelSelection(
+            bool hasSelectedChannel,
+            bool hasStoredChannel,
+            bool wasAutoSelectedChannel)
+        {
+            return wasAutoSelectedChannel || (!hasSelectedChannel && !hasStoredChannel);
         }
 
         private void EnsureValidSelection()
@@ -2057,6 +2713,11 @@ namespace Deucarian.PackageInstaller.Editor
                 return status.Label + ": " + status.Message;
             }
 
+            if (status.Kind == PackageUpdateStatusKind.CannotDetermine && !string.IsNullOrWhiteSpace(status.Message))
+            {
+                return status.Label + ": " + status.Message;
+            }
+
             return status.Label;
         }
 
@@ -2114,6 +2775,14 @@ namespace Deucarian.PackageInstaller.Editor
         {
             _packageUpdateCheckService?.InvalidateAll();
             EnsureValidSelection();
+
+            if (_checkUpdatesAfterDetectionRefresh &&
+                !_packageDetectionService.IsRefreshing &&
+                !PackageRegistryProvider.IsRemoteRefreshing)
+            {
+                RunDeferredUpdateCheck();
+            }
+
             Repaint();
         }
 
@@ -2137,6 +2806,17 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
+            if (PackageRegistryProvider.IsRemoteRefreshing)
+            {
+                Repaint();
+                return;
+            }
+
+            RunDeferredUpdateCheck();
+        }
+
+        private void RunDeferredUpdateCheck()
+        {
             _checkUpdatesAfterDetectionRefresh = false;
             _packageUpdateCheckService.CheckForUpdates(PackageRegistryProvider.All, GetSelectedChannel);
         }
