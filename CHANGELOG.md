@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.6 - 2026-06-15
+
+- Moved the Package Installer editor entry point under `Tools > Deucarian > Package Installer`.
+- Kept the installer self-contained with no dependency on `com.deucarian.editor`.
+
 ## 1.1.5 - 2026-06-15
 
 - Synced the bundled fallback registry with the main registry for Deucarian Editor, Logging, and Theming.
