@@ -278,6 +278,28 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void BundledRegistryIncludesEditorBackedTools()
+        {
+            string registryJson = File.ReadAllText(GetBundledRegistryPath());
+            PackageRegistryLoadResult result = new PackageRegistryLoader()
+                .LoadFromJson(registryJson, PackageRegistrySource.Bundled);
+
+            Assert.IsTrue(result.IsValid, result.ErrorMessage);
+
+            PackageRegistryEntry editor = result.Registry.packages
+                .Single(package => package.id == "com.deucarian.editor");
+            PackageRegistryEntry logging = result.Registry.packages
+                .Single(package => package.id == "com.deucarian.logging");
+            PackageRegistryEntry theming = result.Registry.packages
+                .Single(package => package.id == "com.deucarian.theming");
+
+            Assert.AreEqual("Editor", editor.category);
+            StringAssert.Contains("Editor.git#main", editor.stableUrl);
+            CollectionAssert.AreEqual(new[] { "com.deucarian.editor" }, logging.dependencies);
+            CollectionAssert.AreEqual(new[] { "com.deucarian.editor" }, theming.dependencies);
+        }
+
+        [Test]
         public void CoreStateInstalledDetectionUsesRealPackageId()
         {
             PackageDefinition coreState = PackageRegistryProvider

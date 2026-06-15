@@ -30,6 +30,17 @@
       "dependencies": []
     },
     {
+      "id": "com.deucarian.logging",
+      "displayName": "Deucarian Logging",
+      "category": "Core",
+      "description": "Small dependency-light logging wrapper for Deucarian Unity packages.",
+      "stableUrl": "https://github.com/Deucarian/Logging.git#main",
+      "developmentUrl": "",
+      "dependencies": [
+        "com.deucarian.editor"
+      ]
+    },
+    {
       "id": "com.deucarian.object-loading",
       "displayName": "Deucarian Object Loading",
       "category": "Core",
@@ -55,6 +66,17 @@
       "stableUrl": "https://github.com/Deucarian/UI-Binding.git#main",
       "developmentUrl": "https://github.com/Deucarian/UI-Binding.git#develop",
       "dependencies": []
+    },
+    {
+      "id": "com.deucarian.theming",
+      "displayName": "Deucarian Theming",
+      "category": "UI",
+      "description": "Designer-friendly ScriptableObject theming with color role assets, palettes, themes, and Unity component adapters.",
+      "stableUrl": "https://github.com/Deucarian/Theming.git#main",
+      "developmentUrl": "",
+      "dependencies": [
+        "com.deucarian.editor"
+      ]
     },
     {
       "id": "com.deucarian.object-selection",

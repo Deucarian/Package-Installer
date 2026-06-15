@@ -136,6 +136,8 @@ namespace Deucarian.PackageInstaller.Editor
         private GUIStyle _primaryButtonStyle;
         private GUIStyle _secondaryButtonStyle;
 
+        // Intentionally keeps the legacy top-level bootstrap entry for discoverability
+        // and backwards compatibility while package-owned tools use Tools/Deucarian.
         [MenuItem("Deucarian/Package Installer")]
         public static void Open()
         {

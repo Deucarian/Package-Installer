@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.5 - 2026-06-15
+
+- Synced the bundled fallback registry with the main registry for Deucarian Editor, Logging, and Theming.
+- Declared bundled fallback dependency ordering from Logging and Theming to Deucarian Editor.
+- Documented the Package Installer's legacy `Deucarian > Package Installer` menu path as an intentional bootstrap exception.
+- Added package license metadata.
+
 ## 1.1.4 - 2026-06-15
 
 - Added Deucarian Editor to the bundled fallback package registry.

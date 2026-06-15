@@ -12,7 +12,7 @@ Deucarian > Package Installer
 
 ## Deucarian Menu
 
-The installer keeps its Unity Editor entry point at `Deucarian > Package Installer`. This package does not own the Theming, Logging, Object Loading, Session, or Selection menu groups; those packages provide their own package-local menu items under the shared `Deucarian` top-level menu.
+The installer intentionally keeps its Unity Editor entry point at `Deucarian > Package Installer` as a legacy bootstrap path for discoverability and backwards compatibility. Package-owned tools use `Tools > Deucarian > <Package> > ...`; this package does not own the Theming, Logging, Object Loading, Session, or Selection menu groups.
 
 The installer can install standalone packages, bridge packages, and explicitly declared package samples without making this package a runtime dependency of any other package.
 
@@ -45,6 +45,10 @@ You can also use Unity's Package Manager window:
 
 The package requires Unity `2021.3` or newer and has no package dependencies.
 
+## Usage
+
+Use the installer window to install standalone packages, install bridge packages with their dependencies, import package samples explicitly, and check installed Git packages for updates.
+
 ## Package Registry
 
 Package entries are loaded from a registry instead of being hardcoded in the installer window.
@@ -57,10 +61,11 @@ If the remote registry succeeds and validates, the window uses it. If it fails, 
 
 Remote registry validation also checks each package entry against the target package's `package.json` name so installed-package detection uses Unity's exact package IDs.
 
-The current registry includes these package entries:
+The current bundled fallback registry includes these package entries:
 
-- Core: Core State, API, Object Loading, Session
-- UI: UI Binding
+- Editor: Deucarian Editor
+- Core: Core State, API, Logging, Object Loading, Session
+- UI: UI Binding, Theming
 - World: Object Selection
 - Bridge: UI Binding + Core State Bridge, Object Loading API Bridge, ObjectSelection + CoreState Bridge, Session + API Bridge
 - Tools: Package Installer
@@ -70,10 +75,13 @@ Registered packages are first-class UPM packages with their own package IDs:
 
 - `com.deucarian.core-state`
 - `com.deucarian.api`
+- `com.deucarian.logging`
 - `com.deucarian.object-loading`
 - `com.deucarian.session`
 - `com.deucarian.ui-binding`
+- `com.deucarian.theming`
 - `com.deucarian.object-selection`
+- `com.deucarian.editor`
 - `com.deucarian.ui-binding.core-state-bridge`
 - `com.deucarian.object-loading.api-bridge`
 - `com.deucarian.object-selection.core-state-bridge`
@@ -118,6 +126,10 @@ For installed packages, the installer resolves the package through Unity Package
 Sample imports are explicit. The installer first tries Unity's Package Manager sample import API, then falls back to a bounded copy from the installed package's `Samples~` folder into `Assets/Samples/<Package Display Name>/<Version>/<Sample Name>`.
 
 If a sample destination already exists, the installer shows it as already imported and does not overwrite it silently.
+
+## Tests
+
+Run the package's EditMode tests in Unity. The registry tests validate bundled fallback parsing, package ID consistency, dependency references, and the explicit package entries needed for bootstrap installs.
 
 ## Update Checks
 
@@ -189,7 +201,7 @@ Keeping the installer editor-only ensures:
 
 ## Versioning
 
-Current package version: `1.1.3`.
+Current package version: `1.1.5`.
 
 Branch strategy:
 
@@ -215,3 +227,7 @@ After installing, updating, or removing a package, the installer refreshes insta
 - Only Git branch update checks are supported today.
 - The installer cannot know download-byte progress for Git packages.
 - Sample import avoids silent overwrite; there is no overwrite UI in this version.
+
+## License
+
+See [LICENSE.md](LICENSE.md).
