@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.14 - 2026-06-16
+
+- Added a dismissible first-run notice that recommends Deucarian Bootstrap for setup and repair.
+- Documented Bootstrap as the official first-time setup path while keeping direct Package Installer installs supported for advanced/manual setups.
+- Updated the Package Installer window footer version to match the package version.
+
 ## 1.1.13 - 2026-06-15
 
 - Updated the Deucarian Logging dependency to `0.2.6` for npmjs scoped-registry publishing.

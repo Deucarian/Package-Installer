@@ -11,7 +11,7 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed class PackageInstallerWindow : EditorWindow
     {
         private const string WindowTitle = "Package Installer";
-        private const string PackageVersion = "1.1.12";
+        private const string PackageVersion = "1.1.14";
         private const float MinWindowWidth = 850f;
         private const float MinWindowHeight = 650f;
         private const float SidebarWidth = 340f;
@@ -23,6 +23,7 @@ namespace Deucarian.PackageInstaller.Editor
         private const string AdvancedFoldoutPreferencePrefix = "Deucarian.PackageInstaller.AdvancedFoldout.";
         private const string CategoryFoldoutPreferencePrefix = "Deucarian.PackageInstaller.CategoryFoldout.";
         private const string OperationDrawerPreferencePrefix = "Deucarian.PackageInstaller.OperationDrawer.";
+        private const string BootstrapNoticeDismissedPreferencePrefix = "Deucarian.PackageInstaller.BootstrapNoticeDismissed.";
 
         private enum SelectionKind
         {
@@ -216,6 +217,7 @@ namespace Deucarian.PackageInstaller.Editor
             using (new EditorGUILayout.VerticalScope(_windowStyle))
             {
                 DrawHeader();
+                DrawBootstrapRecommendationNotice();
 
                 using (new EditorGUILayout.HorizontalScope(GUILayout.ExpandHeight(true)))
                 {
@@ -364,6 +366,41 @@ namespace Deucarian.PackageInstaller.Editor
 
             GUILayout.Space(6f);
             DrawHeaderUpdateControls(compact);
+
+            DeucarianEditorChrome.EndSection();
+            GUILayout.Space(8f);
+        }
+
+        private void DrawBootstrapRecommendationNotice()
+        {
+            if (EditorPrefs.GetBool(GetBootstrapNoticeDismissedPreferenceKey(), false))
+            {
+                return;
+            }
+
+            DeucarianEditorChrome.BeginSection();
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                GUILayout.Label(
+                    DeucarianEditorIcons.GetPackageIcon("package-installer"),
+                    GUILayout.Width(32f),
+                    GUILayout.Height(32f));
+
+                using (new EditorGUILayout.VerticalScope(GUILayout.ExpandWidth(true)))
+                {
+                    EditorGUILayout.LabelField("Recommended setup path: Deucarian Bootstrap", _sectionTitleStyle);
+                    EditorGUILayout.LabelField(
+                        "Bootstrap configures the Deucarian scoped registry, installs Package Installer, and can repair registry setup and package dependencies.",
+                        _mutedMiniLabelStyle);
+                }
+
+                GUILayout.Space(8f);
+
+                if (GUILayout.Button("Dismiss", _secondaryButtonStyle, GUILayout.Width(76f)))
+                {
+                    EditorPrefs.SetBool(GetBootstrapNoticeDismissedPreferenceKey(), true);
+                }
+            }
 
             DeucarianEditorChrome.EndSection();
             GUILayout.Space(8f);
@@ -2514,6 +2551,11 @@ namespace Deucarian.PackageInstaller.Editor
                    Application.dataPath.Replace("\\", "/") +
                    "." +
                    category.Trim();
+        }
+
+        private string GetBootstrapNoticeDismissedPreferenceKey()
+        {
+            return BootstrapNoticeDismissedPreferencePrefix + Application.dataPath.Replace("\\", "/");
         }
 
         private static PackageChannel[] GetChannelOptions(

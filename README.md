@@ -28,7 +28,31 @@ Package ID: `com.deucarian.package-installer`
 
 ## Installation
 
-Add the installer through Unity Package Manager with a Git URL:
+Install Deucarian Bootstrap first. Bootstrap configures the Deucarian scoped registry and installs Package Installer:
+
+```text
+https://github.com/Deucarian/Bootstrap.git#main
+```
+
+Then open:
+
+```text
+Tools > Deucarian > Bootstrap > Open Bootstrapper
+```
+
+Use the recommended scoped registry setup mode. Bootstrap installs `com.deucarian.package-installer`, and Unity resolves `com.deucarian.editor` and `com.deucarian.logging`.
+
+Direct Package Installer install is supported for advanced/manual setups only. If the Deucarian scoped registry is already configured, add:
+
+```json
+{
+  "dependencies": {
+    "com.deucarian.package-installer": "1.1.14"
+  }
+}
+```
+
+Direct Git install is also supported for development or emergency fallback setups, but dependencies must already be installed or resolvable:
 
 ```json
 {
@@ -38,7 +62,7 @@ Add the installer through Unity Package Manager with a Git URL:
 }
 ```
 
-For development builds, use:
+For direct development Git builds, use:
 
 ```json
 "com.deucarian.package-installer": "https://github.com/Deucarian/Package-Installer.git#develop"
@@ -51,7 +75,7 @@ You can also use Unity's Package Manager window:
 3. Enter the installer Git URL.
 4. Open `Tools > Deucarian > Package Installer`.
 
-The package requires Unity `2021.3` or newer and depends on `com.deucarian.editor` and `com.deucarian.logging`.
+The package requires Unity `2021.3` or newer and depends on `com.deucarian.editor` and `com.deucarian.logging`. Bootstrap is not a dependency of Package Installer.
 
 ## Logging
 
@@ -189,7 +213,7 @@ This package is editor-only and exposes no runtime API for game code.
 The user-facing entry point is the Unity menu item:
 
 ```text
-Deucarian/Package Installer
+Tools/Deucarian/Package Installer
 ```
 
 The implementation is split into internal editor classes:
@@ -231,7 +255,7 @@ Keeping the installer editor-only ensures:
 
 ## Versioning
 
-Current package version: `1.1.13`.
+Current package version: `1.1.14`.
 
 Branch strategy:
 

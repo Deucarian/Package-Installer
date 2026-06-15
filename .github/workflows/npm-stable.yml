@@ -34,6 +34,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 concurrency:
   group: npm-stable-${{ github.repository }}-${{ github.ref_name }}
@@ -403,7 +404,7 @@ jobs:
             exit 1
           fi
 
-          npm publish --tag latest --registry="${NPM_REGISTRY_URL}"
+          npm publish --provenance --access public --tag latest --registry="${NPM_REGISTRY_URL}"
 
       - name: Create Git tag
         shell: bash

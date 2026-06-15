@@ -39,6 +39,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
   group: npm-development-${{ github.repository }}-${{ github.ref_name }}
@@ -286,4 +287,4 @@ jobs:
             exit 1
           fi
 
-          npm publish --tag dev --registry="${NPM_REGISTRY_URL}"
+          npm publish --provenance --access public --tag dev --registry="${NPM_REGISTRY_URL}"
