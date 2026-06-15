@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.4 - 2026-06-15
+
+- Added Deucarian Editor to the bundled fallback package registry.
+
 ## 1.1.3 - 2026-06-15
 
 - Documented that the Package Installer remains at `Deucarian > Package Installer` while other packages own their own `Deucarian` menu groups.
