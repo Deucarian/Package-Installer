@@ -76,6 +76,8 @@ namespace Deucarian.PackageInstaller.Editor
         private PackageDependencyInstaller _packageDependencyInstaller;
         private readonly Dictionary<string, PackageChannel> _selectedChannels =
             new Dictionary<string, PackageChannel>();
+        private readonly HashSet<string> _autoSelectedChannelPackageIds =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, bool> _advancedFoldouts =
             new Dictionary<string, bool>();
         private readonly Dictionary<string, bool> _categoryFoldouts =
@@ -2277,7 +2279,20 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             _selectedChannels[packageDefinition.PackageId] = channel;
+            _autoSelectedChannelPackageIds.Remove(packageDefinition.PackageId);
             EditorPrefs.SetInt(GetChannelPreferenceKey(packageDefinition.PackageId), (int)channel);
+            _packageUpdateCheckService.Invalidate(packageDefinition.PackageId);
+        }
+
+        private void SetAutoSelectedChannel(PackageDefinition packageDefinition, PackageChannel channel)
+        {
+            if (packageDefinition == null)
+            {
+                return;
+            }
+
+            _selectedChannels[packageDefinition.PackageId] = channel;
+            _autoSelectedChannelPackageIds.Add(packageDefinition.PackageId);
             _packageUpdateCheckService.Invalidate(packageDefinition.PackageId);
         }
 
@@ -2313,6 +2328,12 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             return true;
+        }
+
+        private bool HasStoredChannel(PackageDefinition packageDefinition)
+        {
+            return packageDefinition != null &&
+                   EditorPrefs.HasKey(GetChannelPreferenceKey(packageDefinition.PackageId));
         }
 
         private string GetChannelPreferenceKey(string packageId)
@@ -2405,12 +2426,32 @@ namespace Deucarian.PackageInstaller.Editor
                 }
 
                 PackageChannel currentChannel = GetSelectedChannel(packageDefinition);
+                bool hasSelectedChannel = _selectedChannels.ContainsKey(packageDefinition.PackageId);
+                bool hasStoredChannel = HasStoredChannel(packageDefinition);
+                bool wasAutoSelectedChannel =
+                    _autoSelectedChannelPackageIds.Contains(packageDefinition.PackageId);
+
+                if (!ShouldApplyInstalledChannelSelection(
+                        hasSelectedChannel,
+                        hasStoredChannel,
+                        wasAutoSelectedChannel))
+                {
+                    continue;
+                }
 
                 if (currentChannel != installedChannel)
                 {
-                    SetSelectedChannel(packageDefinition, installedChannel);
+                    SetAutoSelectedChannel(packageDefinition, installedChannel);
                 }
             }
+        }
+
+        internal static bool ShouldApplyInstalledChannelSelection(
+            bool hasSelectedChannel,
+            bool hasStoredChannel,
+            bool wasAutoSelectedChannel)
+        {
+            return wasAutoSelectedChannel || (!hasSelectedChannel && !hasStoredChannel);
         }
 
         private void EnsureValidSelection()

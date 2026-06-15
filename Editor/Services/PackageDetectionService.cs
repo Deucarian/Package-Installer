@@ -314,7 +314,10 @@ namespace Deucarian.PackageInstaller.Editor
 
             return TryGetReferenceName(installedReference, out string installedReferenceName) &&
                    TryGetReferenceName(channelUrl, out string channelReferenceName) &&
-                   string.Equals(installedReferenceName, channelReferenceName, StringComparison.OrdinalIgnoreCase);
+                   string.Equals(
+                       NormalizeReferenceName(installedReferenceName),
+                       NormalizeReferenceName(channelReferenceName),
+                       StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool TryGetReferenceName(string packageReference, out string referenceName)
@@ -340,6 +343,32 @@ namespace Deucarian.PackageInstaller.Editor
         private static string NormalizePackageReference(string packageReference)
         {
             return (packageReference ?? string.Empty).Trim();
+        }
+
+        private static string NormalizeReferenceName(string referenceName)
+        {
+            referenceName = (referenceName ?? string.Empty).Trim();
+
+            const string refsHeadsPrefix = "refs/heads/";
+            const string headsPrefix = "heads/";
+            const string originPrefix = "origin/";
+
+            if (referenceName.StartsWith(refsHeadsPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                return referenceName.Substring(refsHeadsPrefix.Length);
+            }
+
+            if (referenceName.StartsWith(headsPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                return referenceName.Substring(headsPrefix.Length);
+            }
+
+            if (referenceName.StartsWith(originPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                return referenceName.Substring(originPrefix.Length);
+            }
+
+            return referenceName;
         }
 
         private static IReadOnlyList<string> GetPackageLockPaths()

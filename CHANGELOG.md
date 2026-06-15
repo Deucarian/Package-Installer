@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.8 - 2026-06-15
+
+- Kept manually selected Stable or Development channels from being overwritten by auto-detected Custom install references during update checks.
+- Recognized common Git branch reference forms such as `refs/heads/main` and `origin/develop` when inferring installed package channels.
+
 ## 1.1.7 - 2026-06-15
 
 - Installed registry dependencies before requested packages for first installs, reinstalls, single updates, and update-all operations.
