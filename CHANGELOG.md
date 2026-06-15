@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.11 - 2026-06-15
+
+- Updated the Deucarian Logging dependency to `0.2.5` for the restored Unity `2021.3` first-time install graph.
+
 ## 1.1.10 - 2026-06-15
 
 - Declared Package Installer dependencies on Deucarian Editor and Deucarian Logging for bootstrap-aware installs.
