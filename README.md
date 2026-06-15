@@ -10,6 +10,10 @@ Open it from:
 Deucarian > Package Installer
 ```
 
+## Deucarian Menu
+
+The installer keeps its Unity Editor entry point at `Deucarian > Package Installer`. This package does not own the Theming, Logging, Object Loading, Session, or Selection menu groups; those packages provide their own package-local menu items under the shared `Deucarian` top-level menu.
+
 The installer can install standalone packages, bridge packages, and explicitly declared package samples without making this package a runtime dependency of any other package.
 
 Package ID: `com.deucarian.package-installer`
@@ -185,7 +189,7 @@ Keeping the installer editor-only ensures:
 
 ## Versioning
 
-Current package version: `1.1.2`.
+Current package version: `1.1.3`.
 
 Branch strategy:
 

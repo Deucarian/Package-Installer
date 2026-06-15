@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.3 - 2026-06-15
+
+- Documented that the Package Installer remains at `Deucarian > Package Installer` while other packages own their own `Deucarian` menu groups.
+
 ## 1.1.2 - 2026-06-15
 
 - Let the package list use the full available window height by moving operation summary panels under the details pane.
