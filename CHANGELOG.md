@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.9 - 2026-06-15
+
+- Removed the duplicated Source panel from package details and kept source diagnostics under Advanced.
+- Moved current and last operation feedback into a shared bottom status bar with an expandable summary drawer.
+- Persisted Advanced foldout and operation drawer state per Unity project.
+
 ## 1.1.8 - 2026-06-15
 
 - Kept manually selected Stable or Development channels from being overwritten by auto-detected Custom install references during update checks.

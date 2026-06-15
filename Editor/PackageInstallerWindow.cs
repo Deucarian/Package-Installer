@@ -16,10 +16,11 @@ namespace Deucarian.PackageInstaller.Editor
         private const float SidebarRowMinHeight = 94f;
         private const float SidebarRowMaxHeight = 150f;
         private const float DetailLabelWidth = 118f;
-        private const float ProgressAreaHeight = 96f;
-        private const float SummaryAreaHeight = 106f;
+        private const float OperationDrawerHeight = 132f;
         private const string ChannelPreferencePrefix = "Deucarian.PackageInstaller.SelectedChannel.";
+        private const string AdvancedFoldoutPreferencePrefix = "Deucarian.PackageInstaller.AdvancedFoldout.";
         private const string CategoryFoldoutPreferencePrefix = "Deucarian.PackageInstaller.CategoryFoldout.";
+        private const string OperationDrawerPreferencePrefix = "Deucarian.PackageInstaller.OperationDrawer.";
 
         private enum SelectionKind
         {
@@ -85,12 +86,14 @@ namespace Deucarian.PackageInstaller.Editor
 
         private Vector2 _sidebarScrollPosition;
         private Vector2 _detailsScrollPosition;
+        private Vector2 _operationDetailsScrollPosition;
         private SelectionKind _selectionKind = SelectionKind.Package;
         private string _selectedPackageId = string.Empty;
         private string _packageSearchText = string.Empty;
         private bool _showInstalledPackages = true;
         private bool _showNotInstalledPackages = true;
         private bool _checkUpdatesAfterDetectionRefresh;
+        private bool _operationDetailsExpanded;
 
         private bool _stylesInitialized;
         private bool _lastProSkin;
@@ -120,6 +123,7 @@ namespace Deucarian.PackageInstaller.Editor
         private GUIStyle _sidebarStyle;
         private GUIStyle _detailsStyle;
         private GUIStyle _panelStyle;
+        private GUIStyle _operationBarStyle;
         private GUIStyle _detailHeaderStyle;
         private GUIStyle _sampleRowStyle;
         private GUIStyle _titleStyle;
@@ -129,6 +133,7 @@ namespace Deucarian.PackageInstaller.Editor
         private GUIStyle _labelStyle;
         private GUIStyle _miniLabelStyle;
         private GUIStyle _mutedMiniLabelStyle;
+        private GUIStyle _operationLineStyle;
         private GUIStyle _rowTitleStyle;
         private GUIStyle _rowSubLabelStyle;
         private GUIStyle _rowStatusStyle;
@@ -162,6 +167,7 @@ namespace Deucarian.PackageInstaller.Editor
                 _packageDetectionService);
             PackageRegistryProvider.EnsureLoaded();
             EnsureValidSelection();
+            _operationDetailsExpanded = EditorPrefs.GetBool(GetOperationDrawerPreferenceKey(), false);
 
             PackageRegistryProvider.RegistryChanged += HandleRegistryChanged;
             _packageInstallService.StateChanged += Repaint;
@@ -229,18 +235,10 @@ namespace Deucarian.PackageInstaller.Editor
                 {
                     DrawSidebar();
                     GUILayout.Space(8f);
-                    DrawRightPane();
+                    DrawDetailsPane();
                 }
-            }
-        }
 
-        private void DrawRightPane()
-        {
-            using (new EditorGUILayout.VerticalScope(GUILayout.ExpandWidth(true), GUILayout.ExpandHeight(true)))
-            {
-                DrawDetailsPane();
-                DrawProgressFooter();
-                DrawLastOperationSummaryPanel();
+                DrawGlobalOperationArea();
             }
         }
 
@@ -294,6 +292,10 @@ namespace Deucarian.PackageInstaller.Editor
             _panelStyle.padding = new RectOffset(12, 12, 10, 10);
             _panelStyle.margin = new RectOffset(0, 0, 0, 8);
 
+            _operationBarStyle = new GUIStyle();
+            _operationBarStyle.padding = new RectOffset(10, 10, 6, 6);
+            _operationBarStyle.margin = new RectOffset(0, 0, 8, 0);
+
             _detailHeaderStyle = new GUIStyle();
             _detailHeaderStyle.padding = new RectOffset(14, 14, 12, 12);
             _detailHeaderStyle.margin = new RectOffset(0, 0, 0, 8);
@@ -328,6 +330,11 @@ namespace Deucarian.PackageInstaller.Editor
 
             _mutedMiniLabelStyle = new GUIStyle(EditorStyles.wordWrappedMiniLabel);
             _mutedMiniLabelStyle.normal.textColor = _mutedTextColor;
+
+            _operationLineStyle = new GUIStyle(EditorStyles.miniLabel);
+            _operationLineStyle.normal.textColor = _textColor;
+            _operationLineStyle.clipping = TextClipping.Clip;
+            _operationLineStyle.wordWrap = false;
 
             _rowTitleStyle = new GUIStyle(EditorStyles.miniBoldLabel);
             _rowTitleStyle.normal.textColor = _textColor;
@@ -1019,7 +1026,6 @@ namespace Deucarian.PackageInstaller.Editor
             DrawDetailHeader(packageDefinition);
             DrawStatusPanel(packageDefinition);
             DrawChannelPanel(packageDefinition);
-            DrawSourcePanel(packageDefinition);
             DrawActionsPanel(packageDefinition);
             DrawExtrasPanel(packageDefinition);
             DrawAdvancedPanel(packageDefinition);
@@ -1031,7 +1037,6 @@ namespace Deucarian.PackageInstaller.Editor
             DrawStatusPanel(packageDefinition);
             DrawRequirementsPanel(packageDefinition);
             DrawChannelPanel(packageDefinition);
-            DrawSourcePanel(packageDefinition);
             DrawActionsPanel(packageDefinition);
             DrawExtrasPanel(packageDefinition);
             DrawAdvancedPanel(packageDefinition);
@@ -1184,27 +1189,6 @@ namespace Deucarian.PackageInstaller.Editor
 
                 DrawKeyValueRow("Stable", string.IsNullOrWhiteSpace(packageDefinition.StableUrl) ? "Not configured" : "Configured");
                 DrawKeyValueRow("Development", string.IsNullOrWhiteSpace(packageDefinition.DevelopmentUrl) ? "Not configured" : "Configured");
-            }, GUILayout.ExpandWidth(true));
-        }
-
-        private void DrawSourcePanel(PackageDefinition packageDefinition)
-        {
-            DrawPanel("Source", () =>
-            {
-                PackageChannel selectedChannel = GetSelectedChannel(packageDefinition);
-                string selectedUrl = packageDefinition.GetUrl(selectedChannel);
-
-                DrawSelectableValue("Package ID", packageDefinition.PackageId);
-                DrawSelectableValue("Selected URL", selectedUrl);
-                DrawSelectableValue("Stable URL", packageDefinition.StableUrl);
-                DrawSelectableValue("Development URL", packageDefinition.DevelopmentUrl);
-
-                if (_packageDetectionService.TryGetInstalledPackageReference(
-                        packageDefinition.PackageId,
-                        out string installedReference))
-                {
-                    DrawSelectableValue("Installed ref", installedReference);
-                }
             }, GUILayout.ExpandWidth(true));
         }
 
@@ -1645,10 +1629,19 @@ namespace Deucarian.PackageInstaller.Editor
 
             DrawSelectableValue("Package ID", packageDefinition.PackageId);
             DrawSelectableValue("Type", packageDefinition.Category);
-            DrawSelectableValue("Git URL", packageDefinition.GetUrl(selectedChannel));
+            DrawSelectableValue("Selected URL", packageDefinition.GetUrl(selectedChannel));
             DrawSelectableValue("Stable URL", packageDefinition.StableUrl);
             DrawSelectableValue("Development URL", packageDefinition.DevelopmentUrl);
             DrawSelectableValue("Selected ref", GetChannelLabel(selectedChannel));
+
+            if (_packageDetectionService.TryGetInstalledPackage(
+                    packageDefinition.PackageId,
+                    out PackageManagerPackageInfo packageInfo))
+            {
+                DrawSelectableValue("Installed source", packageInfo.source.ToString());
+                DrawSelectableValue("Installed version", packageInfo.version);
+                DrawSelectableValue("Installed path", packageInfo.resolvedPath);
+            }
 
             if (_packageDetectionService.TryGetInstalledPackageReference(
                     packageDefinition.PackageId,
@@ -1676,76 +1669,133 @@ namespace Deucarian.PackageInstaller.Editor
                 return false;
             }
 
-            _advancedFoldouts.TryGetValue(key, out bool expanded);
+            if (!_advancedFoldouts.TryGetValue(key, out bool expanded))
+            {
+                expanded = EditorPrefs.GetBool(GetAdvancedFoldoutPreferenceKey(key), false);
+                _advancedFoldouts[key] = expanded;
+            }
+
             bool nextExpanded = EditorGUILayout.Foldout(expanded, "Advanced", true, _foldoutStyle);
 
             if (nextExpanded != expanded)
             {
                 _advancedFoldouts[key] = nextExpanded;
+                EditorPrefs.SetBool(GetAdvancedFoldoutPreferenceKey(key), nextExpanded);
             }
 
             return nextExpanded;
         }
 
-        private void DrawProgressFooter()
+        private string GetAdvancedFoldoutPreferenceKey(string packageId)
         {
-            DrawPanel("Current Operation", () =>
-            {
-                OperationProgressView operation = GetCurrentOperationProgress();
-
-                if (operation == null)
-                {
-                    EditorGUILayout.LabelField(new GUIContent("No operation running.", "No operation running."), _mutedMiniLabelStyle);
-                    Rect idleRect = GUILayoutUtility.GetRect(1f, 18f, GUILayout.ExpandWidth(true));
-                    EditorGUI.ProgressBar(idleRect, 0f, "Idle");
-                    return;
-                }
-
-                using (new EditorGUILayout.HorizontalScope())
-                {
-                    using (new EditorGUILayout.VerticalScope(GUILayout.ExpandWidth(true)))
-                    {
-                        EditorGUILayout.LabelField(new GUIContent(operation.OperationName, operation.OperationName), _labelStyle);
-                        string progressStepText = GetProgressStepText(operation);
-                        EditorGUILayout.LabelField(new GUIContent(progressStepText, progressStepText), _mutedMiniLabelStyle);
-                    }
-
-                    DrawStatusBadge(operation.IsBusy ? "Running" : "Complete", operation.IsBusy ? VisualStatusKind.Busy : VisualStatusKind.Installed, GUILayout.Width(92f));
-                }
-
-                Rect progressRect = GUILayoutUtility.GetRect(1f, 18f, GUILayout.ExpandWidth(true));
-                float progress = GetOperationProgress(operation);
-                EditorGUI.ProgressBar(progressRect, progress, Mathf.RoundToInt(progress * 100f) + "%");
-
-                DrawProgressMessage(operation.Message, operation.ErrorMessage, operation.FailedSteps);
-            }, GUILayout.Height(ProgressAreaHeight), GUILayout.ExpandWidth(true));
+            return AdvancedFoldoutPreferencePrefix +
+                   Application.dataPath.Replace("\\", "/") +
+                   "." +
+                   packageId;
         }
 
-        private void DrawLastOperationSummaryPanel()
+        private void DrawGlobalOperationArea()
         {
-            DrawPanel("Last Operation Summary", () =>
+            OperationProgressView operation = GetCurrentOperationProgress();
+            Rect rect = BeginSurface(
+                _operationBarStyle,
+                _panelBackgroundColor,
+                _panelBorderColor,
+                GUILayout.ExpandWidth(true));
+
+            DrawGlobalOperationBar(operation);
+
+            if (_operationDetailsExpanded)
             {
-                string summary = GetLastOperationSummary();
-                IReadOnlyList<PackageInstallProgressItem> progressItems = GetLastProgressItems();
+                GUILayout.Space(6f);
+                DrawHorizontalSeparator();
+                GUILayout.Space(6f);
+                DrawOperationSummaryDrawer();
+            }
 
-                if (string.IsNullOrWhiteSpace(summary) && (progressItems == null || progressItems.Count == 0))
+            EditorGUILayout.EndVertical();
+        }
+
+        private void DrawGlobalOperationBar(OperationProgressView operation)
+        {
+            string stateLabel = GetGlobalOperationStateLabel(operation);
+            VisualStatusKind stateKind = GetGlobalOperationStatusKind(operation);
+            string title = GetOperationBarTitle(operation);
+            string subtitle = GetOperationBarSubtitle(operation);
+
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                DrawStatusBadge(stateLabel, stateKind, GUILayout.Width(142f));
+                GUILayout.Space(8f);
+
+                string line = string.IsNullOrWhiteSpace(subtitle) ? title : title + " - " + subtitle;
+                EditorGUILayout.LabelField(
+                    new GUIContent(line, line),
+                    _operationLineStyle,
+                    GUILayout.ExpandWidth(true),
+                    GUILayout.Height(20f));
+
+                if (operation != null)
                 {
-                    EditorGUILayout.LabelField(
-                        new GUIContent("No operations have completed yet.", "No operations have completed yet."),
-                        _mutedMiniLabelStyle);
-                    return;
+                    GUILayout.Space(8f);
+                    float progress = GetOperationProgress(operation);
+                    Rect progressRect = GUILayoutUtility.GetRect(
+                        150f,
+                        18f,
+                        GUILayout.Width(150f),
+                        GUILayout.Height(18f));
+                    EditorGUI.ProgressBar(progressRect, progress, Mathf.RoundToInt(progress * 100f) + "%");
                 }
 
-                VisualStatusKind summaryKind = GetLastSummaryStatusKind(progressItems);
-                DrawStatusBadge(GetLastSummaryStatusLabel(summaryKind), summaryKind, GUILayout.Width(118f));
+                GUILayout.Space(8f);
 
-                if (!string.IsNullOrWhiteSpace(summary))
+                if (GUILayout.Button(
+                        _operationDetailsExpanded ? "Hide Details" : "Show Details",
+                        _secondaryButtonStyle,
+                        GUILayout.Width(96f)))
                 {
-                    EditorGUILayout.LabelField(new GUIContent(summary, summary), _miniLabelStyle);
+                    SetOperationDetailsExpanded(!_operationDetailsExpanded);
                 }
+            }
+        }
 
-                DrawProgressItemSummary(progressItems);
-            }, GUILayout.Height(SummaryAreaHeight), GUILayout.ExpandWidth(true));
+        private void DrawOperationSummaryDrawer()
+        {
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                EditorGUILayout.LabelField("Last Operation Summary", _panelTitleStyle, GUILayout.ExpandWidth(true));
+                bool hasSummary = HasLastOperationDetails();
+                VisualStatusKind summaryKind = hasSummary ? GetLastSummaryStatusKind(GetLastProgressItems()) : VisualStatusKind.Info;
+                DrawStatusBadge(hasSummary ? GetLastSummaryStatusLabel(summaryKind) : "Idle", summaryKind, GUILayout.Width(118f));
+            }
+
+            _operationDetailsScrollPosition = EditorGUILayout.BeginScrollView(
+                _operationDetailsScrollPosition,
+                GUILayout.Height(OperationDrawerHeight),
+                GUILayout.ExpandWidth(true));
+            DrawLastOperationSummaryContent();
+            EditorGUILayout.EndScrollView();
+        }
+
+        private void DrawLastOperationSummaryContent()
+        {
+            string summary = GetLastOperationSummary();
+            IReadOnlyList<PackageInstallProgressItem> progressItems = GetLastProgressItems();
+
+            if (string.IsNullOrWhiteSpace(summary) && (progressItems == null || progressItems.Count == 0))
+            {
+                EditorGUILayout.LabelField(
+                    new GUIContent("No operations have completed yet.", "No operations have completed yet."),
+                    _mutedMiniLabelStyle);
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(summary))
+            {
+                EditorGUILayout.LabelField(new GUIContent(summary, summary), _miniLabelStyle);
+            }
+
+            DrawProgressItemSummary(progressItems, int.MaxValue);
         }
 
         private OperationProgressView GetCurrentOperationProgress()
@@ -1815,6 +1865,151 @@ namespace Deucarian.PackageInstaller.Editor
             return null;
         }
 
+        private string GetGlobalOperationStateLabel(OperationProgressView operation)
+        {
+            if (operation != null)
+            {
+                if (operation.FailedSteps > 0 && !operation.IsBusy)
+                {
+                    return "Failed";
+                }
+
+                if (_packageUpdateCheckService.IsChecking)
+                {
+                    return "Checking for updates";
+                }
+
+                if (_packageDetectionService.IsRefreshing)
+                {
+                    return "Refreshing";
+                }
+
+                if (_packageSampleImportService.IsBusy)
+                {
+                    return "Installing";
+                }
+
+                if (_packageInstallService.State == PackageInstallRequestState.Removing)
+                {
+                    return "Removing";
+                }
+
+                return IsUpdateOperation(operation.OperationName) ? "Updating" : "Installing";
+            }
+
+            if (HasLastOperationFailure())
+            {
+                return "Failed";
+            }
+
+            if (HasLastOperationDetails())
+            {
+                return "Complete";
+            }
+
+            return "Idle";
+        }
+
+        private VisualStatusKind GetGlobalOperationStatusKind(OperationProgressView operation)
+        {
+            string stateLabel = GetGlobalOperationStateLabel(operation);
+
+            if (string.Equals(stateLabel, "Failed", StringComparison.OrdinalIgnoreCase))
+            {
+                return VisualStatusKind.Failed;
+            }
+
+            if (string.Equals(stateLabel, "Idle", StringComparison.OrdinalIgnoreCase))
+            {
+                return VisualStatusKind.Info;
+            }
+
+            if (string.Equals(stateLabel, "Complete", StringComparison.OrdinalIgnoreCase))
+            {
+                return VisualStatusKind.Installed;
+            }
+
+            return VisualStatusKind.Busy;
+        }
+
+        private string GetOperationBarTitle(OperationProgressView operation)
+        {
+            if (operation != null)
+            {
+                return string.IsNullOrWhiteSpace(operation.OperationName)
+                    ? GetGlobalOperationStateLabel(operation)
+                    : operation.OperationName;
+            }
+
+            if (HasLastOperationFailure())
+            {
+                return "Last operation failed.";
+            }
+
+            if (HasLastOperationDetails())
+            {
+                return "Last operation complete.";
+            }
+
+            return "No operation running.";
+        }
+
+        private string GetOperationBarSubtitle(OperationProgressView operation)
+        {
+            if (operation != null)
+            {
+                if (!string.IsNullOrWhiteSpace(operation.ErrorMessage))
+                {
+                    return operation.ErrorMessage;
+                }
+
+                string progressStepText = GetProgressStepText(operation);
+
+                if (!string.IsNullOrWhiteSpace(progressStepText))
+                {
+                    return progressStepText;
+                }
+
+                return operation.Message;
+            }
+
+            return GetLastOperationSummary();
+        }
+
+        private bool HasLastOperationDetails()
+        {
+            IReadOnlyList<PackageInstallProgressItem> progressItems = GetLastProgressItems();
+
+            return !string.IsNullOrWhiteSpace(GetLastOperationSummary()) ||
+                   (progressItems != null && progressItems.Count > 0);
+        }
+
+        private bool HasLastOperationFailure()
+        {
+            IReadOnlyList<PackageInstallProgressItem> progressItems = GetLastProgressItems();
+
+            return !string.IsNullOrWhiteSpace(_packageSampleImportService.LastErrorMessage) ||
+                   !string.IsNullOrWhiteSpace(_packageInstallService.LastErrorMessage) ||
+                   (progressItems != null && progressItems.Any(item => item.State == PackageInstallProgressItemState.Failed));
+        }
+
+        private static bool IsUpdateOperation(string operationName)
+        {
+            return !string.IsNullOrWhiteSpace(operationName) &&
+                   operationName.IndexOf("Update", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private void SetOperationDetailsExpanded(bool expanded)
+        {
+            _operationDetailsExpanded = expanded;
+            EditorPrefs.SetBool(GetOperationDrawerPreferenceKey(), expanded);
+        }
+
+        private string GetOperationDrawerPreferenceKey()
+        {
+            return OperationDrawerPreferencePrefix + Application.dataPath.Replace("\\", "/");
+        }
+
         private string GetProgressStepText(OperationProgressView operation)
         {
             if (operation == null || operation.TotalSteps <= 0)
@@ -1844,19 +2039,6 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             return Mathf.Clamp01(operation.CompletedSteps / (float)Mathf.Max(operation.TotalSteps, 1));
-        }
-
-        private void DrawProgressMessage(string statusMessage, string errorMessage, int failedSteps)
-        {
-            if (!string.IsNullOrWhiteSpace(statusMessage))
-            {
-                EditorGUILayout.LabelField(new GUIContent(statusMessage, statusMessage), _mutedMiniLabelStyle);
-            }
-
-            if (failedSteps > 0 && !string.IsNullOrWhiteSpace(errorMessage))
-            {
-                DrawInlineHelp(errorMessage, VisualStatusKind.Failed);
-            }
         }
 
         private IReadOnlyList<PackageInstallProgressItem> GetLastProgressItems()
@@ -1902,7 +2084,7 @@ namespace Deucarian.PackageInstaller.Editor
             }
         }
 
-        private void DrawProgressItemSummary(IReadOnlyList<PackageInstallProgressItem> progressItems)
+        private void DrawProgressItemSummary(IReadOnlyList<PackageInstallProgressItem> progressItems, int maxItems)
         {
             if (progressItems == null || progressItems.Count == 0)
             {
@@ -1925,7 +2107,7 @@ namespace Deucarian.PackageInstaller.Editor
                 DrawColoredLabel(GetProgressItemStateLabel(item.State) + ": " + item.DisplayName, _mutedMiniLabelStyle, GetStatusColor(kind));
                 drawn++;
 
-                if (drawn >= 3)
+                if (drawn >= maxItems)
                 {
                     break;
                 }
