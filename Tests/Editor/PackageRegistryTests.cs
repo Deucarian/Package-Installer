@@ -329,11 +329,14 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 .Single(package => package.id == "com.deucarian.logging");
             PackageRegistryEntry theming = result.Registry.packages
                 .Single(package => package.id == "com.deucarian.theming");
+            PackageRegistryEntry packageInstaller = result.Registry.packages
+                .Single(package => package.id == "com.deucarian.package-installer");
 
             Assert.AreEqual("Editor", editor.category);
             StringAssert.Contains("Editor.git#main", editor.stableUrl);
             CollectionAssert.AreEqual(new[] { "com.deucarian.editor" }, logging.dependencies);
             CollectionAssert.AreEqual(new[] { "com.deucarian.editor", "com.deucarian.logging" }, theming.dependencies);
+            CollectionAssert.AreEqual(new[] { "com.deucarian.editor", "com.deucarian.logging" }, packageInstaller.dependencies);
         }
 
         [Test]

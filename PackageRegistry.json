@@ -104,6 +104,7 @@
       "stableUrl": "https://github.com/Deucarian/Package-Installer.git#main",
       "developmentUrl": "https://github.com/Deucarian/Package-Installer.git#develop",
       "dependencies": [
+        "com.deucarian.editor",
         "com.deucarian.logging"
       ]
     },

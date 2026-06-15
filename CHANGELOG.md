@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.10 - 2026-06-15
+
+- Declared Package Installer dependencies on Deucarian Editor and Deucarian Logging for bootstrap-aware installs.
+- Synced the bundled fallback registry's Package Installer dependency metadata with the main registry.
+
 ## 1.1.9 - 2026-06-15
 
 - Removed the duplicated Source panel from package details and kept source diagnostics under Advanced.
