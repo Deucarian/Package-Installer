@@ -13,6 +13,11 @@ on:
         required: true
         type: boolean
         default: false
+      auto_update_deucarian_dependencies:
+        description: "Update com.deucarian dependency versions to latest npm stable versions before publishing."
+        required: true
+        type: boolean
+        default: false
       run_unity_tests:
         description: "Run Unity tests using game-ci. Requires unity_project_path and Unity secrets."
         required: true
@@ -91,10 +96,10 @@ jobs:
           console.log(`Validated ${pkg.name}@${pkg.version}`);
           NODE
 
-      - name: Check Deucarian dependency versions on npmjs
+      - name: Resolve Deucarian dependency versions on npmjs
         shell: bash
         env:
-          PUBLISH_ENABLED: ${{ inputs.publish }}
+          AUTO_UPDATE_DEUCARIAN_DEPENDENCIES: ${{ inputs.auto_update_deucarian_dependencies }}
         run: |
           node <<'NODE'
           const { execFileSync } = require('child_process');
@@ -102,35 +107,115 @@ jobs:
 
           const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
           const dependencies = pkg.dependencies || {};
+          const stableSemver = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+          const autoUpdate = process.env.AUTO_UPDATE_DEUCARIAN_DEPENDENCIES === 'true';
           const missing = [];
+          const updates = [];
+          const dependencyEntries = Object.entries(dependencies)
+            .filter(([name]) => name.startsWith('com.deucarian.'))
+            .sort(([left], [right]) => left.localeCompare(right));
 
-          for (const [name, version] of Object.entries(dependencies)) {
-            if (!name.startsWith('com.deucarian.')) {
+          function npmView(args) {
+            return execFileSync('npm', [...args, '--registry=https://registry.npmjs.org'], {
+              encoding: 'utf8',
+              stdio: ['ignore', 'pipe', 'pipe'],
+            }).trim();
+          }
+
+          if (dependencyEntries.length === 0) {
+            console.log('No com.deucarian dependencies declared. This package is first in the stable publish order.');
+            fs.appendFileSync(process.env.GITHUB_ENV, 'DEUCARIAN_DEPENDENCIES_UPDATED=false\n');
+            process.exit(0);
+          }
+
+          console.log('Stable publish order is enforced by requiring declared com.deucarian dependencies to exist on npmjs before publish.');
+
+          for (const [name, version] of dependencyEntries) {
+            const requiredVersion = String(version).trim();
+            let latest = '';
+            try {
+              latest = npmView(['view', name, 'dist-tags.latest']);
+            } catch (error) {
+              missing.push(`${name}@${version} (no latest version is published on npmjs)`);
               continue;
             }
 
-            try {
-              execFileSync('npm', ['view', `${name}@${version}`, 'version', '--registry=https://registry.npmjs.org'], {
-                stdio: ['ignore', 'pipe', 'pipe'],
-              });
-              console.log(`Found dependency ${name}@${version} on npmjs.`);
-            } catch {
-              missing.push(`${name}@${version}`);
+            console.log(`${name}: required=${version}, latest=${latest}`);
+
+            if (!stableSemver.test(latest)) {
+              missing.push(`${name}@${version} (latest npm version "${latest}" is not stable SemVer)`);
+              continue;
+            }
+
+            let requiredExists = false;
+            if (stableSemver.test(requiredVersion)) {
+              try {
+                npmView(['view', `${name}@${requiredVersion}`, 'version']);
+                requiredExists = true;
+              } catch (error) {
+                requiredExists = false;
+              }
+            }
+
+            if (requiredExists) {
+              console.log(`Found required dependency ${name}@${requiredVersion} on npmjs.`);
+            } else if (!stableSemver.test(requiredVersion)) {
+              if (autoUpdate) {
+                console.log(`Will update ${name} from non-stable or unresolved version "${version}" to latest stable ${latest}.`);
+              } else {
+                missing.push(`${name}@${version} (required version is not stable SemVer; latest available: ${latest})`);
+                continue;
+              }
+            } else if (autoUpdate && requiredVersion !== latest) {
+              console.log(`Will update ${name} from ${requiredVersion} to latest stable ${latest}.`);
+            } else {
+              missing.push(`${name}@${requiredVersion} (latest available: ${latest})`);
+              continue;
+            }
+
+            if (autoUpdate && requiredVersion !== latest) {
+              dependencies[name] = latest;
+              updates.push(`${name}: ${version} -> ${latest}`);
             }
           }
 
           if (missing.length === 0) {
+            if (updates.length > 0) {
+              pkg.dependencies = dependencies;
+              fs.writeFileSync('package.json', `${JSON.stringify(pkg, null, 2)}\n`);
+              console.log('Updated com.deucarian dependency versions:');
+              for (const update of updates) {
+                console.log(`- ${update}`);
+              }
+              fs.appendFileSync(process.env.GITHUB_ENV, 'DEUCARIAN_DEPENDENCIES_UPDATED=true\n');
+            } else {
+              console.log('No com.deucarian dependency updates are needed.');
+              fs.appendFileSync(process.env.GITHUB_ENV, 'DEUCARIAN_DEPENDENCIES_UPDATED=false\n');
+            }
+
             process.exit(0);
           }
 
           const message = `Missing Deucarian dependency versions on npmjs: ${missing.join(', ')}`;
-          if (process.env.PUBLISH_ENABLED === 'true') {
-            console.error(`::error::${message}`);
-            process.exit(1);
-          }
-
-          console.log(`::warning::${message}`);
+          console.error(`::error::${message}`);
+          process.exit(1);
           NODE
+
+      - name: Update package-lock for auto-updated dependencies
+        if: ${{ inputs.auto_update_deucarian_dependencies && env.DEUCARIAN_DEPENDENCIES_UPDATED == 'true' && hashFiles('package-lock.json') != '' }}
+        shell: bash
+        run: npm install --package-lock-only --ignore-scripts --registry="${NPM_REGISTRY_URL}"
+
+      - name: Show Deucarian dependency update diff
+        if: ${{ inputs.auto_update_deucarian_dependencies }}
+        shell: bash
+        run: |
+          if git diff --quiet -- package.json package-lock.json; then
+            echo "No com.deucarian dependency update diff."
+            exit 0
+          fi
+
+          git diff -- package.json package-lock.json
 
       - name: Optional Unity test guard
         if: ${{ inputs.run_unity_tests && inputs.unity_project_path == '' }}
@@ -177,6 +262,38 @@ jobs:
         run: |
           echo "::error::Refusing to publish ${PACKAGE_NAME}@${PACKAGE_VERSION}; that version already exists on npmjs."
           exit 1
+
+      - name: Commit auto-updated Deucarian dependencies
+        if: ${{ inputs.publish && inputs.auto_update_deucarian_dependencies && env.DEUCARIAN_DEPENDENCIES_UPDATED == 'true' }}
+        shell: bash
+        run: |
+          if [ "${GITHUB_REF_NAME}" != "main" ]; then
+            echo "::error::Refusing to commit dependency updates from branch ${GITHUB_REF_NAME}; stable publishes must run from main."
+            exit 1
+          fi
+
+          changed_files="$(git diff --name-only; git ls-files --others --exclude-standard)"
+          unsafe_files="$(printf '%s\n' "$changed_files" | sed '/^$/d' | grep -Ev '^(package\.json|package-lock\.json)$' || true)"
+
+          if [ -n "$unsafe_files" ]; then
+            echo "::error::Refusing to commit unsafe dependency update; unexpected files changed:"
+            printf '%s\n' "$unsafe_files"
+            exit 1
+          fi
+
+          if git diff --quiet -- package.json package-lock.json; then
+            echo "No dependency update commit needed."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json
+          if [ -f package-lock.json ]; then
+            git add package-lock.json
+          fi
+          git commit -m "Update Deucarian dependency versions for npm publish"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
 
       - name: Publish package
         if: ${{ inputs.publish }}
