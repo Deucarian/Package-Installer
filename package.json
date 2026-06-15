@@ -13,5 +13,7 @@
     "installer",
     "package-manager"
   ],
-  "dependencies": {}
+  "dependencies": {
+    "com.deucarian.logging": "0.2.2"
+  }
 }

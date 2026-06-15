@@ -11,8 +11,6 @@ namespace Deucarian.PackageInstaller.Editor
 {
     internal sealed class PackageDetectionService : IDisposable
     {
-        private const string LogPrefix = "[Deucarian Package Installer]";
-
         private readonly Dictionary<string, PackageManagerPackageInfo> _installedPackages =
             new Dictionary<string, PackageManagerPackageInfo>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, string> _installedPackageReferences =
@@ -49,7 +47,7 @@ namespace Deucarian.PackageInstaller.Editor
             }
             catch (Exception exception)
             {
-                Debug.LogError(LogPrefix + " Failed to start installed-package refresh: " + exception.Message);
+                PackageInstallerLog.Registry.Error("Failed to start installed-package refresh: " + exception.Message);
                 _listRequest = null;
                 ScheduleRefreshRetry();
                 NotifyStateChanged();
@@ -207,7 +205,7 @@ namespace Deucarian.PackageInstaller.Editor
                     ? _listRequest.Error.message
                     : "Package Manager returned an unknown error.";
 
-                Debug.LogError(LogPrefix + " Failed to refresh installed-package state: " + errorMessage);
+                PackageInstallerLog.Registry.Error("Failed to refresh installed-package state: " + errorMessage);
             }
 
             _listRequest = null;

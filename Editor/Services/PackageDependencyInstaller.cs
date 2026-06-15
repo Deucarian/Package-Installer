@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using UnityEngine;
 
 namespace Deucarian.PackageInstaller.Editor
 {
@@ -90,8 +89,6 @@ namespace Deucarian.PackageInstaller.Editor
 
     internal sealed class PackageDependencyInstaller
     {
-        private const string LogPrefix = "[Deucarian Package Installer]";
-
         private readonly PackageInstallService _packageInstallService;
         private readonly PackageDetectionService _packageDetectionService;
         private readonly Func<IEnumerable<PackageDefinition>> _registeredPackagesProvider;
@@ -300,13 +297,13 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (!installPlan.IsValid)
             {
-                Debug.LogError(LogPrefix + " " + installPlan.ErrorMessage);
+                PackageInstallerLog.Install.Error(installPlan.ErrorMessage);
                 return;
             }
 
             if (installPlan.Steps.Count == 0)
             {
-                Debug.Log(LogPrefix + " " + alreadyInstalledMessage);
+                PackageInstallerLog.Install.Info(alreadyInstalledMessage);
                 return;
             }
 
@@ -579,7 +576,7 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 if (!string.IsNullOrWhiteSpace(message))
                 {
-                    Debug.Log(LogPrefix + " " + message);
+                    PackageInstallerLog.Install.Info(message);
                 }
             }
         }

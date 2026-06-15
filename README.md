@@ -43,7 +43,13 @@ You can also use Unity's Package Manager window:
 3. Enter the installer Git URL.
 4. Open `Tools > Deucarian > Package Installer`.
 
-The package requires Unity `2021.3` or newer and has no package dependencies.
+The package requires Unity `2021.3` or newer and depends on `com.deucarian.logging`.
+
+## Logging
+
+This package uses `com.deucarian.logging`.
+
+Package Installer diagnostics use stable package categories: `PackageInstaller`, `PackageInstaller.Registry`, `PackageInstaller.Install`, `PackageInstaller.Samples`, and `PackageInstaller.UpdateChecks`. Configure Deucarian Logging filters by category and level to isolate registry loading, install/remove operations, sample imports, or update checks. Entries flow through the shared ring buffer for recent-diagnostic inspection and remain compatible with future telemetry sinks.
 
 ## Usage
 

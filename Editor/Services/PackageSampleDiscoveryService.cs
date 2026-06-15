@@ -8,8 +8,6 @@ namespace Deucarian.PackageInstaller.Editor
 {
     internal sealed class PackageSampleDiscoveryService
     {
-        private const string LogPrefix = "[Deucarian Package Installer]";
-
         private static readonly IReadOnlyList<PackageExtraDefinition> EmptySamples =
             Array.Empty<PackageExtraDefinition>();
 
@@ -62,9 +60,8 @@ namespace Deucarian.PackageInstaller.Editor
             }
             catch (Exception exception)
             {
-                Debug.LogWarning(
-                    LogPrefix +
-                    " Failed to read package samples for " +
+                PackageInstallerLog.Samples.Warning(
+                    "Failed to read package samples for " +
                     (string.IsNullOrWhiteSpace(packageName) ? packageJsonPath : packageName) +
                     ": " +
                     exception.GetBaseException().Message);

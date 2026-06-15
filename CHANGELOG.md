@@ -5,6 +5,8 @@
 - Removed the duplicated Source panel from package details and kept source diagnostics under Advanced.
 - Moved current and last operation feedback into a shared bottom status bar with an expandable summary drawer.
 - Persisted Advanced foldout and operation drawer state per Unity project.
+- Standardized package logging on com.deucarian.logging.
+- Added Package Installer log categories for registry, install, sample import, and update-check diagnostics.
 
 ## 1.1.8 - 2026-06-15
 

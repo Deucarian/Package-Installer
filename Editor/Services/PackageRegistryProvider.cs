@@ -3,14 +3,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using UnityEditor;
-using UnityEngine;
 
 namespace Deucarian.PackageInstaller.Editor
 {
     internal static class PackageRegistryProvider
     {
-        private const string LogPrefix = "[Deucarian Package Installer]";
-
         private static readonly PackageRegistryLoader Loader = new PackageRegistryLoader();
         private static readonly IReadOnlyList<PackageDefinition> EmptyPackages =
             Array.Empty<PackageDefinition>();
@@ -254,11 +251,11 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (!result.IsValid && logFailures)
             {
-                Debug.LogWarning(LogPrefix + " Registry load failed: " + result.ErrorMessage);
+                PackageInstallerLog.Registry.Warning("Registry load failed: " + result.ErrorMessage);
             }
             else if (result.Source == PackageRegistrySource.RemoteFailedUsingBundled && logFailures)
             {
-                Debug.LogWarning(LogPrefix + " Remote registry failed, using bundled registry: " + result.ErrorMessage);
+                PackageInstallerLog.Registry.Warning("Remote registry failed, using bundled registry: " + result.ErrorMessage);
             }
 
             RegistryChanged?.Invoke();

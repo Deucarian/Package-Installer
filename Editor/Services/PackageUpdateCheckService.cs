@@ -14,7 +14,6 @@ namespace Deucarian.PackageInstaller.Editor
 {
     internal sealed class PackageUpdateCheckService : IDisposable
     {
-        private const string LogPrefix = "[Deucarian Package Installer]";
         private const int GitTimeoutMilliseconds = 15000;
 
         private static readonly Regex ShaRegex =
@@ -57,7 +56,7 @@ namespace Deucarian.PackageInstaller.Editor
         {
             if (IsChecking)
             {
-                UnityEngine.Debug.Log(LogPrefix + " Update check is already running.");
+                PackageInstallerLog.UpdateChecks.Info("Update check is already running.");
                 return;
             }
 
@@ -105,7 +104,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (checkItems.Count == 0)
             {
-                UnityEngine.Debug.Log(LogPrefix + " No installed registry packages found for update checking.");
+                PackageInstallerLog.UpdateChecks.Info("No installed registry packages found for update checking.");
                 RecordCheckCompleted(Array.Empty<PackageUpdateStatus>());
                 return;
             }
@@ -695,20 +694,20 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (status.IsUpdateAvailable)
             {
-                message = LogPrefix + " Update available for " + status.DisplayName + ": " +
+                message = "Update available for " + status.DisplayName + ": " +
                           status.ShortInstalledRevision + " -> " + status.ShortLatestRevision + ".";
             }
             else if (status.Kind == PackageUpdateStatusKind.Failed)
             {
-                message = LogPrefix + " Update check failed for " + status.DisplayName + ": " + status.Message;
+                message = "Update check failed for " + status.DisplayName + ": " + status.Message;
             }
             else if (status.Kind == PackageUpdateStatusKind.CannotDetermine)
             {
-                message = LogPrefix + " Update check failed for " + status.DisplayName + ": " + status.Label + ". " + status.Message;
+                message = "Update check failed for " + status.DisplayName + ": " + status.Label + ". " + status.Message;
             }
             else
             {
-                message = LogPrefix + " Update check for " + status.DisplayName + ": " + status.Label + ".";
+                message = "Update check for " + status.DisplayName + ": " + status.Label + ".";
             }
 
             LogMessage(logType, message);
@@ -735,11 +734,11 @@ namespace Deucarian.PackageInstaller.Editor
         {
             if (logType == LogType.Error)
             {
-                UnityEngine.Debug.LogError(message);
+                PackageInstallerLog.UpdateChecks.Error(message);
                 return;
             }
 
-            UnityEngine.Debug.Log(message);
+            PackageInstallerLog.UpdateChecks.Info(message);
         }
 
         private void NotifyStateChanged()

@@ -279,7 +279,12 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 .Single(package => package.id == "com.deucarian.object-loading");
             Assert.AreEqual("Deucarian Object Loading", objectLoading.displayName);
             Assert.AreEqual("Core", objectLoading.category);
-            Assert.IsEmpty(objectLoading.dependencies);
+            CollectionAssert.AreEqual(
+                new[]
+                {
+                    "com.deucarian.logging"
+                },
+                objectLoading.dependencies);
 
             PackageRegistryEntry bridge = result.Registry.packages
                 .Single(package => package.id == "com.deucarian.object-loading.api-bridge");
@@ -328,7 +333,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual("Editor", editor.category);
             StringAssert.Contains("Editor.git#main", editor.stableUrl);
             CollectionAssert.AreEqual(new[] { "com.deucarian.editor" }, logging.dependencies);
-            CollectionAssert.AreEqual(new[] { "com.deucarian.editor" }, theming.dependencies);
+            CollectionAssert.AreEqual(new[] { "com.deucarian.editor", "com.deucarian.logging" }, theming.dependencies);
         }
 
         [Test]

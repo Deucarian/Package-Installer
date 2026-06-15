@@ -34,8 +34,6 @@ namespace Deucarian.PackageInstaller.Editor
 
     internal sealed class PackageSampleImportService
     {
-        private const string LogPrefix = "[Deucarian Package Installer]";
-
         private readonly Dictionary<string, PackageSampleImportStatus> _statuses =
             new Dictionary<string, PackageSampleImportStatus>(StringComparer.OrdinalIgnoreCase);
 
@@ -234,13 +232,13 @@ namespace Deucarian.PackageInstaller.Editor
 
                 AssetDatabase.Refresh();
                 message = "Imported sample " + extraDefinition.DisplayName + ".";
-                Debug.Log(LogPrefix + " " + message);
+                PackageInstallerLog.Samples.Info(message);
                 return true;
             }
             catch (Exception exception)
             {
                 message = "Unity sample import failed: " + exception.GetBaseException().Message;
-                Debug.LogWarning(LogPrefix + " " + message);
+                PackageInstallerLog.Samples.Warning(message);
                 return false;
             }
         }
@@ -299,13 +297,13 @@ namespace Deucarian.PackageInstaller.Editor
                 CopyDirectory(sourcePath, destinationPath);
                 AssetDatabase.Refresh();
                 message = "Imported sample " + extraDefinition.DisplayName + ".";
-                Debug.Log(LogPrefix + " " + message);
+                PackageInstallerLog.Samples.Info(message);
                 return true;
             }
             catch (Exception exception)
             {
                 message = "Sample import failed: " + exception.Message;
-                Debug.LogWarning(LogPrefix + " " + message);
+                PackageInstallerLog.Samples.Warning(message);
                 return false;
             }
         }
