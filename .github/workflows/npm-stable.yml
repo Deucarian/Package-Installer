@@ -1,0 +1,207 @@
+name: Publish stable package to npmjs
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish to npmjs. Leave false for validation-only dry runs."
+        required: true
+        type: boolean
+        default: false
+      create_git_tag:
+        description: "Create and push vX.Y.Z after a successful publish."
+        required: true
+        type: boolean
+        default: false
+      run_unity_tests:
+        description: "Run Unity tests using game-ci. Requires unity_project_path and Unity secrets."
+        required: true
+        type: boolean
+        default: false
+      unity_project_path:
+        description: "Unity project path for optional tests. Package-only repos should leave this empty."
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  validate-and-publish:
+    name: Validate and publish stable package
+    runs-on: ubuntu-latest
+    env:
+      NPM_REGISTRY_URL: https://registry.npmjs.org
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+
+      - name: Validate package manifest
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const stableSemver = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+          const requiredDeps = {
+            'com.deucarian.logging': ['com.deucarian.editor'],
+            'com.deucarian.package-installer': ['com.deucarian.editor', 'com.deucarian.logging'],
+          };
+
+          function fail(message) {
+            console.error(`::error::${message}`);
+            process.exitCode = 1;
+          }
+
+          if (!pkg.name || !pkg.name.startsWith('com.deucarian.')) {
+            fail('package.json name must use the com.deucarian.* Unity package namespace.');
+          }
+
+          if (!stableSemver.test(pkg.version || '')) {
+            fail(`Stable workflow requires stable SemVer X.Y.Z, got "${pkg.version || ''}".`);
+          }
+
+          if (!pkg.unity) {
+            fail('package.json must declare a minimum Unity version.');
+          }
+
+          const dependencies = pkg.dependencies || {};
+          for (const dependencyName of requiredDeps[pkg.name] || []) {
+            if (!dependencies[dependencyName]) {
+              fail(`${pkg.name} must declare dependency ${dependencyName} before publishing.`);
+            }
+          }
+
+          if (process.exitCode) {
+            process.exit(process.exitCode);
+          }
+
+          fs.appendFileSync(process.env.GITHUB_ENV, `PACKAGE_NAME=${pkg.name}\n`);
+          fs.appendFileSync(process.env.GITHUB_ENV, `PACKAGE_VERSION=${pkg.version}\n`);
+          console.log(`Validated ${pkg.name}@${pkg.version}`);
+          NODE
+
+      - name: Check Deucarian dependency versions on npmjs
+        shell: bash
+        env:
+          PUBLISH_ENABLED: ${{ inputs.publish }}
+        run: |
+          node <<'NODE'
+          const { execFileSync } = require('child_process');
+          const fs = require('fs');
+
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const dependencies = pkg.dependencies || {};
+          const missing = [];
+
+          for (const [name, version] of Object.entries(dependencies)) {
+            if (!name.startsWith('com.deucarian.')) {
+              continue;
+            }
+
+            try {
+              execFileSync('npm', ['view', `${name}@${version}`, 'version', '--registry=https://registry.npmjs.org'], {
+                stdio: ['ignore', 'pipe', 'pipe'],
+              });
+              console.log(`Found dependency ${name}@${version} on npmjs.`);
+            } catch {
+              missing.push(`${name}@${version}`);
+            }
+          }
+
+          if (missing.length === 0) {
+            process.exit(0);
+          }
+
+          const message = `Missing Deucarian dependency versions on npmjs: ${missing.join(', ')}`;
+          if (process.env.PUBLISH_ENABLED === 'true') {
+            console.error(`::error::${message}`);
+            process.exit(1);
+          }
+
+          console.log(`::warning::${message}`);
+          NODE
+
+      - name: Optional Unity test guard
+        if: ${{ inputs.run_unity_tests && inputs.unity_project_path == '' }}
+        shell: bash
+        run: |
+          echo "::error::unity_project_path is required when run_unity_tests is enabled."
+          exit 1
+
+      - name: Run Unity tests
+        if: ${{ inputs.run_unity_tests && inputs.unity_project_path != '' }}
+        uses: game-ci/unity-test-runner@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: ${{ inputs.unity_project_path }}
+          testMode: all
+
+      - name: npm pack dry run
+        shell: bash
+        run: npm pack --dry-run --ignore-scripts
+
+      - name: Check whether package version already exists
+        id: registry
+        shell: bash
+        run: |
+          set +e
+          existing="$(npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version --registry="${NPM_REGISTRY_URL}" 2>/dev/null)"
+          status=$?
+          set -e
+
+          if [ "$status" -eq 0 ] && [ -n "$existing" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::${PACKAGE_NAME}@${PACKAGE_VERSION} already exists on npmjs."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "${PACKAGE_NAME}@${PACKAGE_VERSION} is not published on npmjs."
+          fi
+
+      - name: Refuse duplicate stable publish
+        if: ${{ inputs.publish && steps.registry.outputs.exists == 'true' }}
+        shell: bash
+        run: |
+          echo "::error::Refusing to publish ${PACKAGE_NAME}@${PACKAGE_VERSION}; that version already exists on npmjs."
+          exit 1
+
+      - name: Publish package
+        if: ${{ inputs.publish }}
+        shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "::error::NPM_TOKEN secret is required to publish."
+            exit 1
+          fi
+
+          npm publish --tag latest --registry="${NPM_REGISTRY_URL}"
+
+      - name: Create Git tag
+        if: ${{ inputs.publish && inputs.create_git_tag }}
+        shell: bash
+        run: |
+          tag="v${PACKAGE_VERSION}"
+          if git rev-parse "$tag" >/dev/null 2>&1; then
+            echo "::error::Git tag ${tag} already exists."
+            exit 1
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag "$tag"
+          git push origin "$tag"
