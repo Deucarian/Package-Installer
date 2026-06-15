@@ -1,23 +1,26 @@
 name: Publish stable package to npmjs
 
 on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - ".github/workflows/**"
   workflow_dispatch:
     inputs:
-      publish:
-        description: "Publish to npmjs. Leave false for validation-only dry runs."
+      mode:
+        description: "Manual mode. Dry-run validates without publishing."
         required: true
-        type: boolean
-        default: false
-      create_git_tag:
-        description: "Create and push vX.Y.Z after a successful publish."
-        required: true
-        type: boolean
-        default: false
-      auto_update_deucarian_dependencies:
-        description: "Update com.deucarian dependency versions to latest npm stable versions before publishing."
-        required: true
-        type: boolean
-        default: false
+        type: choice
+        options:
+          - dry-run
+          - publish
+        default: dry-run
+      target_branch:
+        description: "Optional branch/ref to check out for manual runs. Leave empty to use the selected run branch."
+        required: false
+        type: string
+        default: ""
       run_unity_tests:
         description: "Run Unity tests using game-ci. Requires unity_project_path and Unity secrets."
         required: true
@@ -32,40 +35,176 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: npm-stable-${{ github.repository }}-${{ github.ref_name }}
+  cancel-in-progress: false
+
 jobs:
   validate-and-publish:
     name: Validate and publish stable package
+    if: ${{ github.event_name != 'push' || !contains(github.event.head_commit.message, '[skip ci]') }}
     runs-on: ubuntu-latest
     env:
       NPM_REGISTRY_URL: https://registry.npmjs.org
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.target_branch != '' && inputs.target_branch || github.ref }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: 24
           registry-url: https://registry.npmjs.org
 
-      - name: Validate package manifest
+      - name: Resolve workflow mode
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_MODE: ${{ inputs.mode }}
+          INPUT_TARGET_BRANCH: ${{ inputs.target_branch }}
+        run: |
+          effective_branch="${GITHUB_REF_NAME}"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -n "$INPUT_TARGET_BRANCH" ]; then
+            effective_branch="$INPUT_TARGET_BRANCH"
+          fi
+          effective_branch="${effective_branch#refs/heads/}"
+          effective_branch="${effective_branch#origin/}"
+
+          should_publish=false
+          if [ "$EVENT_NAME" = "push" ]; then
+            should_publish=true
+          elif [ "$INPUT_MODE" = "publish" ]; then
+            should_publish=true
+          fi
+
+          if [ "$should_publish" = "true" ] && [ "$effective_branch" != "main" ]; then
+            echo "::error::Stable publishes must run from main; effective branch is ${effective_branch}."
+            exit 1
+          fi
+
+          echo "EFFECTIVE_BRANCH=${effective_branch}" >> "$GITHUB_ENV"
+          echo "SHOULD_PUBLISH=${should_publish}" >> "$GITHUB_ENV"
+          echo "Stable workflow mode: event=${EVENT_NAME}, branch=${effective_branch}, publish=${should_publish}"
+
+      - name: Prepare stable manifest
         shell: bash
         run: |
           node <<'NODE'
+          const { execFileSync } = require('child_process');
           const fs = require('fs');
 
-          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const packagePath = 'package.json';
+          const pkg = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
+          const registry = process.env.NPM_REGISTRY_URL || 'https://registry.npmjs.org';
           const stableSemver = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
           const requiredDeps = {
             'com.deucarian.logging': ['com.deucarian.editor'],
             'com.deucarian.package-installer': ['com.deucarian.editor', 'com.deucarian.logging'],
           };
+          let manifestChanged = false;
 
           function fail(message) {
             console.error(`::error::${message}`);
-            process.exitCode = 1;
+            process.exit(1);
+          }
+
+          function npmView(args) {
+            return execFileSync('npm', [...args, `--registry=${registry}`], {
+              encoding: 'utf8',
+              stdio: ['ignore', 'pipe', 'pipe'],
+            }).trim();
+          }
+
+          function npmVersionExists(name, version) {
+            try {
+              npmView(['view', `${name}@${version}`, 'version']);
+              return true;
+            } catch {
+              return false;
+            }
+          }
+
+          function npmLatest(name) {
+            try {
+              return npmView(['view', name, 'dist-tags.latest']);
+            } catch {
+              return '';
+            }
+          }
+
+          function parseStable(version) {
+            if (!stableSemver.test(version || '')) {
+              return null;
+            }
+            return version.split('.').map((part) => Number(part));
+          }
+
+          function compareStable(left, right) {
+            const a = parseStable(left);
+            const b = parseStable(right);
+            if (!a || !b) {
+              fail(`Cannot compare non-stable SemVer values "${left}" and "${right}".`);
+            }
+            for (let i = 0; i < 3; i += 1) {
+              if (a[i] !== b[i]) {
+                return a[i] - b[i];
+              }
+            }
+            return 0;
+          }
+
+          function bumpPatch(version) {
+            const parsed = parseStable(version);
+            if (!parsed) {
+              fail(`Cannot patch-bump non-stable version "${version}".`);
+            }
+            return `${parsed[0]}.${parsed[1]}.${parsed[2] + 1}`;
+          }
+
+          function gitTagExists(version) {
+            try {
+              execFileSync('git', ['rev-parse', '--verify', `refs/tags/v${version}`], {
+                encoding: 'utf8',
+                stdio: ['ignore', 'pipe', 'pipe'],
+              });
+              return true;
+            } catch {
+              return false;
+            }
+          }
+
+          function escapeRegExp(value) {
+            return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          }
+
+          function updateSimpleCurrentVersionFile(file, fromVersion, toVersion) {
+            if (!fs.existsSync(file)) {
+              return false;
+            }
+
+            const before = fs.readFileSync(file, 'utf8');
+            const escapedFrom = escapeRegExp(fromVersion);
+            const patterns = [
+              new RegExp(`(Current package version:\\s*\`)${escapedFrom}(\`)`, 'g'),
+              new RegExp(`(Current version:\\s*\`)${escapedFrom}(\`)`, 'g'),
+              new RegExp(`(Package version:\\s*\`)${escapedFrom}(\`)`, 'g'),
+            ];
+
+            let after = before;
+            for (const pattern of patterns) {
+              after = after.replace(pattern, `$1${toVersion}$2`);
+            }
+
+            if (after !== before) {
+              fs.writeFileSync(file, after);
+              console.log(`Updated simple current-version reference in ${file}.`);
+              return true;
+            }
+
+            return false;
           }
 
           if (!pkg.name || !pkg.name.startsWith('com.deucarian.')) {
@@ -82,150 +221,128 @@ jobs:
 
           const dependencies = pkg.dependencies || {};
           for (const dependencyName of requiredDeps[pkg.name] || []) {
-            if (!dependencies[dependencyName]) {
+            if (!Object.prototype.hasOwnProperty.call(dependencies, dependencyName)) {
               fail(`${pkg.name} must declare dependency ${dependencyName} before publishing.`);
             }
           }
 
-          if (process.exitCode) {
-            process.exit(process.exitCode);
-          }
-
-          fs.appendFileSync(process.env.GITHUB_ENV, `PACKAGE_NAME=${pkg.name}\n`);
-          fs.appendFileSync(process.env.GITHUB_ENV, `PACKAGE_VERSION=${pkg.version}\n`);
-          console.log(`Validated ${pkg.name}@${pkg.version}`);
-          NODE
-
-      - name: Resolve Deucarian dependency versions on npmjs
-        shell: bash
-        env:
-          AUTO_UPDATE_DEUCARIAN_DEPENDENCIES: ${{ inputs.auto_update_deucarian_dependencies }}
-        run: |
-          node <<'NODE'
-          const { execFileSync } = require('child_process');
-          const fs = require('fs');
-
-          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-          const dependencies = pkg.dependencies || {};
-          const stableSemver = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
-          const autoUpdate = process.env.AUTO_UPDATE_DEUCARIAN_DEPENDENCIES === 'true';
-          const missing = [];
-          const updates = [];
           const dependencyEntries = Object.entries(dependencies)
             .filter(([name]) => name.startsWith('com.deucarian.'))
             .sort(([left], [right]) => left.localeCompare(right));
 
-          function npmView(args) {
-            return execFileSync('npm', [...args, '--registry=https://registry.npmjs.org'], {
-              encoding: 'utf8',
-              stdio: ['ignore', 'pipe', 'pipe'],
-            }).trim();
-          }
-
           if (dependencyEntries.length === 0) {
             console.log('No com.deucarian dependencies declared. This package is first in the stable publish order.');
-            fs.appendFileSync(process.env.GITHUB_ENV, 'DEUCARIAN_DEPENDENCIES_UPDATED=false\n');
-            process.exit(0);
+          } else {
+            console.log('Resolving com.deucarian dependencies from npmjs latest stable dist-tags.');
           }
-
-          console.log('Stable publish order is enforced by requiring declared com.deucarian dependencies to exist on npmjs before publish.');
 
           for (const [name, version] of dependencyEntries) {
             const requiredVersion = String(version).trim();
-            let latest = '';
-            try {
-              latest = npmView(['view', name, 'dist-tags.latest']);
-            } catch (error) {
-              missing.push(`${name}@${version} (no latest version is published on npmjs)`);
-              continue;
+            const latest = npmLatest(name);
+
+            if (!latest) {
+              fail(`${name}@${requiredVersion} cannot be resolved because ${name} has no latest version on npmjs.`);
             }
 
-            console.log(`${name}: required=${version}, latest=${latest}`);
+            console.log(`${name}: required=${requiredVersion}, latest=${latest}`);
+
+            if (!stableSemver.test(requiredVersion)) {
+              fail(`${name}@${requiredVersion} is not a stable SemVer dependency; latest available: ${latest}.`);
+            }
 
             if (!stableSemver.test(latest)) {
-              missing.push(`${name}@${version} (latest npm version "${latest}" is not stable SemVer)`);
-              continue;
+              fail(`${name} latest dist-tag points to non-stable version "${latest}".`);
             }
 
-            let requiredExists = false;
-            if (stableSemver.test(requiredVersion)) {
-              try {
-                npmView(['view', `${name}@${requiredVersion}`, 'version']);
-                requiredExists = true;
-              } catch (error) {
-                requiredExists = false;
-              }
+            const requiredExists = npmVersionExists(name, requiredVersion);
+            console.log(`${name}@${requiredVersion} published: ${requiredExists ? 'yes' : 'no'}`);
+
+            if (compareStable(requiredVersion, latest) > 0) {
+              fail(`${name}@${requiredVersion} is required but is not published yet; latest available: ${latest}. Publish dependencies first.`);
             }
 
-            if (requiredExists) {
-              console.log(`Found required dependency ${name}@${requiredVersion} on npmjs.`);
-            } else if (!stableSemver.test(requiredVersion)) {
-              if (autoUpdate) {
-                console.log(`Will update ${name} from non-stable or unresolved version "${version}" to latest stable ${latest}.`);
-              } else {
-                missing.push(`${name}@${version} (required version is not stable SemVer; latest available: ${latest})`);
-                continue;
-              }
-            } else if (autoUpdate && requiredVersion !== latest) {
-              console.log(`Will update ${name} from ${requiredVersion} to latest stable ${latest}.`);
-            } else {
-              missing.push(`${name}@${requiredVersion} (latest available: ${latest})`);
-              continue;
-            }
-
-            if (autoUpdate && requiredVersion !== latest) {
+            if (requiredVersion !== latest) {
               dependencies[name] = latest;
-              updates.push(`${name}: ${version} -> ${latest}`);
+              manifestChanged = true;
+              console.log(`Updated ${name} dependency from ${requiredVersion} to latest stable ${latest}.`);
+            } else if (!requiredExists) {
+              fail(`${name}@${requiredVersion} could not be verified on npmjs even though latest is ${latest}.`);
             }
           }
 
-          if (missing.length === 0) {
-            if (updates.length > 0) {
-              pkg.dependencies = dependencies;
-              fs.writeFileSync('package.json', `${JSON.stringify(pkg, null, 2)}\n`);
-              console.log('Updated com.deucarian dependency versions:');
-              for (const update of updates) {
-                console.log(`- ${update}`);
-              }
-              fs.appendFileSync(process.env.GITHUB_ENV, 'DEUCARIAN_DEPENDENCIES_UPDATED=true\n');
-            } else {
-              console.log('No com.deucarian dependency updates are needed.');
-              fs.appendFileSync(process.env.GITHUB_ENV, 'DEUCARIAN_DEPENDENCIES_UPDATED=false\n');
-            }
-
-            process.exit(0);
+          let finalVersion = pkg.version;
+          while (npmVersionExists(pkg.name, finalVersion) || gitTagExists(finalVersion)) {
+            const npmState = npmVersionExists(pkg.name, finalVersion) ? 'published on npmjs' : 'not published on npmjs';
+            const tagState = gitTagExists(finalVersion) ? 'tag exists' : 'tag is available';
+            const nextVersion = bumpPatch(finalVersion);
+            console.log(`${pkg.name}@${finalVersion} is unavailable (${npmState}, ${tagState}); patch-bumping to ${nextVersion}.`);
+            finalVersion = nextVersion;
           }
 
-          const message = `Missing Deucarian dependency versions on npmjs: ${missing.join(', ')}`;
-          console.error(`::error::${message}`);
-          process.exit(1);
+          if (finalVersion !== pkg.version) {
+            const previousVersion = pkg.version;
+            pkg.version = finalVersion;
+            manifestChanged = true;
+            updateSimpleCurrentVersionFile('README.md', previousVersion, finalVersion);
+            updateSimpleCurrentVersionFile('CHANGELOG.md', previousVersion, finalVersion);
+          } else {
+            console.log(`${pkg.name}@${finalVersion} is available for stable publish.`);
+          }
+
+          if (manifestChanged) {
+            pkg.dependencies = dependencies;
+            fs.writeFileSync(packagePath, `${JSON.stringify(pkg, null, 2)}\n`);
+          }
+
+          fs.appendFileSync(process.env.GITHUB_ENV, `PACKAGE_NAME=${pkg.name}\n`);
+          fs.appendFileSync(process.env.GITHUB_ENV, `PACKAGE_VERSION=${finalVersion}\n`);
+          fs.appendFileSync(process.env.GITHUB_ENV, `MANIFEST_CHANGED=${manifestChanged ? 'true' : 'false'}\n`);
+          console.log(`Prepared ${pkg.name}@${finalVersion}; manifest changed: ${manifestChanged ? 'yes' : 'no'}.`);
           NODE
 
-      - name: Update package-lock for auto-updated dependencies
-        if: ${{ inputs.auto_update_deucarian_dependencies && env.DEUCARIAN_DEPENDENCIES_UPDATED == 'true' && hashFiles('package-lock.json') != '' }}
-        shell: bash
-        run: npm install --package-lock-only --ignore-scripts --registry="${NPM_REGISTRY_URL}"
-
-      - name: Show Deucarian dependency update diff
-        if: ${{ inputs.auto_update_deucarian_dependencies }}
+      - name: Update package-lock if present
         shell: bash
         run: |
-          if git diff --quiet -- package.json package-lock.json; then
-            echo "No com.deucarian dependency update diff."
+          if [ "$MANIFEST_CHANGED" != "true" ]; then
+            echo "No manifest changes; package-lock update skipped."
             exit 0
           fi
 
-          git diff -- package.json package-lock.json
+          if [ ! -f package-lock.json ]; then
+            echo "No package-lock.json present; package-lock update skipped."
+            exit 0
+          fi
+
+          npm install --package-lock-only --ignore-scripts --registry="${NPM_REGISTRY_URL}"
+
+      - name: Show prepared diff
+        shell: bash
+        run: |
+          if git diff --quiet -- package.json package-lock.json README.md CHANGELOG.md; then
+            echo "No package/version/dependency diff."
+            exit 0
+          fi
+
+          git diff -- package.json package-lock.json README.md CHANGELOG.md
+
+      - name: Run npm tests if present
+        shell: bash
+        run: |
+          if node -e "const pkg=require('./package.json'); process.exit(pkg.scripts && pkg.scripts.test ? 0 : 1)"; then
+            npm test
+          else
+            echo "No npm test script declared; skipping npm tests."
+          fi
 
       - name: Optional Unity test guard
-        if: ${{ inputs.run_unity_tests && inputs.unity_project_path == '' }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_unity_tests && inputs.unity_project_path == '' }}
         shell: bash
         run: |
           echo "::error::unity_project_path is required when run_unity_tests is enabled."
           exit 1
 
       - name: Run Unity tests
-        if: ${{ inputs.run_unity_tests && inputs.unity_project_path != '' }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_unity_tests && inputs.unity_project_path != '' }}
         uses: game-ci/unity-test-runner@v4
         env:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
@@ -233,74 +350,54 @@ jobs:
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         with:
           projectPath: ${{ inputs.unity_project_path }}
-          testMode: all
+          testMode: editmode
 
-      - name: npm pack dry run
-        shell: bash
-        run: npm pack --dry-run --ignore-scripts
-
-      - name: Check whether package version already exists
-        id: registry
+      - name: Commit prepared stable manifest
         shell: bash
         run: |
-          set +e
-          existing="$(npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version --registry="${NPM_REGISTRY_URL}" 2>/dev/null)"
-          status=$?
-          set -e
-
-          if [ "$status" -eq 0 ] && [ -n "$existing" ]; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-            echo "::warning::${PACKAGE_NAME}@${PACKAGE_VERSION} already exists on npmjs."
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-            echo "${PACKAGE_NAME}@${PACKAGE_VERSION} is not published on npmjs."
-          fi
-
-      - name: Refuse duplicate stable publish
-        if: ${{ inputs.publish && steps.registry.outputs.exists == 'true' }}
-        shell: bash
-        run: |
-          echo "::error::Refusing to publish ${PACKAGE_NAME}@${PACKAGE_VERSION}; that version already exists on npmjs."
-          exit 1
-
-      - name: Commit auto-updated Deucarian dependencies
-        if: ${{ inputs.publish && inputs.auto_update_deucarian_dependencies && env.DEUCARIAN_DEPENDENCIES_UPDATED == 'true' }}
-        shell: bash
-        run: |
-          if [ "${GITHUB_REF_NAME}" != "main" ]; then
-            echo "::error::Refusing to commit dependency updates from branch ${GITHUB_REF_NAME}; stable publishes must run from main."
-            exit 1
-          fi
-
           changed_files="$(git diff --name-only; git ls-files --others --exclude-standard)"
-          unsafe_files="$(printf '%s\n' "$changed_files" | sed '/^$/d' | grep -Ev '^(package\.json|package-lock\.json)$' || true)"
+          changed_files="$(printf '%s\n' "$changed_files" | sed '/^$/d')"
 
+          if [ -z "$changed_files" ]; then
+            echo "No stable manifest commit needed."
+            exit 0
+          fi
+
+          unsafe_files="$(printf '%s\n' "$changed_files" | grep -Ev '^(package\.json|package-lock\.json|README\.md|CHANGELOG\.md)$' || true)"
           if [ -n "$unsafe_files" ]; then
-            echo "::error::Refusing to commit unsafe dependency update; unexpected files changed:"
+            echo "::error::Refusing to commit unsafe publish preparation changes:"
             printf '%s\n' "$unsafe_files"
             exit 1
           fi
 
-          if git diff --quiet -- package.json package-lock.json; then
-            echo "No dependency update commit needed."
+          if [ "$SHOULD_PUBLISH" != "true" ]; then
+            echo "Dry-run mode; leaving prepared manifest changes uncommitted in the CI workspace."
             exit 0
           fi
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package.json
+          git add package.json README.md CHANGELOG.md
           if [ -f package-lock.json ]; then
             git add package-lock.json
           fi
-          git commit -m "Update Deucarian dependency versions for npm publish"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
+          git commit -m "Prepare ${PACKAGE_NAME}@${PACKAGE_VERSION} for npm publish [skip ci]"
+          git push origin "HEAD:${EFFECTIVE_BRANCH}"
+
+      - name: npm pack dry-run
+        shell: bash
+        run: npm pack --dry-run --registry="${NPM_REGISTRY_URL}"
 
       - name: Publish package
-        if: ${{ inputs.publish }}
         shell: bash
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
+          if [ "$SHOULD_PUBLISH" != "true" ]; then
+            echo "Dry-run mode; skipping npm publish."
+            exit 0
+          fi
+
           if [ -z "$NODE_AUTH_TOKEN" ]; then
             echo "::error::NPM_TOKEN secret is required to publish."
             exit 1
@@ -309,11 +406,15 @@ jobs:
           npm publish --tag latest --registry="${NPM_REGISTRY_URL}"
 
       - name: Create Git tag
-        if: ${{ inputs.publish && inputs.create_git_tag }}
         shell: bash
         run: |
+          if [ "$SHOULD_PUBLISH" != "true" ]; then
+            echo "Dry-run mode; skipping Git tag creation."
+            exit 0
+          fi
+
           tag="v${PACKAGE_VERSION}"
-          if git rev-parse "$tag" >/dev/null 2>&1; then
+          if git rev-parse --verify "refs/tags/${tag}" >/dev/null 2>&1; then
             echo "::error::Git tag ${tag} already exists."
             exit 1
           fi
