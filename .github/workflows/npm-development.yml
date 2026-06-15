@@ -1,13 +1,26 @@
 name: Publish development package to npmjs
 
 on:
+  push:
+    branches:
+      - develop
+    paths-ignore:
+      - ".github/workflows/**"
   workflow_dispatch:
     inputs:
-      publish:
-        description: "Publish preview package to npmjs with the dev dist-tag."
+      mode:
+        description: "Manual mode. Dry-run validates without publishing."
         required: true
-        type: boolean
-        default: false
+        type: choice
+        options:
+          - dry-run
+          - publish
+        default: dry-run
+      target_branch:
+        description: "Optional branch/ref to check out for manual runs. Leave empty to use the selected run branch."
+        required: false
+        type: string
+        default: ""
       base_version:
         description: "Optional stable base version. Defaults to package.json version."
         required: false
@@ -27,120 +40,224 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: npm-development-${{ github.repository }}-${{ github.ref_name }}
+  cancel-in-progress: false
+
 jobs:
   validate-and-publish-dev:
     name: Validate and publish development package
+    if: ${{ github.event_name != 'push' || !contains(github.event.head_commit.message, '[skip ci]') }}
     runs-on: ubuntu-latest
     env:
       NPM_REGISTRY_URL: https://registry.npmjs.org
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.target_branch != '' && inputs.target_branch || github.ref }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: 24
           registry-url: https://registry.npmjs.org
+
+      - name: Resolve workflow mode
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_MODE: ${{ inputs.mode }}
+          INPUT_TARGET_BRANCH: ${{ inputs.target_branch }}
+        run: |
+          effective_branch="${GITHUB_REF_NAME}"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -n "$INPUT_TARGET_BRANCH" ]; then
+            effective_branch="$INPUT_TARGET_BRANCH"
+          fi
+          effective_branch="${effective_branch#refs/heads/}"
+          effective_branch="${effective_branch#origin/}"
+
+          should_publish=false
+          if [ "$EVENT_NAME" = "push" ]; then
+            should_publish=true
+          elif [ "$INPUT_MODE" = "publish" ]; then
+            should_publish=true
+          fi
+
+          if [ "$should_publish" = "true" ] && [ "$effective_branch" != "develop" ]; then
+            echo "::error::Development publishes must run from develop; effective branch is ${effective_branch}."
+            exit 1
+          fi
+
+          echo "EFFECTIVE_BRANCH=${effective_branch}" >> "$GITHUB_ENV"
+          echo "SHOULD_PUBLISH=${should_publish}" >> "$GITHUB_ENV"
+          echo "Development workflow mode: event=${EVENT_NAME}, branch=${effective_branch}, publish=${should_publish}"
 
       - name: Prepare preview manifest
         shell: bash
         env:
           INPUT_BASE_VERSION: ${{ inputs.base_version }}
+          RUN_NUMBER: ${{ github.run_number }}
         run: |
           node <<'NODE'
+          const { execFileSync } = require('child_process');
           const fs = require('fs');
 
-          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const packagePath = 'package.json';
+          const pkg = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
+          const registry = process.env.NPM_REGISTRY_URL || 'https://registry.npmjs.org';
           const stableSemver = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+          const semver = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z]+(?:\.[0-9A-Za-z]+)*)?$/;
           const requiredDeps = {
             'com.deucarian.logging': ['com.deucarian.editor'],
             'com.deucarian.package-installer': ['com.deucarian.editor', 'com.deucarian.logging'],
           };
-          const baseVersion = process.env.INPUT_BASE_VERSION || pkg.version || '';
 
           function fail(message) {
             console.error(`::error::${message}`);
-            process.exitCode = 1;
+            process.exit(1);
+          }
+
+          function npmView(args) {
+            return execFileSync('npm', [...args, `--registry=${registry}`], {
+              encoding: 'utf8',
+              stdio: ['ignore', 'pipe', 'pipe'],
+            }).trim();
+          }
+
+          function npmVersionExists(name, version) {
+            try {
+              npmView(['view', `${name}@${version}`, 'version']);
+              return true;
+            } catch {
+              return false;
+            }
+          }
+
+          function npmDistTag(name, tag) {
+            try {
+              return npmView(['view', name, `dist-tags.${tag}`]);
+            } catch {
+              return '';
+            }
+          }
+
+          function parseStable(version) {
+            if (!stableSemver.test(version || '')) {
+              return null;
+            }
+            return version.split('.').map((part) => Number(part));
+          }
+
+          function compareStable(left, right) {
+            const a = parseStable(left);
+            const b = parseStable(right);
+            if (!a || !b) {
+              return 0;
+            }
+            for (let i = 0; i < 3; i += 1) {
+              if (a[i] !== b[i]) {
+                return a[i] - b[i];
+              }
+            }
+            return 0;
           }
 
           if (!pkg.name || !pkg.name.startsWith('com.deucarian.')) {
             fail('package.json name must use the com.deucarian.* Unity package namespace.');
           }
 
-          if (!stableSemver.test(baseVersion)) {
-            fail(`Development workflow requires stable base SemVer X.Y.Z, got "${baseVersion}".`);
+          if (!pkg.unity) {
+            fail('package.json must declare a minimum Unity version.');
           }
 
           const dependencies = pkg.dependencies || {};
           for (const dependencyName of requiredDeps[pkg.name] || []) {
-            if (!dependencies[dependencyName]) {
+            if (!Object.prototype.hasOwnProperty.call(dependencies, dependencyName)) {
               fail(`${pkg.name} must declare dependency ${dependencyName} before publishing.`);
             }
           }
 
-          if (process.exitCode) {
-            process.exit(process.exitCode);
+          const dependencyEntries = Object.entries(dependencies)
+            .filter(([name]) => name.startsWith('com.deucarian.'))
+            .sort(([left], [right]) => left.localeCompare(right));
+
+          if (dependencyEntries.length === 0) {
+            console.log('No com.deucarian dependencies declared. This package is first in the development publish order.');
+          } else {
+            console.log('Resolving com.deucarian dependencies from npmjs dev dist-tags, falling back to latest stable.');
           }
 
-          const previewVersion = `${baseVersion}-dev.${process.env.GITHUB_RUN_NUMBER}`;
+          for (const [name, version] of dependencyEntries) {
+            const requiredVersion = String(version).trim();
+            const devVersion = npmDistTag(name, 'dev');
+            const stableVersion = npmDistTag(name, 'latest');
+            const selectedVersion = devVersion || stableVersion;
+            const selectedTag = devVersion ? 'dev' : 'latest';
+
+            console.log(`${name}: required=${requiredVersion}, dev=${devVersion || 'none'}, latest=${stableVersion || 'none'}, selected=${selectedVersion || 'none'} (${selectedTag})`);
+
+            if (!selectedVersion) {
+              fail(`${name}@${requiredVersion} cannot be resolved because neither dev nor latest is published on npmjs.`);
+            }
+
+            if (!semver.test(selectedVersion)) {
+              fail(`${name} ${selectedTag} dist-tag points to invalid SemVer "${selectedVersion}".`);
+            }
+
+            if (stableSemver.test(requiredVersion) && stableSemver.test(selectedVersion) && compareStable(requiredVersion, selectedVersion) > 0) {
+              fail(`${name}@${requiredVersion} is required but is not published yet; latest available: ${selectedVersion}. Publish dependencies first.`);
+            }
+
+            console.log(`${name}@${requiredVersion} published: ${npmVersionExists(name, requiredVersion) ? 'yes' : 'no'}`);
+
+            if (dependencies[name] !== selectedVersion) {
+              dependencies[name] = selectedVersion;
+              console.log(`Using ${name}@${selectedVersion} for this preview package.`);
+            }
+          }
+
+          const baseVersion = process.env.INPUT_BASE_VERSION || pkg.version || '';
+          if (!stableSemver.test(baseVersion)) {
+            fail(`Development workflow requires stable base SemVer X.Y.Z, got "${baseVersion}".`);
+          }
+
+          const previewVersion = `${baseVersion}-dev.${process.env.RUN_NUMBER}`;
+          if (npmVersionExists(pkg.name, previewVersion)) {
+            fail(`${pkg.name}@${previewVersion} already exists on npmjs. The dev publish would be a duplicate.`);
+          }
+
           pkg.version = previewVersion;
-          fs.writeFileSync('package.json', `${JSON.stringify(pkg, null, 2)}\n`);
+          pkg.dependencies = dependencies;
+          fs.writeFileSync(packagePath, `${JSON.stringify(pkg, null, 2)}\n`);
+
           fs.appendFileSync(process.env.GITHUB_ENV, `PACKAGE_NAME=${pkg.name}\n`);
           fs.appendFileSync(process.env.GITHUB_ENV, `PACKAGE_VERSION=${previewVersion}\n`);
-          console.log(`Prepared ${pkg.name}@${previewVersion}`);
+          console.log(`Prepared preview package ${pkg.name}@${previewVersion}.`);
           NODE
 
-      - name: Check Deucarian dependency versions on npmjs
+      - name: Show preview manifest diff
         shell: bash
-        env:
-          PUBLISH_ENABLED: ${{ inputs.publish }}
+        run: git diff -- package.json
+
+      - name: Run npm tests if present
+        shell: bash
         run: |
-          node <<'NODE'
-          const { execFileSync } = require('child_process');
-          const fs = require('fs');
-
-          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-          const dependencies = pkg.dependencies || {};
-          const missing = [];
-
-          for (const [name, version] of Object.entries(dependencies)) {
-            if (!name.startsWith('com.deucarian.')) {
-              continue;
-            }
-
-            try {
-              execFileSync('npm', ['view', `${name}@${version}`, 'version', '--registry=https://registry.npmjs.org'], {
-                stdio: ['ignore', 'pipe', 'pipe'],
-              });
-              console.log(`Found dependency ${name}@${version} on npmjs.`);
-            } catch {
-              missing.push(`${name}@${version}`);
-            }
-          }
-
-          if (missing.length === 0) {
-            process.exit(0);
-          }
-
-          const message = `Missing Deucarian dependency versions on npmjs: ${missing.join(', ')}`;
-          if (process.env.PUBLISH_ENABLED === 'true') {
-            console.error(`::error::${message}`);
-            process.exit(1);
-          }
-
-          console.log(`::warning::${message}`);
-          NODE
+          if node -e "const pkg=require('./package.json'); process.exit(pkg.scripts && pkg.scripts.test ? 0 : 1)"; then
+            npm test
+          else
+            echo "No npm test script declared; skipping npm tests."
+          fi
 
       - name: Optional Unity test guard
-        if: ${{ inputs.run_unity_tests && inputs.unity_project_path == '' }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_unity_tests && inputs.unity_project_path == '' }}
         shell: bash
         run: |
           echo "::error::unity_project_path is required when run_unity_tests is enabled."
           exit 1
 
       - name: Run Unity tests
-        if: ${{ inputs.run_unity_tests && inputs.unity_project_path != '' }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_unity_tests && inputs.unity_project_path != '' }}
         uses: game-ci/unity-test-runner@v4
         env:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
@@ -148,42 +265,22 @@ jobs:
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         with:
           projectPath: ${{ inputs.unity_project_path }}
-          testMode: all
+          testMode: editmode
 
-      - name: npm pack dry run
+      - name: npm pack dry-run
         shell: bash
-        run: npm pack --dry-run --ignore-scripts
-
-      - name: Check whether preview version already exists
-        id: registry
-        shell: bash
-        run: |
-          set +e
-          existing="$(npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version --registry="${NPM_REGISTRY_URL}" 2>/dev/null)"
-          status=$?
-          set -e
-
-          if [ "$status" -eq 0 ] && [ -n "$existing" ]; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-            echo "::warning::${PACKAGE_NAME}@${PACKAGE_VERSION} already exists on npmjs."
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-            echo "${PACKAGE_NAME}@${PACKAGE_VERSION} is not published on npmjs."
-          fi
-
-      - name: Refuse duplicate preview publish
-        if: ${{ inputs.publish && steps.registry.outputs.exists == 'true' }}
-        shell: bash
-        run: |
-          echo "::error::Refusing to publish ${PACKAGE_NAME}@${PACKAGE_VERSION}; that version already exists on npmjs."
-          exit 1
+        run: npm pack --dry-run --registry="${NPM_REGISTRY_URL}"
 
       - name: Publish preview package
-        if: ${{ inputs.publish }}
         shell: bash
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
+          if [ "$SHOULD_PUBLISH" != "true" ]; then
+            echo "Dry-run mode; skipping npm publish."
+            exit 0
+          fi
+
           if [ -z "$NODE_AUTH_TOKEN" ]; then
             echo "::error::NPM_TOKEN secret is required to publish."
             exit 1
