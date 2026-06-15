@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Deucarian.Editor;
 using UnityEditor;
 using UnityEngine;
 using PackageManagerPackageInfo = UnityEditor.PackageManager.PackageInfo;
@@ -10,6 +11,7 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed class PackageInstallerWindow : EditorWindow
     {
         private const string WindowTitle = "Package Installer";
+        private const string PackageVersion = "1.1.12";
         private const float MinWindowWidth = 850f;
         private const float MinWindowHeight = 650f;
         private const float SidebarWidth = 340f;
@@ -98,10 +100,8 @@ namespace Deucarian.PackageInstaller.Editor
         private bool _stylesInitialized;
         private bool _lastProSkin;
         private Color _mainBackgroundColor;
-        private Color _headerBackgroundColor;
         private Color _sidebarBackgroundColor;
         private Color _detailsBackgroundColor;
-        private Color _panelBackgroundColor;
         private Color _sampleRowBackgroundColor;
         private Color _panelBorderColor;
         private Color _separatorColor;
@@ -110,34 +110,20 @@ namespace Deucarian.PackageInstaller.Editor
         private Color _rowSelectedColor;
         private Color _textColor;
         private Color _mutedTextColor;
-        private Color _installedColor;
-        private Color _notInstalledColor;
-        private Color _updateColor;
-        private Color _failedColor;
-        private Color _busyColor;
-        private Color _infoColor;
-        private Color _bridgeColor;
 
         private GUIStyle _windowStyle;
-        private GUIStyle _headerStyle;
         private GUIStyle _sidebarStyle;
         private GUIStyle _detailsStyle;
-        private GUIStyle _panelStyle;
-        private GUIStyle _operationBarStyle;
-        private GUIStyle _detailHeaderStyle;
         private GUIStyle _sampleRowStyle;
         private GUIStyle _titleStyle;
         private GUIStyle _subtitleStyle;
         private GUIStyle _sectionTitleStyle;
-        private GUIStyle _panelTitleStyle;
-        private GUIStyle _labelStyle;
         private GUIStyle _miniLabelStyle;
         private GUIStyle _mutedMiniLabelStyle;
         private GUIStyle _operationLineStyle;
         private GUIStyle _rowTitleStyle;
         private GUIStyle _rowSubLabelStyle;
         private GUIStyle _rowStatusStyle;
-        private GUIStyle _badgeStyle;
         private GUIStyle _markerStyle;
         private GUIStyle _foldoutStyle;
         private GUIStyle _primaryButtonStyle;
@@ -239,6 +225,7 @@ namespace Deucarian.PackageInstaller.Editor
                 }
 
                 DrawGlobalOperationArea();
+                DeucarianEditorChrome.DrawFooterVersion("com.deucarian.package-installer", PackageVersion);
             }
         }
 
@@ -254,33 +241,20 @@ namespace Deucarian.PackageInstaller.Editor
             _stylesInitialized = true;
             _lastProSkin = proSkin;
 
-            _mainBackgroundColor = new Color(0.105f, 0.115f, 0.125f);
-            _headerBackgroundColor = new Color(0.145f, 0.155f, 0.165f);
-            _sidebarBackgroundColor = new Color(0.115f, 0.125f, 0.135f);
-            _detailsBackgroundColor = new Color(0.12f, 0.13f, 0.14f);
-            _panelBackgroundColor = new Color(0.16f, 0.17f, 0.18f);
-            _sampleRowBackgroundColor = new Color(0.135f, 0.145f, 0.155f);
-            _panelBorderColor = new Color(0.30f, 0.32f, 0.35f);
-            _separatorColor = new Color(0.26f, 0.28f, 0.30f);
-            _rowBackgroundColor = new Color(0.14f, 0.15f, 0.16f);
-            _rowHoverColor = new Color(0.18f, 0.20f, 0.22f);
-            _rowSelectedColor = new Color(0.18f, 0.28f, 0.39f);
-            _textColor = new Color(0.88f, 0.90f, 0.92f);
-            _mutedTextColor = new Color(0.58f, 0.63f, 0.68f);
-            _installedColor = new Color(0.34f, 0.78f, 0.50f);
-            _notInstalledColor = new Color(0.56f, 0.60f, 0.64f);
-            _updateColor = new Color(0.96f, 0.68f, 0.25f);
-            _failedColor = new Color(0.95f, 0.34f, 0.34f);
-            _busyColor = new Color(0.35f, 0.62f, 0.95f);
-            _infoColor = new Color(0.42f, 0.72f, 0.90f);
-            _bridgeColor = new Color(0.44f, 0.67f, 0.95f);
+            _mainBackgroundColor = DeucarianEditorColors.HeaderBackground;
+            _sidebarBackgroundColor = DeucarianEditorColors.SectionBackground;
+            _detailsBackgroundColor = DeucarianEditorColors.SectionBackground;
+            _sampleRowBackgroundColor = DeucarianEditorColors.WithAlpha(DeucarianEditorColors.SectionBackground, 0.92f);
+            _panelBorderColor = DeucarianEditorColors.Border;
+            _separatorColor = DeucarianEditorColors.Border;
+            _rowBackgroundColor = DeucarianEditorColors.WithAlpha(DeucarianEditorColors.SectionBackground, 0.88f);
+            _rowHoverColor = DeucarianEditorColors.WithAlpha(DeucarianEditorColors.Blue, proSkin ? 0.24f : 0.14f);
+            _rowSelectedColor = DeucarianEditorColors.WithAlpha(DeucarianEditorColors.Teal, proSkin ? 0.34f : 0.20f);
+            _textColor = DeucarianEditorColors.BodyText;
+            _mutedTextColor = DeucarianEditorColors.MutedText;
 
             _windowStyle = new GUIStyle();
             _windowStyle.padding = new RectOffset(12, 12, 10, 10);
-
-            _headerStyle = new GUIStyle();
-            _headerStyle.padding = new RectOffset(14, 14, 10, 10);
-            _headerStyle.margin = new RectOffset(0, 0, 0, 8);
 
             _sidebarStyle = new GUIStyle();
             _sidebarStyle.padding = new RectOffset(10, 10, 10, 10);
@@ -288,48 +262,23 @@ namespace Deucarian.PackageInstaller.Editor
             _detailsStyle = new GUIStyle();
             _detailsStyle.padding = new RectOffset(10, 10, 10, 10);
 
-            _panelStyle = new GUIStyle();
-            _panelStyle.padding = new RectOffset(12, 12, 10, 10);
-            _panelStyle.margin = new RectOffset(0, 0, 0, 8);
-
-            _operationBarStyle = new GUIStyle();
-            _operationBarStyle.padding = new RectOffset(10, 10, 6, 6);
-            _operationBarStyle.margin = new RectOffset(0, 0, 8, 0);
-
-            _detailHeaderStyle = new GUIStyle();
-            _detailHeaderStyle.padding = new RectOffset(14, 14, 12, 12);
-            _detailHeaderStyle.margin = new RectOffset(0, 0, 0, 8);
-
             _sampleRowStyle = new GUIStyle();
             _sampleRowStyle.padding = new RectOffset(10, 10, 8, 8);
             _sampleRowStyle.margin = new RectOffset(0, 0, 2, 6);
 
-            _titleStyle = new GUIStyle(EditorStyles.boldLabel);
-            _titleStyle.fontSize = 18;
-            _titleStyle.normal.textColor = _textColor;
+            _titleStyle = new GUIStyle(DeucarianEditorStyles.PackageHeaderTitle);
+            _titleStyle.fontSize = 15;
             _titleStyle.wordWrap = true;
 
-            _subtitleStyle = new GUIStyle(EditorStyles.wordWrappedMiniLabel);
-            _subtitleStyle.fontSize = 11;
-            _subtitleStyle.normal.textColor = _mutedTextColor;
+            _subtitleStyle = new GUIStyle(DeucarianEditorStyles.PackageHeaderSubtitle);
 
-            _sectionTitleStyle = new GUIStyle(EditorStyles.boldLabel);
-            _sectionTitleStyle.fontSize = 12;
-            _sectionTitleStyle.normal.textColor = _textColor;
-
-            _panelTitleStyle = new GUIStyle(EditorStyles.boldLabel);
-            _panelTitleStyle.fontSize = 12;
-            _panelTitleStyle.normal.textColor = _textColor;
-
-            _labelStyle = new GUIStyle(EditorStyles.label);
-            _labelStyle.normal.textColor = _textColor;
-            _labelStyle.wordWrap = true;
+            _sectionTitleStyle = new GUIStyle(DeucarianEditorStyles.SectionTitle);
 
             _miniLabelStyle = new GUIStyle(EditorStyles.wordWrappedMiniLabel);
             _miniLabelStyle.normal.textColor = _textColor;
 
-            _mutedMiniLabelStyle = new GUIStyle(EditorStyles.wordWrappedMiniLabel);
-            _mutedMiniLabelStyle.normal.textColor = _mutedTextColor;
+            _mutedMiniLabelStyle = new GUIStyle(DeucarianEditorStyles.MutedLabel);
+            _mutedMiniLabelStyle.fontSize = EditorStyles.wordWrappedMiniLabel.fontSize;
 
             _operationLineStyle = new GUIStyle(EditorStyles.miniLabel);
             _operationLineStyle.normal.textColor = _textColor;
@@ -346,14 +295,9 @@ namespace Deucarian.PackageInstaller.Editor
             _rowSubLabelStyle.wordWrap = true;
             _rowSubLabelStyle.clipping = TextClipping.Clip;
 
-            _rowStatusStyle = new GUIStyle(EditorStyles.miniBoldLabel);
+            _rowStatusStyle = new GUIStyle(DeucarianEditorStyles.StatusBadge);
             _rowStatusStyle.alignment = TextAnchor.MiddleCenter;
             _rowStatusStyle.clipping = TextClipping.Clip;
-
-            _badgeStyle = new GUIStyle(EditorStyles.miniBoldLabel);
-            _badgeStyle.alignment = TextAnchor.MiddleCenter;
-            _badgeStyle.normal.textColor = _textColor;
-            _badgeStyle.clipping = TextClipping.Clip;
 
             _markerStyle = new GUIStyle(EditorStyles.miniBoldLabel);
             _markerStyle.alignment = TextAnchor.MiddleCenter;
@@ -371,7 +315,7 @@ namespace Deucarian.PackageInstaller.Editor
             _primaryButtonStyle.fontStyle = FontStyle.Bold;
             _primaryButtonStyle.fixedHeight = 24f;
 
-            _secondaryButtonStyle = new GUIStyle(EditorStyles.miniButton);
+            _secondaryButtonStyle = new GUIStyle(DeucarianEditorStyles.ToolbarButton);
             _secondaryButtonStyle.fixedHeight = 24f;
         }
 
@@ -386,21 +330,25 @@ namespace Deucarian.PackageInstaller.Editor
         private void DrawHeader()
         {
             bool compact = position.width < 1100f;
-            Rect rect = BeginSurface(
-                _headerStyle,
-                _headerBackgroundColor,
-                _panelBorderColor,
-                GUILayout.MinHeight(compact ? 118f : 88f),
-                GUILayout.ExpandWidth(true));
+
+            DeucarianEditorChrome.DrawPackageHeader(
+                "package-installer",
+                "Deucarian Package Installer",
+                "Install, update, remove, and compose Deucarian packages through first-class bridge packages.");
+
+            DeucarianEditorChrome.BeginSection();
 
             using (new EditorGUILayout.HorizontalScope())
             {
                 using (new EditorGUILayout.VerticalScope(GUILayout.ExpandWidth(true)))
                 {
-                    EditorGUILayout.LabelField("Deucarian Package Installer", _titleStyle);
-                    EditorGUILayout.LabelField(
-                        "Install, update, remove, and compose Deucarian packages through first-class bridge packages.",
-                        _subtitleStyle);
+                    DrawRegistrySummary();
+
+                    if (compact)
+                    {
+                        GUILayout.Space(4f);
+                        DrawUpdateSummary(true);
+                    }
                 }
 
                 if (!compact)
@@ -409,23 +357,15 @@ namespace Deucarian.PackageInstaller.Editor
 
                     using (new EditorGUILayout.VerticalScope(GUILayout.Width(420f)))
                     {
-                        DrawRegistrySummary();
                         DrawUpdateSummary(false);
                     }
                 }
             }
 
-            if (compact)
-            {
-                GUILayout.Space(4f);
-                DrawRegistrySummary();
-                DrawUpdateSummary(true);
-            }
-
             GUILayout.Space(6f);
             DrawHeaderUpdateControls(compact);
 
-            EditorGUILayout.EndVertical();
+            DeucarianEditorChrome.EndSection();
             GUILayout.Space(8f);
         }
 
@@ -1050,51 +990,72 @@ namespace Deucarian.PackageInstaller.Editor
         private void DrawDetailHeader(PackageDefinition packageDefinition)
         {
             VisualStatus status = GetPackageVisualStatus(packageDefinition);
-            Color accentColor = packageDefinition.IsBridge ? _bridgeColor : GetStatusColor(status.Kind);
 
-            Rect rect = BeginSurface(
-                _detailHeaderStyle,
-                _panelBackgroundColor,
-                accentColor,
-                GUILayout.ExpandWidth(true));
-
-            EditorGUILayout.LabelField("Overview", _panelTitleStyle);
-            GUILayout.Space(4f);
-
-            using (new EditorGUILayout.HorizontalScope())
+            DrawPanel("Overview", () =>
             {
-                Rect markerRect = GUILayoutUtility.GetRect(48f, 42f, GUILayout.Width(48f), GUILayout.Height(42f));
-                DrawInlineMarker(markerRect, packageDefinition.IsBridge ? "LINK" : status.Marker, packageDefinition.IsBridge ? VisualStatusKind.Bridge : status.Kind);
-
-                GUILayout.Space(8f);
-
-                using (new EditorGUILayout.VerticalScope(GUILayout.ExpandWidth(true)))
+                using (new EditorGUILayout.HorizontalScope())
                 {
-                    string displayName = GetDetailDisplayName(packageDefinition);
-                    EditorGUILayout.LabelField(
-                        new GUIContent(displayName, displayName),
-                        _titleStyle,
-                        GUILayout.ExpandWidth(true));
+                    Rect iconRect = GUILayoutUtility.GetRect(48f, 42f, GUILayout.Width(48f), GUILayout.Height(42f));
+                    DrawPackageIcon(
+                        iconRect,
+                        packageDefinition,
+                        packageDefinition.IsBridge ? VisualStatusKind.Bridge : status.Kind);
 
-                    if (!string.IsNullOrWhiteSpace(packageDefinition.Description))
+                    GUILayout.Space(8f);
+
+                    using (new EditorGUILayout.VerticalScope(GUILayout.ExpandWidth(true)))
                     {
+                        string displayName = GetDetailDisplayName(packageDefinition);
                         EditorGUILayout.LabelField(
-                            new GUIContent(packageDefinition.Description, packageDefinition.Description),
-                            _subtitleStyle);
+                            new GUIContent(displayName, displayName),
+                            _titleStyle,
+                            GUILayout.ExpandWidth(true));
+
+                        if (!string.IsNullOrWhiteSpace(packageDefinition.Description))
+                        {
+                            EditorGUILayout.LabelField(
+                                new GUIContent(packageDefinition.Description, packageDefinition.Description),
+                                _subtitleStyle);
+                        }
+
+                        if (packageDefinition.HasDisplayVersion)
+                        {
+                            DrawKeyValueRow("Version", packageDefinition.DisplayVersion);
+                        }
                     }
 
-                    if (packageDefinition.HasDisplayVersion)
-                    {
-                        DrawKeyValueRow("Version", packageDefinition.DisplayVersion);
-                    }
+                    GUILayout.Space(8f);
+                    DrawStatusBadge(status.Label, status.Kind, GUILayout.Width(132f));
                 }
+            }, GUILayout.ExpandWidth(true));
+        }
 
-                GUILayout.Space(8f);
-                DrawStatusBadge(status.Label, status.Kind, GUILayout.Width(132f));
+        private void DrawPackageIcon(Rect rect, PackageDefinition packageDefinition, VisualStatusKind statusKind)
+        {
+            if (Event.current.type == EventType.Repaint)
+            {
+                Color color = GetStatusColor(statusKind);
+                EditorGUI.DrawRect(rect, DeucarianEditorColors.WithAlpha(color, 0.12f));
+                DrawBorder(rect, DeucarianEditorColors.WithAlpha(color, 0.58f));
             }
 
-            EditorGUILayout.EndVertical();
-            GUILayout.Space(8f);
+            Texture2D icon = DeucarianEditorIcons.GetPackageIcon(GetPackageIconKey(packageDefinition));
+            Rect iconRect = new Rect(rect.x + 6f, rect.y + 3f, rect.width - 12f, rect.height - 6f);
+            GUI.DrawTexture(iconRect, icon, ScaleMode.ScaleToFit, true);
+        }
+
+        private static string GetPackageIconKey(PackageDefinition packageDefinition)
+        {
+            if (packageDefinition == null || string.IsNullOrWhiteSpace(packageDefinition.PackageId))
+            {
+                return "package-installer";
+            }
+
+            const string prefix = "com.deucarian.";
+            string packageId = packageDefinition.PackageId.Trim();
+            return packageId.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                ? packageId.Substring(prefix.Length)
+                : packageId;
         }
 
         private static string GetDetailDisplayName(PackageDefinition packageDefinition)
@@ -1236,7 +1197,7 @@ namespace Deucarian.PackageInstaller.Editor
                 _rowTitleStyle);
 
             Rect statusRect = new Rect(rowRect.xMax - 108f, rowRect.y + 5f, 96f, 18f);
-            DrawColoredRectLabel(statusRect, new GUIContent(status.Label, status.Label), _rowStatusStyle, GetStatusColor(status.Kind));
+            DrawStatusBadge(statusRect, status.Label, status.Kind, _rowStatusStyle);
         }
 
         private void DrawActionsPanel(PackageDefinition packageDefinition)
@@ -1697,11 +1658,7 @@ namespace Deucarian.PackageInstaller.Editor
         private void DrawGlobalOperationArea()
         {
             OperationProgressView operation = GetCurrentOperationProgress();
-            Rect rect = BeginSurface(
-                _operationBarStyle,
-                _panelBackgroundColor,
-                _panelBorderColor,
-                GUILayout.ExpandWidth(true));
+            DeucarianEditorChrome.BeginSection();
 
             DrawGlobalOperationBar(operation);
 
@@ -1713,7 +1670,7 @@ namespace Deucarian.PackageInstaller.Editor
                 DrawOperationSummaryDrawer();
             }
 
-            EditorGUILayout.EndVertical();
+            DeucarianEditorChrome.EndSection();
         }
 
         private void DrawGlobalOperationBar(OperationProgressView operation)
@@ -1763,7 +1720,7 @@ namespace Deucarian.PackageInstaller.Editor
         {
             using (new EditorGUILayout.HorizontalScope())
             {
-                EditorGUILayout.LabelField("Last Operation Summary", _panelTitleStyle, GUILayout.ExpandWidth(true));
+                EditorGUILayout.LabelField("Last Operation Summary", _sectionTitleStyle, GUILayout.ExpandWidth(true));
                 bool hasSummary = HasLastOperationDetails();
                 VisualStatusKind summaryKind = hasSummary ? GetLastSummaryStatusKind(GetLastProgressItems()) : VisualStatusKind.Info;
                 DrawStatusBadge(hasSummary ? GetLastSummaryStatusLabel(summaryKind) : "Idle", summaryKind, GUILayout.Width(118f));
@@ -2150,14 +2107,12 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void DrawPanel(string title, Action content, params GUILayoutOption[] options)
         {
-            Rect rect = BeginSurface(_panelStyle, _panelBackgroundColor, _panelBorderColor, options);
-
             if (!string.IsNullOrWhiteSpace(title))
             {
-                EditorGUILayout.LabelField(title, _panelTitleStyle);
-                GUILayout.Space(4f);
+                DeucarianEditorChrome.DrawSectionHeader(title);
             }
 
+            EditorGUILayout.BeginVertical(DeucarianEditorStyles.SectionBox, options);
             content?.Invoke();
             EditorGUILayout.EndVertical();
             GUILayout.Space(8f);
@@ -2222,33 +2177,20 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void DrawStatusBadge(string text, VisualStatusKind statusKind, params GUILayoutOption[] options)
         {
-            Rect rect = GUILayoutUtility.GetRect(new GUIContent(text), _badgeStyle, options);
-
-            if (rect.height < 20f)
-            {
-                rect.height = 20f;
-            }
-
-            if (Event.current.type == EventType.Repaint)
-            {
-                Color color = GetStatusColor(statusKind);
-                EditorGUI.DrawRect(rect, new Color(color.r, color.g, color.b, 0.14f));
-                DrawBorder(rect, new Color(color.r, color.g, color.b, 0.70f));
-            }
-
-            DrawColoredRectLabel(rect, new GUIContent(text, text), _badgeStyle, GetStatusColor(statusKind));
+            DeucarianEditorStatus status = ToEditorStatus(statusKind);
+            GUIStyle style = DeucarianEditorStatusBadge.CreateStyle(status);
+            GUIContent content = new GUIContent(text ?? string.Empty, text ?? string.Empty);
+            Rect rect = GUILayoutUtility.GetRect(content, style, options);
+            DeucarianEditorStatusBadge.Draw(rect, content, status, style);
         }
 
         private void DrawStatusBadge(Rect rect, string text, VisualStatusKind statusKind, GUIStyle style)
         {
-            if (Event.current.type == EventType.Repaint)
-            {
-                Color color = GetStatusColor(statusKind);
-                EditorGUI.DrawRect(rect, new Color(color.r, color.g, color.b, 0.14f));
-                DrawBorder(rect, new Color(color.r, color.g, color.b, 0.70f));
-            }
-
-            DrawColoredRectLabel(rect, new GUIContent(text, text), style, GetStatusColor(statusKind));
+            DeucarianEditorStatusBadge.Draw(
+                rect,
+                new GUIContent(text ?? string.Empty, text ?? string.Empty),
+                ToEditorStatus(statusKind),
+                style);
         }
 
         private void DrawInlineHelp(string message, VisualStatusKind statusKind)
@@ -2258,10 +2200,7 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            Rect rect = EditorGUILayout.BeginVertical(_sampleRowStyle, GUILayout.ExpandWidth(true));
-            DrawSurface(rect, _sampleRowBackgroundColor, GetStatusColor(statusKind));
-            DrawColoredLabel(message, _mutedMiniLabelStyle, GetStatusColor(statusKind));
-            EditorGUILayout.EndVertical();
+            DeucarianEditorChrome.DrawInlineHelp(message, ToMessageType(statusKind));
         }
 
         private void DrawKeyValueRow(string label, string value)
@@ -2364,22 +2303,39 @@ namespace Deucarian.PackageInstaller.Editor
 
         private Color GetStatusColor(VisualStatusKind statusKind)
         {
+            return DeucarianEditorStatusBadge.GetColor(ToEditorStatus(statusKind));
+        }
+
+        private static DeucarianEditorStatus ToEditorStatus(VisualStatusKind statusKind)
+        {
             switch (statusKind)
             {
                 case VisualStatusKind.Installed:
-                    return _installedColor;
+                    return DeucarianEditorStatus.Success;
                 case VisualStatusKind.UpdateAvailable:
-                    return _updateColor;
+                    return DeucarianEditorStatus.Warning;
                 case VisualStatusKind.Failed:
-                    return _failedColor;
+                    return DeucarianEditorStatus.Error;
+                case VisualStatusKind.NotInstalled:
+                    return DeucarianEditorStatus.Disabled;
                 case VisualStatusKind.Busy:
-                    return _busyColor;
                 case VisualStatusKind.Info:
-                    return _infoColor;
                 case VisualStatusKind.Bridge:
-                    return _bridgeColor;
                 default:
-                    return _notInstalledColor;
+                    return DeucarianEditorStatus.Info;
+            }
+        }
+
+        private static MessageType ToMessageType(VisualStatusKind statusKind)
+        {
+            switch (statusKind)
+            {
+                case VisualStatusKind.Failed:
+                    return MessageType.Error;
+                case VisualStatusKind.UpdateAvailable:
+                    return MessageType.Warning;
+                default:
+                    return MessageType.Info;
             }
         }
 

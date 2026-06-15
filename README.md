@@ -47,7 +47,7 @@ The package requires Unity `2021.3` or newer and depends on `com.deucarian.edito
 
 ## Logging
 
-This package uses `com.deucarian.logging` for diagnostics. `com.deucarian.editor` is installed first so shared Deucarian editor chrome can become the single source of truth in the next UI migration phase.
+This package uses `com.deucarian.logging` for diagnostics and `com.deucarian.editor` for shared Deucarian editor chrome, styles, icons, and status badges.
 
 Package Installer diagnostics use stable package categories: `PackageInstaller`, `PackageInstaller.Registry`, `PackageInstaller.Install`, `PackageInstaller.Samples`, and `PackageInstaller.UpdateChecks`. Configure Deucarian Logging filters by category and level to isolate registry loading, install/remove operations, sample imports, or update checks. Entries flow through the shared ring buffer for recent-diagnostic inspection and remain compatible with future telemetry sinks.
 
@@ -207,7 +207,7 @@ Keeping the installer editor-only ensures:
 
 ## Versioning
 
-Current package version: `1.1.11`.
+Current package version: `1.1.12`.
 
 Branch strategy:
 

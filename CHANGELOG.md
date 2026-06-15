@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.12 - 2026-06-15
+
+- Migrated Package Installer editor chrome, sections, status badges, icon usage, and shared colors/styles onto `com.deucarian.editor`.
+- Updated the Deucarian Editor dependency to `0.1.2`.
+
 ## 1.1.11 - 2026-06-15
 
 - Updated the Deucarian Logging dependency to `0.2.5` for the restored Unity `2021.3` first-time install graph.
