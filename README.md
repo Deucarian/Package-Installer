@@ -47,7 +47,7 @@ The package requires Unity `2021.3` or newer and has no package dependencies.
 
 ## Usage
 
-Use the installer window to install standalone packages, install bridge packages with their dependencies, import package samples explicitly, and check installed Git packages for updates.
+Use the installer window to install standalone packages, install packages with their registered dependencies, import package samples explicitly, and check installed Git packages for updates.
 
 ## Package Registry
 
@@ -59,7 +59,7 @@ The installer loads the bundled `PackageRegistry.json` first so it works offline
 
 If the remote registry succeeds and validates, the window uses it. If it fails, the bundled registry stays active and the header shows that the remote registry failed.
 
-Remote registry validation also checks each package entry against the target package's `package.json` name so installed-package detection uses Unity's exact package IDs.
+Remote registry validation also checks each package entry against the target package's `package.json` name so installed-package detection uses Unity's exact package IDs. If a target manifest cannot be fetched, the validation message includes the exact `package.json` URL that failed.
 
 The current bundled fallback registry includes these package entries:
 
@@ -89,7 +89,7 @@ Registered packages are first-class UPM packages with their own package IDs:
 - `com.deucarian.selection-suite`
 - `com.deucarian.package-installer`
 
-`Install All` installs all missing registered packages in dependency order. Installing one bridge package automatically installs its missing dependencies first, then installs the bridge.
+`Install All` installs all missing registered packages in dependency order. Single install, reinstall, single update, and update-all operations install missing registered Deucarian dependencies first, then install the requested package.
 
 Package IDs remain branded as `com.deucarian.*`. Display names are supplied by the registry and used by the installer UI.
 Technical details such as package IDs, selected references, installed references, revisions, and raw update messages are available from each row's Advanced foldout.
@@ -111,7 +111,7 @@ The registry schema uses `schemaVersion` 1 and contains:
 - `description`: explanatory text shown in the detail pane.
 - `stableUrl`: the stable Git URL or UPM identifier passed to `UnityEditor.PackageManager.Client.Add`.
 - `developmentUrl`: optional development-channel Git URL or UPM identifier. If this is empty, the Development channel is disabled for that package.
-- `dependencies`: package IDs that should be installed before this package is installed. Bridge packages are just packages in the `Bridge` category with dependencies.
+- `dependencies`: package IDs that should be installed before this package is installed, reinstalled, or updated. Bridge packages are just packages in the `Bridge` category with dependencies.
 
 Set `stableUrl` and, when available, `developmentUrl` to the UPM identifier or Git URL. Bridge packages should also list their dependency package IDs in `dependencies`.
 
@@ -139,7 +139,7 @@ Unknown installed revisions are shown as "Cannot determine update" while the pac
 
 The installer can also check for updates automatically when Unity starts and when the Package Installer window opens. Startup checks run at most once per editor session, and window-open checks are throttled so reopening the window does not repeatedly hit remotes. These settings are stored in `EditorPrefs` and can be toggled from the window header.
 
-`Update` and `Update All Installed Packages` reuse Unity Package Manager installation through `Client.Add` with the selected channel URL.
+`Update` and `Update All Installed Packages` reuse Unity Package Manager installation through `Client.Add` with the selected channel URL after dependency-first planning has installed any missing registered Deucarian dependencies.
 
 The installer package itself is included in update discovery when it is installed in the current project.
 
@@ -162,7 +162,7 @@ Current bridge package dependencies:
 - ObjectSelection CoreState Bridge depends on Object Selection and Core State.
 - Session API Bridge depends on Session and API.
 
-Installing a bridge only requires one click. The installer computes the dependency-first install plan from `PackageDefinition.Dependencies` and sends that ordered package list to Unity Package Manager.
+Installing a package only requires one click. The installer computes the dependency-first install plan from `PackageDefinition.Dependencies`, skips dependencies that are already installed, fails clearly on unavailable or circular dependencies, and sends the ordered package list to Unity Package Manager.
 
 Bridge packages are regular UPM packages, so no scripting define symbols are required for these bridge installs.
 
@@ -201,7 +201,7 @@ Keeping the installer editor-only ensures:
 
 ## Versioning
 
-Current package version: `1.1.6`.
+Current package version: `1.1.7`.
 
 Branch strategy:
 

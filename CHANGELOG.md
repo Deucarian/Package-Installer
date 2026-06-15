@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.7 - 2026-06-15
+
+- Installed registry dependencies before requested packages for first installs, reinstalls, single updates, and update-all operations.
+- Added dependency install planning for missing, already installed, duplicate, and circular dependency cases with explicit logs.
+- Reported the exact target `package.json` URL when remote registry package-name validation cannot fetch or read a package manifest.
+
 ## 1.1.6 - 2026-06-15
 
 - Moved the Package Installer editor entry point under `Tools > Deucarian > Package Installer`.

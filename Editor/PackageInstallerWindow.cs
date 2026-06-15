@@ -539,10 +539,9 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void UpdateAllPackages()
         {
-            _packageInstallService.InstallMany(
+            _packageDependencyInstaller.UpdateAll(
                 GetPackagesWithUpdates(),
-                GetSelectedChannel,
-                "Update All Installed Packages");
+                GetSelectedChannel);
             _packageUpdateCheckService.InvalidateAll();
         }
 
@@ -1424,19 +1423,17 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void UpdatePackage(PackageDefinition packageDefinition)
         {
-            _packageInstallService.Install(
+            _packageDependencyInstaller.UpdateWithDependencies(
                 packageDefinition,
-                GetSelectedChannel(packageDefinition),
-                "Update " + packageDefinition.DisplayName);
+                GetSelectedChannel);
             _packageUpdateCheckService.Invalidate(packageDefinition.PackageId);
         }
 
         private void ReinstallPackage(PackageDefinition packageDefinition)
         {
-            _packageInstallService.Install(
+            _packageDependencyInstaller.ReinstallWithDependencies(
                 packageDefinition,
-                GetSelectedChannel(packageDefinition),
-                "Reinstall " + packageDefinition.DisplayName);
+                GetSelectedChannel);
             _packageUpdateCheckService.Invalidate(packageDefinition.PackageId);
         }
 

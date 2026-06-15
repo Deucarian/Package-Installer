@@ -64,6 +64,7 @@ namespace Deucarian.PackageInstaller.Editor
         internal void ReplaceInstalledPackageNamesForTests(IEnumerable<string> packageIds)
         {
             _installedPackages.Clear();
+            _installedPackageReferences.Clear();
 
             if (packageIds == null)
             {
@@ -77,6 +78,24 @@ namespace Deucarian.PackageInstaller.Editor
                     _installedPackages[packageId.Trim()] = null;
                 }
             }
+        }
+
+        internal void ReplaceInstalledPackageReferenceForTests(string packageId, string packageReference)
+        {
+            if (string.IsNullOrWhiteSpace(packageId))
+            {
+                return;
+            }
+
+            _installedPackages[packageId.Trim()] = null;
+
+            if (string.IsNullOrWhiteSpace(packageReference))
+            {
+                _installedPackageReferences.Remove(packageId.Trim());
+                return;
+            }
+
+            _installedPackageReferences[packageId.Trim()] = packageReference.Trim();
         }
 
         public bool TryGetInstalledPackage(string packageId, out PackageManagerPackageInfo packageInfo)

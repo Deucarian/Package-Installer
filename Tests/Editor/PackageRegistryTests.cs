@@ -215,6 +215,38 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void RemoteRegistryPackageFetchFailureReportsPackageJsonUrl()
+        {
+            RunAsync(async () =>
+            {
+            PackageRegistry registry = new PackageRegistry
+            {
+                schemaVersion = 1,
+                packages = new[]
+                {
+                    new PackageRegistryEntry
+                    {
+                        id = "com.deucarian.editor",
+                        displayName = "Deucarian Editor",
+                        category = "Editor",
+                        stableUrl = "https://github.com/Deucarian/Editor.git#main",
+                        dependencies = Array.Empty<string>()
+                    }
+                }
+            };
+
+            string message = await PackageRegistryPackageNameValidator.ValidateRemotePackageNamesAsync(
+                registry,
+                _ => Task.FromException<string>(new InvalidOperationException("404 Not Found")));
+
+            StringAssert.Contains(
+                "https://raw.githubusercontent.com/Deucarian/Editor/main/package.json",
+                message);
+            StringAssert.Contains("404 Not Found", message);
+            });
+        }
+
+        [Test]
         public void BundledRegistryUsesRealCoreStatePackageId()
         {
             string registryJson = File.ReadAllText(GetBundledRegistryPath());

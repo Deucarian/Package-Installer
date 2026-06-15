@@ -65,7 +65,8 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 if (!TryCreateGitHubPackageJsonUrl(package.stableUrl, out string packageJsonUrl))
                 {
-                    return "Could not resolve target package.json URL for " + package.id + ".";
+                    return "Could not resolve target package.json URL for " + package.id +
+                           " from stableUrl " + package.stableUrl + ".";
                 }
 
                 string packageJson;
@@ -76,11 +77,12 @@ namespace Deucarian.PackageInstaller.Editor
                 }
                 catch (Exception exception)
                 {
-                    return "Could not fetch target package.json for " + package.id + ": " +
+                    return "Could not fetch target package.json for " + package.id +
+                           " at " + packageJsonUrl + ": " +
                            exception.GetBaseException().Message;
                 }
 
-                if (!ValidatePackageName(package, packageJson, out message))
+                if (!ValidatePackageName(package, packageJson, packageJsonUrl, out message))
                 {
                     return message;
                 }
@@ -187,9 +189,19 @@ namespace Deucarian.PackageInstaller.Editor
             string packageJson,
             out string message)
         {
+            return ValidatePackageName(package, packageJson, string.Empty, out message);
+        }
+
+        private static bool ValidatePackageName(
+            PackageRegistryEntry package,
+            string packageJson,
+            string packageJsonUrl,
+            out string message)
+        {
             if (!TryReadPackageName(packageJson, out string packageName))
             {
-                message = "Could not read package.json name for " + package.id + ".";
+                message = "Could not read package.json name for " + package.id +
+                          FormatPackageJsonUrlSuffix(packageJsonUrl) + ".";
                 return false;
             }
 
@@ -198,12 +210,20 @@ namespace Deucarian.PackageInstaller.Editor
             if (!string.Equals(registryPackageId, packageName, StringComparison.Ordinal))
             {
                 message = "Registry package id " + registryPackageId +
-                          " does not match target package.json name " + packageName + ".";
+                          " does not match target package.json name " + packageName +
+                          FormatPackageJsonUrlSuffix(packageJsonUrl) + ".";
                 return false;
             }
 
             message = string.Empty;
             return true;
+        }
+
+        private static string FormatPackageJsonUrlSuffix(string packageJsonUrl)
+        {
+            return string.IsNullOrWhiteSpace(packageJsonUrl)
+                ? string.Empty
+                : " at " + packageJsonUrl;
         }
 
         private static string ExtractPackagePath(string query)
