@@ -39,6 +39,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
   group: npm-development-${{ github.repository }}-${{ github.ref_name }}
@@ -111,6 +112,18 @@ jobs:
           const requiredDeps = {
             'com.deucarian.logging': ['com.deucarian.editor'],
             'com.deucarian.package-installer': ['com.deucarian.editor', 'com.deucarian.logging'],
+            'com.deucarian.theming': ['com.deucarian.editor', 'com.deucarian.logging'],
+            'com.deucarian.session.api-bridge': ['com.deucarian.session', 'com.deucarian.api'],
+            'com.deucarian.object-loading.api-bridge': ['com.deucarian.object-loading', 'com.deucarian.api'],
+            'com.deucarian.ui-binding.core-state-bridge': ['com.deucarian.ui-binding', 'com.deucarian.core-state'],
+            'com.deucarian.object-selection.core-state-bridge': ['com.deucarian.object-selection', 'com.deucarian.core-state'],
+            'com.deucarian.selection-suite': [
+              'com.deucarian.core-state',
+              'com.deucarian.ui-binding',
+              'com.deucarian.object-selection',
+              'com.deucarian.ui-binding.core-state-bridge',
+              'com.deucarian.object-selection.core-state-bridge',
+            ],
           };
 
           function fail(message) {
@@ -167,11 +180,28 @@ jobs:
             fail('package.json name must use the com.deucarian.* Unity package namespace.');
           }
 
-          if (!pkg.unity) {
-            fail('package.json must declare a minimum Unity version.');
+          if (pkg.private === true) {
+            fail('package.json is marked private and cannot be published to npmjs.');
+          }
+
+          for (const field of ['displayName', 'description', 'unity']) {
+            if (!pkg[field] || String(pkg[field]).trim() === '') {
+              fail(`package.json must declare ${field}.`);
+            }
+          }
+
+          if (!pkg.repository) {
+            console.log('::warning::package.json has no repository field. npm provenance is still requested, but package metadata will not link a repository unless one is added.');
           }
 
           const dependencies = pkg.dependencies || {};
+          if (pkg.name === 'com.deucarian.bootstrap') {
+            const deucarianDeps = Object.keys(dependencies).filter((name) => name.startsWith('com.deucarian.'));
+            if (deucarianDeps.length > 0) {
+              fail(`Bootstrap must stay self-contained; remove Deucarian dependencies: ${deucarianDeps.join(', ')}.`);
+            }
+          }
+
           for (const dependencyName of requiredDeps[pkg.name] || []) {
             if (!Object.prototype.hasOwnProperty.call(dependencies, dependencyName)) {
               fail(`${pkg.name} must declare dependency ${dependencyName} before publishing.`);
@@ -286,4 +316,4 @@ jobs:
             exit 1
           fi
 
-          npm publish --tag dev --registry="${NPM_REGISTRY_URL}"
+          npm publish --provenance --access public --tag dev --registry="${NPM_REGISTRY_URL}"
