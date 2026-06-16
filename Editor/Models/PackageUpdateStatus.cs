@@ -126,6 +126,23 @@ namespace Deucarian.PackageInstaller.Editor
             string installedRevision,
             string latestRevision)
         {
+            return UpToDate(
+                packageDefinition,
+                channel,
+                selectedUrl,
+                installedRevision,
+                latestRevision,
+                "Installed revision matches the selected channel.");
+        }
+
+        public static PackageUpdateStatus UpToDate(
+            PackageDefinition packageDefinition,
+            PackageChannel channel,
+            string selectedUrl,
+            string installedRevision,
+            string latestRevision,
+            string message)
+        {
             return Create(
                 PackageUpdateStatusKind.UpToDate,
                 packageDefinition,
@@ -133,7 +150,7 @@ namespace Deucarian.PackageInstaller.Editor
                 selectedUrl,
                 installedRevision,
                 latestRevision,
-                "Installed revision matches the selected channel.");
+                message);
         }
 
         public static PackageUpdateStatus UpdateAvailable(
@@ -143,6 +160,23 @@ namespace Deucarian.PackageInstaller.Editor
             string installedRevision,
             string latestRevision)
         {
+            return UpdateAvailable(
+                packageDefinition,
+                channel,
+                selectedUrl,
+                installedRevision,
+                latestRevision,
+                "Installed revision differs from the selected channel.");
+        }
+
+        public static PackageUpdateStatus UpdateAvailable(
+            PackageDefinition packageDefinition,
+            PackageChannel channel,
+            string selectedUrl,
+            string installedRevision,
+            string latestRevision,
+            string message)
+        {
             return Create(
                 PackageUpdateStatusKind.UpdateAvailable,
                 packageDefinition,
@@ -150,7 +184,7 @@ namespace Deucarian.PackageInstaller.Editor
                 selectedUrl,
                 installedRevision,
                 latestRevision,
-                "Installed revision differs from the selected channel.");
+                message);
         }
 
         public static PackageUpdateStatus CannotDetermine(

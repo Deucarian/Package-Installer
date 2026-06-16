@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.Net;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -12,12 +13,144 @@ using PackageManagerPackageInfo = UnityEditor.PackageManager.PackageInfo;
 
 namespace Deucarian.PackageInstaller.Editor
 {
+    internal enum PackageInstallSourceType
+    {
+        Unknown,
+        Git,
+        Registry,
+        Local,
+        Embedded
+    }
+
+    internal static class PackageInstallSourceUtility
+    {
+        public static PackageInstallSourceType Detect(
+            string packageSourceName,
+            string packageManagerPackageId,
+            string installedPackageReference,
+            string resolvedPath)
+        {
+            string sourceName = (packageSourceName ?? string.Empty).Trim();
+
+            if (string.Equals(sourceName, "Git", StringComparison.OrdinalIgnoreCase))
+            {
+                return PackageInstallSourceType.Git;
+            }
+
+            if (string.Equals(sourceName, "Registry", StringComparison.OrdinalIgnoreCase))
+            {
+                return PackageInstallSourceType.Registry;
+            }
+
+            if (string.Equals(sourceName, "Embedded", StringComparison.OrdinalIgnoreCase))
+            {
+                return PackageInstallSourceType.Embedded;
+            }
+
+            if (string.Equals(sourceName, "Local", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(sourceName, "LocalTarball", StringComparison.OrdinalIgnoreCase))
+            {
+                return PackageInstallSourceType.Local;
+            }
+
+            if (LooksLikeGitPackageReference(packageManagerPackageId) ||
+                LooksLikeGitPackageReference(installedPackageReference))
+            {
+                return PackageInstallSourceType.Git;
+            }
+
+            if (TryExtractRegistryVersion(packageManagerPackageId, string.Empty, out _) ||
+                TryExtractRegistryVersion(installedPackageReference, string.Empty, out _))
+            {
+                return PackageInstallSourceType.Registry;
+            }
+
+            if (!string.IsNullOrWhiteSpace(resolvedPath) &&
+                (resolvedPath.IndexOf("/Packages/", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 resolvedPath.IndexOf("\\Packages\\", StringComparison.OrdinalIgnoreCase) >= 0))
+            {
+                return PackageInstallSourceType.Embedded;
+            }
+
+            return PackageInstallSourceType.Unknown;
+        }
+
+        public static bool LooksLikeGitPackageReference(string packageReference)
+        {
+            if (string.IsNullOrWhiteSpace(packageReference))
+            {
+                return false;
+            }
+
+            string value = packageReference.Trim();
+            return value.StartsWith("git+", StringComparison.OrdinalIgnoreCase) ||
+                   value.StartsWith("git@", StringComparison.OrdinalIgnoreCase) ||
+                   value.StartsWith("ssh://", StringComparison.OrdinalIgnoreCase) ||
+                   value.IndexOf(".git", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        public static bool TryExtractRegistryVersion(
+            string packageReference,
+            string packageId,
+            out string version)
+        {
+            version = string.Empty;
+
+            if (string.IsNullOrWhiteSpace(packageReference))
+            {
+                return false;
+            }
+
+            string value = packageReference.Trim();
+
+            if (!string.IsNullOrWhiteSpace(packageId))
+            {
+                string prefix = packageId.Trim() + "@";
+                if (value.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    value = value.Substring(prefix.Length).Trim();
+                }
+            }
+            else
+            {
+                int atIndex = value.LastIndexOf('@');
+                if (atIndex >= 0 && atIndex < value.Length - 1)
+                {
+                    value = value.Substring(atIndex + 1).Trim();
+                }
+            }
+
+            if (!LooksLikeStableOrPrereleaseVersion(value))
+            {
+                return false;
+            }
+
+            version = value;
+            return true;
+        }
+
+        public static bool LooksLikeStableOrPrereleaseVersion(string value)
+        {
+            return !string.IsNullOrWhiteSpace(value) &&
+                   Regex.IsMatch(
+                       value.Trim(),
+                       @"^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$");
+        }
+    }
+
     internal sealed class PackageUpdateCheckService : IDisposable
     {
         private const int GitTimeoutMilliseconds = 15000;
+        private const int NpmTimeoutMilliseconds = 15000;
+        private const string NpmRegistryUrl = "https://registry.npmjs.org/";
 
         private static readonly Regex ShaRegex =
             new Regex("(?<![0-9a-fA-F])([0-9a-fA-F]{40})(?![0-9a-fA-F])", RegexOptions.Compiled);
+
+        private static readonly Regex NpmLatestDistTagRegex =
+            new Regex(
+                "\"dist-tags\"\\s*:\\s*\\{.*?\"latest\"\\s*:\\s*\"(?<version>[^\"]+)\"",
+                RegexOptions.Compiled | RegexOptions.Singleline);
 
         private readonly PackageDetectionService _packageDetectionService;
         private static readonly Dictionary<string, PackageUpdateStatus> Statuses =
@@ -29,6 +162,7 @@ namespace Deucarian.PackageInstaller.Editor
         private static IReadOnlyList<UpdateCheckItem> ActiveCheckItems = Array.Empty<UpdateCheckItem>();
         private static string LastFailureMessageValue = string.Empty;
         private static event Action SharedStateChanged;
+        internal static Func<string, RegistryLatestVersionResult> RegistryLatestVersionResolverForTests;
 
         public PackageUpdateCheckService(PackageDetectionService packageDetectionService)
         {
@@ -89,6 +223,12 @@ namespace Deucarian.PackageInstaller.Editor
                 _packageDetectionService.TryGetInstalledPackageReference(
                     packageDefinition.PackageId,
                     out string installedPackageReference);
+                _packageDetectionService.TryGetInstalledPackageSourceType(
+                    packageDefinition.PackageId,
+                    out PackageInstallSourceType sourceType);
+                _packageDetectionService.TryGetInstalledPackageVersion(
+                    packageDefinition.PackageId,
+                    out string installedVersion);
 
                 checkItems.Add(new UpdateCheckItem(
                     packageDefinition,
@@ -97,6 +237,8 @@ namespace Deucarian.PackageInstaller.Editor
                     packageInfo != null ? packageInfo.packageId : string.Empty,
                     packageInfo != null ? packageInfo.resolvedPath : string.Empty,
                     installedPackageReference,
+                    sourceType,
+                    installedVersion,
                     _packageLockPaths));
             }
 
@@ -104,7 +246,6 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (checkItems.Count == 0)
             {
-                PackageInstallerLog.UpdateChecks.Info("No installed registry packages found for update checking.");
                 RecordCheckCompleted(Array.Empty<PackageUpdateStatus>());
                 return;
             }
@@ -218,6 +359,31 @@ namespace Deucarian.PackageInstaller.Editor
                 packageManagerPackageId,
                 resolvedPath,
                 installedPackageReference,
+                PackageInstallSourceType.Git,
+                string.Empty,
+                packageLockPaths));
+        }
+
+        internal static PackageUpdateStatus CheckItemForTests(
+            PackageDefinition packageDefinition,
+            PackageChannel channel,
+            string selectedUrl,
+            string packageManagerPackageId,
+            string resolvedPath,
+            string installedPackageReference,
+            PackageInstallSourceType sourceType,
+            string installedVersion,
+            IReadOnlyList<string> packageLockPaths)
+        {
+            return CheckItem(new UpdateCheckItem(
+                packageDefinition,
+                channel,
+                selectedUrl,
+                packageManagerPackageId,
+                resolvedPath,
+                installedPackageReference,
+                sourceType,
+                installedVersion,
                 packageLockPaths));
         }
 
@@ -225,6 +391,30 @@ namespace Deucarian.PackageInstaller.Editor
         {
             try
             {
+                PackageInstallSourceType sourceType = item.SourceType == PackageInstallSourceType.Unknown
+                    ? PackageInstallSourceUtility.Detect(
+                        string.Empty,
+                        item.PackageManagerPackageId,
+                        item.InstalledPackageReference,
+                        item.ResolvedPath)
+                    : item.SourceType;
+
+                if (sourceType == PackageInstallSourceType.Registry)
+                {
+                    return CheckRegistryItem(item);
+                }
+
+                if (sourceType == PackageInstallSourceType.Local ||
+                    sourceType == PackageInstallSourceType.Embedded)
+                {
+                    return PackageUpdateStatus.CannotDetermine(
+                        item.PackageDefinition,
+                        item.Channel,
+                        item.SelectedUrl,
+                        item.InstalledVersion,
+                        "Update checks are not available for " + sourceType.ToString().ToLowerInvariant() + " packages.");
+                }
+
                 if (string.IsNullOrWhiteSpace(item.SelectedUrl))
                 {
                     return PackageUpdateStatus.Failed(
@@ -293,8 +483,183 @@ namespace Deucarian.PackageInstaller.Editor
                     item.Channel,
                     item.SelectedUrl,
                     string.Empty,
-                    "Update check failed: " + exception.Message);
+                        "Update check failed: " + exception.Message);
             }
+        }
+
+        private static PackageUpdateStatus CheckRegistryItem(UpdateCheckItem item)
+        {
+            if (!TryGetInstalledRegistryVersion(item, out string installedVersion))
+            {
+                return PackageUpdateStatus.CannotDetermine(
+                    item.PackageDefinition,
+                    item.Channel,
+                    item.SelectedUrl,
+                    string.Empty,
+                    "The package is installed from a registry, but Unity did not expose an installed version.");
+            }
+
+            RegistryLatestVersionResult latestVersionResult = ResolveLatestRegistryVersion(
+                item.PackageDefinition.PackageId);
+
+            if (!latestVersionResult.Success)
+            {
+                return PackageUpdateStatus.CannotDetermine(
+                    item.PackageDefinition,
+                    item.Channel,
+                    item.SelectedUrl,
+                    installedVersion,
+                    latestVersionResult.Message);
+            }
+
+            if (!TryCompareSemanticVersions(
+                    installedVersion,
+                    latestVersionResult.Version,
+                    out int comparison,
+                    out string compareMessage))
+            {
+                return PackageUpdateStatus.Failed(
+                    item.PackageDefinition,
+                    item.Channel,
+                    item.SelectedUrl,
+                    installedVersion,
+                    compareMessage);
+            }
+
+            if (comparison >= 0)
+            {
+                return PackageUpdateStatus.UpToDate(
+                    item.PackageDefinition,
+                    item.Channel,
+                    item.SelectedUrl,
+                    installedVersion,
+                    latestVersionResult.Version,
+                    "Installed registry version is up to date.");
+            }
+
+            return PackageUpdateStatus.UpdateAvailable(
+                item.PackageDefinition,
+                item.Channel,
+                item.SelectedUrl,
+                installedVersion,
+                latestVersionResult.Version,
+                "Installed registry version is older than the latest npmjs stable version.");
+        }
+
+        private static bool TryGetInstalledRegistryVersion(UpdateCheckItem item, out string installedVersion)
+        {
+            installedVersion = string.Empty;
+
+            if (item == null)
+            {
+                return false;
+            }
+
+            if (PackageInstallSourceUtility.LooksLikeStableOrPrereleaseVersion(item.InstalledVersion))
+            {
+                installedVersion = item.InstalledVersion.Trim();
+                return true;
+            }
+
+            string packageId = item.PackageDefinition != null
+                ? item.PackageDefinition.PackageId
+                : string.Empty;
+
+            return PackageInstallSourceUtility.TryExtractRegistryVersion(
+                       item.PackageManagerPackageId,
+                       packageId,
+                       out installedVersion) ||
+                   PackageInstallSourceUtility.TryExtractRegistryVersion(
+                       item.InstalledPackageReference,
+                       packageId,
+                       out installedVersion);
+        }
+
+        private static RegistryLatestVersionResult ResolveLatestRegistryVersion(string packageId)
+        {
+            Func<string, RegistryLatestVersionResult> resolver = RegistryLatestVersionResolverForTests;
+            return resolver != null ? resolver(packageId) : FetchLatestRegistryVersion(packageId);
+        }
+
+        private static RegistryLatestVersionResult FetchLatestRegistryVersion(string packageId)
+        {
+            if (string.IsNullOrWhiteSpace(packageId))
+            {
+                return RegistryLatestVersionResult.Fail("Cannot determine latest registry version without a package id.");
+            }
+
+            try
+            {
+                string url = NpmRegistryUrl + Uri.EscapeDataString(packageId.Trim());
+                HttpWebRequest request = (HttpWebRequest)WebRequest.Create(url);
+                request.Method = "GET";
+                request.Timeout = NpmTimeoutMilliseconds;
+                request.ReadWriteTimeout = NpmTimeoutMilliseconds;
+
+                using (WebResponse response = request.GetResponse())
+                using (Stream responseStream = response.GetResponseStream())
+                using (StreamReader reader = new StreamReader(responseStream))
+                {
+                    string json = reader.ReadToEnd();
+
+                    if (TryReadNpmLatestVersion(json, out string latestVersion))
+                    {
+                        return RegistryLatestVersionResult.Ok(latestVersion);
+                    }
+
+                    return RegistryLatestVersionResult.Fail(
+                        "npmjs registry metadata did not include a stable latest dist-tag.");
+                }
+            }
+            catch (Exception exception)
+            {
+                return RegistryLatestVersionResult.Fail(
+                    "Could not fetch latest npmjs version: " + exception.GetBaseException().Message);
+            }
+        }
+
+        internal static bool TryReadNpmLatestVersion(string json, out string latestVersion)
+        {
+            latestVersion = string.Empty;
+
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                return false;
+            }
+
+            Match match = NpmLatestDistTagRegex.Match(json);
+            if (!match.Success)
+            {
+                return false;
+            }
+
+            latestVersion = match.Groups["version"].Value.Trim();
+            return PackageInstallSourceUtility.LooksLikeStableOrPrereleaseVersion(latestVersion);
+        }
+
+        internal static bool TryCompareSemanticVersions(
+            string installedVersion,
+            string latestVersion,
+            out int comparison,
+            out string message)
+        {
+            comparison = 0;
+            message = string.Empty;
+
+            if (!SemanticVersion.TryParse(installedVersion, out SemanticVersion installed))
+            {
+                message = "Installed registry version is not valid SemVer: " + (installedVersion ?? string.Empty) + ".";
+                return false;
+            }
+
+            if (!SemanticVersion.TryParse(latestVersion, out SemanticVersion latest))
+            {
+                message = "Latest registry version is not valid SemVer: " + (latestVersion ?? string.Empty) + ".";
+                return false;
+            }
+
+            comparison = installed.CompareTo(latest);
+            return true;
         }
 
         private static void UpdateShared()
@@ -689,28 +1054,41 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            LogType logType = GetLogType(status);
-            string message;
+            if (!TryCreateLogMessage(status, out LogType logType, out string message))
+            {
+                return;
+            }
+
+            LogMessage(logType, message);
+        }
+
+        internal static bool TryCreateLogMessage(
+            PackageUpdateStatus status,
+            out LogType logType,
+            out string message)
+        {
+            logType = GetLogType(status);
+            message = string.Empty;
+
+            if (status == null)
+            {
+                return false;
+            }
 
             if (status.IsUpdateAvailable)
             {
                 message = "Update available for " + status.DisplayName + ": " +
                           status.ShortInstalledRevision + " -> " + status.ShortLatestRevision + ".";
-            }
-            else if (status.Kind == PackageUpdateStatusKind.Failed)
-            {
-                message = "Update check failed for " + status.DisplayName + ": " + status.Message;
-            }
-            else if (status.Kind == PackageUpdateStatusKind.CannotDetermine)
-            {
-                message = "Update check failed for " + status.DisplayName + ": " + status.Label + ". " + status.Message;
-            }
-            else
-            {
-                message = "Update check for " + status.DisplayName + ": " + status.Label + ".";
+                return true;
             }
 
-            LogMessage(logType, message);
+            if (status.Kind == PackageUpdateStatusKind.Failed)
+            {
+                message = "Update check failed for " + status.DisplayName + ": " + status.Message;
+                return true;
+            }
+
+            return false;
         }
 
         internal static LogType GetLogType(PackageUpdateStatus status)
@@ -723,7 +1101,6 @@ namespace Deucarian.PackageInstaller.Editor
             switch (status.Kind)
             {
                 case PackageUpdateStatusKind.Failed:
-                case PackageUpdateStatusKind.CannotDetermine:
                     return LogType.Error;
                 default:
                     return LogType.Log;
@@ -771,6 +1148,126 @@ namespace Deucarian.PackageInstaller.Editor
                    failures[0].DisplayName + ": " + failures[0].Message;
         }
 
+        internal sealed class RegistryLatestVersionResult
+        {
+            private RegistryLatestVersionResult(bool success, string version, string message)
+            {
+                Success = success;
+                Version = version ?? string.Empty;
+                Message = message ?? string.Empty;
+            }
+
+            public bool Success { get; }
+
+            public string Version { get; }
+
+            public string Message { get; }
+
+            public static RegistryLatestVersionResult Ok(string version)
+            {
+                return new RegistryLatestVersionResult(true, version, string.Empty);
+            }
+
+            public static RegistryLatestVersionResult Fail(string message)
+            {
+                return new RegistryLatestVersionResult(false, string.Empty, message);
+            }
+        }
+
+        private struct SemanticVersion : IComparable<SemanticVersion>
+        {
+            private readonly int _major;
+            private readonly int _minor;
+            private readonly int _patch;
+            private readonly string _preRelease;
+
+            private SemanticVersion(int major, int minor, int patch, string preRelease)
+            {
+                _major = major;
+                _minor = minor;
+                _patch = patch;
+                _preRelease = preRelease ?? string.Empty;
+            }
+
+            public static bool TryParse(string value, out SemanticVersion version)
+            {
+                version = default(SemanticVersion);
+
+                if (string.IsNullOrWhiteSpace(value))
+                {
+                    return false;
+                }
+
+                string normalized = value.Trim();
+                int buildIndex = normalized.IndexOf('+');
+                if (buildIndex >= 0)
+                {
+                    normalized = normalized.Substring(0, buildIndex);
+                }
+
+                string preRelease = string.Empty;
+                int preReleaseIndex = normalized.IndexOf('-');
+                if (preReleaseIndex >= 0)
+                {
+                    preRelease = normalized.Substring(preReleaseIndex + 1);
+                    normalized = normalized.Substring(0, preReleaseIndex);
+                }
+
+                string[] parts = normalized.Split('.');
+                if (parts.Length != 3 ||
+                    !int.TryParse(parts[0], out int major) ||
+                    !int.TryParse(parts[1], out int minor) ||
+                    !int.TryParse(parts[2], out int patch))
+                {
+                    return false;
+                }
+
+                version = new SemanticVersion(major, minor, patch, preRelease);
+                return true;
+            }
+
+            public int CompareTo(SemanticVersion other)
+            {
+                int majorComparison = _major.CompareTo(other._major);
+                if (majorComparison != 0)
+                {
+                    return majorComparison;
+                }
+
+                int minorComparison = _minor.CompareTo(other._minor);
+                if (minorComparison != 0)
+                {
+                    return minorComparison;
+                }
+
+                int patchComparison = _patch.CompareTo(other._patch);
+                if (patchComparison != 0)
+                {
+                    return patchComparison;
+                }
+
+                bool hasPreRelease = !string.IsNullOrWhiteSpace(_preRelease);
+                bool otherHasPreRelease = !string.IsNullOrWhiteSpace(other._preRelease);
+
+                if (!hasPreRelease && !otherHasPreRelease)
+                {
+                    return 0;
+                }
+
+                if (!hasPreRelease)
+                {
+                    return 1;
+                }
+
+                if (!otherHasPreRelease)
+                {
+                    return -1;
+                }
+
+                return string.Compare(_preRelease, other._preRelease, StringComparison.OrdinalIgnoreCase);
+            }
+        }
+
         private sealed class UpdateCheckItem
         {
             public UpdateCheckItem(
@@ -780,6 +1277,8 @@ namespace Deucarian.PackageInstaller.Editor
                 string packageManagerPackageId,
                 string resolvedPath,
                 string installedPackageReference,
+                PackageInstallSourceType sourceType,
+                string installedVersion,
                 IReadOnlyList<string> packageLockPaths)
             {
                 PackageDefinition = packageDefinition;
@@ -788,6 +1287,8 @@ namespace Deucarian.PackageInstaller.Editor
                 PackageManagerPackageId = packageManagerPackageId ?? string.Empty;
                 ResolvedPath = resolvedPath ?? string.Empty;
                 InstalledPackageReference = installedPackageReference ?? string.Empty;
+                SourceType = sourceType;
+                InstalledVersion = installedVersion ?? string.Empty;
                 PackageLockPaths = packageLockPaths ?? Array.Empty<string>();
             }
 
@@ -802,6 +1303,10 @@ namespace Deucarian.PackageInstaller.Editor
             public string ResolvedPath { get; }
 
             public string InstalledPackageReference { get; }
+
+            public PackageInstallSourceType SourceType { get; }
+
+            public string InstalledVersion { get; }
 
             public IReadOnlyList<string> PackageLockPaths { get; }
         }

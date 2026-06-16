@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.14 - 2026-06-16
+
+- Made update checks source-aware so npm/scoped-registry packages compare installed package versions against npmjs `latest` instead of requiring Git revisions.
+- Kept Git-installed packages on the existing revision comparison path while treating missing Git revisions as neutral "Cannot determine update" states.
+- Reduced startup update-check noise when package detection or registry loading has not produced installed Deucarian packages yet.
+
 ## 1.1.13 - 2026-06-15
 
 - Updated the Deucarian Logging dependency to `0.2.6` for npmjs scoped-registry publishing.

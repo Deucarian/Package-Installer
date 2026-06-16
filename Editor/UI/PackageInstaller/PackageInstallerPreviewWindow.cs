@@ -1335,6 +1335,7 @@ namespace Deucarian.PackageInstaller.Editor
             _detectionService = new PackageDetectionService();
             _updateCheckService = new PackageUpdateCheckService(_detectionService);
             _detectionService.RefreshCompleted += HandleDetectionRefreshCompleted;
+            _updateCheckService.StateChanged += DisposeWhenUpdateCheckCompletes;
             _detectionService.Refresh();
         }
 
@@ -1346,8 +1347,37 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
+            if (PackageRegistryProvider.IsRemoteRefreshing)
+            {
+                PackageRegistryProvider.RegistryChanged -= HandleRegistryChanged;
+                PackageRegistryProvider.RegistryChanged += HandleRegistryChanged;
+                return;
+            }
+
+            StartUpdateCheck();
+        }
+
+        private static void HandleRegistryChanged()
+        {
+            if (_detectionService == null || _updateCheckService == null)
+            {
+                DisposeServices();
+                return;
+            }
+
+            if (PackageRegistryProvider.IsRemoteRefreshing)
+            {
+                return;
+            }
+
+            StartUpdateCheck();
+        }
+
+        private static void StartUpdateCheck()
+        {
+            PackageRegistryProvider.RegistryChanged -= HandleRegistryChanged;
+
             _detectionService.RefreshCompleted -= HandleDetectionRefreshCompleted;
-            _updateCheckService.StateChanged += DisposeWhenUpdateCheckCompletes;
             _updateCheckService.CheckForUpdates(PackageRegistryProvider.All, _ => PackageChannel.Stable);
             DisposeWhenUpdateCheckCompletes();
         }
@@ -1377,6 +1407,8 @@ namespace Deucarian.PackageInstaller.Editor
                 _detectionService.Dispose();
                 _detectionService = null;
             }
+
+            PackageRegistryProvider.RegistryChanged -= HandleRegistryChanged;
         }
     }
 }

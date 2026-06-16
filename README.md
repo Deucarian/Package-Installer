@@ -147,9 +147,9 @@ Run the package's EditMode tests in Unity. The registry tests validate bundled f
 
 ## Update Checks
 
-`Check for Updates` compares installed registry packages against the selected Stable or Development channel. Git packages are compared by installed revision and the latest revision returned by `git ls-remote`.
+`Check for Updates` is source-aware. Git-installed packages are compared by installed revision and the latest revision returned by `git ls-remote`. Scoped-registry/npm-installed packages are compared by installed package version and the npmjs `latest` dist-tag.
 
-Unknown installed revisions are shown as "Cannot determine update" while the package remains installed. Missing Git, network failures, local/file packages, and non-Git UPM identifiers are reported as update-check messages instead of blocking the installer.
+Unknown installed revisions or versions are shown as "Cannot determine update" while the package remains installed. Missing Git metadata, unavailable registry metadata, local/file packages, and embedded packages stay neutral instead of marking the row as failed.
 
 The installer can also check for updates automatically when Unity starts and when the Package Installer window opens. Startup checks run at most once per editor session, and window-open checks are throttled so reopening the window does not repeatedly hit remotes. These settings are stored in `EditorPrefs` and can be toggled from the window header.
 
@@ -231,7 +231,7 @@ Keeping the installer editor-only ensures:
 
 ## Versioning
 
-Current package version: `1.1.13`.
+Current package version: `1.1.14`.
 
 Branch strategy:
 
