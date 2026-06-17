@@ -59,25 +59,30 @@
     overflow: hidden;
 }
 
-.dpi-graph-operation {
+.dpi-operation-drawer {
     flex-shrink: 0;
-    height: 96px;
-    min-height: 96px;
-    max-height: 96px;
+    height: 0;
+    min-height: 0;
+    max-height: 0;
     margin-top: 0;
     overflow: hidden;
 }
 
-.dpi-graph-operation--expanded {
-    height: 172px;
-    min-height: 172px;
-    max-height: 236px;
+.dpi-operation-drawer--expanded {
+    margin-bottom: 6px;
 }
 
-.dpi-graph-operation--collapsed {
-    height: 96px;
-    min-height: 96px;
-    max-height: 96px;
+.dpi-operation-drawer--collapsed {
+    margin-bottom: 0;
+}
+
+.dpi-operation-footer {
+    flex-shrink: 0;
+    height: 40px;
+    min-height: 40px;
+    max-height: 40px;
+    margin-top: 0;
+    overflow: hidden;
 }
 
 .dpi-ecosystem-graph {

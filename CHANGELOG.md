@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.17 - 2026-06-17
+
+- Anchored the Package Installer operation footer as the final fixed row in the window layout.
+- Moved Show Details / Hide Details and the package version label into the persistent footer.
+- Split the operation details drawer into a compact row above the footer so it expands upward and consumes main content height.
+
 ## 1.1.16 - 2026-06-17
 
 - Renamed Package Installer registry, graph, and UI terminology from Bridge packages to Integration packages.

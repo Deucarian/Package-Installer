@@ -12,18 +12,18 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed class PackageInstallerWindow : EditorWindow
     {
         private const string WindowTitle = "Package Installer";
-        private const string PackageVersion = "1.1.16";
+        private const string PackageVersion = "1.1.17";
         private const float MinWindowWidth = 850f;
         private const float MinWindowHeight = 650f;
         private const float SidebarWidth = 340f;
         private const float SidebarRowMinHeight = 94f;
         private const float SidebarRowMaxHeight = 150f;
         private const float DetailLabelWidth = 118f;
-        private const float OperationDrawerMinHeight = 28f;
+        private const float OperationDrawerMinHeight = 24f;
         private const float OperationDrawerMaxHeight = 86f;
-        private const float GraphOperationCollapsedHeight = 96f;
-        private const float GraphOperationExpandedBaseHeight = 144f;
-        private const float GraphOperationExpandedMaxHeight = 236f;
+        private const float OperationDrawerExpandedBaseHeight = 54f;
+        private const float OperationDrawerExpandedMaxHeight = 150f;
+        private const float OperationFooterHeight = 40f;
         private const string ChannelPreferencePrefix = "Deucarian.PackageInstaller.SelectedChannel.";
         private const string AdvancedFoldoutPreferencePrefix = "Deucarian.PackageInstaller.AdvancedFoldout.";
         private const string CategoryFoldoutPreferencePrefix = "Deucarian.PackageInstaller.CategoryFoldout.";
@@ -125,7 +125,8 @@ namespace Deucarian.PackageInstaller.Editor
         private VisualElement _graphContentRow;
         private IMGUIContainer _listViewContainer;
         private IMGUIContainer _graphDetailsContainer;
-        private IMGUIContainer _graphOperationContainer;
+        private IMGUIContainer _operationDrawerContainer;
+        private IMGUIContainer _operationFooterContainer;
         private PackageGraphView _graphView;
 
         private bool _stylesInitialized;
@@ -155,6 +156,7 @@ namespace Deucarian.PackageInstaller.Editor
         private GUIStyle _miniLabelStyle;
         private GUIStyle _mutedMiniLabelStyle;
         private GUIStyle _operationLineStyle;
+        private GUIStyle _footerVersionStyle;
         private GUIStyle _rowTitleStyle;
         private GUIStyle _rowSubLabelStyle;
         private GUIStyle _rowStatusStyle;
@@ -299,10 +301,15 @@ namespace Deucarian.PackageInstaller.Editor
             _graphDetailsContainer.AddToClassList("dpi-graph-details");
             _graphContentRow.Add(_graphDetailsContainer);
 
-            _graphOperationContainer = new IMGUIContainer(DrawGraphOperationGui);
-            _graphOperationContainer.AddToClassList("dpi-graph-operation");
-            _graphModeContainer.Add(_graphOperationContainer);
             content.Add(_graphModeContainer);
+
+            _operationDrawerContainer = new IMGUIContainer(DrawOperationDrawerGui);
+            _operationDrawerContainer.AddToClassList("dpi-operation-drawer");
+            content.Add(_operationDrawerContainer);
+
+            _operationFooterContainer = new IMGUIContainer(DrawOperationFooterGui);
+            _operationFooterContainer.AddToClassList("dpi-operation-footer");
+            content.Add(_operationFooterContainer);
 
             SetViewMode(_viewMode);
             RefreshGraphView();
@@ -386,15 +393,23 @@ namespace Deucarian.PackageInstaller.Editor
                 _graphModeContainer.style.display = graphMode ? DisplayStyle.Flex : DisplayStyle.None;
             }
 
-            if (_graphOperationContainer != null)
+            if (_operationDrawerContainer != null)
             {
-                _graphOperationContainer.style.display = graphMode ? DisplayStyle.Flex : DisplayStyle.None;
-                _graphOperationContainer.EnableInClassList("dpi-graph-operation--expanded", _operationDetailsExpanded);
-                _graphOperationContainer.EnableInClassList("dpi-graph-operation--collapsed", !_operationDetailsExpanded);
-                float graphOperationHeight = GetGraphOperationHeight();
-                _graphOperationContainer.style.height = graphOperationHeight;
-                _graphOperationContainer.style.minHeight = graphOperationHeight;
-                _graphOperationContainer.style.maxHeight = graphOperationHeight;
+                _operationDrawerContainer.style.display = DisplayStyle.Flex;
+                _operationDrawerContainer.EnableInClassList("dpi-operation-drawer--expanded", _operationDetailsExpanded);
+                _operationDrawerContainer.EnableInClassList("dpi-operation-drawer--collapsed", !_operationDetailsExpanded);
+                float operationDrawerHeight = GetOperationDrawerContainerHeight();
+                _operationDrawerContainer.style.height = operationDrawerHeight;
+                _operationDrawerContainer.style.minHeight = operationDrawerHeight;
+                _operationDrawerContainer.style.maxHeight = operationDrawerHeight;
+            }
+
+            if (_operationFooterContainer != null)
+            {
+                _operationFooterContainer.style.display = DisplayStyle.Flex;
+                _operationFooterContainer.style.height = OperationFooterHeight;
+                _operationFooterContainer.style.minHeight = OperationFooterHeight;
+                _operationFooterContainer.style.maxHeight = OperationFooterHeight;
             }
 
             if (_listViewButton != null)
@@ -458,7 +473,8 @@ namespace Deucarian.PackageInstaller.Editor
                 .Build(PackageRegistryProvider.All);
             _graphView.SetGraph(graph, _selectedPackageId, _graphFocusedPackageId, !IsAnyOperationBusy());
             _graphDetailsContainer?.MarkDirtyRepaint();
-            _graphOperationContainer?.MarkDirtyRepaint();
+            _operationDrawerContainer?.MarkDirtyRepaint();
+            _operationFooterContainer?.MarkDirtyRepaint();
             UpdateViewVisibility();
         }
 
@@ -544,16 +560,22 @@ namespace Deucarian.PackageInstaller.Editor
             DrawDetailsPane();
         }
 
-        private void DrawGraphOperationGui()
+        private void DrawOperationDrawerGui()
         {
             EnsureStyles();
-            DrawGlobalOperationArea();
-            DrawGraphFooterVersion();
+
+            if (!_operationDetailsExpanded)
+            {
+                return;
+            }
+
+            DrawOperationDetailsDrawer();
         }
 
-        private void DrawGraphFooterVersion()
+        private void DrawOperationFooterGui()
         {
-            DeucarianEditorChrome.DrawFooterVersion("com.deucarian.package-installer", PackageVersion);
+            EnsureStyles();
+            DrawOperationFooter();
         }
 
         private void DrawListViewGui()
@@ -573,8 +595,6 @@ namespace Deucarian.PackageInstaller.Editor
                     DrawDetailsPane();
                 }
 
-                DrawGlobalOperationArea();
-                DeucarianEditorChrome.DrawFooterVersion("com.deucarian.package-installer", PackageVersion);
             }
         }
 
@@ -636,6 +656,12 @@ namespace Deucarian.PackageInstaller.Editor
             _operationLineStyle.normal.textColor = _textColor;
             _operationLineStyle.clipping = TextClipping.Clip;
             _operationLineStyle.wordWrap = false;
+
+            _footerVersionStyle = new GUIStyle(DeucarianEditorStyles.FooterVersionText);
+            _footerVersionStyle.alignment = TextAnchor.MiddleRight;
+            _footerVersionStyle.margin = new RectOffset(0, 0, 0, 0);
+            _footerVersionStyle.wordWrap = false;
+            _footerVersionStyle.clipping = TextClipping.Clip;
 
             _rowTitleStyle = new GUIStyle(EditorStyles.miniBoldLabel);
             _rowTitleStyle.normal.textColor = _textColor;
@@ -2139,68 +2165,82 @@ namespace Deucarian.PackageInstaller.Editor
                    packageId;
         }
 
-        private void DrawGlobalOperationArea()
+        private void DrawOperationDetailsDrawer()
         {
-            OperationProgressView operation = GetCurrentOperationProgress();
             BeginSurface(
                 DeucarianEditorStyles.SectionBox,
                 _headerPanelBackgroundColor,
                 _panelBorderColor,
                 GUILayout.ExpandWidth(true));
 
-            DrawGlobalOperationBar(operation);
-
-            if (_operationDetailsExpanded)
-            {
-                GUILayout.Space(6f);
-                DrawHorizontalSeparator();
-                GUILayout.Space(6f);
-                DrawOperationSummaryDrawer();
-            }
-
+            DrawOperationSummaryDrawer();
             EditorGUILayout.EndVertical();
         }
 
-        private void DrawGlobalOperationBar(OperationProgressView operation)
+        private void DrawOperationFooter()
         {
-            string stateLabel = GetGlobalOperationStateLabel(operation);
-            VisualStatusKind stateKind = GetGlobalOperationStatusKind(operation);
-            string title = GetOperationBarTitle(operation);
-            string subtitle = GetOperationBarSubtitle(operation);
+            OperationProgressView operation = GetCurrentOperationProgress();
+            BeginSurface(
+                DeucarianEditorStyles.SectionBox,
+                _headerPanelBackgroundColor,
+                _panelBorderColor,
+                GUILayout.ExpandWidth(true),
+                GUILayout.Height(OperationFooterHeight));
 
             using (new EditorGUILayout.HorizontalScope())
             {
-                DrawStatusBadge(stateLabel, stateKind, GUILayout.Width(142f));
-                GUILayout.Space(8f);
-
-                string line = string.IsNullOrWhiteSpace(subtitle) ? title : title + " - " + subtitle;
-                EditorGUILayout.LabelField(
-                    new GUIContent(line, line),
-                    _operationLineStyle,
-                    GUILayout.ExpandWidth(true),
-                    GUILayout.Height(20f));
-
-                if (operation != null)
-                {
-                    GUILayout.Space(8f);
-                    float progress = GetOperationProgress(operation);
-                    Rect progressRect = GUILayoutUtility.GetRect(
-                        150f,
-                        18f,
-                        GUILayout.Width(150f),
-                        GUILayout.Height(18f));
-                    EditorGUI.ProgressBar(progressRect, progress, Mathf.RoundToInt(progress * 100f) + "%");
-                }
+                DrawOperationFooterSummary(operation);
 
                 GUILayout.Space(8f);
 
                 if (GUILayout.Button(
                         _operationDetailsExpanded ? "Hide Details" : "Show Details",
                         _secondaryButtonStyle,
-                        GUILayout.Width(96f)))
+                        GUILayout.Width(96f),
+                        GUILayout.Height(22f)))
                 {
                     SetOperationDetailsExpanded(!_operationDetailsExpanded);
                 }
+
+                GUILayout.Space(12f);
+
+                GUILayout.Label(
+                    GetFooterVersionText(),
+                    _footerVersionStyle,
+                    GUILayout.Width(244f),
+                    GUILayout.Height(22f));
+            }
+
+            EditorGUILayout.EndVertical();
+        }
+
+        private void DrawOperationFooterSummary(OperationProgressView operation)
+        {
+            string stateLabel = GetGlobalOperationStateLabel(operation);
+            VisualStatusKind stateKind = GetGlobalOperationStatusKind(operation);
+            string title = GetOperationBarTitle(operation);
+            string subtitle = GetOperationBarSubtitle(operation);
+
+            DrawStatusBadge(stateLabel, stateKind, GUILayout.Width(142f));
+            GUILayout.Space(8f);
+
+            string line = string.IsNullOrWhiteSpace(subtitle) ? title : title + " - " + subtitle;
+            EditorGUILayout.LabelField(
+                new GUIContent(line, line),
+                _operationLineStyle,
+                GUILayout.ExpandWidth(true),
+                GUILayout.Height(22f));
+
+            if (operation != null)
+            {
+                GUILayout.Space(8f);
+                float progress = GetOperationProgress(operation);
+                Rect progressRect = GUILayoutUtility.GetRect(
+                    120f,
+                    18f,
+                    GUILayout.Width(120f),
+                    GUILayout.Height(18f));
+                EditorGUI.ProgressBar(progressRect, progress, Mathf.RoundToInt(progress * 100f) + "%");
             }
         }
 
@@ -2225,26 +2265,31 @@ namespace Deucarian.PackageInstaller.Editor
             EditorGUILayout.EndScrollView();
         }
 
-        private float GetGraphOperationHeight()
+        private float GetOperationDrawerContainerHeight()
         {
             if (!_operationDetailsExpanded)
             {
-                return GraphOperationCollapsedHeight;
+                return 0f;
             }
 
             return Mathf.Min(
-                GraphOperationExpandedMaxHeight,
-                GraphOperationExpandedBaseHeight + GetOperationDrawerScrollHeight());
+                OperationDrawerExpandedMaxHeight,
+                OperationDrawerExpandedBaseHeight + GetOperationDrawerScrollHeight());
         }
 
         private float GetOperationDrawerScrollHeight()
         {
             const float lineHeight = 18f;
-            const float verticalPadding = 8f;
+            const float verticalPadding = 4f;
             int lineCount = GetOperationDrawerContentLineCount();
             float contentHeight = lineCount * lineHeight + verticalPadding;
 
             return Mathf.Clamp(contentHeight, OperationDrawerMinHeight, OperationDrawerMaxHeight);
+        }
+
+        private static string GetFooterVersionText()
+        {
+            return "com.deucarian.package-installer " + PackageVersion;
         }
 
         private int GetOperationDrawerContentLineCount()
@@ -2523,7 +2568,8 @@ namespace Deucarian.PackageInstaller.Editor
             _operationDetailsExpanded = expanded;
             EditorPrefs.SetBool(GetOperationDrawerPreferenceKey(), expanded);
             UpdateViewVisibility();
-            _graphOperationContainer?.MarkDirtyRepaint();
+            _operationDrawerContainer?.MarkDirtyRepaint();
+            _operationFooterContainer?.MarkDirtyRepaint();
             Repaint();
         }
 
