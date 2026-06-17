@@ -317,6 +317,28 @@
     opacity: 0.62;
 }
 
+.dpi-graph-hub--focus {
+    opacity: 0.52;
+    padding-left: 8px;
+    padding-right: 8px;
+    padding-top: 7px;
+    padding-bottom: 7px;
+}
+
+.dpi-graph-hub--focus .dpi-graph-hub__icon {
+    width: 24px;
+    height: 24px;
+    margin-bottom: 3px;
+}
+
+.dpi-graph-hub--focus .dpi-graph-hub__title {
+    font-size: 11px;
+}
+
+.dpi-graph-hub--focus .dpi-graph-hub__subtitle {
+    display: none;
+}
+
 .dpi-graph-hub__title {
     color: rgba(229, 239, 242, 0.76);
     -unity-font-style: bold;

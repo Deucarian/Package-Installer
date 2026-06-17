@@ -65,7 +65,7 @@ namespace Deucarian.PackageInstaller.Editor
             toolbar.AddToClassList("dpi-ecosystem-graph__toolbar");
             toolbar.Add(CreateToolbarButton("Fit", () => _viewport.FitToContent(_canvas.GetContentBounds())));
             toolbar.Add(CreateToolbarButton("100%", _viewport.ResetZoom));
-            toolbar.Add(CreateToolbarButton("Center", () => _viewport.CenterOn(_canvas.GetHubCenter())));
+            toolbar.Add(CreateToolbarButton("Center", () => _viewport.CenterOn(_canvas.GetActiveCenter())));
             header.Add(toolbar);
 
             Add(_viewport);
@@ -82,9 +82,19 @@ namespace Deucarian.PackageInstaller.Editor
             string focusedPackageId,
             bool actionsEnabled)
         {
+            string previousLayoutFocusPackageId = _canvas.LayoutFocusPackageId;
             _canvas.SetGraph(graph, selectedPackageId, focusedPackageId, actionsEnabled);
             _viewport.SetContentSize(_canvas.ContentSize.x, _canvas.ContentSize.y);
             _viewport.EnsureInitialFrame(_canvas.GetContentBounds());
+
+            if (!string.Equals(
+                    previousLayoutFocusPackageId,
+                    _canvas.LayoutFocusPackageId,
+                    StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(_canvas.LayoutFocusPackageId))
+            {
+                _viewport.CenterOn(_canvas.GetActiveCenter());
+            }
         }
 
         private static VisualElement CreateLegendItem(
@@ -448,12 +458,23 @@ namespace Deucarian.PackageInstaller.Editor
 
     internal sealed class PackageGraphCanvas : VisualElement
     {
+        private const float LayoutTransitionSeconds = 0.24f;
+        private const float LayoutAnimationFrameMs = 16f;
+
         private readonly Action<PackageDefinition> _packageSelected;
         private readonly Action<PackageDefinition, PackageGraphNodeAction> _packageAction;
         private readonly Action _selectionCleared;
         private readonly PackageGraphLayout _layout = new PackageGraphLayout();
         private readonly HashSet<string> _expandedSuiteIds =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, Rect> _animatedNodeRects =
+            new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, Rect> _transitionStartRects =
+            new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, PackageGraphNodeElement> _nodeElements =
+            new Dictionary<string, PackageGraphNodeElement>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, VisualElement> _suiteRegionElements =
+            new Dictionary<string, VisualElement>(StringComparer.OrdinalIgnoreCase);
         private readonly VisualElement _guideLayer;
         private readonly VisualElement _suiteLayer;
         private readonly PackageGraphEdgeLayer _edgeLayer;
@@ -468,6 +489,11 @@ namespace Deucarian.PackageInstaller.Editor
         private string _selectedPackageId = string.Empty;
         private string _focusedPackageId = string.Empty;
         private string _hoveredPackageId = string.Empty;
+        private string _layoutFocusPackageId = string.Empty;
+        private PackageGraphFocus _currentFocus = PackageGraphFocus.Create(null, string.Empty, null);
+        private IVisualElementScheduledItem _layoutAnimationItem;
+        private double _layoutAnimationStartedAt;
+        private bool _layoutAnimationActive;
         private bool _actionsEnabled;
 
         public PackageGraphCanvas(
@@ -551,12 +577,14 @@ namespace Deucarian.PackageInstaller.Editor
             return bounds;
         }
 
-        public Vector2 GetHubCenter()
+        public Vector2 GetActiveCenter()
         {
             return _layoutResult != null
-                ? _layoutResult.HubRect.center
+                ? _layoutResult.ActiveCenter
                 : PackageGraphLayout.GraphCenter;
         }
+
+        public string LayoutFocusPackageId => _layoutFocusPackageId;
 
         public void SetGraph(
             PackageGraphModel graph,
@@ -576,11 +604,18 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void Rebuild()
         {
+            Dictionary<string, Rect> previousRects = CaptureCurrentNodeRects();
             _guideLayer.Clear();
             _suiteLayer.Clear();
             _nodeLayer.Clear();
+            _nodeElements.Clear();
+            _suiteRegionElements.Clear();
 
-            _layoutResult = _layout.Calculate(_graph);
+            _layoutFocusPackageId = GetLayoutFocusPackageId();
+            PackageGraphLayoutMode layoutMode = string.IsNullOrWhiteSpace(_layoutFocusPackageId)
+                ? PackageGraphLayoutMode.Overview
+                : PackageGraphLayoutMode.Focus;
+            _layoutResult = _layout.Calculate(_graph, layoutMode, _layoutFocusPackageId);
             style.width = _layoutResult.CanvasWidth;
             style.height = _layoutResult.CanvasHeight;
             _guideLayer.style.width = _layoutResult.CanvasWidth;
@@ -592,15 +627,17 @@ namespace Deucarian.PackageInstaller.Editor
             _nodeLayer.style.width = _layoutResult.CanvasWidth;
             _nodeLayer.style.height = _layoutResult.CanvasHeight;
 
-            PackageGraphFocus focus = PackageGraphFocus.Create(
+            _currentFocus = PackageGraphFocus.Create(
                 _graph,
                 GetActiveFocusPackageId(),
                 _expandedSuiteIds);
 
             DrawGuides();
-            DrawSuiteRegions(focus);
-            DrawNodes(focus);
-            _edgeLayer.SetGraph(_graph, _layoutResult.NodeRects, _layoutResult.CanvasHeight, focus);
+            StartLayoutTransition(previousRects);
+            DrawSuiteRegions(_currentFocus);
+            DrawNodes(_currentFocus);
+            ApplyAnimatedLayout();
+            _edgeLayer.SetGraph(_graph, _animatedNodeRects, _layoutResult.CanvasHeight, _currentFocus);
         }
 
         private string GetActiveFocusPackageId()
@@ -615,6 +652,125 @@ namespace Deucarian.PackageInstaller.Editor
                    _graph.TryGetNode(_focusedPackageId, out _)
                 ? _focusedPackageId
                 : string.Empty;
+        }
+
+        private string GetLayoutFocusPackageId()
+        {
+            return !string.IsNullOrWhiteSpace(_focusedPackageId) &&
+                   _graph.TryGetNode(_focusedPackageId, out _)
+                ? _focusedPackageId
+                : string.Empty;
+        }
+
+        private Dictionary<string, Rect> CaptureCurrentNodeRects()
+        {
+            if (_animatedNodeRects.Count > 0)
+            {
+                return new Dictionary<string, Rect>(_animatedNodeRects, StringComparer.OrdinalIgnoreCase);
+            }
+
+            return _layoutResult != null
+                ? new Dictionary<string, Rect>(_layoutResult.NodeRects, StringComparer.OrdinalIgnoreCase)
+                : new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        private void StartLayoutTransition(IReadOnlyDictionary<string, Rect> previousRects)
+        {
+            _animatedNodeRects.Clear();
+            _transitionStartRects.Clear();
+            bool shouldAnimate = false;
+
+            foreach (KeyValuePair<string, Rect> target in _layoutResult.NodeRects)
+            {
+                Rect start = previousRects != null && previousRects.TryGetValue(target.Key, out Rect previous)
+                    ? previous
+                    : target.Value;
+                _transitionStartRects[target.Key] = start;
+                _animatedNodeRects[target.Key] = start;
+
+                if (!AreRectsClose(start, target.Value))
+                {
+                    shouldAnimate = true;
+                }
+            }
+
+            if (!shouldAnimate)
+            {
+                _layoutAnimationActive = false;
+                _layoutAnimationItem?.Pause();
+                CopyTargetRectsToAnimatedRects();
+                return;
+            }
+
+            _layoutAnimationStartedAt = EditorApplication.timeSinceStartup;
+            _layoutAnimationActive = true;
+
+            if (_layoutAnimationItem == null)
+            {
+                _layoutAnimationItem = schedule.Execute(UpdateLayoutAnimation).Every((long)LayoutAnimationFrameMs);
+            }
+
+            _layoutAnimationItem.Resume();
+        }
+
+        private void UpdateLayoutAnimation()
+        {
+            if (!_layoutAnimationActive || _layoutResult == null)
+            {
+                return;
+            }
+
+            float elapsed = (float)(EditorApplication.timeSinceStartup - _layoutAnimationStartedAt);
+            float t = Mathf.Clamp01(elapsed / LayoutTransitionSeconds);
+            float eased = SmoothStep(t);
+
+            foreach (KeyValuePair<string, Rect> target in _layoutResult.NodeRects)
+            {
+                Rect start = _transitionStartRects.TryGetValue(target.Key, out Rect startRect)
+                    ? startRect
+                    : target.Value;
+                _animatedNodeRects[target.Key] = LerpRect(start, target.Value, eased);
+            }
+
+            ApplyAnimatedLayout();
+
+            if (t >= 1f)
+            {
+                _layoutAnimationActive = false;
+                _layoutAnimationItem?.Pause();
+                CopyTargetRectsToAnimatedRects();
+                ApplyAnimatedLayout();
+            }
+        }
+
+        private void CopyTargetRectsToAnimatedRects()
+        {
+            _animatedNodeRects.Clear();
+
+            if (_layoutResult == null)
+            {
+                return;
+            }
+
+            foreach (KeyValuePair<string, Rect> target in _layoutResult.NodeRects)
+            {
+                _animatedNodeRects[target.Key] = target.Value;
+            }
+        }
+
+        private void ApplyAnimatedLayout()
+        {
+            foreach (KeyValuePair<string, PackageGraphNodeElement> nodeElement in _nodeElements)
+            {
+                if (_animatedNodeRects.TryGetValue(nodeElement.Key, out Rect rect))
+                {
+                    SetElementRect(nodeElement.Value, rect);
+                }
+            }
+
+            UpdateSuiteRegionRects();
+            _edgeLayer.UpdateNodeRects(_animatedNodeRects);
+            _edgeLayer.MarkDirtyRepaint();
         }
 
         private void DrawGuides()
@@ -637,6 +793,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             VisualElement hub = new VisualElement();
             hub.AddToClassList("dpi-graph-hub");
+            hub.EnableInClassList("dpi-graph-hub--focus", _layoutResult.Mode == PackageGraphLayoutMode.Focus);
             hub.style.left = _layoutResult.HubRect.x;
             hub.style.top = _layoutResult.HubRect.y;
             hub.style.width = _layoutResult.HubRect.width;
@@ -673,13 +830,13 @@ namespace Deucarian.PackageInstaller.Editor
 
                 foreach (string memberPackageId in region.MemberPackageIds)
                 {
-                    if (_layoutResult.NodeRects.TryGetValue(memberPackageId, out Rect memberRect))
+                    if (_animatedNodeRects.TryGetValue(memberPackageId, out Rect memberRect))
                     {
                         memberRects.Add(memberRect);
                     }
                 }
 
-                if (_layoutResult.NodeRects.TryGetValue(region.SuitePackageId, out Rect suiteRect))
+                if (_animatedNodeRects.TryGetValue(region.SuitePackageId, out Rect suiteRect))
                 {
                     memberRects.Add(suiteRect);
                 }
@@ -720,14 +877,68 @@ namespace Deucarian.PackageInstaller.Editor
                 label.AddToClassList("dpi-graph-suite-region__label");
                 suiteRegion.Add(label);
                 _suiteLayer.Add(suiteRegion);
+                _suiteRegionElements[region.SuitePackageId] = suiteRegion;
             }
+        }
+
+        private void UpdateSuiteRegionRects()
+        {
+            foreach (PackageGraphSuiteRegion region in _graph.SuiteRegions)
+            {
+                if (!_suiteRegionElements.TryGetValue(region.SuitePackageId, out VisualElement suiteRegion))
+                {
+                    continue;
+                }
+
+                if (TryGetSuiteRegionBounds(region, out Rect bounds))
+                {
+                    SetElementRect(suiteRegion, bounds);
+                }
+            }
+        }
+
+        private bool TryGetSuiteRegionBounds(PackageGraphSuiteRegion region, out Rect bounds)
+        {
+            bounds = default(Rect);
+            List<Rect> memberRects = new List<Rect>();
+
+            foreach (string memberPackageId in region.MemberPackageIds)
+            {
+                if (_animatedNodeRects.TryGetValue(memberPackageId, out Rect memberRect))
+                {
+                    memberRects.Add(memberRect);
+                }
+            }
+
+            if (_animatedNodeRects.TryGetValue(region.SuitePackageId, out Rect suiteRect))
+            {
+                memberRects.Add(suiteRect);
+            }
+
+            if (memberRects.Count == 0)
+            {
+                return false;
+            }
+
+            bounds = memberRects[0];
+
+            for (int index = 1; index < memberRects.Count; index++)
+            {
+                bounds = Union(bounds, memberRects[index]);
+            }
+
+            bounds.x -= 28f;
+            bounds.y -= 30f;
+            bounds.width += 56f;
+            bounds.height += 60f;
+            return true;
         }
 
         private void DrawNodes(PackageGraphFocus focus)
         {
             foreach (PackageGraphNode node in _graph.Nodes)
             {
-                if (!_layoutResult.NodeRects.TryGetValue(node.PackageId, out Rect rect))
+                if (!_animatedNodeRects.TryGetValue(node.PackageId, out Rect rect))
                 {
                     continue;
                 }
@@ -767,6 +978,7 @@ namespace Deucarian.PackageInstaller.Editor
                 nodeElement.style.width = rect.width;
                 nodeElement.style.height = rect.height;
                 _nodeLayer.Add(nodeElement);
+                _nodeElements[node.PackageId] = nodeElement;
             }
         }
 
@@ -821,6 +1033,41 @@ namespace Deucarian.PackageInstaller.Editor
                 Mathf.Min(first.yMin, second.yMin),
                 Mathf.Max(first.xMax, second.xMax),
                 Mathf.Max(first.yMax, second.yMax));
+        }
+
+        private static void SetElementRect(VisualElement element, Rect rect)
+        {
+            if (element == null)
+            {
+                return;
+            }
+
+            element.style.left = rect.x;
+            element.style.top = rect.y;
+            element.style.width = rect.width;
+            element.style.height = rect.height;
+        }
+
+        private static Rect LerpRect(Rect start, Rect end, float t)
+        {
+            return new Rect(
+                Mathf.Lerp(start.x, end.x, t),
+                Mathf.Lerp(start.y, end.y, t),
+                Mathf.Lerp(start.width, end.width, t),
+                Mathf.Lerp(start.height, end.height, t));
+        }
+
+        private static float SmoothStep(float t)
+        {
+            return t * t * (3f - 2f * t);
+        }
+
+        private static bool AreRectsClose(Rect first, Rect second)
+        {
+            return Mathf.Abs(first.x - second.x) < 0.5f &&
+                   Mathf.Abs(first.y - second.y) < 0.5f &&
+                   Mathf.Abs(first.width - second.width) < 0.5f &&
+                   Mathf.Abs(first.height - second.height) < 0.5f;
         }
 
         private static void StretchToCanvas(VisualElement element)
@@ -889,20 +1136,32 @@ namespace Deucarian.PackageInstaller.Editor
                 Array.Empty<PackageGraphEdge>(),
                 Array.Empty<PackageGraphSuiteRegion>());
             _focus = focus ?? PackageGraphFocus.Create(_graph, string.Empty, null);
-            _nodeRects.Clear();
-
-            if (nodeRects != null)
-            {
-                foreach (KeyValuePair<string, Rect> nodeRect in nodeRects)
-                {
-                    _nodeRects[nodeRect.Key] = nodeRect.Value;
-                }
-            }
-
+            CopyNodeRects(nodeRects);
             style.height = canvasHeight;
             _animationEnabled = HasAnimatedEdges();
             UpdateAnimationSchedule();
             MarkDirtyRepaint();
+        }
+
+        public void UpdateNodeRects(IReadOnlyDictionary<string, Rect> nodeRects)
+        {
+            CopyNodeRects(nodeRects);
+            MarkDirtyRepaint();
+        }
+
+        private void CopyNodeRects(IReadOnlyDictionary<string, Rect> nodeRects)
+        {
+            _nodeRects.Clear();
+
+            if (nodeRects == null)
+            {
+                return;
+            }
+
+            foreach (KeyValuePair<string, Rect> nodeRect in nodeRects)
+            {
+                _nodeRects[nodeRect.Key] = nodeRect.Value;
+            }
         }
 
         private bool HasAnimatedEdges()

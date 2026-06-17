@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
+using UnityEngine;
 using UnityEngine.UIElements;
 
 namespace Deucarian.PackageInstaller.Editor.Tests
@@ -239,6 +240,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
             PackageGraphLayoutResult layout = new PackageGraphLayout().Calculate(graph);
 
+            Assert.AreEqual(PackageGraphLayoutMode.Overview, layout.Mode);
             Assert.AreEqual(graph.Nodes.Count, layout.NodeRects.Count);
             Assert.IsTrue(layout.RingGuides.Count >= 4);
             Assert.AreEqual(
@@ -247,7 +249,52 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual(
                 PackageGraphLayoutRing.Runtime,
                 layout.NodeRings["com.deucarian.diagnostics"]);
+            Assert.AreEqual(
+                PackageGraphLayoutRing.Runtime,
+                layout.NodeRings["com.deucarian.package-installer"]);
             AssertNoOverlaps(layout.NodeRects.Values.ToArray());
+        }
+
+        [Test]
+        public void Layout_CalculatesEgoFocusPositionsAroundSelectedPackage()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+
+            PackageGraphLayoutResult layout = new PackageGraphLayout().Calculate(
+                graph,
+                PackageGraphLayoutMode.Focus,
+                "com.deucarian.session");
+
+            Rect session = layout.NodeRects["com.deucarian.session"];
+            Rect logging = layout.NodeRects["com.deucarian.logging"];
+            Rect api = layout.NodeRects["com.deucarian.api"];
+            Rect sessionIntegration = layout.NodeRects["com.deucarian.session.api-integration"];
+
+            Assert.AreEqual(PackageGraphLayoutMode.Focus, layout.Mode);
+            Assert.AreEqual("com.deucarian.session", layout.FocusPackageId);
+            Assert.That(Vector2.Distance(PackageGraphLayout.GraphCenter, session.center), Is.LessThan(0.1f));
+            Assert.Less(logging.center.x, session.center.x);
+            Assert.Less(api.center.x, session.center.x);
+            Assert.Greater(sessionIntegration.center.y, session.center.y);
+            Assert.AreEqual(layout.ActiveCenter, session.center);
+            Assert.IsTrue(layout.RingGuides.Any(guide => guide.Label == "Required packages"));
+            AssertNoOverlaps(layout.NodeRects.Values.ToArray());
+        }
+
+        [Test]
+        public void Layout_InvalidFocusFallsBackToOverview()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+
+            PackageGraphLayoutResult layout = new PackageGraphLayout().Calculate(
+                graph,
+                PackageGraphLayoutMode.Focus,
+                "com.deucarian.missing");
+
+            Assert.AreEqual(PackageGraphLayoutMode.Overview, layout.Mode);
+            Assert.IsEmpty(layout.FocusPackageId);
         }
 
         [Test]

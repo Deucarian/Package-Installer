@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.18 - 2026-06-17
+
+- Added explicit overview and focus layout modes for the Ecosystem Graph.
+- Kept the overview as deterministic Deucarian-centered rings for core, runtime/tooling, integrations, and suites.
+- Added ego focus targets that center the selected package and group providers, dependents, integrations, companions, and suites into stable zones.
+- Animated node and edge transitions between overview and focus layouts.
+
 ## 1.1.17 - 2026-06-17
 
 - Anchored the Package Installer operation footer as the final fixed row in the window layout.
