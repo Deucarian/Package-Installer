@@ -70,6 +70,20 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void UnknownOptionalGraphRelationshipDoesNotRejectRegistry()
+        {
+            string json =
+                "{ \"schemaVersion\": 1, \"packages\": [" +
+                "{ \"id\": \"com.deucarian.core\", \"displayName\": \"Core\", \"category\": \"Core\", \"stableUrl\": \"https://example.com/core.git#main\", \"dependencies\": [], \"optionalIntegrations\": [\"com.deucarian.optional-missing\"] }" +
+                "] }";
+
+            PackageRegistryLoadResult result = new PackageRegistryLoader()
+                .LoadFromJson(json, PackageRegistrySource.Bundled);
+
+            Assert.IsTrue(result.IsValid, result.ErrorMessage);
+        }
+
+        [Test]
         public void MissingDevelopmentUrlDisablesDevelopmentChannel()
         {
             string json =

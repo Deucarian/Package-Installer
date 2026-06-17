@@ -17,7 +17,12 @@ namespace Deucarian.PackageInstaller.Editor
             string displayVersion = null,
             IEnumerable<PackageExtraDefinition> extras = null,
             IEnumerable<string> optionalCompanions = null,
-            string category = null)
+            string category = null,
+            string metadataType = null,
+            IEnumerable<string> optionalIntegrations = null,
+            IEnumerable<string> bridgeTargets = null,
+            IEnumerable<string> suiteMembers = null,
+            IEnumerable<string> recommendedWith = null)
         {
             if (string.IsNullOrWhiteSpace(displayName))
             {
@@ -35,10 +40,17 @@ namespace Deucarian.PackageInstaller.Editor
             DevelopmentUrl = developmentUrl ?? string.Empty;
             Description = description ?? string.Empty;
             Dependencies = ToReadOnlyList(dependencies);
+            OptionalIntegrations = ToReadOnlyList(optionalIntegrations);
+            BridgeTargets = ToReadOnlyList(bridgeTargets);
+            SuiteMembers = ToReadOnlyList(suiteMembers);
+            RecommendedWith = ToReadOnlyList(recommendedWith);
             PackageType = packageType;
             Category = string.IsNullOrWhiteSpace(category)
                 ? GetDefaultCategory(packageType)
                 : category.Trim();
+            MetadataType = string.IsNullOrWhiteSpace(metadataType)
+                ? string.Empty
+                : metadataType.Trim();
             DisplayVersion = displayVersion ?? string.Empty;
             Extras = ToReadOnlyList(extras);
             OptionalCompanions = ToReadOnlyList(optionalCompanions);
@@ -60,6 +72,14 @@ namespace Deucarian.PackageInstaller.Editor
 
         public IReadOnlyList<string> Dependencies { get; }
 
+        public IReadOnlyList<string> OptionalIntegrations { get; }
+
+        public IReadOnlyList<string> BridgeTargets { get; }
+
+        public IReadOnlyList<string> SuiteMembers { get; }
+
+        public IReadOnlyList<string> RecommendedWith { get; }
+
         public IReadOnlyList<PackageExtraDefinition> Extras { get; }
 
         public IReadOnlyList<string> OptionalCompanions { get; }
@@ -68,7 +88,14 @@ namespace Deucarian.PackageInstaller.Editor
 
         public string Category { get; }
 
+        public string MetadataType { get; }
+
         public bool IsBridge => string.Equals(Category, "Bridge", StringComparison.OrdinalIgnoreCase);
+
+        public bool IsSuite =>
+            string.Equals(Category, "Suites", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(Category, "Suite", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(MetadataType, "Suite", StringComparison.OrdinalIgnoreCase);
 
         public bool HasPackageReference => !string.IsNullOrWhiteSpace(GetUrl(PackageChannel.Stable));
 

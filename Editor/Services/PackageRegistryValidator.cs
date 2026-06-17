@@ -90,24 +90,70 @@ namespace Deucarian.PackageInstaller.Editor
                     }
                 }
 
-                if (package.optionalCompanions == null)
+                if (!ValidateKnownRelationshipIds(package, package.optionalCompanions, "optional companion", packageIds, out message) ||
+                    !ValidateOptionalRelationshipIds(package, package.optionalIntegrations, "optionalIntegrations", out message) ||
+                    !ValidateOptionalRelationshipIds(package, package.bridgeTargets, "bridgeTargets", out message) ||
+                    !ValidateOptionalRelationshipIds(package, package.suiteMembers, "suiteMembers", out message) ||
+                    !ValidateOptionalRelationshipIds(package, package.recommendedWith, "recommendedWith", out message))
                 {
-                    continue;
+                    return false;
+                }
+            }
+
+            message = string.Empty;
+            return true;
+        }
+
+        private static bool ValidateKnownRelationshipIds(
+            PackageRegistryEntry package,
+            IEnumerable<string> relationshipIds,
+            string relationshipName,
+            ISet<string> knownPackageIds,
+            out string message)
+        {
+            if (relationshipIds == null)
+            {
+                message = string.Empty;
+                return true;
+            }
+
+            foreach (string relationshipId in relationshipIds)
+            {
+                if (string.IsNullOrWhiteSpace(relationshipId))
+                {
+                    message = "Package " + package.id + " contains an empty " + relationshipName + " id.";
+                    return false;
                 }
 
-                foreach (string companionId in package.optionalCompanions)
+                if (!knownPackageIds.Contains(relationshipId.Trim()))
                 {
-                    if (string.IsNullOrWhiteSpace(companionId))
-                    {
-                        message = "Package " + package.id + " contains an empty optional companion id.";
-                        return false;
-                    }
+                    message = "Package " + package.id + " references unknown " + relationshipName + " id " + relationshipId + ".";
+                    return false;
+                }
+            }
 
-                    if (!packageIds.Contains(companionId.Trim()))
-                    {
-                        message = "Package " + package.id + " references unknown optional companion id " + companionId + ".";
-                        return false;
-                    }
+            message = string.Empty;
+            return true;
+        }
+
+        private static bool ValidateOptionalRelationshipIds(
+            PackageRegistryEntry package,
+            IEnumerable<string> relationshipIds,
+            string fieldName,
+            out string message)
+        {
+            if (relationshipIds == null)
+            {
+                message = string.Empty;
+                return true;
+            }
+
+            foreach (string relationshipId in relationshipIds)
+            {
+                if (string.IsNullOrWhiteSpace(relationshipId))
+                {
+                    message = "Package " + package.id + " contains an empty " + fieldName + " id.";
+                    return false;
                 }
             }
 

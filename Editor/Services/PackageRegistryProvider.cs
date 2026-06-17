@@ -148,7 +148,12 @@ namespace Deucarian.PackageInstaller.Editor
                 ParsePackageType(category),
                 entry.developmentUrl,
                 optionalCompanions: entry.optionalCompanions,
-                category: category);
+                category: category,
+                metadataType: entry.type,
+                optionalIntegrations: entry.optionalIntegrations,
+                bridgeTargets: entry.bridgeTargets,
+                suiteMembers: entry.suiteMembers,
+                recommendedWith: entry.recommendedWith);
         }
 
         private static IReadOnlyList<PackageDefinition> EnsureInstallerPackageDefinition(
@@ -177,7 +182,8 @@ namespace Deucarian.PackageInstaller.Editor
                 Array.Empty<string>(),
                 PackageType.Core,
                 "https://github.com/Deucarian/Package-Installer.git#develop",
-                category: "Tools");
+                category: "Tools",
+                metadataType: "Tool");
         }
 
         private static PackageType ParsePackageType(string category)
