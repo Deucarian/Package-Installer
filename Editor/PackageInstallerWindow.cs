@@ -12,7 +12,7 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed class PackageInstallerWindow : EditorWindow
     {
         private const string WindowTitle = "Package Installer";
-        private const string PackageVersion = "1.1.15";
+        private const string PackageVersion = "1.1.16";
         private const float MinWindowWidth = 850f;
         private const float MinWindowHeight = 650f;
         private const float SidebarWidth = 340f;
@@ -40,7 +40,7 @@ namespace Deucarian.PackageInstaller.Editor
         private enum SelectionKind
         {
             Package,
-            Bridge
+            Integration
         }
 
         private enum VisualStatusKind
@@ -51,7 +51,7 @@ namespace Deucarian.PackageInstaller.Editor
             Failed,
             Busy,
             Info,
-            Bridge
+            Integration
         }
 
         private sealed class VisualStatus
@@ -469,7 +469,7 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            SelectionKind selectionKind = packageDefinition.IsBridge ? SelectionKind.Bridge : SelectionKind.Package;
+            SelectionKind selectionKind = packageDefinition.IsIntegration ? SelectionKind.Integration : SelectionKind.Package;
 
             if (IsSelected(packageDefinition, selectionKind))
             {
@@ -519,7 +519,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             SelectDefinition(
                 packageDefinition,
-                packageDefinition.IsBridge ? SelectionKind.Bridge : SelectionKind.Package);
+                packageDefinition.IsIntegration ? SelectionKind.Integration : SelectionKind.Package);
             _graphFocusedPackageId = packageDefinition.PackageId;
 
             switch (action)
@@ -685,7 +685,7 @@ namespace Deucarian.PackageInstaller.Editor
             DeucarianEditorChrome.DrawPackageHeader(
                 "package-installer",
                 "Deucarian Package Installer",
-                "Install, update, remove, and compose Deucarian packages through first-class bridge packages.");
+                "Install, update, remove, and compose Deucarian packages through first-class integration packages.");
 
             BeginSurface(
                 DeucarianEditorStyles.SectionBox,
@@ -953,7 +953,7 @@ namespace Deucarian.PackageInstaller.Editor
         private void DrawRegistrySidebarSections(IReadOnlyList<PackageCategoryListView> categoryViews)
         {
             bool drewPackageHeader = false;
-            bool drewBridgeHeader = false;
+            bool drewIntegrationHeader = false;
             bool drewAnyCategory = false;
 
             foreach (PackageCategoryListView categoryView in categoryViews)
@@ -963,19 +963,19 @@ namespace Deucarian.PackageInstaller.Editor
                     continue;
                 }
 
-                bool bridgeCategory = string.Equals(categoryView.Category, "Bridge", StringComparison.OrdinalIgnoreCase);
+                bool integrationCategory = string.Equals(categoryView.Category, "Integration", StringComparison.OrdinalIgnoreCase);
 
-                if (bridgeCategory)
+                if (integrationCategory)
                 {
-                    if (!drewBridgeHeader && drewPackageHeader)
+                    if (!drewIntegrationHeader && drewPackageHeader)
                     {
                         GUILayout.Space(10f);
                         DrawHorizontalSeparator();
                         GUILayout.Space(8f);
                     }
 
-                    DrawSidebarSection("Bridge Packages", categoryView, SelectionKind.Bridge);
-                    drewBridgeHeader = true;
+                    DrawSidebarSection("Integration Packages", categoryView, SelectionKind.Integration);
+                    drewIntegrationHeader = true;
                 }
                 else
                 {
@@ -1230,7 +1230,7 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             string channelSummary = GetChannelSummary(packageDefinition);
-            string typeSummary = selectionKind == SelectionKind.Bridge ? "Bridge package" : packageDefinition.Category;
+            string typeSummary = selectionKind == SelectionKind.Integration ? "Integration package" : packageDefinition.Category;
 
             if (packageDefinition.HasDisplayVersion)
             {
@@ -1314,9 +1314,9 @@ namespace Deucarian.PackageInstaller.Editor
                         _mutedMiniLabelStyle);
                 });
             }
-            else if (_selectionKind == SelectionKind.Bridge)
+            else if (_selectionKind == SelectionKind.Integration)
             {
-                DrawBridgeDetails(selectedDefinition);
+                DrawIntegrationDetails(selectedDefinition);
             }
             else
             {
@@ -1338,7 +1338,7 @@ namespace Deucarian.PackageInstaller.Editor
             DrawAdvancedPanel(packageDefinition);
         }
 
-        private void DrawBridgeDetails(PackageDefinition packageDefinition)
+        private void DrawIntegrationDetails(PackageDefinition packageDefinition)
         {
             DrawDetailHeader(packageDefinition);
             DrawStatusPanel(packageDefinition);
@@ -1367,7 +1367,7 @@ namespace Deucarian.PackageInstaller.Editor
                     DrawPackageIcon(
                         iconRect,
                         packageDefinition,
-                        packageDefinition.IsBridge ? VisualStatusKind.Bridge : status.Kind);
+                        packageDefinition.IsIntegration ? VisualStatusKind.Integration : status.Kind);
 
                     GUILayout.Space(8f);
 
@@ -1441,7 +1441,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void DrawStatusPanel(PackageDefinition packageDefinition)
         {
-            DrawPanel(packageDefinition.IsBridge ? "Bridge Status" : "Status", () =>
+            DrawPanel(packageDefinition.IsIntegration ? "Integration Status" : "Status", () =>
             {
                 DrawPackageStatusContent(packageDefinition);
             }, GUILayout.ExpandWidth(true));
@@ -1619,7 +1619,7 @@ namespace Deucarian.PackageInstaller.Editor
                         DrawInlineHelp(
                             "This package is required by installed package(s): " +
                             string.Join(", ", dependentPackages.Select(package => package.DisplayName).ToArray()) +
-                            ". Remove those bridge packages first.",
+                            ". Remove those integration packages first.",
                             VisualStatusKind.UpdateAvailable);
                     }
                     else if (updateStatus.Kind == PackageUpdateStatusKind.SwitchAvailable)
@@ -1645,7 +1645,7 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 using (new EditorGUI.DisabledScope(queuedOrInstalling || actionsBusy))
                 {
-                    string buttonLabel = packageDefinition.IsBridge ? "Install Bridge" : "Install";
+                    string buttonLabel = packageDefinition.IsIntegration ? "Install Integration" : "Install";
 
                     if (GUILayout.Button(
                             buttonLabel,
@@ -2914,7 +2914,7 @@ namespace Deucarian.PackageInstaller.Editor
                     return DeucarianEditorStatus.Disabled;
                 case VisualStatusKind.Busy:
                 case VisualStatusKind.Info:
-                case VisualStatusKind.Bridge:
+                case VisualStatusKind.Integration:
                 default:
                     return DeucarianEditorStatus.Info;
             }
@@ -3207,12 +3207,12 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            PackageDefinition defaultSelection = PackageRegistryProvider.All.FirstOrDefault(package => !package.IsBridge);
+            PackageDefinition defaultSelection = PackageRegistryProvider.All.FirstOrDefault(package => !package.IsIntegration);
 
             if (defaultSelection == null)
             {
-                defaultSelection = PackageRegistryProvider.BridgePackages.FirstOrDefault();
-                _selectionKind = SelectionKind.Bridge;
+                defaultSelection = PackageRegistryProvider.IntegrationPackages.FirstOrDefault();
+                _selectionKind = SelectionKind.Integration;
             }
             else
             {

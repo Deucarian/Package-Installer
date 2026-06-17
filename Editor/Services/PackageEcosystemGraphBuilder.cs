@@ -82,18 +82,18 @@ namespace Deucarian.PackageInstaller.Editor
                         GetDependencyRelationshipLabel(package, dependencyId));
                 }
 
-                if (package.IsBridge)
+                if (package.IsIntegration)
                 {
-                    foreach (string targetId in GetBridgeTargets(package))
+                    foreach (string targetId in GetIntegrationTargets(package))
                     {
                         AddRelationshipEdge(
                             edges,
                             edgeKeys,
                             package.PackageId,
                             targetId,
-                            PackageGraphEdgeKind.BridgeConnection,
+                            PackageGraphEdgeKind.IntegrationConnection,
                             GetPeerRelationshipState(package.PackageId, targetId),
-                            GetBridgeRelationshipLabel(package, targetId));
+                            GetIntegrationRelationshipLabel(package, targetId));
                     }
                 }
 
@@ -101,16 +101,16 @@ namespace Deucarian.PackageInstaller.Editor
                 {
                     PackageGraphEdgeKind edgeKind = GetOptionalIntegrationEdgeKind(integrationId);
                     PackageGraphNode integrationNode = EnsureNode(integrationId, null);
-                    bool bridgeConnectionAlreadyDeclared =
-                        edgeKind == PackageGraphEdgeKind.BridgeConnection &&
+                    bool integrationConnectionAlreadyDeclared =
+                        edgeKind == PackageGraphEdgeKind.IntegrationConnection &&
                         integrationNode.PackageDefinition != null &&
-                        GetBridgeTargets(integrationNode.PackageDefinition)
+                        GetIntegrationTargets(integrationNode.PackageDefinition)
                             .Any(targetId => string.Equals(
                                 targetId,
                                 package.PackageId,
                                 StringComparison.OrdinalIgnoreCase));
 
-                    if (bridgeConnectionAlreadyDeclared)
+                    if (integrationConnectionAlreadyDeclared)
                     {
                         continue;
                     }
@@ -118,12 +118,12 @@ namespace Deucarian.PackageInstaller.Editor
                     AddRelationshipEdge(
                         edges,
                         edgeKeys,
-                        edgeKind == PackageGraphEdgeKind.BridgeConnection ? integrationId : package.PackageId,
-                        edgeKind == PackageGraphEdgeKind.BridgeConnection ? package.PackageId : integrationId,
+                        edgeKind == PackageGraphEdgeKind.IntegrationConnection ? integrationId : package.PackageId,
+                        edgeKind == PackageGraphEdgeKind.IntegrationConnection ? package.PackageId : integrationId,
                         edgeKind,
                         GetPeerRelationshipState(package.PackageId, integrationId),
-                        edgeKind == PackageGraphEdgeKind.BridgeConnection
-                            ? GetBridgeRelationshipLabel(integrationNode.PackageDefinition, package.PackageId)
+                        edgeKind == PackageGraphEdgeKind.IntegrationConnection
+                            ? GetIntegrationRelationshipLabel(integrationNode.PackageDefinition, package.PackageId)
                             : "Optional companion");
                 }
 
@@ -265,7 +265,7 @@ namespace Deucarian.PackageInstaller.Editor
                     packageId.Trim(),
                     "Missing",
                     "Registry relationship target is not registered.",
-                    PackageGraphNodeType.Integration,
+                    PackageGraphNodeType.Companion,
                     PackageGraphNodeStatus.Missing,
                     PackageChannel.Stable,
                     false,
@@ -290,14 +290,14 @@ namespace Deucarian.PackageInstaller.Editor
             return dependentName + " uses " + requiredName;
         }
 
-        private string GetBridgeRelationshipLabel(PackageDefinition bridgePackage, string targetPackageId)
+        private string GetIntegrationRelationshipLabel(PackageDefinition integrationPackage, string targetPackageId)
         {
-            string bridgeName = bridgePackage != null && !string.IsNullOrWhiteSpace(bridgePackage.DisplayName)
-                ? bridgePackage.DisplayName
-                : "Bridge package";
+            string integrationName = integrationPackage != null && !string.IsNullOrWhiteSpace(integrationPackage.DisplayName)
+                ? integrationPackage.DisplayName
+                : "Integration package";
             string targetName = GetPackageDisplayName(targetPackageId);
 
-            return bridgeName + " connects " + targetName;
+            return integrationName + " connects " + targetName;
         }
 
         private string GetPackageDisplayName(string packageId)
@@ -316,8 +316,8 @@ namespace Deucarian.PackageInstaller.Editor
         {
             PackageGraphNode node = EnsureNode(packageId, null);
 
-            return node.NodeType == PackageGraphNodeType.Bridge
-                ? PackageGraphEdgeKind.BridgeConnection
+            return node.NodeType == PackageGraphNodeType.Integration
+                ? PackageGraphEdgeKind.IntegrationConnection
                 : PackageGraphEdgeKind.OptionalCompanion;
         }
 
@@ -439,9 +439,9 @@ namespace Deucarian.PackageInstaller.Editor
             }
         }
 
-        private static IEnumerable<string> GetBridgeTargets(PackageDefinition package)
+        private static IEnumerable<string> GetIntegrationTargets(PackageDefinition package)
         {
-            return package.BridgeTargets.Count > 0 ? package.BridgeTargets : package.Dependencies;
+            return package.IntegrationTargets.Count > 0 ? package.IntegrationTargets : package.Dependencies;
         }
 
         private static IEnumerable<string> GetSuiteMembers(PackageDefinition package)
@@ -451,9 +451,9 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static PackageGraphNodeType GetNodeType(PackageDefinition package)
         {
-            if (package.IsBridge)
+            if (package.IsIntegration)
             {
-                return PackageGraphNodeType.Bridge;
+                return PackageGraphNodeType.Integration;
             }
 
             if (package.IsSuite)
@@ -469,11 +469,10 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             if (string.Equals(package.MetadataType, "OptionalIntegration", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(package.MetadataType, "Integration", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(package.Category, "UI", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(package.Category, "World", StringComparison.OrdinalIgnoreCase))
             {
-                return PackageGraphNodeType.Integration;
+                return PackageGraphNodeType.Companion;
             }
 
             return PackageGraphNodeType.Core;
@@ -530,9 +529,9 @@ namespace Deucarian.PackageInstaller.Editor
                     return 0;
                 case PackageGraphNodeType.Core:
                     return 1;
-                case PackageGraphNodeType.Integration:
+                case PackageGraphNodeType.Companion:
                     return 2;
-                case PackageGraphNodeType.Bridge:
+                case PackageGraphNodeType.Integration:
                     return 3;
                 case PackageGraphNodeType.Suite:
                     return 4;
@@ -547,7 +546,7 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 case PackageGraphEdgeKind.HardDependency:
                     return 0;
-                case PackageGraphEdgeKind.BridgeConnection:
+                case PackageGraphEdgeKind.IntegrationConnection:
                     return 1;
                 case PackageGraphEdgeKind.OptionalCompanion:
                     return 2;

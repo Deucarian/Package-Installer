@@ -12,7 +12,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         private const string ValidRegistryJson =
             "{ \"schemaVersion\": 1, \"updatedAt\": \"2026-06-05\", \"packages\": [" +
             "{ \"id\": \"com.deucarian.core-state\", \"displayName\": \"Deucarian Core State\", \"category\": \"Core\", \"description\": \"Core package.\", \"stableUrl\": \"https://github.com/Deucarian/Core-State.git#main\", \"developmentUrl\": \"https://github.com/Deucarian/Core-State.git#develop\", \"dependencies\": [] }," +
-            "{ \"id\": \"com.deucarian.core-state.bridge\", \"displayName\": \"Core Bridge\", \"category\": \"Bridge\", \"description\": \"Bridge package.\", \"stableUrl\": \"https://github.com/Deucarian/Core-State-Bridge.git#main\", \"developmentUrl\": \"https://github.com/Deucarian/Core-State-Bridge.git#develop\", \"dependencies\": [\"com.deucarian.core-state\"] }" +
+            "{ \"id\": \"com.deucarian.core-state.integration\", \"displayName\": \"Core Integration\", \"category\": \"Integration\", \"description\": \"Integration package.\", \"stableUrl\": \"https://github.com/Deucarian/Core-State-Integration.git#main\", \"developmentUrl\": \"https://github.com/Deucarian/Core-State-Integration.git#develop\", \"dependencies\": [\"com.deucarian.core-state\"] }" +
             "] }";
 
         [Test]
@@ -59,7 +59,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         {
             string json =
                 "{ \"schemaVersion\": 1, \"packages\": [" +
-                "{ \"id\": \"com.deucarian.bridge\", \"displayName\": \"Bridge\", \"category\": \"Bridge\", \"stableUrl\": \"https://example.com/bridge.git#main\", \"dependencies\": [\"com.deucarian.missing\"] }" +
+                "{ \"id\": \"com.deucarian.integration\", \"displayName\": \"Integration\", \"category\": \"Integration\", \"stableUrl\": \"https://example.com/integration.git#main\", \"dependencies\": [\"com.deucarian.missing\"] }" +
                 "] }";
 
             PackageRegistryLoadResult result = new PackageRegistryLoader()
@@ -308,7 +308,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
-        public void BundledRegistryIncludesObjectLoadingAndApiBridge()
+        public void BundledRegistryIncludesObjectLoadingAndApiIntegration()
         {
             string registryJson = File.ReadAllText(GetBundledRegistryPath());
             PackageRegistryLoadResult result = new PackageRegistryLoader()
@@ -333,17 +333,17 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 },
                 objectLoading.optionalCompanions);
 
-            PackageRegistryEntry bridge = result.Registry.packages
-                .Single(package => package.id == "com.deucarian.object-loading.api-bridge");
-            Assert.AreEqual("Deucarian Object Loading API Bridge", bridge.displayName);
-            Assert.AreEqual("Bridge", bridge.category);
+            PackageRegistryEntry integration = result.Registry.packages
+                .Single(package => package.id == "com.deucarian.object-loading.api-integration");
+            Assert.AreEqual("Deucarian Object Loading API Integration", integration.displayName);
+            Assert.AreEqual("Integration", integration.category);
             CollectionAssert.AreEqual(
                 new[]
                 {
                     "com.deucarian.object-loading",
                     "com.deucarian.api"
                 },
-                bridge.dependencies);
+                integration.dependencies);
         }
 
         [Test]

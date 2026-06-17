@@ -45,8 +45,8 @@ namespace Deucarian.PackageInstaller.Editor
                 "Required package → dependent package. Animated flow markers show direction."));
             legend.Add(CreateLegendItem(
                 "Cable",
-                "Bridge connection",
-                "dpi-graph-legend__line--bridge",
+                "Integration connection",
+                "dpi-graph-legend__line--integration",
                 "Integration package connects systems. Animated markers show direction."));
             legend.Add(CreateLegendItem(
                 "Dotted",
@@ -838,8 +838,8 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 case PackageGraphLayoutRing.Runtime:
                     return "runtime";
-                case PackageGraphLayoutRing.Bridge:
-                    return "bridge";
+                case PackageGraphLayoutRing.Integration:
+                    return "integration";
                 case PackageGraphLayoutRing.Suite:
                     return "suite";
                 default:
@@ -1028,9 +1028,9 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            if (edge.Kind == PackageGraphEdgeKind.BridgeConnection)
+            if (edge.Kind == PackageGraphEdgeKind.IntegrationConnection)
             {
-                DrawBridgeCableBezier(
+                DrawIntegrationCableBezier(
                     painter,
                     start,
                     controlA,
@@ -1140,7 +1140,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             float distance = Mathf.Max(70f, Vector2.Distance(start, end) * 0.16f);
 
-            if (edge.Kind == PackageGraphEdgeKind.BridgeConnection)
+            if (edge.Kind == PackageGraphEdgeKind.IntegrationConnection)
             {
                 distance += 24f;
             }
@@ -1170,7 +1170,7 @@ namespace Deucarian.PackageInstaller.Editor
         private static bool ShouldAnimate(PackageGraphEdgeKind kind)
         {
             return kind == PackageGraphEdgeKind.HardDependency ||
-                   kind == PackageGraphEdgeKind.BridgeConnection ||
+                   kind == PackageGraphEdgeKind.IntegrationConnection ||
                    kind == PackageGraphEdgeKind.OptionalCompanion ||
                    kind == PackageGraphEdgeKind.Recommended ||
                    kind == PackageGraphEdgeKind.SuiteMembership;
@@ -1190,7 +1190,7 @@ namespace Deucarian.PackageInstaller.Editor
                     return new Color(0.34f, 0.70f, 0.98f, 0.90f);
                 }
 
-                if (edge.Kind == PackageGraphEdgeKind.BridgeConnection)
+                if (edge.Kind == PackageGraphEdgeKind.IntegrationConnection)
                 {
                     return new Color(0.24f, 0.82f, 0.75f, 0.92f);
                 }
@@ -1214,7 +1214,7 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 case PackageGraphEdgeKind.HardDependency:
                     return new Color(0.42f, 0.54f, 0.72f, 0.24f);
-                case PackageGraphEdgeKind.BridgeConnection:
+                case PackageGraphEdgeKind.IntegrationConnection:
                     return new Color(0.20f, 0.70f, 0.66f, 0.18f);
                 case PackageGraphEdgeKind.OptionalCompanion:
                     return new Color(0.50f, 0.62f, 0.72f, 0.12f);
@@ -1244,7 +1244,7 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 case PackageGraphEdgeKind.HardDependency:
                     return 1.45f;
-                case PackageGraphEdgeKind.BridgeConnection:
+                case PackageGraphEdgeKind.IntegrationConnection:
                     return 1.2f;
                 case PackageGraphEdgeKind.OptionalCompanion:
                     return 0.9f;
@@ -1253,7 +1253,7 @@ namespace Deucarian.PackageInstaller.Editor
             }
         }
 
-        private static void DrawBridgeCableBezier(
+        private static void DrawIntegrationCableBezier(
             Painter2D painter,
             Vector2 start,
             Vector2 controlA,
@@ -1383,7 +1383,7 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 case PackageGraphEdgeKind.OptionalCompanion:
                     return 4.6f;
-                case PackageGraphEdgeKind.BridgeConnection:
+                case PackageGraphEdgeKind.IntegrationConnection:
                     return 5.8f;
                 case PackageGraphEdgeKind.SuiteMembership:
                     return 4.8f;
@@ -1398,7 +1398,7 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 case PackageGraphEdgeKind.OptionalCompanion:
                     return 1.0f;
-                case PackageGraphEdgeKind.BridgeConnection:
+                case PackageGraphEdgeKind.IntegrationConnection:
                     return 1.35f;
                 default:
                     return 1.25f;
@@ -1658,8 +1658,8 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 case PackageGraphNodeType.Tool:
                     return "tool";
-                case PackageGraphNodeType.Bridge:
-                    return "bridge";
+                case PackageGraphNodeType.Companion:
+                    return "companion";
                 case PackageGraphNodeType.Suite:
                     return "suite";
                 case PackageGraphNodeType.Integration:
@@ -1675,8 +1675,8 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 case PackageGraphLayoutRing.Runtime:
                     return "runtime";
-                case PackageGraphLayoutRing.Bridge:
-                    return "bridge";
+                case PackageGraphLayoutRing.Integration:
+                    return "integration";
                 case PackageGraphLayoutRing.Suite:
                     return "suite";
                 default:
@@ -1690,8 +1690,8 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 case PackageGraphNodeType.Tool:
                     return "Tool";
-                case PackageGraphNodeType.Bridge:
-                    return "Bridge";
+                case PackageGraphNodeType.Companion:
+                    return "Companion";
                 case PackageGraphNodeType.Suite:
                     return "Suite";
                 case PackageGraphNodeType.Integration:

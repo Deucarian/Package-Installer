@@ -113,16 +113,16 @@ jobs:
             'com.deucarian.logging': ['com.deucarian.editor'],
             'com.deucarian.package-installer': ['com.deucarian.editor', 'com.deucarian.logging'],
             'com.deucarian.theming': ['com.deucarian.editor', 'com.deucarian.logging'],
-            'com.deucarian.session.api-bridge': ['com.deucarian.session', 'com.deucarian.api'],
-            'com.deucarian.object-loading.api-bridge': ['com.deucarian.object-loading', 'com.deucarian.api'],
-            'com.deucarian.ui-binding.core-state-bridge': ['com.deucarian.ui-binding', 'com.deucarian.core-state'],
-            'com.deucarian.object-selection.core-state-bridge': ['com.deucarian.object-selection', 'com.deucarian.core-state'],
+            'com.deucarian.session.api-integration': ['com.deucarian.session', 'com.deucarian.api'],
+            'com.deucarian.object-loading.api-integration': ['com.deucarian.object-loading', 'com.deucarian.api'],
+            'com.deucarian.ui-binding.core-state-integration': ['com.deucarian.ui-binding', 'com.deucarian.core-state'],
+            'com.deucarian.object-selection.core-state-integration': ['com.deucarian.object-selection', 'com.deucarian.core-state'],
             'com.deucarian.selection-suite': [
               'com.deucarian.core-state',
               'com.deucarian.ui-binding',
               'com.deucarian.object-selection',
-              'com.deucarian.ui-binding.core-state-bridge',
-              'com.deucarian.object-selection.core-state-bridge',
+              'com.deucarian.ui-binding.core-state-integration',
+              'com.deucarian.object-selection.core-state-integration',
             ],
           };
 

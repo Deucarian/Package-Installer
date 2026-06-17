@@ -22,7 +22,7 @@ Tools > Deucarian > Development > Package Installer Preview
 
 The preview is separate from the real installer and does not replace the existing production entry point.
 
-The installer can install standalone packages, bridge packages, and explicitly declared package samples without making this package a runtime dependency of any other package.
+The installer can install standalone packages, integration packages, and explicitly declared package samples without making this package a runtime dependency of any other package.
 
 Package ID: `com.deucarian.package-installer`
 
@@ -81,7 +81,7 @@ The current bundled fallback registry includes these package entries:
 - Core: Core State, API, Logging, Object Loading, Session
 - UI: UI Binding, Theming
 - World: Object Selection
-- Bridge: UI Binding + Core State Bridge, Object Loading API Bridge, ObjectSelection + CoreState Bridge, Session + API Bridge
+- Integration: UI Binding + Core State Integration, Object Loading API Integration, ObjectSelection + CoreState Integration, Session + API Integration
 - Tools: Package Installer, Diagnostics
 - Suites: Selection Suite
 
@@ -96,10 +96,10 @@ Registered packages are first-class UPM packages with their own package IDs:
 - `com.deucarian.theming`
 - `com.deucarian.object-selection`
 - `com.deucarian.editor`
-- `com.deucarian.ui-binding.core-state-bridge`
-- `com.deucarian.object-loading.api-bridge`
-- `com.deucarian.object-selection.core-state-bridge`
-- `com.deucarian.session.api-bridge`
+- `com.deucarian.ui-binding.core-state-integration`
+- `com.deucarian.object-loading.api-integration`
+- `com.deucarian.object-selection.core-state-integration`
+- `com.deucarian.session.api-integration`
 - `com.deucarian.selection-suite`
 - `com.deucarian.diagnostics`
 - `com.deucarian.package-installer`
@@ -122,14 +122,14 @@ The registry schema uses `schemaVersion` 1 and contains:
 
 - `id`: the Unity package name, such as `com.deucarian.api`. This must exactly match the target package's `package.json` `name` value.
 - `displayName`: the name shown in the installer window.
-- `category`: grouping shown in the sidebar. Core, UI, World, Bridge, and Suites are ordered first; unknown categories are shown alphabetically after them.
+- `category`: grouping shown in the sidebar. Core, UI, World, Integration, and Suites are ordered first; unknown categories are shown alphabetically after them.
 - `description`: explanatory text shown in the detail pane.
 - `stableUrl`: the stable Git URL or UPM identifier passed to `UnityEditor.PackageManager.Client.Add`.
 - `developmentUrl`: optional development-channel Git URL or UPM identifier. If this is empty, the Development channel is disabled for that package.
-- `dependencies`: package IDs that should be installed before this package is installed, reinstalled, or updated. Bridge packages are just packages in the `Bridge` category with dependencies.
+- `dependencies`: package IDs that should be installed before this package is installed, reinstalled, or updated. Integration packages are just packages in the `Integration` category with dependencies.
 - `optionalCompanions`: package IDs shown as optional integrations that should not be installed as required dependencies.
 
-Set `stableUrl` and, when available, `developmentUrl` to the UPM identifier or Git URL. Bridge packages should also list their dependency package IDs in `dependencies`.
+Set `stableUrl` and, when available, `developmentUrl` to the UPM identifier or Git URL. Integration packages should also list their dependency package IDs in `dependencies`.
 
 When an installed Git package can be matched to `#main` or `#develop`, including common forms such as `#refs/heads/main`, the installer infers the visible channel from the installed package reference. If the installed reference does not match a known channel, the row shows a Custom channel until the user selects Stable or Development.
 
@@ -161,28 +161,39 @@ The installer package itself is included in update discovery when it is installe
 
 ## Progress Display
 
-The installer shows step-based progress for package install, bridge install, install-all, single update, update-all, and remove operations.
+The installer shows step-based progress for package install, integration install, install-all, single update, update-all, and remove operations.
 
 Progress is counted by package steps because Unity Package Manager does not provide reliable download-byte progress for these Git package operations.
 
 Progress summaries list succeeded, failed, and skipped package steps so multi-package operations do not rely only on console logs.
 
-## Bridge Packages
+## Integration Packages
 
-Bridge packages keep the core packages standalone while providing explicit composition packages for projects that want the combined behavior.
+Integration packages keep the core packages standalone while providing explicit composition packages for projects that want the combined behavior.
 
-Current bridge package dependencies:
+Current integration package dependencies:
 
-- UIBinding CoreState Bridge depends on UI Binding and Core State.
-- Object Loading API Bridge depends on Object Loading and API.
-- ObjectSelection CoreState Bridge depends on Object Selection and Core State.
-- Session API Bridge depends on Session and API.
+- UIBinding CoreState Integration depends on UI Binding and Core State.
+- Object Loading API Integration depends on Object Loading and API.
+- ObjectSelection CoreState Integration depends on Object Selection and Core State.
+- Session API Integration depends on Session and API.
 
 Installing a package only requires one click. The installer computes the dependency-first install plan from `PackageDefinition.Dependencies`, skips dependencies that are already installed, fails clearly on unavailable or circular dependencies, and sends the ordered package list to Unity Package Manager.
 
-Bridge packages are regular UPM packages, so no scripting define symbols are required for these bridge installs.
+Integration packages are regular UPM packages, so no scripting define symbols are required for these integration installs.
 
-When removing a package, the installer warns and disables removal if another installed registered package depends on it. Remove the dependent bridge package first to avoid silently breaking the project.
+### Migration From Bridge IDs
+
+The Package Installer now shows only the Integration package IDs. Remove or replace old bridge IDs in Unity `Packages/manifest.json`:
+
+- `com.deucarian.session.api-bridge` -> `com.deucarian.session.api-integration`
+- `com.deucarian.object-loading.api-bridge` -> `com.deucarian.object-loading.api-integration`
+- `com.deucarian.ui-binding.core-state-bridge` -> `com.deucarian.ui-binding.core-state-integration`
+- `com.deucarian.object-selection.core-state-bridge` -> `com.deucarian.object-selection.core-state-integration`
+
+The Git repository URLs still use their existing `Bridge.git` names until those GitHub repositories are manually renamed.
+
+When removing a package, the installer warns and disables removal if another installed registered package depends on it. Remove the dependent integration package first to avoid silently breaking the project.
 
 ## Public API
 
@@ -233,7 +244,7 @@ Keeping the installer editor-only ensures:
 
 ## Versioning
 
-Current package version: `1.1.15`.
+Current package version: `1.1.16`.
 
 Branch strategy:
 

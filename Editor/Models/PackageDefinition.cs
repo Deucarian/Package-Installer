@@ -20,7 +20,7 @@ namespace Deucarian.PackageInstaller.Editor
             string category = null,
             string metadataType = null,
             IEnumerable<string> optionalIntegrations = null,
-            IEnumerable<string> bridgeTargets = null,
+            IEnumerable<string> integrationTargets = null,
             IEnumerable<string> suiteMembers = null,
             IEnumerable<string> recommendedWith = null)
         {
@@ -41,7 +41,7 @@ namespace Deucarian.PackageInstaller.Editor
             Description = description ?? string.Empty;
             Dependencies = ToReadOnlyList(dependencies);
             OptionalIntegrations = ToReadOnlyList(optionalIntegrations);
-            BridgeTargets = ToReadOnlyList(bridgeTargets);
+            IntegrationTargets = ToReadOnlyList(integrationTargets);
             SuiteMembers = ToReadOnlyList(suiteMembers);
             RecommendedWith = ToReadOnlyList(recommendedWith);
             PackageType = packageType;
@@ -74,7 +74,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         public IReadOnlyList<string> OptionalIntegrations { get; }
 
-        public IReadOnlyList<string> BridgeTargets { get; }
+        public IReadOnlyList<string> IntegrationTargets { get; }
 
         public IReadOnlyList<string> SuiteMembers { get; }
 
@@ -90,7 +90,9 @@ namespace Deucarian.PackageInstaller.Editor
 
         public string MetadataType { get; }
 
-        public bool IsBridge => string.Equals(Category, "Bridge", StringComparison.OrdinalIgnoreCase);
+        public bool IsIntegration =>
+            string.Equals(Category, "Integration", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(MetadataType, "Integration", StringComparison.OrdinalIgnoreCase);
 
         public bool IsSuite =>
             string.Equals(Category, "Suites", StringComparison.OrdinalIgnoreCase) ||
@@ -150,8 +152,8 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 case PackageType.UI:
                     return "UI";
-                case PackageType.Bridge:
-                    return "Bridge";
+                case PackageType.Integration:
+                    return "Integration";
                 default:
                     return "Core";
             }

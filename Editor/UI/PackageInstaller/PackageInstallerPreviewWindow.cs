@@ -391,7 +391,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             PackageDefinition[] visiblePackages = GetVisiblePackages().ToArray();
             PackageDefinition[] featured = visiblePackages
-                .Where(package => !package.IsBridge)
+                .Where(package => !package.IsIntegration)
                 .Take(4)
                 .ToArray();
 
@@ -415,7 +415,7 @@ namespace Deucarian.PackageInstaller.Editor
             AddSection("Recently updated", section =>
             {
                 PackageDefinition[] recent = visiblePackages
-                    .Where(package => !package.IsBridge)
+                    .Where(package => !package.IsIntegration)
                     .Skip(4)
                     .Take(5)
                     .ToArray();
@@ -423,7 +423,7 @@ namespace Deucarian.PackageInstaller.Editor
                 if (recent.Length == 0)
                 {
                     recent = visiblePackages
-                        .Where(package => !package.IsBridge)
+                        .Where(package => !package.IsIntegration)
                         .Take(5)
                         .ToArray();
                 }
@@ -524,21 +524,21 @@ namespace Deucarian.PackageInstaller.Editor
                 }
             });
 
-            AddSection("Bridge groups", section =>
+            AddSection("Integration groups", section =>
             {
-                PackageDefinition[] bridgePackages = GetVisiblePackages()
-                    .Where(package => package.IsBridge)
+                PackageDefinition[] integrationPackages = GetVisiblePackages()
+                    .Where(package => package.IsIntegration)
                     .ToArray();
 
-                if (bridgePackages.Length == 0)
+                if (integrationPackages.Length == 0)
                 {
-                    section.Add(CreateMutedLabel("No bridge packages match the current search."));
+                    section.Add(CreateMutedLabel("No integration packages match the current search."));
                     return;
                 }
 
-                foreach (PackageDefinition bridgePackage in bridgePackages)
+                foreach (PackageDefinition integrationPackage in integrationPackages)
                 {
-                    section.Add(CreatePackageRow(bridgePackage, includeActions: true));
+                    section.Add(CreatePackageRow(integrationPackage, includeActions: true));
                 }
             });
         }
@@ -964,7 +964,7 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            PackageDefinition nextSelection = GetVisiblePackages().FirstOrDefault(package => !package.IsBridge) ??
+            PackageDefinition nextSelection = GetVisiblePackages().FirstOrDefault(package => !package.IsIntegration) ??
                                               GetVisiblePackages().FirstOrDefault();
             _selectedPackageId = nextSelection != null ? nextSelection.PackageId : string.Empty;
         }
@@ -1297,7 +1297,7 @@ namespace Deucarian.PackageInstaller.Editor
                 return 2;
             }
 
-            if (string.Equals(category, "Bridge", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(category, "Integration", StringComparison.OrdinalIgnoreCase))
             {
                 return 3;
             }

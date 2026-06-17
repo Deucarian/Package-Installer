@@ -15,7 +15,7 @@ namespace Deucarian.PackageInstaller.Editor
         public string[] dependencies;
         public string[] optionalCompanions;
         public string[] optionalIntegrations;
-        public string[] bridgeTargets;
+        public string[] integrationTargets;
         public string[] suiteMembers;
         public string[] recommendedWith;
     }

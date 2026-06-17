@@ -92,7 +92,7 @@ namespace Deucarian.PackageInstaller.Editor
 
                 if (!ValidateKnownRelationshipIds(package, package.optionalCompanions, "optional companion", packageIds, out message) ||
                     !ValidateOptionalRelationshipIds(package, package.optionalIntegrations, "optionalIntegrations", out message) ||
-                    !ValidateOptionalRelationshipIds(package, package.bridgeTargets, "bridgeTargets", out message) ||
+                    !ValidateOptionalRelationshipIds(package, package.integrationTargets, "integrationTargets", out message) ||
                     !ValidateOptionalRelationshipIds(package, package.suiteMembers, "suiteMembers", out message) ||
                     !ValidateOptionalRelationshipIds(package, package.recommendedWith, "recommendedWith", out message))
                 {

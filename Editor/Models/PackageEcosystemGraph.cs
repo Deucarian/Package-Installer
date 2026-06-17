@@ -8,15 +8,15 @@ namespace Deucarian.PackageInstaller.Editor
     {
         Core,
         Tool,
-        Bridge,
+        Integration,
         Suite,
-        Integration
+        Companion
     }
 
     internal enum PackageGraphEdgeKind
     {
         HardDependency,
-        BridgeConnection,
+        IntegrationConnection,
         OptionalCompanion,
         SuiteMembership,
         Recommended
@@ -163,7 +163,7 @@ namespace Deucarian.PackageInstaller.Editor
                 switch (PrimaryAction)
                 {
                     case PackageGraphNodeAction.Install:
-                        return IsBridge ? "Install Bridge" : "Install";
+                        return IsIntegration ? "Install Integration" : "Install";
                     case PackageGraphNodeAction.Update:
                         return "Update";
                     case PackageGraphNodeAction.Reinstall:
@@ -174,7 +174,7 @@ namespace Deucarian.PackageInstaller.Editor
             }
         }
 
-        public bool IsBridge => NodeType == PackageGraphNodeType.Bridge;
+        public bool IsIntegration => NodeType == PackageGraphNodeType.Integration;
     }
 
     internal sealed class PackageGraphEdge
@@ -307,7 +307,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             focus._relatedPackageIds.Add(normalizedFocusPackageId);
             focus.AddDirectEdges(graph, normalizedFocusPackageId);
-            focus.AddBridgeContext(graph);
+            focus.AddIntegrationContext(graph);
             focus.AddSuiteContext(graph, normalizedFocusPackageId);
             focus.AddWarningContext(graph);
 
@@ -370,20 +370,20 @@ namespace Deucarian.PackageInstaller.Editor
             }
         }
 
-        private void AddBridgeContext(PackageGraphModel graph)
+        private void AddIntegrationContext(PackageGraphModel graph)
         {
-            string[] bridgePackageIds = graph.Nodes
-                .Where(node => node.NodeType == PackageGraphNodeType.Bridge &&
+            string[] integrationPackageIds = graph.Nodes
+                .Where(node => node.NodeType == PackageGraphNodeType.Integration &&
                                _relatedPackageIds.Contains(node.PackageId))
                 .Select(node => node.PackageId)
                 .ToArray();
 
-            foreach (string bridgePackageId in bridgePackageIds)
+            foreach (string integrationPackageId in integrationPackageIds)
             {
                 foreach (PackageGraphEdge edge in graph.Edges.Where(edge =>
-                             (edge.Kind == PackageGraphEdgeKind.BridgeConnection ||
+                             (edge.Kind == PackageGraphEdgeKind.IntegrationConnection ||
                               edge.Kind == PackageGraphEdgeKind.HardDependency) &&
-                             edge.ConnectsPackage(bridgePackageId)))
+                             edge.ConnectsPackage(integrationPackageId)))
                 {
                     AddFocusEdge(edge);
                     _relatedPackageIds.Add(edge.FromPackageId);

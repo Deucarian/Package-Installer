@@ -9,7 +9,7 @@ namespace Deucarian.PackageInstaller.Editor
     {
         Foundation,
         Runtime,
-        Bridge,
+        Integration,
         Suite
     }
 
@@ -91,7 +91,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             PlaceRing(nodes, PackageGraphLayoutRing.Foundation, nodeRects, nodeRings);
             PlaceRing(nodes, PackageGraphLayoutRing.Runtime, nodeRects, nodeRings);
-            PlaceRing(nodes, PackageGraphLayoutRing.Bridge, nodeRects, nodeRings);
+            PlaceRing(nodes, PackageGraphLayoutRing.Integration, nodeRects, nodeRings);
             PlaceRing(nodes, PackageGraphLayoutRing.Suite, nodeRects, nodeRings);
             ResolveOverlaps(nodeRects, nodeRings);
 
@@ -151,9 +151,9 @@ namespace Deucarian.PackageInstaller.Editor
                 return PackageGraphLayoutRing.Foundation;
             }
 
-            if (node.NodeType == PackageGraphNodeType.Bridge)
+            if (node.NodeType == PackageGraphNodeType.Integration)
             {
-                return PackageGraphLayoutRing.Bridge;
+                return PackageGraphLayoutRing.Integration;
             }
 
             if (node.NodeType == PackageGraphNodeType.Suite)
@@ -161,7 +161,7 @@ namespace Deucarian.PackageInstaller.Editor
                 return PackageGraphLayoutRing.Suite;
             }
 
-            if (node.NodeType == PackageGraphNodeType.Integration ||
+            if (node.NodeType == PackageGraphNodeType.Companion ||
                 string.Equals(node.Category, "UI", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(node.Category, "World", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(node.PackageId, "com.deucarian.diagnostics", StringComparison.OrdinalIgnoreCase))
@@ -178,7 +178,7 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 case PackageGraphLayoutRing.Runtime:
                     return new Vector2(560f, 380f);
-                case PackageGraphLayoutRing.Bridge:
+                case PackageGraphLayoutRing.Integration:
                     return new Vector2(620f, 350f);
                 case PackageGraphLayoutRing.Suite:
                     return new Vector2(470f, 450f);
@@ -208,7 +208,7 @@ namespace Deucarian.PackageInstaller.Editor
                         -172f,
                         172f,
                         count);
-                case PackageGraphLayoutRing.Bridge:
+                case PackageGraphLayoutRing.Integration:
                     return CreateEvenAngles(-72f, 72f, count);
                 case PackageGraphLayoutRing.Suite:
                     return CreateEvenAngles(count <= 3 ? 100f : 72f, count <= 3 ? 110f : 128f, count);
@@ -272,14 +272,14 @@ namespace Deucarian.PackageInstaller.Editor
                     "com.deucarian.diagnostics");
             }
 
-            if (ring == PackageGraphLayoutRing.Bridge)
+            if (ring == PackageGraphLayoutRing.Integration)
             {
                 return GetKnownPackageIndex(
                     packageId,
-                    "com.deucarian.session.api-bridge",
-                    "com.deucarian.object-loading.api-bridge",
-                    "com.deucarian.ui-binding.core-state-bridge",
-                    "com.deucarian.object-selection.core-state-bridge");
+                    "com.deucarian.session.api-integration",
+                    "com.deucarian.object-loading.api-integration",
+                    "com.deucarian.ui-binding.core-state-integration",
+                    "com.deucarian.object-selection.core-state-integration");
             }
 
             return 1000;
@@ -391,7 +391,7 @@ namespace Deucarian.PackageInstaller.Editor
                     return 0;
                 case PackageGraphLayoutRing.Runtime:
                     return 1;
-                case PackageGraphLayoutRing.Bridge:
+                case PackageGraphLayoutRing.Integration:
                     return 2;
                 case PackageGraphLayoutRing.Suite:
                     return 3;
@@ -424,8 +424,8 @@ namespace Deucarian.PackageInstaller.Editor
                 602f,
                 418f);
             yield return new PackageGraphRingGuide(
-                "Bridge / Integration",
-                PackageGraphLayoutRing.Bridge,
+                "Integration Packages",
+                PackageGraphLayoutRing.Integration,
                 GraphCenter,
                 666f,
                 382f);

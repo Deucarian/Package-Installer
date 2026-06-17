@@ -181,7 +181,7 @@
     border-bottom-color: rgba(116, 144, 196, 0.62);
 }
 
-.dpi-graph-legend__line--bridge {
+.dpi-graph-legend__line--integration {
     border-bottom-color: rgba(59, 209, 191, 0.76);
 }
 
@@ -260,7 +260,7 @@
     border-bottom-color: rgba(64, 157, 187, 0.13);
 }
 
-.dpi-graph-ring-guide--bridge {
+.dpi-graph-ring-guide--integration {
     border-left-color: rgba(59, 166, 154, 0.14);
     border-right-color: rgba(59, 166, 154, 0.14);
     border-top-color: rgba(59, 166, 154, 0.14);
@@ -421,7 +421,7 @@
     border-bottom-color: rgba(59, 166, 154, 0.58);
 }
 
-.dpi-graph-node--bridge {
+.dpi-graph-node--companion {
     border-left-color: rgba(90, 111, 160, 0.62);
 }
 
