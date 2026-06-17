@@ -40,8 +40,15 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual(PackageGraphNodeType.Suite, graph.Nodes.Single(node => node.PackageId == suite.PackageId).NodeType);
 
             Assert.IsTrue(graph.Edges.Any(edge =>
-                edge.Kind == PackageGraphEdgeKind.Bridge &&
+                edge.Kind == PackageGraphEdgeKind.HardDependency &&
                 edge.FromPackageId == core.PackageId &&
+                edge.ToPackageId == bridge.PackageId));
+            Assert.IsTrue(graph.Edges.Any(edge =>
+                edge.Kind == PackageGraphEdgeKind.BridgeConnection &&
+                edge.FromPackageId == bridge.PackageId &&
+                edge.ToPackageId == core.PackageId));
+            Assert.IsFalse(graph.Edges.Any(edge =>
+                edge.Kind == PackageGraphEdgeKind.OptionalCompanion &&
                 edge.ToPackageId == bridge.PackageId));
             Assert.IsTrue(graph.Edges.Any(edge =>
                 edge.Kind == PackageGraphEdgeKind.SuiteMembership &&
@@ -204,6 +211,18 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 FindByClass(view, "dpi-graph-legend__label")
                     .OfType<Label>()
                     .Any(label => label.text == "Dependency flow"));
+            Assert.IsTrue(
+                FindByClass(view, "dpi-graph-legend__label")
+                    .OfType<Label>()
+                    .Any(label => label.text == "Bridge connection"));
+            Assert.IsTrue(
+                FindByClass(view, "dpi-graph-legend__label")
+                    .OfType<Label>()
+                    .Any(label => label.text == "Optional companion"));
+            Assert.IsTrue(
+                FindByClass(view, "dpi-graph-legend__label")
+                    .OfType<Label>()
+                    .Any(label => label.text == "Suite membership"));
             Assert.AreEqual(3, FindByClass(view, "dpi-graph-node").Count);
             Assert.AreEqual(1, FindByClass(view, "dpi-graph-node--bridge").Count);
             Assert.IsTrue(FindByClass(view, "dpi-graph-node__action").Count >= 1);
@@ -256,24 +275,76 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 focus,
                 "com.deucarian.object-loading",
                 "com.deucarian.object-loading.api-bridge",
-                PackageGraphEdgeKind.Bridge);
+                PackageGraphEdgeKind.HardDependency);
             AssertEdgeVisible(
                 graph,
                 focus,
                 "com.deucarian.api",
                 "com.deucarian.object-loading.api-bridge",
-                PackageGraphEdgeKind.Bridge);
+                PackageGraphEdgeKind.HardDependency);
+            AssertEdgeVisible(
+                graph,
+                focus,
+                "com.deucarian.object-loading.api-bridge",
+                "com.deucarian.object-loading",
+                PackageGraphEdgeKind.BridgeConnection);
+            AssertEdgeVisible(
+                graph,
+                focus,
+                "com.deucarian.object-loading.api-bridge",
+                "com.deucarian.api",
+                PackageGraphEdgeKind.BridgeConnection);
             AssertEdgeVisible(
                 graph,
                 focus,
                 "com.deucarian.object-loading",
                 "com.deucarian.diagnostics",
-                PackageGraphEdgeKind.OptionalIntegration);
+                PackageGraphEdgeKind.OptionalCompanion);
 
             PackageGraphEdge unrelatedThemingEdge = graph.Edges.Single(edge =>
                 edge.FromPackageId == "com.deucarian.editor" &&
                 edge.ToPackageId == "com.deucarian.theming");
             Assert.IsFalse(focus.IsEdgeVisible(unrelatedThemingEdge));
+        }
+
+        [Test]
+        public void Focus_SelectingBridgeShowsHardRequirementsAndBridgeConnectionsSeparately()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+
+            PackageGraphFocus focus = PackageGraphFocus.Create(
+                graph,
+                "com.deucarian.object-loading.api-bridge",
+                Array.Empty<string>());
+
+            AssertEdgeVisible(
+                graph,
+                focus,
+                "com.deucarian.object-loading",
+                "com.deucarian.object-loading.api-bridge",
+                PackageGraphEdgeKind.HardDependency);
+            AssertEdgeVisible(
+                graph,
+                focus,
+                "com.deucarian.api",
+                "com.deucarian.object-loading.api-bridge",
+                PackageGraphEdgeKind.HardDependency);
+            AssertEdgeVisible(
+                graph,
+                focus,
+                "com.deucarian.object-loading.api-bridge",
+                "com.deucarian.object-loading",
+                PackageGraphEdgeKind.BridgeConnection);
+            AssertEdgeVisible(
+                graph,
+                focus,
+                "com.deucarian.object-loading.api-bridge",
+                "com.deucarian.api",
+                PackageGraphEdgeKind.BridgeConnection);
+            Assert.IsFalse(graph.Edges.Any(edge =>
+                edge.Kind == PackageGraphEdgeKind.OptionalCompanion &&
+                edge.ConnectsPackage("com.deucarian.object-loading.api-bridge")));
         }
 
         [Test]

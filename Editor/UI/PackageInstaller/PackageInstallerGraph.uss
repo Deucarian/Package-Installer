@@ -181,12 +181,16 @@
     border-bottom-color: rgba(116, 144, 196, 0.62);
 }
 
-.dpi-graph-legend__line--dashed {
-    border-bottom-color: rgba(72, 150, 188, 0.48);
+.dpi-graph-legend__line--bridge {
+    border-bottom-color: rgba(59, 209, 191, 0.76);
 }
 
-.dpi-graph-legend__line--active {
-    border-bottom-color: rgba(59, 209, 191, 0.90);
+.dpi-graph-legend__line--optional {
+    border-bottom-color: rgba(116, 144, 164, 0.48);
+}
+
+.dpi-graph-legend__line--suite {
+    border-bottom-color: rgba(59, 166, 154, 0.46);
 }
 
 .dpi-graph-legend__line--warning {

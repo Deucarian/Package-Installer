@@ -16,8 +16,8 @@ namespace Deucarian.PackageInstaller.Editor
     internal enum PackageGraphEdgeKind
     {
         HardDependency,
-        OptionalIntegration,
-        Bridge,
+        BridgeConnection,
+        OptionalCompanion,
         SuiteMembership,
         Recommended
     }
@@ -381,7 +381,8 @@ namespace Deucarian.PackageInstaller.Editor
             foreach (string bridgePackageId in bridgePackageIds)
             {
                 foreach (PackageGraphEdge edge in graph.Edges.Where(edge =>
-                             edge.Kind == PackageGraphEdgeKind.Bridge &&
+                             (edge.Kind == PackageGraphEdgeKind.BridgeConnection ||
+                              edge.Kind == PackageGraphEdgeKind.HardDependency) &&
                              edge.ConnectsPackage(bridgePackageId)))
                 {
                     AddFocusEdge(edge);

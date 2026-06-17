@@ -43,8 +43,21 @@ namespace Deucarian.PackageInstaller.Editor
                 "Dependency flow",
                 "dpi-graph-legend__line--solid",
                 "Required package -> dependent package"));
-            legend.Add(CreateLegendItem("Dashed", "Bridge / optional", "dpi-graph-legend__line--dashed"));
-            legend.Add(CreateLegendItem("Focus", "Selected relationship", "dpi-graph-legend__line--active"));
+            legend.Add(CreateLegendItem(
+                "Cable",
+                "Bridge connection",
+                "dpi-graph-legend__line--bridge",
+                "Integration package connects systems"));
+            legend.Add(CreateLegendItem(
+                "Dotted",
+                "Optional companion",
+                "dpi-graph-legend__line--optional",
+                "Enhances, not required"));
+            legend.Add(CreateLegendItem(
+                "Halo",
+                "Suite membership",
+                "dpi-graph-legend__line--suite",
+                "Grouped package bundle"));
             legend.Add(CreateLegendItem("Attention", "Update / missing dependency", "dpi-graph-legend__line--warning"));
             header.Add(legend);
 
@@ -898,6 +911,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             return _graph.Edges.Any(edge =>
                 edge.State != PackageGraphEdgeState.Warning &&
+                ShouldAnimate(edge.Kind) &&
                 _focus.IsEdgeVisible(edge) &&
                 _focus.IsEdgeEmphasized(edge));
         }
@@ -1003,35 +1017,67 @@ namespace Deucarian.PackageInstaller.Editor
             Vector2 controlB = Vector2.Lerp(end, control, 0.72f);
             Color color = GetEdgeColor(edge, emphasized, focusMode);
             float width = GetEdgeWidth(edge, emphasized, focusMode);
-            bool animate = emphasized && focusMode && edge.State != PackageGraphEdgeState.Warning;
+            bool animate = emphasized &&
+                           focusMode &&
+                           edge.State != PackageGraphEdgeState.Warning &&
+                           ShouldAnimate(edge.Kind);
 
             if (color.a <= 0.01f || width <= 0.01f)
             {
                 return;
             }
 
-            painter.strokeColor = color;
-            painter.lineWidth = width;
-
-            if (IsDashed(edge.Kind))
+            if (edge.Kind == PackageGraphEdgeKind.BridgeConnection)
             {
+                DrawBridgeCableBezier(
+                    painter,
+                    start,
+                    controlA,
+                    controlB,
+                    end,
+                    color,
+                    width,
+                    emphasized);
+            }
+            else if (IsDotted(edge.Kind))
+            {
+                painter.strokeColor = color;
+                painter.lineWidth = width;
                 DrawDashedBezier(
                     painter,
                     start,
                     controlA,
                     controlB,
                     end,
+                    2.5f,
+                    7.5f,
+                    animate ? (1f - animationPhase) * 10f : 0f);
+            }
+            else if (IsDashed(edge.Kind))
+            {
+                painter.strokeColor = color;
+                painter.lineWidth = width;
+                DrawDashedBezier(
+                    painter,
+                    start,
+                    controlA,
+                    controlB,
+                    end,
+                    AnimatedDashLength,
+                    AnimatedDashGap,
                     animate ? (1f - animationPhase) * (AnimatedDashLength + AnimatedDashGap) : 0f);
             }
             else
             {
+                painter.strokeColor = color;
+                painter.lineWidth = width;
                 painter.BeginPath();
                 painter.MoveTo(start);
                 painter.BezierCurveTo(controlA, controlB, end);
                 painter.Stroke();
             }
 
-            if (emphasized)
+            if (emphasized && ShouldDrawDirectionArrow(edge.Kind))
             {
                 DrawDirectionArrow(
                     painter,
@@ -1045,15 +1091,23 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 float markerT = Mathf.Lerp(0.22f, 0.78f, animationPhase);
                 Color pulseColor = new Color(color.r, color.g, color.b, Mathf.Min(0.86f, color.a + 0.10f));
-                DrawDirectionArrow(
-                    painter,
-                    GetBezierPoint(start, controlA, controlB, end, markerT),
-                    GetBezierTangent(start, controlA, controlB, end, markerT),
-                    pulseColor,
-                    6.5f);
+
+                if (edge.Kind == PackageGraphEdgeKind.BridgeConnection)
+                {
+                    DrawPulseDot(painter, GetBezierPoint(start, controlA, controlB, end, markerT), pulseColor, 4.2f);
+                }
+                else if (ShouldDrawDirectionArrow(edge.Kind))
+                {
+                    DrawDirectionArrow(
+                        painter,
+                        GetBezierPoint(start, controlA, controlB, end, markerT),
+                        GetBezierTangent(start, controlA, controlB, end, markerT),
+                        pulseColor,
+                        6.5f);
+                }
             }
 
-            if (emphasized)
+            if (emphasized && ShouldDrawPortMarker(edge.Kind))
             {
                 DrawPortMarker(painter, start, color, width);
             }
@@ -1105,7 +1159,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             float distance = Mathf.Max(70f, Vector2.Distance(start, end) * 0.16f);
 
-            if (edge.Kind == PackageGraphEdgeKind.Bridge)
+            if (edge.Kind == PackageGraphEdgeKind.BridgeConnection)
             {
                 distance += 24f;
             }
@@ -1123,10 +1177,30 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static bool IsDashed(PackageGraphEdgeKind kind)
         {
-            return kind == PackageGraphEdgeKind.Bridge ||
-                   kind == PackageGraphEdgeKind.OptionalIntegration ||
-                   kind == PackageGraphEdgeKind.Recommended ||
+            return kind == PackageGraphEdgeKind.Recommended ||
                    kind == PackageGraphEdgeKind.SuiteMembership;
+        }
+
+        private static bool IsDotted(PackageGraphEdgeKind kind)
+        {
+            return kind == PackageGraphEdgeKind.OptionalCompanion;
+        }
+
+        private static bool ShouldAnimate(PackageGraphEdgeKind kind)
+        {
+            return kind == PackageGraphEdgeKind.HardDependency ||
+                   kind == PackageGraphEdgeKind.BridgeConnection;
+        }
+
+        private static bool ShouldDrawDirectionArrow(PackageGraphEdgeKind kind)
+        {
+            return kind == PackageGraphEdgeKind.HardDependency;
+        }
+
+        private static bool ShouldDrawPortMarker(PackageGraphEdgeKind kind)
+        {
+            return kind == PackageGraphEdgeKind.HardDependency ||
+                   kind == PackageGraphEdgeKind.BridgeConnection;
         }
 
         private static Color GetEdgeColor(PackageGraphEdge edge, bool emphasized, bool focusMode)
@@ -1143,32 +1217,154 @@ namespace Deucarian.PackageInstaller.Editor
                     return new Color(0.34f, 0.70f, 0.98f, 0.90f);
                 }
 
-                return new Color(0.24f, 0.82f, 0.75f, 0.92f);
+                if (edge.Kind == PackageGraphEdgeKind.BridgeConnection)
+                {
+                    return new Color(0.24f, 0.82f, 0.75f, 0.92f);
+                }
+
+                if (edge.Kind == PackageGraphEdgeKind.OptionalCompanion)
+                {
+                    return new Color(0.62f, 0.75f, 0.84f, 0.58f);
+                }
+
+                return new Color(0.48f, 0.74f, 0.78f, 0.64f);
             }
 
             if (focusMode)
             {
-                return new Color(0.42f, 0.54f, 0.70f, 0.22f);
+                return edge.Kind == PackageGraphEdgeKind.OptionalCompanion
+                    ? new Color(0.42f, 0.54f, 0.70f, 0.12f)
+                    : new Color(0.42f, 0.54f, 0.70f, 0.22f);
             }
 
-            return edge.Kind == PackageGraphEdgeKind.HardDependency
-                ? new Color(0.42f, 0.54f, 0.72f, 0.24f)
-                : new Color(0.28f, 0.58f, 0.76f, 0.14f);
+            switch (edge.Kind)
+            {
+                case PackageGraphEdgeKind.HardDependency:
+                    return new Color(0.42f, 0.54f, 0.72f, 0.24f);
+                case PackageGraphEdgeKind.BridgeConnection:
+                    return new Color(0.20f, 0.70f, 0.66f, 0.18f);
+                case PackageGraphEdgeKind.OptionalCompanion:
+                    return new Color(0.50f, 0.62f, 0.72f, 0.12f);
+                default:
+                    return new Color(0.28f, 0.58f, 0.76f, 0.14f);
+            }
         }
 
         private static float GetEdgeWidth(PackageGraphEdge edge, bool emphasized, bool focusMode)
         {
             if (emphasized)
             {
-                return edge.State == PackageGraphEdgeState.Warning ? 2.7f : 3f;
+                if (edge.State == PackageGraphEdgeState.Warning)
+                {
+                    return 2.7f;
+                }
+
+                return edge.Kind == PackageGraphEdgeKind.OptionalCompanion ? 1.8f : 3f;
             }
 
             if (focusMode)
             {
-                return 1.2f;
+                return edge.Kind == PackageGraphEdgeKind.OptionalCompanion ? 0.95f : 1.2f;
             }
 
-            return edge.Kind == PackageGraphEdgeKind.HardDependency ? 1.45f : 1f;
+            switch (edge.Kind)
+            {
+                case PackageGraphEdgeKind.HardDependency:
+                    return 1.45f;
+                case PackageGraphEdgeKind.BridgeConnection:
+                    return 1.2f;
+                case PackageGraphEdgeKind.OptionalCompanion:
+                    return 0.9f;
+                default:
+                    return 1f;
+            }
+        }
+
+        private static void DrawBridgeCableBezier(
+            Painter2D painter,
+            Vector2 start,
+            Vector2 controlA,
+            Vector2 controlB,
+            Vector2 end,
+            Color color,
+            float width,
+            bool emphasized)
+        {
+            Vector2 tangent = GetBezierTangent(start, controlA, controlB, end, 0.5f);
+
+            if (tangent.sqrMagnitude < 0.01f)
+            {
+                tangent = end - start;
+            }
+
+            Vector2 side = tangent.sqrMagnitude < 0.01f
+                ? Vector2.up
+                : new Vector2(-tangent.y, tangent.x).normalized;
+            float offset = emphasized ? 4.2f : 3.2f;
+            Color underlay = new Color(0.04f, 0.12f, 0.14f, Mathf.Min(0.58f, color.a * 0.68f));
+
+            painter.strokeColor = underlay;
+            painter.lineWidth = Mathf.Max(2f, width + 1.9f);
+            DrawBezierStroke(painter, start, controlA, controlB, end);
+
+            painter.strokeColor = color;
+            painter.lineWidth = Mathf.Max(1f, width * 0.62f);
+            DrawBezierStroke(
+                painter,
+                start + side * offset,
+                controlA + side * offset,
+                controlB + side * offset,
+                end + side * offset);
+            DrawBezierStroke(
+                painter,
+                start - side * offset,
+                controlA - side * offset,
+                controlB - side * offset,
+                end - side * offset);
+
+            if (emphasized)
+            {
+                DrawCablePlug(painter, start, side, color);
+                DrawCablePlug(painter, end, side, color);
+            }
+        }
+
+        private static void DrawBezierStroke(
+            Painter2D painter,
+            Vector2 start,
+            Vector2 controlA,
+            Vector2 controlB,
+            Vector2 end)
+        {
+            painter.BeginPath();
+            painter.MoveTo(start);
+            painter.BezierCurveTo(controlA, controlB, end);
+            painter.Stroke();
+        }
+
+        private static void DrawCablePlug(Painter2D painter, Vector2 center, Vector2 side, Color color)
+        {
+            painter.strokeColor = new Color(color.r, color.g, color.b, Mathf.Min(1f, color.a + 0.08f));
+            painter.lineWidth = 1.4f;
+            painter.BeginPath();
+            painter.MoveTo(center - side * 5.5f);
+            painter.LineTo(center + side * 5.5f);
+            painter.Stroke();
+        }
+
+        private static void DrawPulseDot(Painter2D painter, Vector2 center, Color color, float size)
+        {
+            painter.fillColor = color;
+            painter.strokeColor = new Color(color.r, color.g, color.b, Mathf.Min(1f, color.a + 0.08f));
+            painter.lineWidth = 0.85f;
+            painter.BeginPath();
+            painter.MoveTo(center + new Vector2(0f, -size));
+            painter.LineTo(center + new Vector2(size, 0f));
+            painter.LineTo(center + new Vector2(0f, size));
+            painter.LineTo(center + new Vector2(-size, 0f));
+            painter.ClosePath();
+            painter.Fill();
+            painter.Stroke();
         }
 
         private static void DrawDashedBezier(
@@ -1177,10 +1373,10 @@ namespace Deucarian.PackageInstaller.Editor
             Vector2 controlA,
             Vector2 controlB,
             Vector2 end,
+            float dashLength,
+            float gapLength,
             float dashOffset)
         {
-            const float dashLength = AnimatedDashLength;
-            const float gapLength = AnimatedDashGap;
             float patternLength = dashLength + gapLength;
             float normalizedOffset = Mathf.Repeat(dashOffset, patternLength);
 
