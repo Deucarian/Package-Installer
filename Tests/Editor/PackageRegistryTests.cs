@@ -386,6 +386,24 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void BundledRegistryProvidesStableAndDevelopmentChannels()
+        {
+            string registryJson = File.ReadAllText(GetBundledRegistryPath());
+            PackageRegistryLoadResult result = new PackageRegistryLoader()
+                .LoadFromJson(registryJson, PackageRegistrySource.Bundled);
+
+            Assert.IsTrue(result.IsValid, result.ErrorMessage);
+
+            foreach (PackageRegistryEntry package in result.Registry.packages)
+            {
+                StringAssert.StartsWith("https://github.com/Deucarian/", package.stableUrl, package.id);
+                StringAssert.EndsWith(".git#main", package.stableUrl, package.id);
+                StringAssert.StartsWith("https://github.com/Deucarian/", package.developmentUrl, package.id);
+                StringAssert.EndsWith(".git#develop", package.developmentUrl, package.id);
+            }
+        }
+
+        [Test]
         public void CoreStateInstalledDetectionUsesRealPackageId()
         {
             PackageDefinition coreState = PackageRegistryProvider

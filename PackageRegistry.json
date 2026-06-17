@@ -52,7 +52,7 @@
       "type": "Core",
       "description": "Small dependency-light logging wrapper for Deucarian Unity packages.",
       "stableUrl": "https://github.com/Deucarian/Logging.git#main",
-      "developmentUrl": "",
+      "developmentUrl": "https://github.com/Deucarian/Logging.git#develop",
       "dependencies": [
         "com.deucarian.editor"
       ]
@@ -113,7 +113,7 @@
       "type": "OptionalIntegration",
       "description": "Designer-friendly ScriptableObject theming with color role assets, palettes, themes, and Unity component adapters.",
       "stableUrl": "https://github.com/Deucarian/Theming.git#main",
-      "developmentUrl": "",
+      "developmentUrl": "https://github.com/Deucarian/Theming.git#develop",
       "dependencies": [
         "com.deucarian.editor",
         "com.deucarian.logging"
@@ -126,7 +126,7 @@
       "type": "OptionalIntegration",
       "description": "Keyed world-object selection, raycast input adapters, hover tracking, and highlight hooks for Unity.",
       "stableUrl": "https://github.com/Deucarian/Object-Selection.git#main",
-      "developmentUrl": "",
+      "developmentUrl": "https://github.com/Deucarian/Object-Selection.git#develop",
       "dependencies": [
         "com.deucarian.logging"
       ],
@@ -169,7 +169,7 @@
       "type": "Bridge",
       "description": "Integration package connecting Session authentication to API.",
       "stableUrl": "https://github.com/Deucarian/Session-API-Bridge.git#main",
-      "developmentUrl": "",
+      "developmentUrl": "https://github.com/Deucarian/Session-API-Bridge.git#develop",
       "dependencies": [
         "com.deucarian.session",
         "com.deucarian.api"
@@ -220,7 +220,7 @@
       "type": "Bridge",
       "description": "Integration package synchronizing Object Selection and Core State selections through shared keys.",
       "stableUrl": "https://github.com/Deucarian/Object-Selection-Bridge.git#main",
-      "developmentUrl": "",
+      "developmentUrl": "https://github.com/Deucarian/Object-Selection-Bridge.git#develop",
       "dependencies": [
         "com.deucarian.object-selection",
         "com.deucarian.core-state",
@@ -238,7 +238,7 @@
       "type": "Suite",
       "description": "Curated bundle that installs Core State, UI Binding, Object Selection, and both Core State selection bridges.",
       "stableUrl": "https://github.com/Deucarian/Selection-Suite.git#main",
-      "developmentUrl": "",
+      "developmentUrl": "https://github.com/Deucarian/Selection-Suite.git#develop",
       "dependencies": [
         "com.deucarian.core-state",
         "com.deucarian.ui-binding",
