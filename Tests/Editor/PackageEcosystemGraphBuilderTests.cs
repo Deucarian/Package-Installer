@@ -104,8 +104,58 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 PackageGraphNodeAction.Update,
                 graph.Nodes.Single(node => node.PackageId == update.PackageId).PrimaryAction);
             Assert.AreEqual(
+                PackageGraphNodeStatus.UpdateAvailable,
+                graph.Nodes.Single(node => node.PackageId == update.PackageId).Status);
+            Assert.AreEqual(
                 PackageGraphNodeAction.Install,
                 graph.Nodes.Single(node => node.PackageId == missing.PackageId).PrimaryAction);
+        }
+
+        [Test]
+        public void GraphView_UsesAttentionStylingForUpdateAvailableNodes()
+        {
+            PackageDefinition update = CreatePackage("Update", "com.example.update", "Core");
+            PackageGraphModel graph = new PackageGraphBuilder(
+                    packageId => packageId == update.PackageId,
+                    _ => PackageChannel.Stable,
+                    package => PackageUpdateStatus.UpdateAvailable(
+                        package,
+                        PackageChannel.Stable,
+                        package.GetUrl(PackageChannel.Stable),
+                        "1111111",
+                        "2222222"))
+                .Build(new[] { update });
+            PackageGraphView view = new PackageGraphView(_ => { }, (_, __) => { });
+
+            view.SetGraph(graph, string.Empty, actionsEnabled: true);
+
+            Assert.AreEqual(1, FindByClass(view, "dpi-graph-node--status-update").Count);
+            Label updateBadge = FindByClass(view, "dpi-graph-node__badge--update")
+                .OfType<Label>()
+                .Single();
+            Assert.AreEqual("Update available", updateBadge.text);
+            Assert.AreEqual(
+                "Update",
+                FindByClass(view, "dpi-graph-node__action").OfType<Button>().Single().text);
+        }
+
+        [Test]
+        public void Build_MarksMissingInstalledDependencyRequirementAsWarningNode()
+        {
+            PackageDefinition dependency = CreatePackage("Dependency", "com.example.dependency", "Core");
+            PackageDefinition installed = CreatePackage(
+                "Installed",
+                "com.example.installed",
+                "Core",
+                dependencies: new[] { dependency.PackageId });
+
+            PackageGraphModel graph = new PackageGraphBuilder(packageId => packageId == installed.PackageId)
+                .Build(new[] { dependency, installed });
+            PackageGraphNode dependencyNode = graph.Nodes.Single(node => node.PackageId == dependency.PackageId);
+
+            Assert.AreEqual(PackageGraphNodeStatus.Warning, dependencyNode.Status);
+            Assert.AreEqual("Required by installed package", dependencyNode.UpdateStatusLabel);
+            Assert.AreEqual(PackageGraphNodeAction.Install, dependencyNode.PrimaryAction);
         }
 
         [Test]
@@ -235,6 +285,31 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.IsTrue(focusedSuite.IsSuiteRegionVisible(selectionSuite));
             Assert.IsTrue(focusedSuite.IsEdgeVisible(suiteMembershipEdge));
             Assert.IsTrue(focusedSuite.IsPackageRelated("com.deucarian.object-selection.core-state-bridge"));
+        }
+
+        [Test]
+        public void Focus_OverviewHidesNormalDependencyEdges()
+        {
+            PackageDefinition editor = CreatePackage("Editor", "com.example.editor", "Editor");
+            PackageDefinition logging = CreatePackage(
+                "Logging",
+                "com.example.logging",
+                "Core",
+                dependencies: new[] { editor.PackageId });
+            PackageGraphModel graph = new PackageGraphBuilder(_ => true)
+                .Build(new[] { editor, logging });
+            PackageGraphFocus overview = PackageGraphFocus.Create(graph, string.Empty, Array.Empty<string>());
+            PackageGraphEdge dependencyEdge = graph.Edges.Single(edge =>
+                edge.Kind == PackageGraphEdgeKind.HardDependency &&
+                edge.FromPackageId == editor.PackageId &&
+                edge.ToPackageId == logging.PackageId);
+
+            Assert.IsFalse(overview.IsEdgeVisible(dependencyEdge));
+
+            PackageGraphFocus focused = PackageGraphFocus.Create(graph, logging.PackageId, Array.Empty<string>());
+
+            Assert.IsTrue(focused.IsEdgeVisible(dependencyEdge));
+            Assert.IsTrue(focused.IsEdgeEmphasized(dependencyEdge));
         }
 
         private static PackageDefinition CreatePackage(

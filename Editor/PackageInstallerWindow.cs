@@ -266,6 +266,7 @@ namespace Deucarian.PackageInstaller.Editor
                 rootVisualElement.styleSheets.Add(graphStyleSheet);
             }
 
+            rootVisualElement.RegisterCallback<KeyDownEvent>(HandleRootKeyDown);
             BuildViewToolbar(content);
 
             _listViewContainerHost = new VisualElement();
@@ -279,7 +280,10 @@ namespace Deucarian.PackageInstaller.Editor
             _graphModeContainer.AddToClassList("dpi-mode-container");
             _graphModeContainer.AddToClassList("dpi-graph-mode");
 
-            _graphView = new PackageGraphView(HandleGraphPackageSelected, HandleGraphPackageAction);
+            _graphView = new PackageGraphView(
+                HandleGraphPackageSelected,
+                HandleGraphPackageAction,
+                ClearGraphSelection);
             _graphModeContainer.Add(_graphView);
 
             _graphDetailsContainer = new IMGUIContainer(DrawGraphDetailsGui);
@@ -450,11 +454,45 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
+            SelectionKind selectionKind = packageDefinition.IsBridge ? SelectionKind.Bridge : SelectionKind.Package;
+
+            if (IsSelected(packageDefinition, selectionKind))
+            {
+                ClearGraphSelection();
+                return;
+            }
+
             SelectDefinition(
                 packageDefinition,
-                packageDefinition.IsBridge ? SelectionKind.Bridge : SelectionKind.Package);
+                selectionKind);
             _graphFocusedPackageId = packageDefinition.PackageId;
             RefreshGraphView();
+        }
+
+        private void ClearGraphSelection()
+        {
+            if (string.IsNullOrWhiteSpace(_selectedPackageId) &&
+                string.IsNullOrWhiteSpace(_graphFocusedPackageId))
+            {
+                return;
+            }
+
+            _selectedPackageId = string.Empty;
+            _graphFocusedPackageId = string.Empty;
+            _detailsScrollPosition = Vector2.zero;
+            RefreshGraphView();
+            Repaint();
+        }
+
+        private void HandleRootKeyDown(KeyDownEvent evt)
+        {
+            if (_viewMode != InstallerViewMode.EcosystemGraph || evt.keyCode != KeyCode.Escape)
+            {
+                return;
+            }
+
+            ClearGraphSelection();
+            evt.StopPropagation();
         }
 
         private void HandleGraphPackageAction(PackageDefinition packageDefinition, PackageGraphNodeAction action)
@@ -488,9 +526,8 @@ namespace Deucarian.PackageInstaller.Editor
         private void DrawGraphDetailsGui()
         {
             EnsureStyles();
-            EnsureValidSelection();
 
-            using (new EditorGUILayout.VerticalScope(_windowStyle))
+            using (new EditorGUILayout.VerticalScope(_windowStyle, GUILayout.ExpandHeight(true)))
             {
                 DrawDetailsPane();
             }
@@ -1246,15 +1283,23 @@ namespace Deucarian.PackageInstaller.Editor
                 GUILayout.ExpandWidth(true),
                 GUILayout.ExpandHeight(true));
 
-            _detailsScrollPosition = EditorGUILayout.BeginScrollView(_detailsScrollPosition, false, false);
+            _detailsScrollPosition = EditorGUILayout.BeginScrollView(
+                _detailsScrollPosition,
+                false,
+                false,
+                GUILayout.ExpandHeight(true));
 
             PackageDefinition selectedDefinition = GetSelectedDefinition();
 
             if (selectedDefinition == null)
             {
-                DrawPanel("Selection", () =>
+                DrawPanel("Ecosystem Overview", () =>
                 {
-                    EditorGUILayout.LabelField("Select a package or bridge package.", _mutedMiniLabelStyle);
+                    EditorGUILayout.LabelField("Select a graph node to inspect package details.", _mutedMiniLabelStyle);
+                    EditorGUILayout.Space(4f);
+                    EditorGUILayout.LabelField(
+                        "Use Fit, 100%, Center, pan, and zoom to explore package relationships.",
+                        _mutedMiniLabelStyle);
                 });
             }
             else if (_selectionKind == SelectionKind.Bridge)
@@ -3090,6 +3135,12 @@ namespace Deucarian.PackageInstaller.Editor
         {
             if (GetSelectedDefinition() != null)
             {
+                return;
+            }
+
+            if (_viewMode == InstallerViewMode.EcosystemGraph)
+            {
+                _selectedPackageId = string.Empty;
                 return;
             }
 

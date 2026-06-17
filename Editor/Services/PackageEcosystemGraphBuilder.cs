@@ -136,6 +136,8 @@ namespace Deucarian.PackageInstaller.Editor
                 }
             }
 
+            ApplyRequiredByInstalledPackageWarnings(edges);
+
             return new PackageGraphModel(
                 _nodes.Values
                     .OrderBy(node => GetNodeTypeSortIndex(node.NodeType))
@@ -145,6 +147,57 @@ namespace Deucarian.PackageInstaller.Editor
                     .ThenBy(edge => edge.FromPackageId, StringComparer.OrdinalIgnoreCase)
                     .ThenBy(edge => edge.ToPackageId, StringComparer.OrdinalIgnoreCase),
                 suiteRegions);
+        }
+
+        private void ApplyRequiredByInstalledPackageWarnings(IEnumerable<PackageGraphEdge> edges)
+        {
+            foreach (PackageGraphEdge edge in edges ?? Array.Empty<PackageGraphEdge>())
+            {
+                if (edge.State != PackageGraphEdgeState.Warning)
+                {
+                    continue;
+                }
+
+                string requiredPackageId = GetRequiredPackageId(edge);
+
+                if (string.IsNullOrWhiteSpace(requiredPackageId) ||
+                    !_nodes.TryGetValue(requiredPackageId, out PackageGraphNode requiredNode) ||
+                    !requiredNode.IsRegistered ||
+                    requiredNode.IsInstalled ||
+                    requiredNode.Status != PackageGraphNodeStatus.NotInstalled)
+                {
+                    continue;
+                }
+
+                _nodes[requiredPackageId] = new PackageGraphNode(
+                    requiredNode.PackageId,
+                    requiredNode.DisplayName,
+                    requiredNode.Category,
+                    requiredNode.Description,
+                    requiredNode.NodeType,
+                    PackageGraphNodeStatus.Warning,
+                    requiredNode.SelectedChannel,
+                    requiredNode.IsInstalled,
+                    requiredNode.IsRegistered,
+                    requiredNode.HasPackageReference,
+                    requiredNode.IconKey,
+                    "Required by installed package",
+                    requiredNode.PackageDefinition);
+            }
+        }
+
+        private static string GetRequiredPackageId(PackageGraphEdge edge)
+        {
+            switch (edge.Kind)
+            {
+                case PackageGraphEdgeKind.HardDependency:
+                case PackageGraphEdgeKind.Bridge:
+                    return edge.FromPackageId;
+                case PackageGraphEdgeKind.SuiteMembership:
+                    return edge.ToPackageId;
+                default:
+                    return string.Empty;
+            }
         }
 
         private PackageGraphNode EnsureNode(string packageId, PackageDefinition package)

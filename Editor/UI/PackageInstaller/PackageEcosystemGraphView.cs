@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Deucarian.Editor;
+using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -15,11 +16,20 @@ namespace Deucarian.PackageInstaller.Editor
         public PackageGraphView(
             Action<PackageDefinition> packageSelected,
             Action<PackageDefinition, PackageGraphNodeAction> packageAction)
+            : this(packageSelected, packageAction, null)
+        {
+        }
+
+        public PackageGraphView(
+            Action<PackageDefinition> packageSelected,
+            Action<PackageDefinition, PackageGraphNodeAction> packageAction,
+            Action selectionCleared)
         {
             AddToClassList("dpi-ecosystem-graph");
+            focusable = true;
 
-            _canvas = new PackageGraphCanvas(packageSelected, packageAction);
-            _viewport = new PackageGraphViewport();
+            _canvas = new PackageGraphCanvas(packageSelected, packageAction, selectionCleared);
+            _viewport = new PackageGraphViewport(selectionCleared);
             _viewport.SetContent(_canvas);
 
             VisualElement header = new VisualElement();
@@ -31,7 +41,7 @@ namespace Deucarian.PackageInstaller.Editor
             legend.Add(CreateLegendItem("Solid", "Hard dependency", "dpi-graph-legend__line--solid"));
             legend.Add(CreateLegendItem("Dashed", "Bridge / optional", "dpi-graph-legend__line--dashed"));
             legend.Add(CreateLegendItem("Focus", "Selected relationship", "dpi-graph-legend__line--active"));
-            legend.Add(CreateLegendItem("Warn", "Missing dependency", "dpi-graph-legend__line--warning"));
+            legend.Add(CreateLegendItem("Attention", "Update / missing dependency", "dpi-graph-legend__line--warning"));
             header.Add(legend);
 
             VisualElement toolbar = new VisualElement();
@@ -95,10 +105,13 @@ namespace Deucarian.PackageInstaller.Editor
         private const float MaxZoom = 1.75f;
         private const float FitPadding = 72f;
         private const float PanMargin = 220f;
+        private const float PanClickToleranceSqr = 4f;
 
         private readonly VisualElement _contentRoot;
+        private readonly Action _selectionCleared;
         private Vector2 _pan;
         private Vector2 _lastMousePosition;
+        private Vector2 _mouseDownPosition;
         private float _zoom = 1f;
         private float _contentWidth = PackageGraphLayout.CanvasWidth;
         private float _contentHeight = PackageGraphLayout.CanvasHeight;
@@ -106,9 +119,11 @@ namespace Deucarian.PackageInstaller.Editor
         private bool _initialized;
         private bool _hasInitialBounds;
         private bool _panning;
+        private bool _panMoved;
 
-        public PackageGraphViewport()
+        public PackageGraphViewport(Action selectionCleared)
         {
+            _selectionCleared = selectionCleared;
             name = "ecosystem-graph-viewport";
             AddToClassList("dpi-ecosystem-graph__viewport");
             focusable = true;
@@ -126,6 +141,8 @@ namespace Deucarian.PackageInstaller.Editor
             RegisterCallback<MouseDownEvent>(HandleMouseDown);
             RegisterCallback<MouseMoveEvent>(HandleMouseMove);
             RegisterCallback<MouseUpEvent>(HandleMouseUp);
+            RegisterCallback<ClickEvent>(HandleClick);
+            RegisterCallback<KeyDownEvent>(HandleKeyDown);
             RegisterCallback<MouseCaptureOutEvent>(_ => _panning = false);
             RegisterCallback<GeometryChangedEvent>(_ =>
             {
@@ -252,6 +269,8 @@ namespace Deucarian.PackageInstaller.Editor
 
             _panning = true;
             _lastMousePosition = evt.localMousePosition;
+            _mouseDownPosition = evt.localMousePosition;
+            _panMoved = false;
             MouseCaptureController.CaptureMouse(this);
             Focus();
             evt.StopPropagation();
@@ -265,6 +284,11 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             Vector2 nextMousePosition = evt.localMousePosition;
+            if ((nextMousePosition - _mouseDownPosition).sqrMagnitude > PanClickToleranceSqr)
+            {
+                _panMoved = true;
+            }
+
             _pan += nextMousePosition - _lastMousePosition;
             _lastMousePosition = nextMousePosition;
             _initialized = true;
@@ -286,6 +310,31 @@ namespace Deucarian.PackageInstaller.Editor
                 MouseCaptureController.ReleaseMouse(this);
             }
 
+            evt.StopPropagation();
+        }
+
+        private void HandleClick(ClickEvent evt)
+        {
+            Focus();
+
+            if (evt.button != 0 || _panMoved)
+            {
+                _panMoved = false;
+                return;
+            }
+
+            _selectionCleared?.Invoke();
+            evt.StopPropagation();
+        }
+
+        private void HandleKeyDown(KeyDownEvent evt)
+        {
+            if (evt.keyCode != KeyCode.Escape)
+            {
+                return;
+            }
+
+            _selectionCleared?.Invoke();
             evt.StopPropagation();
         }
 
@@ -379,6 +428,7 @@ namespace Deucarian.PackageInstaller.Editor
     {
         private readonly Action<PackageDefinition> _packageSelected;
         private readonly Action<PackageDefinition, PackageGraphNodeAction> _packageAction;
+        private readonly Action _selectionCleared;
         private readonly PackageGraphLayout _layout = new PackageGraphLayout();
         private readonly HashSet<string> _expandedSuiteIds =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -400,10 +450,12 @@ namespace Deucarian.PackageInstaller.Editor
 
         public PackageGraphCanvas(
             Action<PackageDefinition> packageSelected,
-            Action<PackageDefinition, PackageGraphNodeAction> packageAction)
+            Action<PackageDefinition, PackageGraphNodeAction> packageAction,
+            Action selectionCleared)
         {
             _packageSelected = packageSelected;
             _packageAction = packageAction;
+            _selectionCleared = selectionCleared;
             name = "ecosystem-graph-canvas";
             AddToClassList("dpi-ecosystem-graph__canvas");
             style.width = PackageGraphLayout.CanvasWidth;
@@ -684,6 +736,7 @@ namespace Deucarian.PackageInstaller.Editor
                     _actionsEnabled,
                     _packageSelected,
                     _packageAction,
+                    _selectionCleared,
                     ToggleSuiteExpanded,
                     SetPreviewPackage,
                     ClearPreviewPackage);
@@ -776,6 +829,9 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed class PackageGraphEdgeLayer : VisualElement
     {
         private const int CurveSamples = 32;
+        private const float AnimationFrameMs = 33f;
+        private const float AnimatedDashLength = 14f;
+        private const float AnimatedDashGap = 10f;
 
         private readonly Dictionary<string, Rect> _nodeRects =
             new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
@@ -786,10 +842,15 @@ namespace Deucarian.PackageInstaller.Editor
                 Array.Empty<PackageGraphEdge>(),
                 Array.Empty<PackageGraphSuiteRegion>());
         private PackageGraphFocus _focus = PackageGraphFocus.Create(null, string.Empty, null);
+        private IVisualElementScheduledItem _animationItem;
+        private float _animationPhase;
+        private bool _animationEnabled;
 
         public PackageGraphEdgeLayer()
         {
             generateVisualContent += GenerateEdges;
+            RegisterCallback<AttachToPanelEvent>(_ => UpdateAnimationSchedule());
+            RegisterCallback<DetachFromPanelEvent>(_ => PauseAnimation());
         }
 
         public void SetGraph(
@@ -814,7 +875,78 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             style.height = canvasHeight;
+            _animationEnabled = HasAnimatedEdges();
+            UpdateAnimationSchedule();
             MarkDirtyRepaint();
+        }
+
+        private bool HasAnimatedEdges()
+        {
+            if (_graph == null || _graph.Edges.Count == 0 || _focus == null || !_focus.HasFocus)
+            {
+                return false;
+            }
+
+            return _graph.Edges.Any(edge =>
+                edge.State != PackageGraphEdgeState.Warning &&
+                _focus.IsEdgeVisible(edge) &&
+                _focus.IsEdgeEmphasized(edge));
+        }
+
+        private void UpdateAnimationSchedule()
+        {
+            if (_animationItem == null)
+            {
+                _animationItem = schedule.Execute(UpdateAnimation).Every((long)AnimationFrameMs);
+            }
+
+            if (_animationEnabled)
+            {
+                _animationItem.Resume();
+            }
+            else
+            {
+                PauseAnimation();
+            }
+        }
+
+        private void PauseAnimation()
+        {
+            _animationItem?.Pause();
+        }
+
+        private void UpdateAnimation()
+        {
+            if (!_animationEnabled || !IsVisibleInPanel())
+            {
+                return;
+            }
+
+            _animationPhase = Mathf.Repeat((float)(EditorApplication.timeSinceStartup * 0.46d), 1f);
+            MarkDirtyRepaint();
+        }
+
+        private bool IsVisibleInPanel()
+        {
+            if (panel == null)
+            {
+                return false;
+            }
+
+            VisualElement element = this;
+
+            while (element != null)
+            {
+                if (element.resolvedStyle.display == DisplayStyle.None ||
+                    element.resolvedStyle.visibility == Visibility.Hidden)
+                {
+                    return false;
+                }
+
+                element = element.parent;
+            }
+
+            return true;
         }
 
         private void GenerateEdges(MeshGenerationContext context)
@@ -835,7 +967,14 @@ namespace Deucarian.PackageInstaller.Editor
                     continue;
                 }
 
-                DrawEdge(painter, edge, fromRect, toRect, _focus.IsEdgeEmphasized(edge), _focus.HasFocus);
+                DrawEdge(
+                    painter,
+                    edge,
+                    fromRect,
+                    toRect,
+                    _focus.IsEdgeEmphasized(edge),
+                    _focus.HasFocus,
+                    _animationPhase);
             }
         }
 
@@ -845,7 +984,8 @@ namespace Deucarian.PackageInstaller.Editor
             Rect fromRect,
             Rect toRect,
             bool emphasized,
-            bool focusMode)
+            bool focusMode,
+            float animationPhase)
         {
             Vector2 start = GetPort(fromRect, toRect);
             Vector2 end = GetPort(toRect, fromRect);
@@ -854,6 +994,7 @@ namespace Deucarian.PackageInstaller.Editor
             Vector2 controlB = Vector2.Lerp(end, control, 0.72f);
             Color color = GetEdgeColor(edge, emphasized, focusMode);
             float width = GetEdgeWidth(edge, emphasized, focusMode);
+            bool animate = emphasized && focusMode && edge.State != PackageGraphEdgeState.Warning;
 
             if (color.a <= 0.01f || width <= 0.01f)
             {
@@ -865,7 +1006,13 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (IsDashed(edge.Kind))
             {
-                DrawDashedBezier(painter, start, controlA, controlB, end);
+                DrawDashedBezier(
+                    painter,
+                    start,
+                    controlA,
+                    controlB,
+                    end,
+                    animate ? (1f - animationPhase) * (AnimatedDashLength + AnimatedDashGap) : 0f);
             }
             else
             {
@@ -873,6 +1020,28 @@ namespace Deucarian.PackageInstaller.Editor
                 painter.MoveTo(start);
                 painter.BezierCurveTo(controlA, controlB, end);
                 painter.Stroke();
+            }
+
+            if (emphasized)
+            {
+                DrawDirectionArrow(
+                    painter,
+                    GetBezierPoint(start, controlA, controlB, end, 0.90f),
+                    GetBezierTangent(start, controlA, controlB, end, 0.90f),
+                    color,
+                    emphasized ? 8.5f : 6.5f);
+            }
+
+            if (animate)
+            {
+                float markerT = Mathf.Lerp(0.22f, 0.78f, animationPhase);
+                Color pulseColor = new Color(color.r, color.g, color.b, Mathf.Min(0.86f, color.a + 0.10f));
+                DrawDirectionArrow(
+                    painter,
+                    GetBezierPoint(start, controlA, controlB, end, markerT),
+                    GetBezierTangent(start, controlA, controlB, end, markerT),
+                    pulseColor,
+                    6.5f);
             }
 
             if (emphasized)
@@ -998,13 +1167,16 @@ namespace Deucarian.PackageInstaller.Editor
             Vector2 start,
             Vector2 controlA,
             Vector2 controlB,
-            Vector2 end)
+            Vector2 end,
+            float dashOffset)
         {
-            const float dashLength = 12f;
-            const float gapLength = 8f;
+            const float dashLength = AnimatedDashLength;
+            const float gapLength = AnimatedDashGap;
+            float patternLength = dashLength + gapLength;
+            float normalizedOffset = Mathf.Repeat(dashOffset, patternLength);
 
-            bool draw = true;
-            float segmentCursor = 0f;
+            bool draw = normalizedOffset < dashLength;
+            float segmentCursor = draw ? normalizedOffset : normalizedOffset - dashLength;
             Vector2 previous = start;
 
             for (int index = 1; index <= CurveSamples; index++)
@@ -1066,6 +1238,49 @@ namespace Deucarian.PackageInstaller.Editor
                    t * t * t * end;
         }
 
+        private static Vector2 GetBezierTangent(
+            Vector2 start,
+            Vector2 controlA,
+            Vector2 controlB,
+            Vector2 end,
+            float t)
+        {
+            float inverse = 1f - t;
+            return 3f * inverse * inverse * (controlA - start) +
+                   6f * inverse * t * (controlB - controlA) +
+                   3f * t * t * (end - controlB);
+        }
+
+        private static void DrawDirectionArrow(
+            Painter2D painter,
+            Vector2 center,
+            Vector2 tangent,
+            Color color,
+            float size)
+        {
+            if (tangent.sqrMagnitude < 0.01f)
+            {
+                return;
+            }
+
+            Vector2 forward = tangent.normalized;
+            Vector2 side = new Vector2(-forward.y, forward.x);
+            Vector2 tip = center + forward * size;
+            Vector2 left = center - forward * size * 0.72f + side * size * 0.52f;
+            Vector2 right = center - forward * size * 0.72f - side * size * 0.52f;
+
+            painter.fillColor = color;
+            painter.strokeColor = new Color(color.r, color.g, color.b, Mathf.Min(1f, color.a + 0.08f));
+            painter.lineWidth = 0.85f;
+            painter.BeginPath();
+            painter.MoveTo(tip);
+            painter.LineTo(left);
+            painter.LineTo(right);
+            painter.ClosePath();
+            painter.Fill();
+            painter.Stroke();
+        }
+
         private static void DrawPortMarker(Painter2D painter, Vector2 position, Color color, float width)
         {
             painter.strokeColor = color;
@@ -1107,6 +1322,7 @@ namespace Deucarian.PackageInstaller.Editor
             bool actionsEnabled,
             Action<PackageDefinition> packageSelected,
             Action<PackageDefinition, PackageGraphNodeAction> packageAction,
+            Action selectionCleared,
             Action<string> suiteToggled,
             Action<string> previewPackage,
             Action<string> clearPreviewPackage)
@@ -1130,7 +1346,19 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (node.PackageDefinition != null && packageSelected != null)
             {
-                RegisterCallback<ClickEvent>(_ => packageSelected(node.PackageDefinition));
+                RegisterCallback<ClickEvent>(evt =>
+                {
+                    if (selected)
+                    {
+                        selectionCleared?.Invoke();
+                    }
+                    else
+                    {
+                        packageSelected(node.PackageDefinition);
+                    }
+
+                    evt.StopPropagation();
+                });
             }
 
             VisualElement header = new VisualElement();
@@ -1262,15 +1490,17 @@ namespace Deucarian.PackageInstaller.Editor
             switch (node.Status)
             {
                 case PackageGraphNodeStatus.Missing:
-                    return "Missing";
+                    return "Missing dependency";
                 case PackageGraphNodeStatus.NotInstalled:
                     return "Not installed";
                 case PackageGraphNodeStatus.UpdateAvailable:
-                    return "Update";
+                    return "Update available";
                 case PackageGraphNodeStatus.Checking:
                     return "Checking";
                 case PackageGraphNodeStatus.Warning:
-                    return "Warning";
+                    return string.IsNullOrWhiteSpace(node.UpdateStatusLabel)
+                        ? "Attention"
+                        : node.UpdateStatusLabel;
                 default:
                     return "Installed";
             }

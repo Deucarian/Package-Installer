@@ -340,8 +340,6 @@ namespace Deucarian.PackageInstaller.Editor
             foreach (PackageGraphEdge edge in graph.Edges)
             {
                 if (edge.State == PackageGraphEdgeState.Warning ||
-                    (edge.Kind == PackageGraphEdgeKind.HardDependency &&
-                     edge.State == PackageGraphEdgeState.Active) ||
                     (edge.Kind == PackageGraphEdgeKind.SuiteMembership &&
                      expandedSuites.Contains(edge.FromPackageId)))
                 {
