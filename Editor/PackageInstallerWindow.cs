@@ -103,8 +103,10 @@ namespace Deucarian.PackageInstaller.Editor
         private Color _sidebarBackgroundColor;
         private Color _detailsBackgroundColor;
         private Color _panelBackgroundColor;
+        private Color _headerPanelBackgroundColor;
         private Color _sampleRowBackgroundColor;
         private Color _panelBorderColor;
+        private Color _interactiveBorderColor;
         private Color _separatorColor;
         private Color _rowBackgroundColor;
         private Color _rowHoverColor;
@@ -243,15 +245,17 @@ namespace Deucarian.PackageInstaller.Editor
             _lastProSkin = proSkin;
 
             _mainBackgroundColor = new Color(0.012f, 0.020f, 0.035f);
-            _sidebarBackgroundColor = new Color(0.024f, 0.045f, 0.070f, 0.72f);
-            _detailsBackgroundColor = new Color(0.027f, 0.047f, 0.074f, 0.69f);
-            _panelBackgroundColor = new Color(0.038f, 0.070f, 0.102f, 0.68f);
-            _sampleRowBackgroundColor = new Color(0.046f, 0.080f, 0.112f, 0.58f);
-            _panelBorderColor = new Color(0.36f, 0.62f, 0.75f, 0.30f);
-            _separatorColor = new Color(0.42f, 0.66f, 0.78f, 0.22f);
-            _rowBackgroundColor = new Color(0.045f, 0.071f, 0.100f, 0.50f);
-            _rowHoverColor = new Color(0.070f, 0.120f, 0.158f, 0.60f);
-            _rowSelectedColor = new Color(0.065f, 0.150f, 0.205f, 0.72f);
+            _sidebarBackgroundColor = new Color(23f / 255f, 32f / 255f, 39f / 255f, 0.72f);
+            _detailsBackgroundColor = new Color(23f / 255f, 32f / 255f, 39f / 255f, 0.72f);
+            _panelBackgroundColor = new Color(32f / 255f, 47f / 255f, 56f / 255f, 0.62f);
+            _headerPanelBackgroundColor = new Color(35f / 255f, 52f / 255f, 61f / 255f, 0.68f);
+            _sampleRowBackgroundColor = new Color(32f / 255f, 47f / 255f, 56f / 255f, 0.62f);
+            _panelBorderColor = new Color(90f / 255f, 111f / 255f, 160f / 255f, 0.35f);
+            _interactiveBorderColor = new Color(59f / 255f, 166f / 255f, 154f / 255f, 0.55f);
+            _separatorColor = new Color(90f / 255f, 111f / 255f, 160f / 255f, 0.24f);
+            _rowBackgroundColor = new Color(32f / 255f, 47f / 255f, 56f / 255f, 0.46f);
+            _rowHoverColor = new Color(32f / 255f, 47f / 255f, 56f / 255f, 0.62f);
+            _rowSelectedColor = new Color(35f / 255f, 62f / 255f, 66f / 255f, 0.58f);
             _textColor = new Color(0.88f, 0.93f, 0.96f);
             _mutedTextColor = new Color(0.58f, 0.68f, 0.75f);
 
@@ -339,7 +343,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             BeginSurface(
                 DeucarianEditorStyles.SectionBox,
-                _panelBackgroundColor,
+                _headerPanelBackgroundColor,
                 _panelBorderColor,
                 GUILayout.ExpandWidth(true));
 
@@ -828,7 +832,7 @@ namespace Deucarian.PackageInstaller.Editor
                 PackageInstallerTheme.DrawInsetSurface(
                     rowRect,
                     background,
-                    selected ? GetStatusColor(status.Kind) : _separatorColor,
+                    selected || hover ? _interactiveBorderColor : _separatorColor,
                     6f);
 
                 if (selected)
@@ -1670,7 +1674,7 @@ namespace Deucarian.PackageInstaller.Editor
             OperationProgressView operation = GetCurrentOperationProgress();
             BeginSurface(
                 DeucarianEditorStyles.SectionBox,
-                _panelBackgroundColor,
+                _headerPanelBackgroundColor,
                 _panelBorderColor,
                 GUILayout.ExpandWidth(true));
 

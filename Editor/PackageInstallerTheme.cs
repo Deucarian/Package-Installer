@@ -9,7 +9,7 @@ namespace Deucarian.PackageInstaller.Editor
             "Packages/com.deucarian.package-installer/Editor/Assets/deucarian-installer-background.png";
         private const string BackgroundAssetFileName = "deucarian-installer-background.png";
         private const float SurfaceRadius = 8f;
-        private const float BackgroundImageAlpha = 0.38f;
+        private const float BackgroundImageAlpha = 0.58f;
 
         private static bool _backgroundLoadAttempted;
         private static Texture2D _backgroundTexture;
@@ -37,7 +37,7 @@ namespace Deucarian.PackageInstaller.Editor
             GUI.DrawTexture(rect, backgroundTexture, ScaleMode.ScaleAndCrop, true);
             GUI.color = previousColor;
 
-            EditorGUI.DrawRect(rect, new Color(0.005f, 0.014f, 0.030f, 0.42f));
+            EditorGUI.DrawRect(rect, new Color(0.005f, 0.014f, 0.030f, 0.24f));
         }
 
         public static void DrawFrostedSurface(Rect rect, Color backgroundColor, Color borderColor)
@@ -110,7 +110,7 @@ namespace Deucarian.PackageInstaller.Editor
                     alignedRect.y + 2f,
                     alignedRect.width,
                     alignedRect.height);
-                DrawRoundedFill(shadowRect, radius, new Color(0f, 0f, 0f, 0.20f));
+                DrawRoundedFill(shadowRect, radius, new Color(0f, 0f, 0f, 0.14f));
             }
 
             DrawRoundedFill(alignedRect, radius, borderColor);
@@ -127,7 +127,7 @@ namespace Deucarian.PackageInstaller.Editor
                 DrawRoundedFill(
                     new Rect(innerRect.x + radius, innerRect.y, innerRect.width - radius * 2f, 1f),
                     0f,
-                    new Color(0.75f, 0.94f, 1f, 0.11f));
+                    new Color(0.75f, 0.94f, 1f, 0.08f));
             }
         }
 
