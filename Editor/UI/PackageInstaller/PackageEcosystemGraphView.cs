@@ -1,74 +1,125 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using UnityEditor;
+using Deucarian.Editor;
 using UnityEngine;
 using UnityEngine.UIElements;
 
 namespace Deucarian.PackageInstaller.Editor
 {
-    internal sealed class PackageEcosystemGraphView : VisualElement
+    internal sealed class PackageGraphView : VisualElement
     {
-        private const float CanvasWidth = 1160f;
-        private const float MinimumCanvasHeight = 660f;
-        private const float NodeWidth = 220f;
-        private const float NodeHeight = 76f;
-        private const float NodeSpacing = 22f;
+        private readonly PackageGraphCanvas _canvas;
+
+        public PackageGraphView(
+            Action<PackageDefinition> packageSelected,
+            Action<PackageDefinition, PackageGraphNodeAction> packageAction)
+        {
+            AddToClassList("dpi-ecosystem-graph");
+
+            VisualElement legend = new VisualElement();
+            legend.AddToClassList("dpi-ecosystem-graph__legend");
+            legend.Add(CreateLegendItem("Solid", "Hard dependency", "dpi-graph-legend__line--solid"));
+            legend.Add(CreateLegendItem("Dashed", "Bridge / integration", "dpi-graph-legend__line--dashed"));
+            legend.Add(CreateLegendItem("Bright", "Installed / active", "dpi-graph-legend__line--active"));
+            legend.Add(CreateLegendItem("Dim", "Available path", "dpi-graph-legend__line--possible"));
+            Add(legend);
+
+            ScrollView scrollView = new ScrollView(ScrollViewMode.VerticalAndHorizontal);
+            scrollView.AddToClassList("dpi-ecosystem-graph__scroll");
+            Add(scrollView);
+
+            _canvas = new PackageGraphCanvas(packageSelected, packageAction);
+            scrollView.Add(_canvas);
+        }
+
+        public void SetGraph(PackageGraphModel graph, string selectedPackageId, bool actionsEnabled)
+        {
+            _canvas.SetGraph(graph, selectedPackageId, actionsEnabled);
+        }
+
+        private static VisualElement CreateLegendItem(string marker, string label, string markerClass)
+        {
+            VisualElement item = new VisualElement();
+            item.AddToClassList("dpi-graph-legend__item");
+
+            Label markerLabel = new Label(marker);
+            markerLabel.AddToClassList("dpi-graph-legend__line");
+            markerLabel.AddToClassList(markerClass);
+            item.Add(markerLabel);
+
+            Label labelElement = new Label(label);
+            labelElement.AddToClassList("dpi-graph-legend__label");
+            item.Add(labelElement);
+
+            return item;
+        }
+    }
+
+    internal sealed class PackageGraphCanvas : VisualElement
+    {
+        private const float CanvasWidth = 1380f;
+        private const float MinimumCanvasHeight = 760f;
+        private const float NodeWidth = 258f;
+        private const float NodeHeight = 118f;
+        private const float NodeSpacing = 24f;
+        private const float ToolLaneX = 36f;
+        private const float CoreLaneX = 36f;
+        private const float RuntimeLaneX = 372f;
+        private const float BridgeLaneX = 704f;
+        private const float SuiteLaneX = 1038f;
 
         private readonly Action<PackageDefinition> _packageSelected;
-        private readonly ScrollView _scrollView;
-        private readonly VisualElement _canvas;
+        private readonly Action<PackageDefinition, PackageGraphNodeAction> _packageAction;
         private readonly VisualElement _suiteLayer;
-        private readonly IMGUIContainer _edgeLayer;
+        private readonly PackageGraphEdgeLayer _edgeLayer;
         private readonly VisualElement _nodeLayer;
         private readonly Dictionary<string, Rect> _nodeRects =
             new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
 
-        private PackageEcosystemGraph _graph =
-            new PackageEcosystemGraph(Array.Empty<PackageEcosystemNode>(), Array.Empty<PackageEcosystemEdge>(), Array.Empty<PackageEcosystemSuiteRegion>());
+        private PackageGraphModel _graph =
+            new PackageGraphModel(Array.Empty<PackageGraphNode>(), Array.Empty<PackageGraphEdge>(), Array.Empty<PackageGraphSuiteRegion>());
         private string _selectedPackageId = string.Empty;
+        private bool _actionsEnabled;
         private float _canvasHeight = MinimumCanvasHeight;
 
-        public PackageEcosystemGraphView(Action<PackageDefinition> packageSelected)
+        public PackageGraphCanvas(
+            Action<PackageDefinition> packageSelected,
+            Action<PackageDefinition, PackageGraphNodeAction> packageAction)
         {
             _packageSelected = packageSelected;
-            AddToClassList("dpi-ecosystem-graph");
-
-            _scrollView = new ScrollView(ScrollViewMode.VerticalAndHorizontal);
-            _scrollView.AddToClassList("dpi-ecosystem-graph__scroll");
-            Add(_scrollView);
-
-            _canvas = new VisualElement { name = "ecosystem-graph-canvas" };
-            _canvas.AddToClassList("dpi-ecosystem-graph__canvas");
-            _canvas.style.width = CanvasWidth;
-            _canvas.style.height = MinimumCanvasHeight;
-            _scrollView.Add(_canvas);
+            _packageAction = packageAction;
+            name = "ecosystem-graph-canvas";
+            AddToClassList("dpi-ecosystem-graph__canvas");
+            style.width = CanvasWidth;
+            style.height = MinimumCanvasHeight;
 
             _suiteLayer = new VisualElement { name = "ecosystem-graph-suite-layer" };
             _suiteLayer.AddToClassList("dpi-ecosystem-graph__suite-layer");
             _suiteLayer.pickingMode = PickingMode.Ignore;
             StretchToCanvas(_suiteLayer);
-            _canvas.Add(_suiteLayer);
+            Add(_suiteLayer);
 
-            _edgeLayer = new IMGUIContainer(DrawEdges) { name = "ecosystem-graph-edge-layer" };
+            _edgeLayer = new PackageGraphEdgeLayer { name = "ecosystem-graph-edge-layer" };
             _edgeLayer.AddToClassList("dpi-ecosystem-graph__edge-layer");
             _edgeLayer.pickingMode = PickingMode.Ignore;
             StretchToCanvas(_edgeLayer);
-            _canvas.Add(_edgeLayer);
+            Add(_edgeLayer);
 
             _nodeLayer = new VisualElement { name = "ecosystem-graph-node-layer" };
             _nodeLayer.AddToClassList("dpi-ecosystem-graph__node-layer");
             StretchToCanvas(_nodeLayer);
-            _canvas.Add(_nodeLayer);
+            Add(_nodeLayer);
         }
 
-        public void SetGraph(PackageEcosystemGraph graph, string selectedPackageId)
+        public void SetGraph(PackageGraphModel graph, string selectedPackageId, bool actionsEnabled)
         {
-            _graph = graph ?? new PackageEcosystemGraph(
-                Array.Empty<PackageEcosystemNode>(),
-                Array.Empty<PackageEcosystemEdge>(),
-                Array.Empty<PackageEcosystemSuiteRegion>());
+            _graph = graph ?? new PackageGraphModel(
+                Array.Empty<PackageGraphNode>(),
+                Array.Empty<PackageGraphEdge>(),
+                Array.Empty<PackageGraphSuiteRegion>());
             _selectedPackageId = selectedPackageId ?? string.Empty;
+            _actionsEnabled = actionsEnabled;
             Rebuild();
         }
 
@@ -78,13 +129,16 @@ namespace Deucarian.PackageInstaller.Editor
             _suiteLayer.Clear();
             _nodeLayer.Clear();
 
-            IReadOnlyList<PackageEcosystemNode> nodes = _graph.Nodes;
+            IReadOnlyList<PackageGraphNode> nodes = _graph.Nodes;
             CalculateNodeLayout(nodes);
-            _canvas.style.height = _canvasHeight;
+            style.height = _canvasHeight;
+            _suiteLayer.style.height = _canvasHeight;
+            _edgeLayer.style.height = _canvasHeight;
+            _nodeLayer.style.height = _canvasHeight;
 
             DrawSuiteRegions();
 
-            foreach (PackageEcosystemNode node in nodes)
+            foreach (PackageGraphNode node in nodes)
             {
                 if (!_nodeRects.TryGetValue(node.PackageId, out Rect rect))
                 {
@@ -92,7 +146,12 @@ namespace Deucarian.PackageInstaller.Editor
                 }
 
                 bool selected = string.Equals(node.PackageId, _selectedPackageId, StringComparison.OrdinalIgnoreCase);
-                GraphNodeElement nodeElement = new GraphNodeElement(node, selected, _packageSelected);
+                PackageGraphNodeElement nodeElement = new PackageGraphNodeElement(
+                    node,
+                    selected,
+                    _actionsEnabled,
+                    _packageSelected,
+                    _packageAction);
                 nodeElement.style.left = rect.x;
                 nodeElement.style.top = rect.y;
                 nodeElement.style.width = rect.width;
@@ -100,51 +159,51 @@ namespace Deucarian.PackageInstaller.Editor
                 _nodeLayer.Add(nodeElement);
             }
 
-            _edgeLayer.MarkDirtyRepaint();
+            _edgeLayer.SetGraph(_graph, _nodeRects, _canvasHeight);
         }
 
-        private void CalculateNodeLayout(IReadOnlyList<PackageEcosystemNode> nodes)
+        private void CalculateNodeLayout(IReadOnlyList<PackageGraphNode> nodes)
         {
             float maxHeight = MinimumCanvasHeight;
 
             PlaceGroup(
-                nodes.Where(node => node.NodeType == PackageGraphNodeType.Core),
-                28f,
-                58f,
-                ref maxHeight);
-            PlaceGroup(
                 nodes.Where(node => node.NodeType == PackageGraphNodeType.Tool),
-                346f,
-                42f,
+                ToolLaneX,
+                34f,
                 ref maxHeight);
             PlaceGroup(
-                nodes.Where(node => node.NodeType == PackageGraphNodeType.OptionalIntegration),
-                346f,
-                178f,
+                nodes.Where(node => node.NodeType == PackageGraphNodeType.Core),
+                CoreLaneX,
+                232f,
                 ref maxHeight);
             PlaceGroup(
+                nodes.Where(node => node.NodeType == PackageGraphNodeType.Integration),
+                RuntimeLaneX,
+                154f,
+                ref maxHeight);
+            PlaceBridgeGroup(
                 nodes.Where(node => node.NodeType == PackageGraphNodeType.Bridge),
-                664f,
-                120f,
+                BridgeLaneX,
+                154f,
                 ref maxHeight);
             PlaceGroup(
                 nodes.Where(node => node.NodeType == PackageGraphNodeType.Suite),
-                924f,
-                272f,
+                SuiteLaneX,
+                270f,
                 ref maxHeight);
 
-            _canvasHeight = Mathf.Max(MinimumCanvasHeight, maxHeight + 52f);
+            _canvasHeight = Mathf.Max(MinimumCanvasHeight, maxHeight + 64f);
         }
 
         private void PlaceGroup(
-            IEnumerable<PackageEcosystemNode> nodes,
+            IEnumerable<PackageGraphNode> nodes,
             float x,
             float startY,
             ref float maxHeight)
         {
             float y = startY;
 
-            foreach (PackageEcosystemNode node in nodes.OrderBy(node => node.DisplayName, StringComparer.OrdinalIgnoreCase))
+            foreach (PackageGraphNode node in nodes.OrderBy(node => node.DisplayName, StringComparer.OrdinalIgnoreCase))
             {
                 Rect rect = new Rect(x, y, NodeWidth, NodeHeight);
                 _nodeRects[node.PackageId] = rect;
@@ -153,9 +212,51 @@ namespace Deucarian.PackageInstaller.Editor
             }
         }
 
+        private void PlaceBridgeGroup(
+            IEnumerable<PackageGraphNode> nodes,
+            float x,
+            float startY,
+            ref float maxHeight)
+        {
+            float y = startY;
+
+            foreach (PackageGraphNode node in nodes.OrderBy(node => GetBridgeAnchorY(node.PackageId)))
+            {
+                float desiredY = GetBridgeAnchorY(node.PackageId);
+
+                if (desiredY <= 0f)
+                {
+                    desiredY = y + NodeHeight * 0.5f;
+                }
+
+                y = Mathf.Max(y, desiredY - NodeHeight * 0.5f);
+                Rect rect = new Rect(x, y, NodeWidth, NodeHeight);
+                _nodeRects[node.PackageId] = rect;
+                y += NodeHeight + NodeSpacing;
+                maxHeight = Mathf.Max(maxHeight, rect.yMax);
+            }
+        }
+
+        private float GetBridgeAnchorY(string bridgePackageId)
+        {
+            PackageGraphEdge[] bridgeEdges = _graph.Edges
+                .Where(edge =>
+                    edge.Kind == PackageGraphEdgeKind.Bridge &&
+                    string.Equals(edge.ToPackageId, bridgePackageId, StringComparison.OrdinalIgnoreCase) &&
+                    _nodeRects.ContainsKey(edge.FromPackageId))
+                .ToArray();
+
+            if (bridgeEdges.Length == 0)
+            {
+                return 0f;
+            }
+
+            return bridgeEdges.Average(edge => _nodeRects[edge.FromPackageId].center.y);
+        }
+
         private void DrawSuiteRegions()
         {
-            foreach (PackageEcosystemSuiteRegion region in _graph.SuiteRegions)
+            foreach (PackageGraphSuiteRegion region in _graph.SuiteRegions)
             {
                 List<Rect> memberRects = new List<Rect>();
 
@@ -189,10 +290,10 @@ namespace Deucarian.PackageInstaller.Editor
                         Mathf.Max(bounds.yMax, rect.yMax));
                 }
 
-                bounds.x -= 18f;
-                bounds.y -= 18f;
-                bounds.width += 36f;
-                bounds.height += 36f;
+                bounds.x -= 22f;
+                bounds.y -= 26f;
+                bounds.width += 44f;
+                bounds.height += 52f;
 
                 VisualElement suiteRegion = new VisualElement();
                 suiteRegion.AddToClassList("dpi-graph-suite-region");
@@ -210,22 +311,69 @@ namespace Deucarian.PackageInstaller.Editor
 
         private string GetSuiteRegionLabel(string suitePackageId)
         {
-            PackageEcosystemNode suiteNode = _graph.Nodes.FirstOrDefault(node =>
+            PackageGraphNode suiteNode = _graph.Nodes.FirstOrDefault(node =>
                 string.Equals(node.PackageId, suitePackageId, StringComparison.OrdinalIgnoreCase));
-            return suiteNode != null ? suiteNode.DisplayName : "Suite";
+            return suiteNode != null ? suiteNode.DisplayName + " membership" : "Suite membership";
         }
 
-        private void DrawEdges()
+        private static void StretchToCanvas(VisualElement element)
+        {
+            element.style.position = Position.Absolute;
+            element.style.left = 0f;
+            element.style.top = 0f;
+            element.style.width = CanvasWidth;
+            element.style.height = Length.Percent(100f);
+        }
+    }
+
+    internal sealed class PackageGraphEdgeLayer : VisualElement
+    {
+        private const int CurveSamples = 30;
+
+        private readonly Dictionary<string, Rect> _nodeRects =
+            new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
+
+        private PackageGraphModel _graph =
+            new PackageGraphModel(Array.Empty<PackageGraphNode>(), Array.Empty<PackageGraphEdge>(), Array.Empty<PackageGraphSuiteRegion>());
+
+        public PackageGraphEdgeLayer()
+        {
+            generateVisualContent += GenerateEdges;
+        }
+
+        public void SetGraph(
+            PackageGraphModel graph,
+            IReadOnlyDictionary<string, Rect> nodeRects,
+            float canvasHeight)
+        {
+            _graph = graph ?? new PackageGraphModel(
+                Array.Empty<PackageGraphNode>(),
+                Array.Empty<PackageGraphEdge>(),
+                Array.Empty<PackageGraphSuiteRegion>());
+            _nodeRects.Clear();
+
+            if (nodeRects != null)
+            {
+                foreach (KeyValuePair<string, Rect> nodeRect in nodeRects)
+                {
+                    _nodeRects[nodeRect.Key] = nodeRect.Value;
+                }
+            }
+
+            style.height = canvasHeight;
+            MarkDirtyRepaint();
+        }
+
+        private void GenerateEdges(MeshGenerationContext context)
         {
             if (_graph == null || _graph.Edges.Count == 0)
             {
                 return;
             }
 
-            Handles.BeginGUI();
-            Color previousHandlesColor = Handles.color;
+            Painter2D painter = context.painter2D;
 
-            foreach (PackageEcosystemEdge edge in _graph.Edges)
+            foreach (PackageGraphEdge edge in _graph.Edges)
             {
                 if (!_nodeRects.TryGetValue(edge.FromPackageId, out Rect fromRect) ||
                     !_nodeRects.TryGetValue(edge.ToPackageId, out Rect toRect))
@@ -233,31 +381,42 @@ namespace Deucarian.PackageInstaller.Editor
                     continue;
                 }
 
-                Vector2 start = GetPort(fromRect, toRect);
-                Vector2 end = GetPort(toRect, fromRect);
-                Vector2 midA = new Vector2((start.x + end.x) * 0.5f, start.y);
-                Vector2 midB = new Vector2((start.x + end.x) * 0.5f, end.y);
-                Color color = GetEdgeColor(edge);
-                float width = GetEdgeWidth(edge);
+                DrawEdge(painter, edge, fromRect, toRect);
+            }
+        }
 
-                if (IsDashed(edge.Kind))
-                {
-                    DrawDashedPolyline(color, width, start, midA, midB, end);
-                }
-                else
-                {
-                    Handles.color = color;
-                    Handles.DrawAAPolyLine(
-                        width,
-                        new Vector3(start.x, start.y),
-                        new Vector3(midA.x, midA.y),
-                        new Vector3(midB.x, midB.y),
-                        new Vector3(end.x, end.y));
-                }
+        private static void DrawEdge(Painter2D painter, PackageGraphEdge edge, Rect fromRect, Rect toRect)
+        {
+            Vector2 start = GetPort(fromRect, toRect);
+            Vector2 end = GetPort(toRect, fromRect);
+            float direction = end.x >= start.x ? 1f : -1f;
+            float handleLength = Mathf.Max(76f, Mathf.Abs(end.x - start.x) * 0.42f);
+            Vector2 controlA = start + new Vector2(handleLength * direction, 0f);
+            Vector2 controlB = end - new Vector2(handleLength * direction, 0f);
+            Color color = GetEdgeColor(edge);
+            float width = GetEdgeWidth(edge);
+
+            painter.strokeColor = color;
+            painter.lineWidth = width;
+
+            if (IsDashed(edge.Kind))
+            {
+                DrawDashedBezier(painter, start, controlA, controlB, end);
+            }
+            else
+            {
+                painter.BeginPath();
+                painter.MoveTo(start);
+                painter.BezierCurveTo(controlA, controlB, end);
+                painter.Stroke();
             }
 
-            Handles.color = previousHandlesColor;
-            Handles.EndGUI();
+            DrawPortMarker(painter, start, color, width);
+
+            if (edge.State == PackageGraphEdgeState.Warning)
+            {
+                DrawWarningMarker(painter, GetBezierPoint(start, controlA, controlB, end, 0.5f));
+            }
         }
 
         private static Vector2 GetPort(Rect fromRect, Rect toRect)
@@ -288,203 +447,319 @@ namespace Deucarian.PackageInstaller.Editor
                    kind == PackageGraphEdgeKind.SuiteMembership;
         }
 
-        private static Color GetEdgeColor(PackageEcosystemEdge edge)
+        private static Color GetEdgeColor(PackageGraphEdge edge)
         {
             if (edge.State == PackageGraphEdgeState.Warning)
             {
-                return new Color(0.86f, 0.61f, 0.28f, 0.92f);
+                return new Color(0.94f, 0.64f, 0.27f, 0.92f);
             }
 
             if (edge.State == PackageGraphEdgeState.Active)
             {
-                return new Color(0.23f, 0.65f, 0.60f, 0.95f);
+                return new Color(0.24f, 0.82f, 0.75f, 0.96f);
             }
 
-            return edge.Kind == PackageGraphEdgeKind.HardDependency
-                ? new Color(0.42f, 0.50f, 0.66f, 0.48f)
-                : new Color(0.34f, 0.56f, 0.72f, 0.36f);
+            if (edge.Kind == PackageGraphEdgeKind.HardDependency)
+            {
+                return new Color(0.44f, 0.55f, 0.76f, 0.54f);
+            }
+
+            return new Color(0.28f, 0.62f, 0.82f, 0.40f);
         }
 
-        private static float GetEdgeWidth(PackageEcosystemEdge edge)
+        private static float GetEdgeWidth(PackageGraphEdge edge)
         {
             if (edge.State == PackageGraphEdgeState.Active)
             {
-                return 3f;
+                return 3.1f;
             }
 
             if (edge.State == PackageGraphEdgeState.Warning)
             {
-                return 2.4f;
+                return 2.6f;
             }
 
-            return edge.Kind == PackageGraphEdgeKind.HardDependency ? 1.8f : 1.4f;
+            return edge.Kind == PackageGraphEdgeKind.HardDependency ? 2f : 1.55f;
         }
 
-        private static void DrawDashedPolyline(Color color, float width, params Vector2[] points)
+        private static void DrawDashedBezier(
+            Painter2D painter,
+            Vector2 start,
+            Vector2 controlA,
+            Vector2 controlB,
+            Vector2 end)
         {
-            for (int index = 0; index < points.Length - 1; index++)
+            const float dashLength = 12f;
+            const float gapLength = 7f;
+
+            bool draw = true;
+            float segmentCursor = 0f;
+            Vector2 previous = start;
+
+            for (int index = 1; index <= CurveSamples; index++)
             {
-                DrawDashedLine(points[index], points[index + 1], color, width);
-            }
-        }
+                float t = index / (float)CurveSamples;
+                Vector2 current = GetBezierPoint(start, controlA, controlB, end, t);
+                Vector2 delta = current - previous;
+                float length = delta.magnitude;
 
-        private static void DrawDashedLine(Vector2 start, Vector2 end, Color color, float width)
-        {
-            Vector2 delta = end - start;
-            float length = delta.magnitude;
-
-            if (length <= 0.1f)
-            {
-                return;
-            }
-
-            Vector2 direction = delta / length;
-            const float dashLength = 8f;
-            const float gapLength = 5f;
-            float cursor = 0f;
-
-            Handles.color = color;
-
-            while (cursor < length)
-            {
-                float segmentEnd = Mathf.Min(cursor + dashLength, length);
-                Vector2 segmentStart = start + direction * cursor;
-                Vector2 segmentStop = start + direction * segmentEnd;
-                Handles.DrawAAPolyLine(
-                    width,
-                    new Vector3(segmentStart.x, segmentStart.y),
-                    new Vector3(segmentStop.x, segmentStop.y));
-                cursor += dashLength + gapLength;
-            }
-        }
-
-        private static void StretchToCanvas(VisualElement element)
-        {
-            element.style.position = Position.Absolute;
-            element.style.left = 0f;
-            element.style.top = 0f;
-            element.style.width = CanvasWidth;
-            element.style.height = Length.Percent(100f);
-        }
-
-        private sealed class GraphNodeElement : VisualElement
-        {
-            public GraphNodeElement(
-                PackageEcosystemNode node,
-                bool selected,
-                Action<PackageDefinition> packageSelected)
-            {
-                AddToClassList("dpi-graph-node");
-                AddToClassList("dpi-graph-node--" + GetNodeClass(node.NodeType));
-                EnableInClassList("dpi-graph-node--installed", node.IsInstalled);
-                EnableInClassList("dpi-graph-node--selected", selected);
-                EnableInClassList("dpi-graph-node--missing", !node.IsRegistered);
-                tooltip = GetTooltip(node);
-
-                if (node.PackageDefinition != null && packageSelected != null)
+                if (length <= 0.1f)
                 {
-                    RegisterCallback<ClickEvent>(_ => packageSelected(node.PackageDefinition));
+                    previous = current;
+                    continue;
                 }
 
-                Label title = new Label(node.DisplayName);
-                title.AddToClassList("dpi-graph-node__title");
-                Add(title);
+                Vector2 direction = delta / length;
+                float consumed = 0f;
 
-                VisualElement badges = new VisualElement();
-                badges.AddToClassList("dpi-graph-node__badges");
-                badges.Add(CreateBadge(GetNodeTypeLabel(node.NodeType), "dpi-graph-node__badge--type"));
-                badges.Add(CreateBadge(GetStatusLabel(node), GetStatusClass(node)));
-                Add(badges);
-
-                Label packageId = new Label(node.PackageId);
-                packageId.AddToClassList("dpi-graph-node__package-id");
-                Add(packageId);
-            }
-
-            private static Label CreateBadge(string text, string className)
-            {
-                Label badge = new Label(text);
-                badge.AddToClassList("deucarian-badge");
-                badge.AddToClassList("dpi-graph-node__badge");
-                badge.AddToClassList(className);
-                return badge;
-            }
-
-            private static string GetNodeClass(PackageGraphNodeType nodeType)
-            {
-                switch (nodeType)
+                while (consumed < length)
                 {
-                    case PackageGraphNodeType.Tool:
-                        return "tool";
-                    case PackageGraphNodeType.Bridge:
-                        return "bridge";
-                    case PackageGraphNodeType.Suite:
-                        return "suite";
-                    case PackageGraphNodeType.OptionalIntegration:
-                        return "optional";
-                    default:
-                        return "core";
+                    float targetLength = draw ? dashLength : gapLength;
+                    float step = Mathf.Min(targetLength - segmentCursor, length - consumed);
+                    Vector2 segmentStart = previous + direction * consumed;
+                    Vector2 segmentEnd = previous + direction * (consumed + step);
+
+                    if (draw)
+                    {
+                        painter.BeginPath();
+                        painter.MoveTo(segmentStart);
+                        painter.LineTo(segmentEnd);
+                        painter.Stroke();
+                    }
+
+                    consumed += step;
+                    segmentCursor += step;
+
+                    if (segmentCursor >= targetLength - 0.01f)
+                    {
+                        segmentCursor = 0f;
+                        draw = !draw;
+                    }
                 }
+
+                previous = current;
+            }
+        }
+
+        private static Vector2 GetBezierPoint(
+            Vector2 start,
+            Vector2 controlA,
+            Vector2 controlB,
+            Vector2 end,
+            float t)
+        {
+            float inverse = 1f - t;
+            return inverse * inverse * inverse * start +
+                   3f * inverse * inverse * t * controlA +
+                   3f * inverse * t * t * controlB +
+                   t * t * t * end;
+        }
+
+        private static void DrawPortMarker(Painter2D painter, Vector2 position, Color color, float width)
+        {
+            painter.strokeColor = color;
+            painter.lineWidth = Mathf.Max(1.4f, width);
+            painter.BeginPath();
+            painter.MoveTo(position + new Vector2(-4f, 0f));
+            painter.LineTo(position + new Vector2(4f, 0f));
+            painter.Stroke();
+        }
+
+        private static void DrawWarningMarker(Painter2D painter, Vector2 center)
+        {
+            painter.fillColor = new Color(0.94f, 0.64f, 0.27f, 0.90f);
+            painter.strokeColor = new Color(0.16f, 0.12f, 0.06f, 0.86f);
+            painter.lineWidth = 1.2f;
+
+            painter.BeginPath();
+            painter.MoveTo(center + new Vector2(0f, -7f));
+            painter.LineTo(center + new Vector2(7f, 6f));
+            painter.LineTo(center + new Vector2(-7f, 6f));
+            painter.ClosePath();
+            painter.Fill();
+            painter.Stroke();
+        }
+    }
+
+    internal sealed class PackageGraphNodeElement : VisualElement
+    {
+        private readonly PackageGraphNode _node;
+
+        public PackageGraphNodeElement(
+            PackageGraphNode node,
+            bool selected,
+            bool actionsEnabled,
+            Action<PackageDefinition> packageSelected,
+            Action<PackageDefinition, PackageGraphNodeAction> packageAction)
+        {
+            _node = node ?? throw new ArgumentNullException(nameof(node));
+
+            AddToClassList("dpi-graph-node");
+            AddToClassList("dpi-graph-node--" + GetNodeClass(node.NodeType));
+            AddToClassList("dpi-graph-node--status-" + GetStatusClass(node.Status));
+            EnableInClassList("dpi-graph-node--installed", node.IsInstalled);
+            EnableInClassList("dpi-graph-node--selected", selected);
+            EnableInClassList("dpi-graph-node--missing", !node.IsRegistered);
+            tooltip = GetTooltip(node);
+
+            if (node.PackageDefinition != null && packageSelected != null)
+            {
+                RegisterCallback<ClickEvent>(_ => packageSelected(node.PackageDefinition));
             }
 
-            private static string GetNodeTypeLabel(PackageGraphNodeType nodeType)
-            {
-                switch (nodeType)
-                {
-                    case PackageGraphNodeType.Tool:
-                        return "Tool";
-                    case PackageGraphNodeType.Bridge:
-                        return "Bridge";
-                    case PackageGraphNodeType.Suite:
-                        return "Suite";
-                    case PackageGraphNodeType.OptionalIntegration:
-                        return "Optional";
-                    default:
-                        return "Core";
-                }
-            }
+            VisualElement header = new VisualElement();
+            header.AddToClassList("dpi-graph-node__header");
+            Add(header);
 
-            private static string GetStatusLabel(PackageEcosystemNode node)
+            Image icon = new Image
             {
-                if (!node.IsRegistered)
+                image = DeucarianEditorIcons.GetPackageIcon(node.IconKey),
+                scaleMode = ScaleMode.ScaleToFit
+            };
+            icon.AddToClassList("dpi-graph-node__icon");
+            header.Add(icon);
+
+            VisualElement titleBlock = new VisualElement();
+            titleBlock.AddToClassList("dpi-graph-node__title-block");
+            header.Add(titleBlock);
+
+            Label title = new Label(node.DisplayName);
+            title.AddToClassList("dpi-graph-node__title");
+            titleBlock.Add(title);
+
+            Label packageId = new Label(node.PackageId);
+            packageId.AddToClassList("dpi-graph-node__package-id");
+            titleBlock.Add(packageId);
+
+            VisualElement badges = new VisualElement();
+            badges.AddToClassList("dpi-graph-node__badges");
+            badges.Add(CreateBadge(GetNodeTypeLabel(node.NodeType), "dpi-graph-node__badge--type"));
+            badges.Add(CreateBadge(GetStatusLabel(node), GetStatusBadgeClass(node.Status)));
+            Add(badges);
+
+            VisualElement footer = new VisualElement();
+            footer.AddToClassList("dpi-graph-node__footer");
+            Add(footer);
+
+            Label channel = new Label(node.SelectedChannel.ToString());
+            channel.AddToClassList("dpi-graph-node__channel");
+            footer.Add(channel);
+
+            if (node.PrimaryAction != PackageGraphNodeAction.None)
+            {
+                Button actionButton = new Button(() =>
                 {
+                    packageAction?.Invoke(node.PackageDefinition, node.PrimaryAction);
+                })
+                {
+                    text = node.PrimaryActionLabel
+                };
+                actionButton.AddToClassList("dpi-graph-node__action");
+                actionButton.SetEnabled(actionsEnabled);
+                actionButton.RegisterCallback<ClickEvent>(evt => evt.StopPropagation());
+                footer.Add(actionButton);
+            }
+        }
+
+        private static Label CreateBadge(string text, string className)
+        {
+            Label badge = new Label(text);
+            badge.AddToClassList("deucarian-badge");
+            badge.AddToClassList("dpi-graph-node__badge");
+            badge.AddToClassList(className);
+            return badge;
+        }
+
+        private static string GetNodeClass(PackageGraphNodeType nodeType)
+        {
+            switch (nodeType)
+            {
+                case PackageGraphNodeType.Tool:
+                    return "tool";
+                case PackageGraphNodeType.Bridge:
+                    return "bridge";
+                case PackageGraphNodeType.Suite:
+                    return "suite";
+                case PackageGraphNodeType.Integration:
+                    return "integration";
+                default:
+                    return "core";
+            }
+        }
+
+        private static string GetNodeTypeLabel(PackageGraphNodeType nodeType)
+        {
+            switch (nodeType)
+            {
+                case PackageGraphNodeType.Tool:
+                    return "Tool";
+                case PackageGraphNodeType.Bridge:
+                    return "Bridge";
+                case PackageGraphNodeType.Suite:
+                    return "Suite";
+                case PackageGraphNodeType.Integration:
+                    return "Integration";
+                default:
+                    return "Core";
+            }
+        }
+
+        private static string GetStatusLabel(PackageGraphNode node)
+        {
+            switch (node.Status)
+            {
+                case PackageGraphNodeStatus.Missing:
                     return "Missing";
-                }
-
-                if (node.IsInstalled)
-                {
+                case PackageGraphNodeStatus.NotInstalled:
+                    return "Not installed";
+                case PackageGraphNodeStatus.UpdateAvailable:
+                    return "Update";
+                case PackageGraphNodeStatus.Checking:
+                    return "Checking";
+                case PackageGraphNodeStatus.Warning:
+                    return "Warning";
+                default:
                     return "Installed";
-                }
-
-                return node.HasPackageReference ? "Available" : "No URL";
             }
+        }
 
-            private static string GetStatusClass(PackageEcosystemNode node)
+        private static string GetStatusClass(PackageGraphNodeStatus status)
+        {
+            switch (status)
             {
-                if (!node.IsRegistered)
-                {
-                    return "dpi-graph-node__badge--warning";
-                }
-
-                if (node.IsInstalled)
-                {
-                    return "dpi-graph-node__badge--installed";
-                }
-
-                return node.HasPackageReference
-                    ? "dpi-graph-node__badge--available"
-                    : "dpi-graph-node__badge--warning";
+                case PackageGraphNodeStatus.Missing:
+                    return "missing";
+                case PackageGraphNodeStatus.NotInstalled:
+                    return "available";
+                case PackageGraphNodeStatus.UpdateAvailable:
+                    return "update";
+                case PackageGraphNodeStatus.Checking:
+                    return "checking";
+                case PackageGraphNodeStatus.Warning:
+                    return "warning";
+                default:
+                    return "installed";
             }
+        }
 
-            private static string GetTooltip(PackageEcosystemNode node)
-            {
-                if (string.IsNullOrWhiteSpace(node.Description))
-                {
-                    return node.PackageId;
-                }
+        private static string GetStatusBadgeClass(PackageGraphNodeStatus status)
+        {
+            return "dpi-graph-node__badge--" + GetStatusClass(status);
+        }
 
-                return node.DisplayName + "\n" + node.Description + "\n" + node.PackageId;
-            }
+        private static string GetTooltip(PackageGraphNode node)
+        {
+            string status = string.IsNullOrWhiteSpace(node.UpdateStatusLabel)
+                ? GetStatusLabel(node)
+                : node.UpdateStatusLabel;
+            string description = string.IsNullOrWhiteSpace(node.Description)
+                ? node.PackageId
+                : node.Description;
+
+            return node.DisplayName + "\n" +
+                   description + "\n" +
+                   node.PackageId + "\n" +
+                   "Status: " + status;
         }
     }
 }

@@ -86,7 +86,7 @@ namespace Deucarian.PackageInstaller.Editor
         private PackageSampleImportService _packageSampleImportService;
         private PackageSampleDiscoveryService _packageSampleDiscoveryService;
         private PackageDependencyInstaller _packageDependencyInstaller;
-        private PackageEcosystemGraphBuilder _packageEcosystemGraphBuilder;
+        private PackageGraphBuilder _packageGraphBuilder;
         private readonly Dictionary<string, PackageChannel> _selectedChannels =
             new Dictionary<string, PackageChannel>();
         private readonly HashSet<string> _autoSelectedChannelPackageIds =
@@ -120,7 +120,7 @@ namespace Deucarian.PackageInstaller.Editor
         private IMGUIContainer _listViewContainer;
         private IMGUIContainer _graphDetailsContainer;
         private IMGUIContainer _graphOperationContainer;
-        private PackageEcosystemGraphView _graphView;
+        private PackageGraphView _graphView;
 
         private bool _stylesInitialized;
         private bool _lastProSkin;
@@ -179,8 +179,12 @@ namespace Deucarian.PackageInstaller.Editor
             _packageDependencyInstaller = new PackageDependencyInstaller(
                 _packageInstallService,
                 _packageDetectionService);
-            _packageEcosystemGraphBuilder = new PackageEcosystemGraphBuilder(packageId =>
-                _packageDetectionService != null && _packageDetectionService.IsInstalled(packageId));
+            _packageGraphBuilder = new PackageGraphBuilder(
+                packageId => _packageDetectionService != null && _packageDetectionService.IsInstalled(packageId),
+                GetSelectedChannel,
+                packageDefinition => _packageUpdateCheckService != null
+                    ? _packageUpdateCheckService.GetStatus(packageDefinition, GetSelectedChannel(packageDefinition))
+                    : null);
             PackageRegistryProvider.EnsureLoaded();
             EnsureValidSelection();
             _operationDetailsExpanded = EditorPrefs.GetBool(GetOperationDrawerPreferenceKey(), false);
@@ -274,7 +278,7 @@ namespace Deucarian.PackageInstaller.Editor
             _graphModeContainer.AddToClassList("dpi-mode-container");
             _graphModeContainer.AddToClassList("dpi-graph-mode");
 
-            _graphView = new PackageEcosystemGraphView(HandleGraphPackageSelected);
+            _graphView = new PackageGraphView(HandleGraphPackageSelected, HandleGraphPackageAction);
             _graphModeContainer.Add(_graphView);
 
             _graphDetailsContainer = new IMGUIContainer(DrawGraphDetailsGui);
@@ -425,10 +429,14 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            PackageEcosystemGraph graph = (_packageEcosystemGraphBuilder ?? new PackageEcosystemGraphBuilder(
-                    packageId => _packageDetectionService != null && _packageDetectionService.IsInstalled(packageId)))
+            PackageGraphModel graph = (_packageGraphBuilder ?? new PackageGraphBuilder(
+                    packageId => _packageDetectionService != null && _packageDetectionService.IsInstalled(packageId),
+                    GetSelectedChannel,
+                    packageDefinition => _packageUpdateCheckService != null
+                        ? _packageUpdateCheckService.GetStatus(packageDefinition, GetSelectedChannel(packageDefinition))
+                        : null))
                 .Build(PackageRegistryProvider.All);
-            _graphView.SetGraph(graph, _selectedPackageId);
+            _graphView.SetGraph(graph, _selectedPackageId, !IsAnyOperationBusy());
             _graphDetailsContainer?.MarkDirtyRepaint();
             _graphOperationContainer?.MarkDirtyRepaint();
             UpdateViewVisibility();
@@ -444,6 +452,33 @@ namespace Deucarian.PackageInstaller.Editor
             SelectDefinition(
                 packageDefinition,
                 packageDefinition.IsBridge ? SelectionKind.Bridge : SelectionKind.Package);
+            RefreshGraphView();
+        }
+
+        private void HandleGraphPackageAction(PackageDefinition packageDefinition, PackageGraphNodeAction action)
+        {
+            if (packageDefinition == null || action == PackageGraphNodeAction.None || IsAnyOperationBusy())
+            {
+                return;
+            }
+
+            SelectDefinition(
+                packageDefinition,
+                packageDefinition.IsBridge ? SelectionKind.Bridge : SelectionKind.Package);
+
+            switch (action)
+            {
+                case PackageGraphNodeAction.Install:
+                    _packageDependencyInstaller.InstallWithDependencies(packageDefinition, GetSelectedChannel);
+                    break;
+                case PackageGraphNodeAction.Update:
+                    UpdatePackage(packageDefinition);
+                    break;
+                case PackageGraphNodeAction.Reinstall:
+                    ReinstallPackage(packageDefinition);
+                    break;
+            }
+
             RefreshGraphView();
         }
 

@@ -4,18 +4,30 @@ using System.Linq;
 
 namespace Deucarian.PackageInstaller.Editor
 {
-    internal sealed class PackageEcosystemGraphBuilder
+    internal sealed class PackageGraphBuilder
     {
         private readonly Func<string, bool> _isInstalled;
-        private readonly Dictionary<string, PackageEcosystemNode> _nodes =
-            new Dictionary<string, PackageEcosystemNode>(StringComparer.OrdinalIgnoreCase);
+        private readonly Func<PackageDefinition, PackageChannel> _selectChannel;
+        private readonly Func<PackageDefinition, PackageUpdateStatus> _getUpdateStatus;
+        private readonly Dictionary<string, PackageGraphNode> _nodes =
+            new Dictionary<string, PackageGraphNode>(StringComparer.OrdinalIgnoreCase);
 
-        public PackageEcosystemGraphBuilder(Func<string, bool> isInstalled)
+        public PackageGraphBuilder(Func<string, bool> isInstalled)
+            : this(isInstalled, _ => PackageChannel.Stable, null)
         {
-            _isInstalled = isInstalled ?? (_ => false);
         }
 
-        public PackageEcosystemGraph Build(IEnumerable<PackageDefinition> packages)
+        public PackageGraphBuilder(
+            Func<string, bool> isInstalled,
+            Func<PackageDefinition, PackageChannel> selectChannel,
+            Func<PackageDefinition, PackageUpdateStatus> getUpdateStatus)
+        {
+            _isInstalled = isInstalled ?? (_ => false);
+            _selectChannel = selectChannel ?? (_ => PackageChannel.Stable);
+            _getUpdateStatus = getUpdateStatus;
+        }
+
+        public PackageGraphModel Build(IEnumerable<PackageDefinition> packages)
         {
             _nodes.Clear();
 
@@ -32,8 +44,8 @@ namespace Deucarian.PackageInstaller.Editor
                 EnsureNode(package.PackageId, package);
             }
 
-            List<PackageEcosystemEdge> edges = new List<PackageEcosystemEdge>();
-            List<PackageEcosystemSuiteRegion> suiteRegions = new List<PackageEcosystemSuiteRegion>();
+            List<PackageGraphEdge> edges = new List<PackageGraphEdge>();
+            List<PackageGraphSuiteRegion> suiteRegions = new List<PackageGraphSuiteRegion>();
             HashSet<string> edgeKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             foreach (PackageDefinition package in definitions)
@@ -41,7 +53,7 @@ namespace Deucarian.PackageInstaller.Editor
                 if (package.IsSuite)
                 {
                     string[] suiteMembers = GetSuiteMembers(package).ToArray();
-                    suiteRegions.Add(new PackageEcosystemSuiteRegion(package.PackageId, suiteMembers));
+                    suiteRegions.Add(new PackageGraphSuiteRegion(package.PackageId, suiteMembers));
 
                     foreach (string memberId in suiteMembers)
                     {
@@ -69,7 +81,7 @@ namespace Deucarian.PackageInstaller.Editor
                             package.PackageId,
                             PackageGraphEdgeKind.Bridge,
                             GetOwnedRelationshipState(package.PackageId, targetId),
-                            "Bridge");
+                            "Bridge target");
                     }
                 }
                 else
@@ -99,6 +111,18 @@ namespace Deucarian.PackageInstaller.Editor
                         "Optional integration");
                 }
 
+                foreach (string companionId in package.OptionalCompanions)
+                {
+                    AddRelationshipEdge(
+                        edges,
+                        edgeKeys,
+                        package.PackageId,
+                        companionId,
+                        PackageGraphEdgeKind.OptionalIntegration,
+                        GetPeerRelationshipState(package.PackageId, companionId),
+                        "Optional companion");
+                }
+
                 foreach (string recommendedId in package.RecommendedWith)
                 {
                     AddRelationshipEdge(
@@ -112,52 +136,69 @@ namespace Deucarian.PackageInstaller.Editor
                 }
             }
 
-            return new PackageEcosystemGraph(
+            return new PackageGraphModel(
                 _nodes.Values
                     .OrderBy(node => GetNodeTypeSortIndex(node.NodeType))
                     .ThenBy(node => node.DisplayName, StringComparer.OrdinalIgnoreCase),
-                edges,
+                edges
+                    .OrderBy(edge => GetEdgeSortIndex(edge.Kind))
+                    .ThenBy(edge => edge.FromPackageId, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(edge => edge.ToPackageId, StringComparer.OrdinalIgnoreCase),
                 suiteRegions);
         }
 
-        private PackageEcosystemNode EnsureNode(string packageId, PackageDefinition package)
+        private PackageGraphNode EnsureNode(string packageId, PackageDefinition package)
         {
             if (string.IsNullOrWhiteSpace(packageId))
             {
                 packageId = "unknown-package";
             }
 
-            if (_nodes.TryGetValue(packageId, out PackageEcosystemNode existingNode))
+            if (_nodes.TryGetValue(packageId, out PackageGraphNode existingNode))
             {
                 return existingNode;
             }
 
-            PackageEcosystemNode node;
+            PackageGraphNode node;
 
             if (package != null)
             {
-                node = new PackageEcosystemNode(
+                bool installed = _isInstalled(package.PackageId);
+                PackageChannel selectedChannel = _selectChannel(package);
+                PackageUpdateStatus updateStatus = _getUpdateStatus != null
+                    ? _getUpdateStatus(package)
+                    : null;
+
+                node = new PackageGraphNode(
                     package.PackageId,
                     package.DisplayName,
                     package.Category,
                     package.Description,
                     GetNodeType(package),
-                    _isInstalled(package.PackageId),
+                    GetNodeStatus(installed, updateStatus),
+                    selectedChannel,
+                    installed,
                     true,
                     package.HasPackageReference,
+                    GetIconKey(package),
+                    updateStatus != null ? updateStatus.Label : string.Empty,
                     package);
             }
             else
             {
-                node = new PackageEcosystemNode(
+                node = new PackageGraphNode(
                     packageId.Trim(),
                     packageId.Trim(),
                     "Missing",
                     "Registry relationship target is not registered.",
-                    PackageGraphNodeType.OptionalIntegration,
+                    PackageGraphNodeType.Integration,
+                    PackageGraphNodeStatus.Missing,
+                    PackageChannel.Stable,
                     false,
                     false,
                     false,
+                    "package",
+                    "Missing registry entry",
                     null);
             }
 
@@ -166,7 +207,7 @@ namespace Deucarian.PackageInstaller.Editor
         }
 
         private void AddRelationshipEdge(
-            ICollection<PackageEcosystemEdge> edges,
+            ICollection<PackageGraphEdge> edges,
             ISet<string> edgeKeys,
             string fromPackageId,
             string toPackageId,
@@ -189,7 +230,7 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            edges.Add(new PackageEcosystemEdge(
+            edges.Add(new PackageGraphEdge(
                 fromPackageId.Trim(),
                 toPackageId.Trim(),
                 kind,
@@ -199,8 +240,8 @@ namespace Deucarian.PackageInstaller.Editor
 
         private PackageGraphEdgeState GetOwnedRelationshipState(string ownerPackageId, string targetPackageId)
         {
-            PackageEcosystemNode owner = EnsureNode(ownerPackageId, null);
-            PackageEcosystemNode target = EnsureNode(targetPackageId, null);
+            PackageGraphNode owner = EnsureNode(ownerPackageId, null);
+            PackageGraphNode target = EnsureNode(targetPackageId, null);
 
             if (!owner.IsRegistered || !target.IsRegistered)
             {
@@ -219,8 +260,8 @@ namespace Deucarian.PackageInstaller.Editor
 
         private PackageGraphEdgeState GetPeerRelationshipState(string fromPackageId, string toPackageId)
         {
-            PackageEcosystemNode from = EnsureNode(fromPackageId, null);
-            PackageEcosystemNode to = EnsureNode(toPackageId, null);
+            PackageGraphNode from = EnsureNode(fromPackageId, null);
+            PackageGraphNode to = EnsureNode(toPackageId, null);
 
             if (!from.IsRegistered || !to.IsRegistered)
             {
@@ -230,6 +271,32 @@ namespace Deucarian.PackageInstaller.Editor
             return from.IsInstalled && to.IsInstalled
                 ? PackageGraphEdgeState.Active
                 : PackageGraphEdgeState.Possible;
+        }
+
+        private static PackageGraphNodeStatus GetNodeStatus(bool installed, PackageUpdateStatus updateStatus)
+        {
+            if (!installed)
+            {
+                return PackageGraphNodeStatus.NotInstalled;
+            }
+
+            if (updateStatus == null)
+            {
+                return PackageGraphNodeStatus.Installed;
+            }
+
+            switch (updateStatus.Kind)
+            {
+                case PackageUpdateStatusKind.Checking:
+                    return PackageGraphNodeStatus.Checking;
+                case PackageUpdateStatusKind.UpdateAvailable:
+                    return PackageGraphNodeStatus.UpdateAvailable;
+                case PackageUpdateStatusKind.CannotDetermine:
+                case PackageUpdateStatusKind.Failed:
+                    return PackageGraphNodeStatus.Warning;
+                default:
+                    return PackageGraphNodeStatus.Installed;
+            }
         }
 
         private static IEnumerable<string> GetBridgeTargets(PackageDefinition package)
@@ -255,7 +322,8 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             if (string.Equals(package.MetadataType, "Tool", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(package.Category, "Tools", StringComparison.OrdinalIgnoreCase))
+                string.Equals(package.Category, "Tools", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(package.Category, "Editor", StringComparison.OrdinalIgnoreCase))
             {
                 return PackageGraphNodeType.Tool;
             }
@@ -265,10 +333,48 @@ namespace Deucarian.PackageInstaller.Editor
                 string.Equals(package.Category, "UI", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(package.Category, "World", StringComparison.OrdinalIgnoreCase))
             {
-                return PackageGraphNodeType.OptionalIntegration;
+                return PackageGraphNodeType.Integration;
             }
 
             return PackageGraphNodeType.Core;
+        }
+
+        private static string GetIconKey(PackageDefinition package)
+        {
+            if (package == null || string.IsNullOrWhiteSpace(package.PackageId))
+            {
+                return "package";
+            }
+
+            string key = package.PackageId.Trim();
+
+            if (key.StartsWith("com.deucarian.", StringComparison.OrdinalIgnoreCase))
+            {
+                key = key.Substring("com.deucarian.".Length);
+            }
+
+            if (key.StartsWith("object-selection", StringComparison.OrdinalIgnoreCase))
+            {
+                return "selection";
+            }
+
+            if (key.StartsWith("api", StringComparison.OrdinalIgnoreCase))
+            {
+                return "api-helper";
+            }
+
+            if (key.StartsWith("ui-binding", StringComparison.OrdinalIgnoreCase))
+            {
+                return "generic-ui-items";
+            }
+
+            int separatorIndex = key.IndexOf('.');
+            if (separatorIndex >= 0)
+            {
+                key = key.Substring(0, separatorIndex);
+            }
+
+            return string.IsNullOrWhiteSpace(key) ? "package" : key;
         }
 
         private static int GetNodeTypeSortIndex(PackageDefinition package)
@@ -276,19 +382,38 @@ namespace Deucarian.PackageInstaller.Editor
             return GetNodeTypeSortIndex(GetNodeType(package));
         }
 
-        private static int GetNodeTypeSortIndex(PackageGraphNodeType nodeType)
+        internal static int GetNodeTypeSortIndex(PackageGraphNodeType nodeType)
         {
             switch (nodeType)
             {
-                case PackageGraphNodeType.Core:
-                    return 0;
                 case PackageGraphNodeType.Tool:
+                    return 0;
+                case PackageGraphNodeType.Core:
                     return 1;
-                case PackageGraphNodeType.OptionalIntegration:
+                case PackageGraphNodeType.Integration:
                     return 2;
                 case PackageGraphNodeType.Bridge:
                     return 3;
                 case PackageGraphNodeType.Suite:
+                    return 4;
+                default:
+                    return 5;
+            }
+        }
+
+        private static int GetEdgeSortIndex(PackageGraphEdgeKind kind)
+        {
+            switch (kind)
+            {
+                case PackageGraphEdgeKind.HardDependency:
+                    return 0;
+                case PackageGraphEdgeKind.Bridge:
+                    return 1;
+                case PackageGraphEdgeKind.OptionalIntegration:
+                    return 2;
+                case PackageGraphEdgeKind.Recommended:
+                    return 3;
+                case PackageGraphEdgeKind.SuiteMembership:
                     return 4;
                 default:
                     return 5;

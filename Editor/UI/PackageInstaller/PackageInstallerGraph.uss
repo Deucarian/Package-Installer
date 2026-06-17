@@ -63,6 +63,55 @@
     background-color: rgba(23, 32, 39, 0.40);
 }
 
+.dpi-ecosystem-graph__legend {
+    min-height: 32px;
+    flex-direction: row;
+    align-items: center;
+    padding-left: 10px;
+    padding-right: 10px;
+    border-bottom-width: 1px;
+    border-bottom-color: rgba(90, 111, 160, 0.22);
+    background-color: rgba(23, 32, 39, 0.34);
+}
+
+.dpi-graph-legend__item {
+    flex-direction: row;
+    align-items: center;
+    margin-right: 14px;
+}
+
+.dpi-graph-legend__line {
+    min-width: 44px;
+    height: 16px;
+    margin-right: 5px;
+    -unity-text-align: middle-center;
+    font-size: 8px;
+    color: rgba(211, 230, 238, 0.72);
+    border-bottom-width: 2px;
+    border-bottom-color: rgba(90, 111, 160, 0.44);
+}
+
+.dpi-graph-legend__line--solid {
+    border-bottom-color: rgba(116, 144, 196, 0.60);
+}
+
+.dpi-graph-legend__line--dashed {
+    border-bottom-color: rgba(72, 150, 188, 0.46);
+}
+
+.dpi-graph-legend__line--active {
+    border-bottom-color: rgba(59, 209, 191, 0.86);
+}
+
+.dpi-graph-legend__line--possible {
+    border-bottom-color: rgba(116, 144, 196, 0.34);
+}
+
+.dpi-graph-legend__label {
+    color: var(--deucarian-muted);
+    font-size: 10px;
+}
+
 .dpi-ecosystem-graph__scroll {
     flex-grow: 1;
 }
@@ -97,7 +146,7 @@
     border-right-color: rgba(59, 166, 154, 0.26);
     border-top-color: rgba(59, 166, 154, 0.26);
     border-bottom-color: rgba(59, 166, 154, 0.26);
-    background-color: rgba(30, 58, 64, 0.18);
+    background-color: rgba(30, 58, 64, 0.14);
 }
 
 .dpi-graph-suite-region__label {
@@ -110,7 +159,7 @@
     position: absolute;
     padding-left: 10px;
     padding-right: 10px;
-    padding-top: 8px;
+    padding-top: 9px;
     padding-bottom: 8px;
     border-top-left-radius: 8px;
     border-top-right-radius: 8px;
@@ -155,6 +204,10 @@
     border-left-color: rgba(59, 166, 154, 0.62);
 }
 
+.dpi-graph-node--integration {
+    border-left-color: rgba(66, 146, 184, 0.54);
+}
+
 .dpi-graph-node--missing {
     border-left-color: rgba(217, 157, 72, 0.66);
     border-right-color: rgba(217, 157, 72, 0.42);
@@ -162,22 +215,41 @@
     border-bottom-color: rgba(217, 157, 72, 0.42);
 }
 
+.dpi-graph-node__header {
+    flex-direction: row;
+    min-height: 34px;
+}
+
+.dpi-graph-node__icon {
+    width: 28px;
+    height: 28px;
+    margin-right: 8px;
+    opacity: 0.92;
+}
+
+.dpi-graph-node__title-block {
+    flex-grow: 1;
+    min-width: 0;
+}
+
 .dpi-graph-node__title {
     color: var(--deucarian-text);
     -unity-font-style: bold;
     font-size: 12px;
+    white-space: normal;
 }
 
 .dpi-graph-node__badges {
     flex-direction: row;
-    margin-top: 5px;
-    margin-bottom: 5px;
+    margin-top: 7px;
+    margin-bottom: 6px;
 }
 
 .dpi-graph-node__badge {
     height: 18px;
     margin-right: 4px;
     font-size: 9px;
+    max-width: 92px;
 }
 
 .dpi-graph-node__badge--type {
@@ -192,11 +264,65 @@
     background-color: rgba(43, 49, 59, 0.82);
 }
 
+.dpi-graph-node__badge--update {
+    background-color: rgba(37, 118, 124, 0.88);
+}
+
+.dpi-graph-node__badge--checking {
+    background-color: rgba(61, 79, 107, 0.84);
+}
+
 .dpi-graph-node__badge--warning {
+    background-color: rgba(115, 91, 46, 0.86);
+}
+
+.dpi-graph-node__badge--missing {
     background-color: rgba(115, 91, 46, 0.86);
 }
 
 .dpi-graph-node__package-id {
     color: var(--deucarian-muted);
     font-size: 9px;
+    white-space: normal;
+}
+
+.dpi-graph-node__footer {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.dpi-graph-node__channel {
+    color: rgba(154, 194, 202, 0.76);
+    font-size: 9px;
+}
+
+.dpi-graph-node__action {
+    min-width: 74px;
+    height: 22px;
+    padding-left: 8px;
+    padding-right: 8px;
+    border-top-left-radius: 5px;
+    border-top-right-radius: 5px;
+    border-bottom-right-radius: 5px;
+    border-bottom-left-radius: 5px;
+    background-color: rgba(35, 82, 87, 0.68);
+    border-left-width: 1px;
+    border-right-width: 1px;
+    border-top-width: 1px;
+    border-bottom-width: 1px;
+    border-left-color: rgba(59, 166, 154, 0.48);
+    border-right-color: rgba(59, 166, 154, 0.48);
+    border-top-color: rgba(59, 166, 154, 0.48);
+    border-bottom-color: rgba(59, 166, 154, 0.48);
+    color: var(--deucarian-text);
+    font-size: 10px;
+}
+
+.dpi-graph-node__action:hover {
+    background-color: rgba(42, 108, 112, 0.76);
+    border-left-color: rgba(59, 166, 154, 0.70);
+    border-right-color: rgba(59, 166, 154, 0.70);
+    border-top-color: rgba(59, 166, 154, 0.70);
+    border-bottom-color: rgba(59, 166, 154, 0.70);
 }

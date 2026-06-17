@@ -10,7 +10,7 @@ namespace Deucarian.PackageInstaller.Editor
         Tool,
         Bridge,
         Suite,
-        OptionalIntegration
+        Integration
     }
 
     internal enum PackageGraphEdgeKind
@@ -29,23 +29,48 @@ namespace Deucarian.PackageInstaller.Editor
         Warning
     }
 
-    internal sealed class PackageEcosystemGraph
+    internal enum PackageGraphNodeStatus
     {
-        public PackageEcosystemGraph(
-            IEnumerable<PackageEcosystemNode> nodes,
-            IEnumerable<PackageEcosystemEdge> edges,
-            IEnumerable<PackageEcosystemSuiteRegion> suiteRegions)
+        Missing,
+        NotInstalled,
+        Installed,
+        UpdateAvailable,
+        Checking,
+        Warning
+    }
+
+    internal enum PackageGraphNodeAction
+    {
+        None,
+        Install,
+        Update,
+        Reinstall
+    }
+
+    internal sealed class PackageGraphModel
+    {
+        public PackageGraphModel(
+            IEnumerable<PackageGraphNode> nodes,
+            IEnumerable<PackageGraphEdge> edges,
+            IEnumerable<PackageGraphSuiteRegion> suiteRegions)
         {
             Nodes = ToReadOnlyList(nodes);
             Edges = ToReadOnlyList(edges);
             SuiteRegions = ToReadOnlyList(suiteRegions);
         }
 
-        public IReadOnlyList<PackageEcosystemNode> Nodes { get; }
+        public IReadOnlyList<PackageGraphNode> Nodes { get; }
 
-        public IReadOnlyList<PackageEcosystemEdge> Edges { get; }
+        public IReadOnlyList<PackageGraphEdge> Edges { get; }
 
-        public IReadOnlyList<PackageEcosystemSuiteRegion> SuiteRegions { get; }
+        public IReadOnlyList<PackageGraphSuiteRegion> SuiteRegions { get; }
+
+        public bool TryGetNode(string packageId, out PackageGraphNode node)
+        {
+            node = Nodes.FirstOrDefault(candidate =>
+                string.Equals(candidate.PackageId, packageId, StringComparison.OrdinalIgnoreCase));
+            return node != null;
+        }
 
         private static IReadOnlyList<T> ToReadOnlyList<T>(IEnumerable<T> values)
         {
@@ -53,17 +78,21 @@ namespace Deucarian.PackageInstaller.Editor
         }
     }
 
-    internal sealed class PackageEcosystemNode
+    internal sealed class PackageGraphNode
     {
-        public PackageEcosystemNode(
+        public PackageGraphNode(
             string packageId,
             string displayName,
             string category,
             string description,
             PackageGraphNodeType nodeType,
+            PackageGraphNodeStatus status,
+            PackageChannel selectedChannel,
             bool isInstalled,
             bool isRegistered,
             bool hasPackageReference,
+            string iconKey,
+            string updateStatusLabel,
             PackageDefinition packageDefinition)
         {
             PackageId = packageId ?? string.Empty;
@@ -71,9 +100,13 @@ namespace Deucarian.PackageInstaller.Editor
             Category = category ?? string.Empty;
             Description = description ?? string.Empty;
             NodeType = nodeType;
+            Status = status;
+            SelectedChannel = selectedChannel;
             IsInstalled = isInstalled;
             IsRegistered = isRegistered;
             HasPackageReference = hasPackageReference;
+            IconKey = iconKey ?? string.Empty;
+            UpdateStatusLabel = updateStatusLabel ?? string.Empty;
             PackageDefinition = packageDefinition;
         }
 
@@ -87,18 +120,66 @@ namespace Deucarian.PackageInstaller.Editor
 
         public PackageGraphNodeType NodeType { get; }
 
+        public PackageGraphNodeStatus Status { get; }
+
+        public PackageChannel SelectedChannel { get; }
+
         public bool IsInstalled { get; }
 
         public bool IsRegistered { get; }
 
         public bool HasPackageReference { get; }
 
+        public string IconKey { get; }
+
+        public string UpdateStatusLabel { get; }
+
         public PackageDefinition PackageDefinition { get; }
+
+        public PackageGraphNodeAction PrimaryAction
+        {
+            get
+            {
+                if (!IsRegistered || PackageDefinition == null || !HasPackageReference)
+                {
+                    return PackageGraphNodeAction.None;
+                }
+
+                if (!IsInstalled)
+                {
+                    return PackageGraphNodeAction.Install;
+                }
+
+                return Status == PackageGraphNodeStatus.UpdateAvailable
+                    ? PackageGraphNodeAction.Update
+                    : PackageGraphNodeAction.Reinstall;
+            }
+        }
+
+        public string PrimaryActionLabel
+        {
+            get
+            {
+                switch (PrimaryAction)
+                {
+                    case PackageGraphNodeAction.Install:
+                        return IsBridge ? "Install Bridge" : "Install";
+                    case PackageGraphNodeAction.Update:
+                        return "Update";
+                    case PackageGraphNodeAction.Reinstall:
+                        return "Reinstall";
+                    default:
+                        return string.Empty;
+                }
+            }
+        }
+
+        public bool IsBridge => NodeType == PackageGraphNodeType.Bridge;
     }
 
-    internal sealed class PackageEcosystemEdge
+    internal sealed class PackageGraphEdge
     {
-        public PackageEcosystemEdge(
+        public PackageGraphEdge(
             string fromPackageId,
             string toPackageId,
             PackageGraphEdgeKind kind,
@@ -123,9 +204,9 @@ namespace Deucarian.PackageInstaller.Editor
         public string Label { get; }
     }
 
-    internal sealed class PackageEcosystemSuiteRegion
+    internal sealed class PackageGraphSuiteRegion
     {
-        public PackageEcosystemSuiteRegion(string suitePackageId, IEnumerable<string> memberPackageIds)
+        public PackageGraphSuiteRegion(string suitePackageId, IEnumerable<string> memberPackageIds)
         {
             SuitePackageId = suitePackageId ?? string.Empty;
             MemberPackageIds = memberPackageIds == null
