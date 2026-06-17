@@ -20,6 +20,8 @@ namespace Deucarian.PackageInstaller.Editor
         private const float SidebarRowMaxHeight = 150f;
         private const float DetailLabelWidth = 118f;
         private const float OperationDrawerHeight = 132f;
+        private const float GraphOperationCollapsedHeight = 106f;
+        private const float GraphOperationExpandedHeight = 262f;
         private const string ChannelPreferencePrefix = "Deucarian.PackageInstaller.SelectedChannel.";
         private const string AdvancedFoldoutPreferencePrefix = "Deucarian.PackageInstaller.AdvancedFoldout.";
         private const string CategoryFoldoutPreferencePrefix = "Deucarian.PackageInstaller.CategoryFoldout.";
@@ -118,6 +120,7 @@ namespace Deucarian.PackageInstaller.Editor
         private Label _viewSummaryLabel;
         private VisualElement _listViewContainerHost;
         private VisualElement _graphModeContainer;
+        private VisualElement _graphContentRow;
         private IMGUIContainer _listViewContainer;
         private IMGUIContainer _graphDetailsContainer;
         private IMGUIContainer _graphOperationContainer;
@@ -280,20 +283,24 @@ namespace Deucarian.PackageInstaller.Editor
             _graphModeContainer.AddToClassList("dpi-mode-container");
             _graphModeContainer.AddToClassList("dpi-graph-mode");
 
+            _graphContentRow = new VisualElement();
+            _graphContentRow.AddToClassList("dpi-graph-content-row");
+            _graphModeContainer.Add(_graphContentRow);
+
             _graphView = new PackageGraphView(
                 HandleGraphPackageSelected,
                 HandleGraphPackageAction,
                 ClearGraphSelection);
-            _graphModeContainer.Add(_graphView);
+            _graphContentRow.Add(_graphView);
 
             _graphDetailsContainer = new IMGUIContainer(DrawGraphDetailsGui);
             _graphDetailsContainer.AddToClassList("dpi-graph-details");
-            _graphModeContainer.Add(_graphDetailsContainer);
-            content.Add(_graphModeContainer);
+            _graphContentRow.Add(_graphDetailsContainer);
 
             _graphOperationContainer = new IMGUIContainer(DrawGraphOperationGui);
             _graphOperationContainer.AddToClassList("dpi-graph-operation");
-            content.Add(_graphOperationContainer);
+            _graphModeContainer.Add(_graphOperationContainer);
+            content.Add(_graphModeContainer);
 
             SetViewMode(_viewMode);
             RefreshGraphView();
@@ -380,6 +387,11 @@ namespace Deucarian.PackageInstaller.Editor
             if (_graphOperationContainer != null)
             {
                 _graphOperationContainer.style.display = graphMode ? DisplayStyle.Flex : DisplayStyle.None;
+                _graphOperationContainer.EnableInClassList("dpi-graph-operation--expanded", _operationDetailsExpanded);
+                _graphOperationContainer.EnableInClassList("dpi-graph-operation--collapsed", !_operationDetailsExpanded);
+                _graphOperationContainer.style.height = _operationDetailsExpanded
+                    ? GraphOperationExpandedHeight
+                    : GraphOperationCollapsedHeight;
             }
 
             if (_listViewButton != null)
@@ -2462,6 +2474,9 @@ namespace Deucarian.PackageInstaller.Editor
         {
             _operationDetailsExpanded = expanded;
             EditorPrefs.SetBool(GetOperationDrawerPreferenceKey(), expanded);
+            UpdateViewVisibility();
+            _graphOperationContainer?.MarkDirtyRepaint();
+            Repaint();
         }
 
         private string GetOperationDrawerPreferenceKey()

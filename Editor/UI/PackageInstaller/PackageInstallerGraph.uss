@@ -33,6 +33,14 @@
 .dpi-graph-mode {
     flex-grow: 1;
     flex-shrink: 1;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.dpi-graph-content-row {
+    flex-grow: 1;
+    flex-shrink: 1;
+    flex-basis: 0;
     flex-direction: row;
     align-items: stretch;
     min-height: 0;
@@ -53,9 +61,23 @@
 
 .dpi-graph-operation {
     flex-shrink: 0;
-    min-height: 74px;
-    max-height: 228px;
+    height: 106px;
+    min-height: 106px;
+    max-height: 106px;
     margin-top: 0;
+    overflow: hidden;
+}
+
+.dpi-graph-operation--expanded {
+    height: 262px;
+    min-height: 262px;
+    max-height: 262px;
+}
+
+.dpi-graph-operation--collapsed {
+    height: 106px;
+    min-height: 106px;
+    max-height: 106px;
 }
 
 .dpi-ecosystem-graph {

@@ -112,6 +112,26 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void Build_LabelsDependencyEdgesAsDependentUsesRequiredPackage()
+        {
+            PackageDefinition logging = CreatePackage("Logging", "com.example.logging", "Core");
+            PackageDefinition session = CreatePackage(
+                "Session",
+                "com.example.session",
+                "Core",
+                dependencies: new[] { logging.PackageId });
+
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(new[] { logging, session });
+            PackageGraphEdge dependencyEdge = graph.Edges.Single(edge =>
+                edge.Kind == PackageGraphEdgeKind.HardDependency &&
+                edge.FromPackageId == logging.PackageId &&
+                edge.ToPackageId == session.PackageId);
+
+            Assert.AreEqual("Session uses Logging", dependencyEdge.Label);
+        }
+
+        [Test]
         public void GraphView_UsesAttentionStylingForUpdateAvailableNodes()
         {
             PackageDefinition update = CreatePackage("Update", "com.example.update", "Core");
@@ -180,6 +200,10 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.IsNotNull(view.Q<VisualElement>("ecosystem-graph-viewport"));
             Assert.IsNotNull(view.Q<VisualElement>("ecosystem-graph-content"));
             Assert.IsNotNull(view.Q<VisualElement>("ecosystem-graph-edge-layer"));
+            Assert.IsTrue(
+                FindByClass(view, "dpi-graph-legend__label")
+                    .OfType<Label>()
+                    .Any(label => label.text == "Dependency flow"));
             Assert.AreEqual(3, FindByClass(view, "dpi-graph-node").Count);
             Assert.AreEqual(1, FindByClass(view, "dpi-graph-node--bridge").Count);
             Assert.IsTrue(FindByClass(view, "dpi-graph-node__action").Count >= 1);

@@ -95,7 +95,7 @@ namespace Deucarian.PackageInstaller.Editor
                             package.PackageId,
                             PackageGraphEdgeKind.HardDependency,
                             GetOwnedRelationshipState(package.PackageId, dependencyId),
-                            "Dependency");
+                            GetDependencyRelationshipLabel(package, dependencyId));
                     }
                 }
 
@@ -257,6 +257,28 @@ namespace Deucarian.PackageInstaller.Editor
 
             _nodes[node.PackageId] = node;
             return node;
+        }
+
+        private string GetDependencyRelationshipLabel(PackageDefinition dependentPackage, string requiredPackageId)
+        {
+            string dependentName = dependentPackage != null && !string.IsNullOrWhiteSpace(dependentPackage.DisplayName)
+                ? dependentPackage.DisplayName
+                : GetPackageDisplayName(dependentPackage != null ? dependentPackage.PackageId : string.Empty);
+            string requiredName = GetPackageDisplayName(requiredPackageId);
+
+            return dependentName + " uses " + requiredName;
+        }
+
+        private string GetPackageDisplayName(string packageId)
+        {
+            if (!string.IsNullOrWhiteSpace(packageId) &&
+                _nodes.TryGetValue(packageId, out PackageGraphNode node) &&
+                !string.IsNullOrWhiteSpace(node.DisplayName))
+            {
+                return node.DisplayName;
+            }
+
+            return string.IsNullOrWhiteSpace(packageId) ? "required package" : packageId.Trim();
         }
 
         private void AddRelationshipEdge(

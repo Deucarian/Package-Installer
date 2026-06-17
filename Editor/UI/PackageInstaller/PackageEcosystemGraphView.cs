@@ -38,7 +38,11 @@ namespace Deucarian.PackageInstaller.Editor
 
             VisualElement legend = new VisualElement();
             legend.AddToClassList("dpi-ecosystem-graph__legend");
-            legend.Add(CreateLegendItem("Solid", "Hard dependency", "dpi-graph-legend__line--solid"));
+            legend.Add(CreateLegendItem(
+                "Solid",
+                "Dependency flow",
+                "dpi-graph-legend__line--solid",
+                "Required package -> dependent package"));
             legend.Add(CreateLegendItem("Dashed", "Bridge / optional", "dpi-graph-legend__line--dashed"));
             legend.Add(CreateLegendItem("Focus", "Selected relationship", "dpi-graph-legend__line--active"));
             legend.Add(CreateLegendItem("Attention", "Update / missing dependency", "dpi-graph-legend__line--warning"));
@@ -70,10 +74,15 @@ namespace Deucarian.PackageInstaller.Editor
             _viewport.EnsureInitialFrame(_canvas.GetContentBounds());
         }
 
-        private static VisualElement CreateLegendItem(string marker, string label, string markerClass)
+        private static VisualElement CreateLegendItem(
+            string marker,
+            string label,
+            string markerClass,
+            string tooltip = null)
         {
             VisualElement item = new VisualElement();
             item.AddToClassList("dpi-graph-legend__item");
+            item.tooltip = tooltip ?? label;
 
             Label markerLabel = new Label(marker);
             markerLabel.AddToClassList("dpi-graph-legend__line");
