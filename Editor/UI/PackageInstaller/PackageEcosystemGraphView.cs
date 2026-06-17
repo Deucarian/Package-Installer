@@ -39,20 +39,20 @@ namespace Deucarian.PackageInstaller.Editor
             VisualElement legend = new VisualElement();
             legend.AddToClassList("dpi-ecosystem-graph__legend");
             legend.Add(CreateLegendItem(
-                "Solid",
+                "Flow",
                 "Dependency flow",
                 "dpi-graph-legend__line--solid",
-                "Required package -> dependent package"));
+                "Required package → dependent package. Animated flow markers show direction."));
             legend.Add(CreateLegendItem(
                 "Cable",
                 "Bridge connection",
                 "dpi-graph-legend__line--bridge",
-                "Integration package connects systems"));
+                "Integration package connects systems. Animated markers show direction."));
             legend.Add(CreateLegendItem(
                 "Dotted",
                 "Optional companion",
                 "dpi-graph-legend__line--optional",
-                "Enhances, not required"));
+                "Enhances, not required. Subtle animated markers show direction."));
             legend.Add(CreateLegendItem(
                 "Halo",
                 "Suite membership",
@@ -854,6 +854,9 @@ namespace Deucarian.PackageInstaller.Editor
         private const float AnimationFrameMs = 33f;
         private const float AnimatedDashLength = 14f;
         private const float AnimatedDashGap = 10f;
+        private const float EdgeEndpointPadding = 8f;
+        private const float MarkerTravelStart = 0.045f;
+        private const float MarkerTravelEnd = 0.955f;
 
         private readonly Dictionary<string, Rect> _nodeRects =
             new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
@@ -910,7 +913,6 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             return _graph.Edges.Any(edge =>
-                edge.State != PackageGraphEdgeState.Warning &&
                 ShouldAnimate(edge.Kind) &&
                 _focus.IsEdgeVisible(edge) &&
                 _focus.IsEdgeEmphasized(edge));
@@ -1010,8 +1012,8 @@ namespace Deucarian.PackageInstaller.Editor
             bool focusMode,
             float animationPhase)
         {
-            Vector2 start = GetPort(fromRect, toRect);
-            Vector2 end = GetPort(toRect, fromRect);
+            Vector2 start = GetPort(fromRect, toRect, EdgeEndpointPadding);
+            Vector2 end = GetPort(toRect, fromRect, EdgeEndpointPadding);
             Vector2 control = GetArcControlPoint(start, end, edge, emphasized);
             Vector2 controlA = Vector2.Lerp(start, control, 0.72f);
             Vector2 controlB = Vector2.Lerp(end, control, 0.72f);
@@ -1019,7 +1021,6 @@ namespace Deucarian.PackageInstaller.Editor
             float width = GetEdgeWidth(edge, emphasized, focusMode);
             bool animate = emphasized &&
                            focusMode &&
-                           edge.State != PackageGraphEdgeState.Warning &&
                            ShouldAnimate(edge.Kind);
 
             if (color.a <= 0.01f || width <= 0.01f)
@@ -1077,39 +1078,18 @@ namespace Deucarian.PackageInstaller.Editor
                 painter.Stroke();
             }
 
-            if (emphasized && ShouldDrawDirectionArrow(edge.Kind))
-            {
-                DrawDirectionArrow(
-                    painter,
-                    GetBezierPoint(start, controlA, controlB, end, 0.90f),
-                    GetBezierTangent(start, controlA, controlB, end, 0.90f),
-                    color,
-                    emphasized ? 8.5f : 6.5f);
-            }
-
             if (animate)
             {
-                float markerT = Mathf.Lerp(0.22f, 0.78f, animationPhase);
                 Color pulseColor = new Color(color.r, color.g, color.b, Mathf.Min(0.86f, color.a + 0.10f));
-
-                if (edge.Kind == PackageGraphEdgeKind.BridgeConnection)
-                {
-                    DrawPulseDot(painter, GetBezierPoint(start, controlA, controlB, end, markerT), pulseColor, 4.2f);
-                }
-                else if (ShouldDrawDirectionArrow(edge.Kind))
-                {
-                    DrawDirectionArrow(
-                        painter,
-                        GetBezierPoint(start, controlA, controlB, end, markerT),
-                        GetBezierTangent(start, controlA, controlB, end, markerT),
-                        pulseColor,
-                        6.5f);
-                }
-            }
-
-            if (emphasized && ShouldDrawPortMarker(edge.Kind))
-            {
-                DrawPortMarker(painter, start, color, width);
+                DrawFlowMarkers(
+                    painter,
+                    edge.Kind,
+                    start,
+                    controlA,
+                    controlB,
+                    end,
+                    pulseColor,
+                    animationPhase);
             }
 
             if (edge.State == PackageGraphEdgeState.Warning)
@@ -1118,7 +1098,7 @@ namespace Deucarian.PackageInstaller.Editor
             }
         }
 
-        private static Vector2 GetPort(Rect fromRect, Rect toRect)
+        private static Vector2 GetPort(Rect fromRect, Rect toRect, float padding)
         {
             Vector2 delta = toRect.center - fromRect.center;
 
@@ -1134,7 +1114,8 @@ namespace Deucarian.PackageInstaller.Editor
                 ? (fromRect.height * 0.5f) / Mathf.Abs(delta.y)
                 : float.PositiveInfinity;
             float scale = Mathf.Min(scaleX, scaleY);
-            return fromRect.center + delta * Mathf.Clamp01(scale);
+            return fromRect.center +
+                   delta.normalized * ((delta.magnitude * Mathf.Clamp01(scale)) + Mathf.Max(0f, padding));
         }
 
         private static Vector2 GetArcControlPoint(
@@ -1189,18 +1170,10 @@ namespace Deucarian.PackageInstaller.Editor
         private static bool ShouldAnimate(PackageGraphEdgeKind kind)
         {
             return kind == PackageGraphEdgeKind.HardDependency ||
-                   kind == PackageGraphEdgeKind.BridgeConnection;
-        }
-
-        private static bool ShouldDrawDirectionArrow(PackageGraphEdgeKind kind)
-        {
-            return kind == PackageGraphEdgeKind.HardDependency;
-        }
-
-        private static bool ShouldDrawPortMarker(PackageGraphEdgeKind kind)
-        {
-            return kind == PackageGraphEdgeKind.HardDependency ||
-                   kind == PackageGraphEdgeKind.BridgeConnection;
+                   kind == PackageGraphEdgeKind.BridgeConnection ||
+                   kind == PackageGraphEdgeKind.OptionalCompanion ||
+                   kind == PackageGraphEdgeKind.Recommended ||
+                   kind == PackageGraphEdgeKind.SuiteMembership;
         }
 
         private static Color GetEdgeColor(PackageGraphEdge edge, bool emphasized, bool focusMode)
@@ -1322,11 +1295,6 @@ namespace Deucarian.PackageInstaller.Editor
                 controlB - side * offset,
                 end - side * offset);
 
-            if (emphasized)
-            {
-                DrawCablePlug(painter, start, side, color);
-                DrawCablePlug(painter, end, side, color);
-            }
         }
 
         private static void DrawBezierStroke(
@@ -1342,29 +1310,112 @@ namespace Deucarian.PackageInstaller.Editor
             painter.Stroke();
         }
 
-        private static void DrawCablePlug(Painter2D painter, Vector2 center, Vector2 side, Color color)
+        private static void DrawFlowMarkers(
+            Painter2D painter,
+            PackageGraphEdgeKind kind,
+            Vector2 start,
+            Vector2 controlA,
+            Vector2 controlB,
+            Vector2 end,
+            Color color,
+            float animationPhase)
         {
-            painter.strokeColor = new Color(color.r, color.g, color.b, Mathf.Min(1f, color.a + 0.08f));
-            painter.lineWidth = 1.4f;
+            int markerCount = GetFlowMarkerCount(kind);
+            float markerSize = GetFlowMarkerSize(kind);
+            float markerWidth = GetFlowMarkerWidth(kind);
+            float markerAlpha = GetFlowMarkerAlpha(kind);
+            Color markerColor = new Color(color.r, color.g, color.b, Mathf.Min(1f, color.a * markerAlpha));
+
+            for (int index = 0; index < markerCount; index++)
+            {
+                float phase = Mathf.Repeat(animationPhase + (index / (float)markerCount), 1f);
+                float markerT = Mathf.Lerp(MarkerTravelStart, MarkerTravelEnd, phase);
+                DrawFlowChevron(
+                    painter,
+                    GetBezierPoint(start, controlA, controlB, end, markerT),
+                    GetBezierTangent(start, controlA, controlB, end, markerT),
+                    markerColor,
+                    markerSize,
+                    markerWidth);
+            }
+        }
+
+        private static void DrawFlowChevron(
+            Painter2D painter,
+            Vector2 center,
+            Vector2 tangent,
+            Color color,
+            float size,
+            float width)
+        {
+            if (tangent.sqrMagnitude < 0.01f)
+            {
+                return;
+            }
+
+            Vector2 forward = tangent.normalized;
+            Vector2 side = new Vector2(-forward.y, forward.x);
+            Vector2 tip = center + forward * size * 0.62f;
+            Vector2 back = center - forward * size * 0.58f;
+            Vector2 left = back + side * size * 0.48f;
+            Vector2 right = back - side * size * 0.48f;
+
+            painter.strokeColor = color;
+            painter.lineWidth = width;
             painter.BeginPath();
-            painter.MoveTo(center - side * 5.5f);
-            painter.LineTo(center + side * 5.5f);
+            painter.MoveTo(left);
+            painter.LineTo(tip);
+            painter.LineTo(right);
             painter.Stroke();
         }
 
-        private static void DrawPulseDot(Painter2D painter, Vector2 center, Color color, float size)
+        private static int GetFlowMarkerCount(PackageGraphEdgeKind kind)
         {
-            painter.fillColor = color;
-            painter.strokeColor = new Color(color.r, color.g, color.b, Mathf.Min(1f, color.a + 0.08f));
-            painter.lineWidth = 0.85f;
-            painter.BeginPath();
-            painter.MoveTo(center + new Vector2(0f, -size));
-            painter.LineTo(center + new Vector2(size, 0f));
-            painter.LineTo(center + new Vector2(0f, size));
-            painter.LineTo(center + new Vector2(-size, 0f));
-            painter.ClosePath();
-            painter.Fill();
-            painter.Stroke();
+            return kind == PackageGraphEdgeKind.OptionalCompanion ||
+                   kind == PackageGraphEdgeKind.SuiteMembership
+                ? 1
+                : 2;
+        }
+
+        private static float GetFlowMarkerSize(PackageGraphEdgeKind kind)
+        {
+            switch (kind)
+            {
+                case PackageGraphEdgeKind.OptionalCompanion:
+                    return 4.6f;
+                case PackageGraphEdgeKind.BridgeConnection:
+                    return 5.8f;
+                case PackageGraphEdgeKind.SuiteMembership:
+                    return 4.8f;
+                default:
+                    return 6.2f;
+            }
+        }
+
+        private static float GetFlowMarkerWidth(PackageGraphEdgeKind kind)
+        {
+            switch (kind)
+            {
+                case PackageGraphEdgeKind.OptionalCompanion:
+                    return 1.0f;
+                case PackageGraphEdgeKind.BridgeConnection:
+                    return 1.35f;
+                default:
+                    return 1.25f;
+            }
+        }
+
+        private static float GetFlowMarkerAlpha(PackageGraphEdgeKind kind)
+        {
+            switch (kind)
+            {
+                case PackageGraphEdgeKind.OptionalCompanion:
+                    return 0.68f;
+                case PackageGraphEdgeKind.SuiteMembership:
+                    return 0.58f;
+                default:
+                    return 0.95f;
+            }
         }
 
         private static void DrawDashedBezier(
@@ -1454,46 +1505,6 @@ namespace Deucarian.PackageInstaller.Editor
             return 3f * inverse * inverse * (controlA - start) +
                    6f * inverse * t * (controlB - controlA) +
                    3f * t * t * (end - controlB);
-        }
-
-        private static void DrawDirectionArrow(
-            Painter2D painter,
-            Vector2 center,
-            Vector2 tangent,
-            Color color,
-            float size)
-        {
-            if (tangent.sqrMagnitude < 0.01f)
-            {
-                return;
-            }
-
-            Vector2 forward = tangent.normalized;
-            Vector2 side = new Vector2(-forward.y, forward.x);
-            Vector2 tip = center + forward * size;
-            Vector2 left = center - forward * size * 0.72f + side * size * 0.52f;
-            Vector2 right = center - forward * size * 0.72f - side * size * 0.52f;
-
-            painter.fillColor = color;
-            painter.strokeColor = new Color(color.r, color.g, color.b, Mathf.Min(1f, color.a + 0.08f));
-            painter.lineWidth = 0.85f;
-            painter.BeginPath();
-            painter.MoveTo(tip);
-            painter.LineTo(left);
-            painter.LineTo(right);
-            painter.ClosePath();
-            painter.Fill();
-            painter.Stroke();
-        }
-
-        private static void DrawPortMarker(Painter2D painter, Vector2 position, Color color, float width)
-        {
-            painter.strokeColor = color;
-            painter.lineWidth = Mathf.Max(1.4f, width);
-            painter.BeginPath();
-            painter.MoveTo(position + new Vector2(-4f, 0f));
-            painter.LineTo(position + new Vector2(4f, 0f));
-            painter.Stroke();
         }
 
         private static void DrawWarningMarker(Painter2D painter, Vector2 center)

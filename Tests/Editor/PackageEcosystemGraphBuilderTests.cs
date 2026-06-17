@@ -212,6 +212,9 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                     .OfType<Label>()
                     .Any(label => label.text == "Dependency flow"));
             Assert.IsTrue(
+                FindByClass(view, "dpi-graph-legend__item")
+                    .Any(item => item.tooltip.Contains("Animated flow markers")));
+            Assert.IsTrue(
                 FindByClass(view, "dpi-graph-legend__label")
                     .OfType<Label>()
                     .Any(label => label.text == "Bridge connection"));
