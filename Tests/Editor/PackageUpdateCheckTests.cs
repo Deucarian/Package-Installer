@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Threading;
 using NUnit.Framework;
 using UnityEngine;
 
@@ -7,6 +8,18 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 {
     internal sealed class PackageUpdateCheckTests
     {
+        [SetUp]
+        public void SetUp()
+        {
+            PackageUpdateCheckService.ResetForTests();
+        }
+
+        [TearDown]
+        public void TearDown()
+        {
+            PackageUpdateCheckService.ResetForTests();
+        }
+
         [Test]
         public void WindowOpenThrottleAllowsFirstCheck()
         {
@@ -253,6 +266,60 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void RegistryPackageSelectedDevelopmentUsesDevelopmentDistTag()
+        {
+            PackageDefinition packageDefinition = CreatePackage();
+            PackageUpdateCheckService.RegistryChannelVersionResolverForTests =
+                (_, channel) => PackageUpdateCheckService.RegistryLatestVersionResult.Ok(
+                    channel == PackageChannel.Development ? "1.2.4-dev.7" : "1.2.3");
+
+            PackageUpdateStatus status = PackageUpdateCheckService.CheckItemForTests(
+                packageDefinition,
+                PackageChannel.Development,
+                packageDefinition.DevelopmentUrl,
+                packageDefinition.PackageId + "@1.2.3",
+                string.Empty,
+                "1.2.3",
+                PackageInstallSourceType.Registry,
+                "1.2.3",
+                hasInstalledChannel: true,
+                installedChannel: PackageChannel.Stable,
+                packageLockPaths: Array.Empty<string>());
+
+            Assert.AreEqual(PackageUpdateStatusKind.SwitchAvailable, status.Kind);
+            Assert.AreEqual("1.2.3", status.InstalledRevision);
+            Assert.AreEqual("1.2.4-dev.7", status.LatestRevision);
+            Assert.IsTrue(status.IsUpdateAvailable);
+        }
+
+        [Test]
+        public void RegistryPackageSelectedStableFromDevelopmentVersionReturnsSwitchAvailable()
+        {
+            PackageDefinition packageDefinition = CreatePackage();
+            PackageUpdateCheckService.RegistryChannelVersionResolverForTests =
+                (_, channel) => PackageUpdateCheckService.RegistryLatestVersionResult.Ok(
+                    channel == PackageChannel.Stable ? "1.2.3" : "1.2.4-dev.7");
+
+            PackageUpdateStatus status = PackageUpdateCheckService.CheckItemForTests(
+                packageDefinition,
+                PackageChannel.Stable,
+                packageDefinition.StableUrl,
+                packageDefinition.PackageId + "@1.2.4-dev.7",
+                string.Empty,
+                "1.2.4-dev.7",
+                PackageInstallSourceType.Registry,
+                "1.2.4-dev.7",
+                hasInstalledChannel: true,
+                installedChannel: PackageChannel.Development,
+                packageLockPaths: Array.Empty<string>());
+
+            Assert.AreEqual(PackageUpdateStatusKind.SwitchAvailable, status.Kind);
+            Assert.AreEqual("1.2.4-dev.7", status.InstalledRevision);
+            Assert.AreEqual("1.2.3", status.LatestRevision);
+            Assert.IsTrue(status.IsUpdateAvailable);
+        }
+
+        [Test]
         public void RegistryPackageWithoutLatestVersionReturnsCannotDetermine()
         {
             PackageDefinition packageDefinition = CreatePackage();
@@ -308,6 +375,18 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void NpmDevelopmentDistTagCanBeReadFromRegistryMetadata()
+        {
+            bool found = PackageUpdateCheckService.TryReadNpmDistTagVersion(
+                "{\"dist-tags\":{\"dev\":\"1.2.4-dev.7\",\"latest\":\"1.2.3\"}}",
+                "dev",
+                out string developmentVersion);
+
+            Assert.IsTrue(found);
+            Assert.AreEqual("1.2.4-dev.7", developmentVersion);
+        }
+
+        [Test]
         public void SemanticVersionComparisonDetectsOlderInstalledVersion()
         {
             bool compared = PackageUpdateCheckService.TryCompareSemanticVersions(
@@ -331,6 +410,128 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 Assert.IsFalse(updateCheckService.IsChecking);
                 Assert.AreEqual(string.Empty, updateCheckService.LastFailureMessage);
                 Assert.AreEqual(PackageUpdateStatusKind.NotInstalled, updateCheckService.GetStatus(CreatePackage(), PackageChannel.Stable).Kind);
+            }
+        }
+
+        [Test]
+        public void TargetedStableToDevelopmentCheckMarksCheckingThenSwitchAvailable()
+        {
+            PackageDefinition packageDefinition = CreatePackage();
+            PackageUpdateCheckService.RegistryChannelVersionResolverForTests =
+                (_, channel) => PackageUpdateCheckService.RegistryLatestVersionResult.Ok(
+                    channel == PackageChannel.Development ? "1.2.4-dev.7" : "1.2.3");
+
+            using (PackageDetectionService detectionService = new PackageDetectionService())
+            using (PackageUpdateCheckService updateCheckService = new PackageUpdateCheckService(detectionService))
+            {
+                detectionService.ReplaceInstalledPackageForTests(
+                    packageDefinition.PackageId,
+                    "1.2.3",
+                    PackageInstallSourceType.Registry,
+                    "1.2.3");
+
+                updateCheckService.CheckForUpdate(packageDefinition, PackageChannel.Development);
+
+                Assert.AreEqual(
+                    PackageUpdateStatusKind.Checking,
+                    updateCheckService.GetStatus(packageDefinition, PackageChannel.Development).Kind);
+
+                PumpTargetedChecksUntilIdle();
+
+                PackageUpdateStatus status = updateCheckService.GetStatus(
+                    packageDefinition,
+                    PackageChannel.Development);
+                Assert.AreEqual(PackageUpdateStatusKind.SwitchAvailable, status.Kind);
+                Assert.AreEqual("1.2.4-dev.7", status.LatestRevision);
+            }
+        }
+
+        [Test]
+        public void TargetedDevelopmentToStableCheckMarksCheckingThenSwitchAvailable()
+        {
+            PackageDefinition packageDefinition = CreatePackage();
+            PackageUpdateCheckService.RegistryChannelVersionResolverForTests =
+                (_, channel) => PackageUpdateCheckService.RegistryLatestVersionResult.Ok(
+                    channel == PackageChannel.Stable ? "1.2.3" : "1.2.4-dev.7");
+
+            using (PackageDetectionService detectionService = new PackageDetectionService())
+            using (PackageUpdateCheckService updateCheckService = new PackageUpdateCheckService(detectionService))
+            {
+                detectionService.ReplaceInstalledPackageForTests(
+                    packageDefinition.PackageId,
+                    "1.2.4-dev.7",
+                    PackageInstallSourceType.Registry,
+                    "1.2.4-dev.7");
+
+                updateCheckService.CheckForUpdate(packageDefinition, PackageChannel.Stable);
+
+                Assert.AreEqual(
+                    PackageUpdateStatusKind.Checking,
+                    updateCheckService.GetStatus(packageDefinition, PackageChannel.Stable).Kind);
+
+                PumpTargetedChecksUntilIdle();
+
+                PackageUpdateStatus status = updateCheckService.GetStatus(
+                    packageDefinition,
+                    PackageChannel.Stable);
+                Assert.AreEqual(PackageUpdateStatusKind.SwitchAvailable, status.Kind);
+                Assert.AreEqual("1.2.3", status.LatestRevision);
+            }
+        }
+
+        [Test]
+        public void TargetedChannelCheckForNotInstalledPackageDoesNotStartAsyncCheck()
+        {
+            PackageDefinition packageDefinition = CreatePackage();
+
+            using (PackageDetectionService detectionService = new PackageDetectionService())
+            using (PackageUpdateCheckService updateCheckService = new PackageUpdateCheckService(detectionService))
+            {
+                updateCheckService.CheckForUpdate(packageDefinition, PackageChannel.Development);
+
+                Assert.IsFalse(PackageUpdateCheckService.HasTargetedChecksForTests);
+                Assert.AreEqual(
+                    PackageUpdateStatusKind.NotInstalled,
+                    updateCheckService.GetStatus(packageDefinition, PackageChannel.Development).Kind);
+            }
+        }
+
+        [Test]
+        public void StaleTargetedCheckResultDoesNotOverwriteNewerChannelSelection()
+        {
+            PackageDefinition packageDefinition = CreatePackage();
+            PackageUpdateCheckService.RegistryChannelVersionResolverForTests =
+                (_, channel) =>
+                {
+                    if (channel == PackageChannel.Stable)
+                    {
+                        Thread.Sleep(100);
+                        return PackageUpdateCheckService.RegistryLatestVersionResult.Ok("1.2.3");
+                    }
+
+                    return PackageUpdateCheckService.RegistryLatestVersionResult.Ok("1.2.4-dev.7");
+                };
+
+            using (PackageDetectionService detectionService = new PackageDetectionService())
+            using (PackageUpdateCheckService updateCheckService = new PackageUpdateCheckService(detectionService))
+            {
+                detectionService.ReplaceInstalledPackageForTests(
+                    packageDefinition.PackageId,
+                    "1.2.0",
+                    PackageInstallSourceType.Registry,
+                    "1.2.0");
+
+                updateCheckService.CheckForUpdate(packageDefinition, PackageChannel.Stable);
+                PackageUpdateCheckService.UpdateTargetedChecksForTests(forceStartPending: true);
+                updateCheckService.CheckForUpdate(packageDefinition, PackageChannel.Development);
+
+                PumpTargetedChecksUntilIdle();
+
+                PackageUpdateStatus status = updateCheckService.GetStatus(
+                    packageDefinition,
+                    PackageChannel.Development);
+                Assert.AreEqual(PackageUpdateStatusKind.SwitchAvailable, status.Kind);
+                Assert.AreEqual("1.2.4-dev.7", status.LatestRevision);
             }
         }
 
@@ -375,6 +576,19 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             {
                 PackageUpdateCheckService.RegistryLatestVersionResolverForTests = null;
             }
+        }
+
+        private static void PumpTargetedChecksUntilIdle()
+        {
+            DateTime deadline = DateTime.UtcNow.AddSeconds(5);
+
+            while (PackageUpdateCheckService.HasTargetedChecksForTests && DateTime.UtcNow < deadline)
+            {
+                PackageUpdateCheckService.UpdateTargetedChecksForTests(forceStartPending: true);
+                Thread.Sleep(10);
+            }
+
+            Assert.IsFalse(PackageUpdateCheckService.HasTargetedChecksForTests);
         }
     }
 }

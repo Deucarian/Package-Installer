@@ -7,6 +7,7 @@ namespace Deucarian.PackageInstaller.Editor
         Checking,
         UpToDate,
         UpdateAvailable,
+        SwitchAvailable,
         CannotDetermine,
         Failed
     }
@@ -53,7 +54,9 @@ namespace Deucarian.PackageInstaller.Editor
 
         public bool IsChecking => Kind == PackageUpdateStatusKind.Checking;
 
-        public bool IsUpdateAvailable => Kind == PackageUpdateStatusKind.UpdateAvailable;
+        public bool IsUpdateAvailable =>
+            Kind == PackageUpdateStatusKind.UpdateAvailable ||
+            Kind == PackageUpdateStatusKind.SwitchAvailable;
 
         public string ShortInstalledRevision => ShortenRevision(InstalledRevision);
 
@@ -73,6 +76,8 @@ namespace Deucarian.PackageInstaller.Editor
                         return "Up to date";
                     case PackageUpdateStatusKind.UpdateAvailable:
                         return "Update available";
+                    case PackageUpdateStatusKind.SwitchAvailable:
+                        return "Switch available";
                     case PackageUpdateStatusKind.CannotDetermine:
                         return "Cannot determine update";
                     case PackageUpdateStatusKind.Failed:
@@ -179,6 +184,40 @@ namespace Deucarian.PackageInstaller.Editor
         {
             return Create(
                 PackageUpdateStatusKind.UpdateAvailable,
+                packageDefinition,
+                channel,
+                selectedUrl,
+                installedRevision,
+                latestRevision,
+                message);
+        }
+
+        public static PackageUpdateStatus SwitchAvailable(
+            PackageDefinition packageDefinition,
+            PackageChannel channel,
+            string selectedUrl,
+            string installedRevision,
+            string latestRevision)
+        {
+            return SwitchAvailable(
+                packageDefinition,
+                channel,
+                selectedUrl,
+                installedRevision,
+                latestRevision,
+                "Installed package differs from the selected channel.");
+        }
+
+        public static PackageUpdateStatus SwitchAvailable(
+            PackageDefinition packageDefinition,
+            PackageChannel channel,
+            string selectedUrl,
+            string installedRevision,
+            string latestRevision,
+            string message)
+        {
+            return Create(
+                PackageUpdateStatusKind.SwitchAvailable,
                 packageDefinition,
                 channel,
                 selectedUrl,

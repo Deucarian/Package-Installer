@@ -290,6 +290,7 @@ namespace Deucarian.PackageInstaller.Editor
                 case PackageUpdateStatusKind.Checking:
                     return PackageGraphNodeStatus.Checking;
                 case PackageUpdateStatusKind.UpdateAvailable:
+                case PackageUpdateStatusKind.SwitchAvailable:
                     return PackageGraphNodeStatus.UpdateAvailable;
                 case PackageUpdateStatusKind.CannotDetermine:
                 case PackageUpdateStatusKind.Failed:

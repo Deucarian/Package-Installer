@@ -143,27 +143,32 @@ namespace Deucarian.PackageInstaller.Editor
         private const int GitTimeoutMilliseconds = 15000;
         private const int NpmTimeoutMilliseconds = 15000;
         private const string NpmRegistryUrl = "https://registry.npmjs.org/";
+        private const double TargetedCheckDebounceSeconds = 0.15d;
 
         private static readonly Regex ShaRegex =
             new Regex("(?<![0-9a-fA-F])([0-9a-fA-F]{40})(?![0-9a-fA-F])", RegexOptions.Compiled);
 
-        private static readonly Regex NpmLatestDistTagRegex =
-            new Regex(
-                "\"dist-tags\"\\s*:\\s*\\{.*?\"latest\"\\s*:\\s*\"(?<version>[^\"]+)\"",
-                RegexOptions.Compiled | RegexOptions.Singleline);
-
         private readonly PackageDetectionService _packageDetectionService;
         private static readonly Dictionary<string, PackageUpdateStatus> Statuses =
             new Dictionary<string, PackageUpdateStatus>(StringComparer.OrdinalIgnoreCase);
+        private static readonly Dictionary<string, TargetedUpdateCheckRequest> PendingTargetedChecks =
+            new Dictionary<string, TargetedUpdateCheckRequest>(StringComparer.OrdinalIgnoreCase);
+        private static readonly Dictionary<string, TargetedUpdateCheckRequest> ActiveTargetedChecks =
+            new Dictionary<string, TargetedUpdateCheckRequest>(StringComparer.OrdinalIgnoreCase);
+        private static readonly Dictionary<string, int> LatestTargetedCheckGenerations =
+            new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         private readonly IReadOnlyList<string> _packageLockPaths;
         private readonly Action _sharedStateChangedHandler;
 
         private static Task<PackageUpdateStatus[]> CheckTask;
         private static IReadOnlyList<UpdateCheckItem> ActiveCheckItems = Array.Empty<UpdateCheckItem>();
+        private static int TargetedCheckGeneration;
+        private static bool IsTargetedUpdateRegistered;
         private static string LastFailureMessageValue = string.Empty;
         private static string LastStatusMessageValue = string.Empty;
         private static event Action SharedStateChanged;
         internal static Func<string, RegistryLatestVersionResult> RegistryLatestVersionResolverForTests;
+        internal static Func<string, PackageChannel, RegistryLatestVersionResult> RegistryChannelVersionResolverForTests;
 
         public PackageUpdateCheckService(PackageDetectionService packageDetectionService)
         {
@@ -177,7 +182,11 @@ namespace Deucarian.PackageInstaller.Editor
 
         public bool IsChecking => CheckTask != null;
 
-        public static bool IsAnyCheckRunning => CheckTask != null;
+        public static bool IsAnyCheckRunning => CheckTask != null || HasTargetedChecks;
+
+        private static bool HasTargetedChecks =>
+            PendingTargetedChecks.Count > 0 ||
+            ActiveTargetedChecks.Count > 0;
 
         public bool HasStatuses => Statuses.Count > 0;
 
@@ -223,26 +232,11 @@ namespace Deucarian.PackageInstaller.Editor
                 Statuses[packageDefinition.PackageId] =
                     PackageUpdateStatus.Checking(packageDefinition, channel, selectedUrl);
 
-                _packageDetectionService.TryGetInstalledPackageReference(
-                    packageDefinition.PackageId,
-                    out string installedPackageReference);
-                _packageDetectionService.TryGetInstalledPackageSourceType(
-                    packageDefinition.PackageId,
-                    out PackageInstallSourceType sourceType);
-                _packageDetectionService.TryGetInstalledPackageVersion(
-                    packageDefinition.PackageId,
-                    out string installedVersion);
-
-                checkItems.Add(new UpdateCheckItem(
+                checkItems.Add(CreateUpdateCheckItem(
                     packageDefinition,
                     channel,
                     selectedUrl,
-                    packageInfo != null ? packageInfo.packageId : string.Empty,
-                    packageInfo != null ? packageInfo.resolvedPath : string.Empty,
-                    installedPackageReference,
-                    sourceType,
-                    installedVersion,
-                    _packageLockPaths));
+                    packageInfo));
             }
 
             LastFailureMessageValue = string.Empty;
@@ -259,6 +253,68 @@ namespace Deucarian.PackageInstaller.Editor
 
             EditorApplication.update -= UpdateShared;
             EditorApplication.update += UpdateShared;
+            NotifySharedStateChanged();
+        }
+
+        public void CheckForUpdate(PackageDefinition packageDefinition, PackageChannel channel)
+        {
+            if (packageDefinition == null || !packageDefinition.HasPackageReference)
+            {
+                return;
+            }
+
+            string packageId = packageDefinition.PackageId;
+            string selectedUrl = packageDefinition.GetUrl(channel);
+
+            if (channel == PackageChannel.Custom)
+            {
+                CancelTargetedCheck(packageId);
+                Statuses[packageId] = PackageUpdateStatus.Unknown(packageDefinition, channel);
+                NotifySharedStateChanged();
+                return;
+            }
+
+            if (!_packageDetectionService.TryGetInstalledPackage(packageId, out PackageManagerPackageInfo packageInfo))
+            {
+                CancelTargetedCheck(packageId);
+                Statuses[packageId] = PackageUpdateStatus.NotInstalled(packageDefinition, channel, selectedUrl);
+                NotifySharedStateChanged();
+                return;
+            }
+
+            if (TryGetEquivalentTargetedCheck(
+                    packageId,
+                    channel,
+                    selectedUrl,
+                    out TargetedUpdateCheckRequest equivalentRequest))
+            {
+                if (PendingTargetedChecks.TryGetValue(packageId, out TargetedUpdateCheckRequest pending) &&
+                    !pending.Matches(channel, selectedUrl))
+                {
+                    PendingTargetedChecks.Remove(packageId);
+                }
+
+                LatestTargetedCheckGenerations[packageId] = equivalentRequest.Generation;
+                Statuses[packageId] = PackageUpdateStatus.Checking(packageDefinition, channel, selectedUrl);
+                NotifySharedStateChanged();
+                return;
+            }
+
+            int generation = ++TargetedCheckGeneration;
+            UpdateCheckItem item = CreateUpdateCheckItem(
+                packageDefinition,
+                channel,
+                selectedUrl,
+                packageInfo);
+
+            PendingTargetedChecks[packageId] = new TargetedUpdateCheckRequest(
+                item,
+                generation,
+                EditorApplication.timeSinceStartup + TargetedCheckDebounceSeconds);
+            LatestTargetedCheckGenerations[packageId] = generation;
+            Statuses[packageId] = PackageUpdateStatus.Checking(packageDefinition, channel, selectedUrl);
+
+            RegisterTargetedUpdate();
             NotifySharedStateChanged();
         }
 
@@ -301,12 +357,49 @@ namespace Deucarian.PackageInstaller.Editor
             }
         }
 
+        private UpdateCheckItem CreateUpdateCheckItem(
+            PackageDefinition packageDefinition,
+            PackageChannel channel,
+            string selectedUrl,
+            PackageManagerPackageInfo packageInfo)
+        {
+            _packageDetectionService.TryGetInstalledPackageReference(
+                packageDefinition.PackageId,
+                out string installedPackageReference);
+            _packageDetectionService.TryGetInstalledPackageSourceType(
+                packageDefinition.PackageId,
+                out PackageInstallSourceType sourceType);
+            _packageDetectionService.TryGetInstalledPackageVersion(
+                packageDefinition.PackageId,
+                out string installedVersion);
+
+            bool hasInstalledChannel = _packageDetectionService.TryGetInstalledPackageChannel(
+                packageDefinition,
+                out PackageChannel installedChannel,
+                out _);
+
+            return new UpdateCheckItem(
+                packageDefinition,
+                channel,
+                selectedUrl,
+                packageInfo != null ? packageInfo.packageId : string.Empty,
+                packageInfo != null ? packageInfo.resolvedPath : string.Empty,
+                installedPackageReference,
+                sourceType,
+                installedVersion,
+                hasInstalledChannel,
+                installedChannel,
+                _packageLockPaths);
+        }
+
         public void Invalidate(string packageId)
         {
             if (string.IsNullOrWhiteSpace(packageId))
             {
                 return;
             }
+
+            CancelTargetedCheck(packageId);
 
             if (Statuses.Remove(packageId))
             {
@@ -322,6 +415,9 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             Statuses.Clear();
+            PendingTargetedChecks.Clear();
+            LatestTargetedCheckGenerations.Clear();
+            UnregisterTargetedUpdateIfIdle();
             LastFailureMessageValue = string.Empty;
             LastStatusMessageValue = string.Empty;
             NotifySharedStateChanged();
@@ -366,6 +462,8 @@ namespace Deucarian.PackageInstaller.Editor
                 installedPackageReference,
                 PackageInstallSourceType.Git,
                 string.Empty,
+                false,
+                PackageChannel.Stable,
                 packageLockPaths));
         }
 
@@ -380,6 +478,33 @@ namespace Deucarian.PackageInstaller.Editor
             string installedVersion,
             IReadOnlyList<string> packageLockPaths)
         {
+            return CheckItemForTests(
+                packageDefinition,
+                channel,
+                selectedUrl,
+                packageManagerPackageId,
+                resolvedPath,
+                installedPackageReference,
+                sourceType,
+                installedVersion,
+                hasInstalledChannel: false,
+                installedChannel: PackageChannel.Stable,
+                packageLockPaths: packageLockPaths);
+        }
+
+        internal static PackageUpdateStatus CheckItemForTests(
+            PackageDefinition packageDefinition,
+            PackageChannel channel,
+            string selectedUrl,
+            string packageManagerPackageId,
+            string resolvedPath,
+            string installedPackageReference,
+            PackageInstallSourceType sourceType,
+            string installedVersion,
+            bool hasInstalledChannel,
+            PackageChannel installedChannel,
+            IReadOnlyList<string> packageLockPaths)
+        {
             return CheckItem(new UpdateCheckItem(
                 packageDefinition,
                 channel,
@@ -389,6 +514,8 @@ namespace Deucarian.PackageInstaller.Editor
                 installedPackageReference,
                 sourceType,
                 installedVersion,
+                hasInstalledChannel,
+                installedChannel,
                 packageLockPaths));
         }
 
@@ -474,12 +601,11 @@ namespace Deucarian.PackageInstaller.Editor
                         latestRevision);
                 }
 
-                return PackageUpdateStatus.UpdateAvailable(
-                    item.PackageDefinition,
-                    item.Channel,
-                    item.SelectedUrl,
+                return CreateAvailableStatus(
+                    item,
                     installedRevision,
-                    latestRevision);
+                    latestRevision,
+                    "Installed revision differs from the selected channel.");
             }
             catch (Exception exception)
             {
@@ -504,8 +630,9 @@ namespace Deucarian.PackageInstaller.Editor
                     "The package is installed from a registry, but Unity did not expose an installed version.");
             }
 
-            RegistryLatestVersionResult latestVersionResult = ResolveLatestRegistryVersion(
-                item.PackageDefinition.PackageId);
+            RegistryLatestVersionResult latestVersionResult = ResolveRegistryChannelVersion(
+                item.PackageDefinition.PackageId,
+                item.Channel);
 
             if (!latestVersionResult.Success)
             {
@@ -531,7 +658,12 @@ namespace Deucarian.PackageInstaller.Editor
                     compareMessage);
             }
 
-            if (comparison >= 0)
+            bool exactVersionMatch = string.Equals(
+                installedVersion,
+                latestVersionResult.Version,
+                StringComparison.OrdinalIgnoreCase);
+
+            if (comparison >= 0 && (!IsSwitchBetweenChannels(item) || exactVersionMatch))
             {
                 return PackageUpdateStatus.UpToDate(
                     item.PackageDefinition,
@@ -539,16 +671,14 @@ namespace Deucarian.PackageInstaller.Editor
                     item.SelectedUrl,
                     installedVersion,
                     latestVersionResult.Version,
-                    "Installed registry version is up to date.");
+                    "Installed registry version is up to date for the selected channel.");
             }
 
-            return PackageUpdateStatus.UpdateAvailable(
-                item.PackageDefinition,
-                item.Channel,
-                item.SelectedUrl,
+            return CreateAvailableStatus(
+                item,
                 installedVersion,
                 latestVersionResult.Version,
-                "Installed registry version is older than the latest npmjs stable version.");
+                "Installed registry version differs from the selected npmjs dist-tag.");
         }
 
         private static bool TryGetInstalledRegistryVersion(UpdateCheckItem item, out string installedVersion)
@@ -580,17 +710,73 @@ namespace Deucarian.PackageInstaller.Editor
                        out installedVersion);
         }
 
-        private static RegistryLatestVersionResult ResolveLatestRegistryVersion(string packageId)
+        private static PackageUpdateStatus CreateAvailableStatus(
+            UpdateCheckItem item,
+            string installedRevision,
+            string latestRevision,
+            string updateMessage)
         {
-            Func<string, RegistryLatestVersionResult> resolver = RegistryLatestVersionResolverForTests;
-            return resolver != null ? resolver(packageId) : FetchLatestRegistryVersion(packageId);
+            if (IsSwitchBetweenChannels(item))
+            {
+                return PackageUpdateStatus.SwitchAvailable(
+                    item.PackageDefinition,
+                    item.Channel,
+                    item.SelectedUrl,
+                    installedRevision,
+                    latestRevision,
+                    "Installed package differs from the selected " + GetChannelLabel(item.Channel) + " channel.");
+            }
+
+            return PackageUpdateStatus.UpdateAvailable(
+                item.PackageDefinition,
+                item.Channel,
+                item.SelectedUrl,
+                installedRevision,
+                latestRevision,
+                updateMessage);
         }
 
-        private static RegistryLatestVersionResult FetchLatestRegistryVersion(string packageId)
+        private static bool IsSwitchBetweenChannels(UpdateCheckItem item)
+        {
+            return item != null &&
+                   item.HasInstalledChannel &&
+                   item.InstalledChannel != item.Channel &&
+                   item.Channel != PackageChannel.Custom;
+        }
+
+        private static string GetChannelLabel(PackageChannel channel)
+        {
+            switch (channel)
+            {
+                case PackageChannel.Development:
+                    return "Development";
+                case PackageChannel.Custom:
+                    return "Custom";
+                default:
+                    return "Stable";
+            }
+        }
+
+        private static RegistryLatestVersionResult ResolveRegistryChannelVersion(
+            string packageId,
+            PackageChannel channel)
+        {
+            Func<string, PackageChannel, RegistryLatestVersionResult> channelResolver =
+                RegistryChannelVersionResolverForTests;
+            if (channelResolver != null)
+            {
+                return channelResolver(packageId, channel);
+            }
+
+            Func<string, RegistryLatestVersionResult> resolver = RegistryLatestVersionResolverForTests;
+            return resolver != null ? resolver(packageId) : FetchRegistryVersion(packageId, GetNpmDistTag(channel));
+        }
+
+        private static RegistryLatestVersionResult FetchRegistryVersion(string packageId, string distTag)
         {
             if (string.IsNullOrWhiteSpace(packageId))
             {
-                return RegistryLatestVersionResult.Fail("Cannot determine latest registry version without a package id.");
+                return RegistryLatestVersionResult.Fail("Cannot determine registry version without a package id.");
             }
 
             try
@@ -607,32 +793,59 @@ namespace Deucarian.PackageInstaller.Editor
                 {
                     string json = reader.ReadToEnd();
 
-                    if (TryReadNpmLatestVersion(json, out string latestVersion))
+                    if (TryReadNpmDistTagVersion(json, distTag, out string latestVersion))
                     {
                         return RegistryLatestVersionResult.Ok(latestVersion);
                     }
 
                     return RegistryLatestVersionResult.Fail(
-                        "npmjs registry metadata did not include a stable latest dist-tag.");
+                        "npmjs registry metadata did not include a '" + distTag + "' dist-tag.");
                 }
             }
             catch (Exception exception)
             {
                 return RegistryLatestVersionResult.Fail(
-                    "Could not fetch latest npmjs version: " + exception.GetBaseException().Message);
+                    "Could not fetch npmjs " + distTag + " version: " + exception.GetBaseException().Message);
             }
+        }
+
+        private static string GetNpmDistTag(PackageChannel channel)
+        {
+            return channel == PackageChannel.Development ? "dev" : "latest";
         }
 
         internal static bool TryReadNpmLatestVersion(string json, out string latestVersion)
         {
+            return TryReadNpmDistTagVersion(json, "latest", out latestVersion);
+        }
+
+        internal static bool TryReadNpmDistTagVersion(
+            string json,
+            string distTag,
+            out string latestVersion)
+        {
             latestVersion = string.Empty;
 
-            if (string.IsNullOrWhiteSpace(json))
+            if (string.IsNullOrWhiteSpace(json) || string.IsNullOrWhiteSpace(distTag))
             {
                 return false;
             }
 
-            Match match = NpmLatestDistTagRegex.Match(json);
+            Match tagsMatch = Regex.Match(
+                json,
+                "\"dist-tags\"\\s*:\\s*\\{(?<tags>.*?)\\}",
+                RegexOptions.Singleline);
+
+            if (!tagsMatch.Success)
+            {
+                return false;
+            }
+
+            Match match = Regex.Match(
+                tagsMatch.Groups["tags"].Value,
+                "\"" + Regex.Escape(distTag.Trim()) + "\"\\s*:\\s*\"(?<version>[^\"]+)\"",
+                RegexOptions.Singleline);
+
             if (!match.Success)
             {
                 return false;
@@ -695,6 +908,170 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             RecordCheckCompleted(results);
+        }
+
+        private static void RegisterTargetedUpdate()
+        {
+            if (IsTargetedUpdateRegistered)
+            {
+                return;
+            }
+
+            EditorApplication.update += UpdateTargetedChecks;
+            IsTargetedUpdateRegistered = true;
+        }
+
+        private static void UnregisterTargetedUpdateIfIdle()
+        {
+            if (HasTargetedChecks)
+            {
+                return;
+            }
+
+            EditorApplication.update -= UpdateTargetedChecks;
+            IsTargetedUpdateRegistered = false;
+        }
+
+        private static bool TryGetEquivalentTargetedCheck(
+            string packageId,
+            PackageChannel channel,
+            string selectedUrl,
+            out TargetedUpdateCheckRequest request)
+        {
+            request = null;
+
+            if (PendingTargetedChecks.TryGetValue(packageId, out TargetedUpdateCheckRequest pending) &&
+                pending.Matches(channel, selectedUrl))
+            {
+                request = pending;
+                return true;
+            }
+
+            if (ActiveTargetedChecks.TryGetValue(packageId, out TargetedUpdateCheckRequest active) &&
+                active.Matches(channel, selectedUrl))
+            {
+                request = active;
+                return true;
+            }
+
+            return false;
+        }
+
+        private static void CancelTargetedCheck(string packageId)
+        {
+            if (string.IsNullOrWhiteSpace(packageId))
+            {
+                return;
+            }
+
+            PendingTargetedChecks.Remove(packageId);
+            LatestTargetedCheckGenerations.Remove(packageId);
+            UnregisterTargetedUpdateIfIdle();
+        }
+
+        private static void UpdateTargetedChecks()
+        {
+            UpdateTargetedChecks(forceStartPending: false);
+        }
+
+        private static void UpdateTargetedChecks(bool forceStartPending)
+        {
+            double now = EditorApplication.timeSinceStartup;
+            string[] pendingPackageIds = PendingTargetedChecks.Keys.ToArray();
+
+            foreach (string packageId in pendingPackageIds)
+            {
+                if (!PendingTargetedChecks.TryGetValue(packageId, out TargetedUpdateCheckRequest request))
+                {
+                    continue;
+                }
+
+                if (ActiveTargetedChecks.ContainsKey(packageId))
+                {
+                    continue;
+                }
+
+                if (!forceStartPending && request.DueTime > now)
+                {
+                    continue;
+                }
+
+                PendingTargetedChecks.Remove(packageId);
+                request.Start();
+                ActiveTargetedChecks[packageId] = request;
+            }
+
+            string[] activePackageIds = ActiveTargetedChecks.Keys.ToArray();
+
+            foreach (string packageId in activePackageIds)
+            {
+                if (!ActiveTargetedChecks.TryGetValue(packageId, out TargetedUpdateCheckRequest request) ||
+                    request.Task == null ||
+                    !request.Task.IsCompleted)
+                {
+                    continue;
+                }
+
+                ActiveTargetedChecks.Remove(packageId);
+                PackageUpdateStatus status = GetTargetedResult(request);
+
+                if (LatestTargetedCheckGenerations.TryGetValue(packageId, out int latestGeneration) &&
+                    latestGeneration == request.Generation)
+                {
+                    Statuses[packageId] = status;
+
+                    if (status.Kind == PackageUpdateStatusKind.Failed)
+                    {
+                        LogStatus(status);
+                    }
+
+                    NotifySharedStateChanged();
+                }
+            }
+
+            UnregisterTargetedUpdateIfIdle();
+        }
+
+        private static PackageUpdateStatus GetTargetedResult(TargetedUpdateCheckRequest request)
+        {
+            try
+            {
+                return request.Task.Result;
+            }
+            catch (Exception exception)
+            {
+                return PackageUpdateStatus.Failed(
+                    request.Item.PackageDefinition,
+                    request.Item.Channel,
+                    request.Item.SelectedUrl,
+                    string.Empty,
+                    "Update check failed: " + exception.GetBaseException().Message);
+            }
+        }
+
+        internal static void UpdateTargetedChecksForTests(bool forceStartPending)
+        {
+            UpdateTargetedChecks(forceStartPending);
+        }
+
+        internal static bool HasTargetedChecksForTests => HasTargetedChecks;
+
+        internal static void ResetForTests()
+        {
+            Statuses.Clear();
+            PendingTargetedChecks.Clear();
+            ActiveTargetedChecks.Clear();
+            LatestTargetedCheckGenerations.Clear();
+            CheckTask = null;
+            ActiveCheckItems = Array.Empty<UpdateCheckItem>();
+            LastFailureMessageValue = string.Empty;
+            LastStatusMessageValue = string.Empty;
+            TargetedCheckGeneration = 0;
+            RegistryLatestVersionResolverForTests = null;
+            RegistryChannelVersionResolverForTests = null;
+            EditorApplication.update -= UpdateShared;
+            EditorApplication.update -= UpdateTargetedChecks;
+            IsTargetedUpdateRegistered = false;
         }
 
         private static void RecordCheckCompleted(PackageUpdateStatus[] results)
@@ -1088,7 +1465,10 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (status.IsUpdateAvailable)
             {
-                message = "Update available for " + status.DisplayName + ": " +
+                string prefix = status.Kind == PackageUpdateStatusKind.SwitchAvailable
+                    ? "Switch available"
+                    : "Update available";
+                message = prefix + " for " + status.DisplayName + ": " +
                           status.ShortInstalledRevision + " -> " + status.ShortLatestRevision + ".";
                 return true;
             }
@@ -1307,6 +1687,8 @@ namespace Deucarian.PackageInstaller.Editor
                 string installedPackageReference,
                 PackageInstallSourceType sourceType,
                 string installedVersion,
+                bool hasInstalledChannel,
+                PackageChannel installedChannel,
                 IReadOnlyList<string> packageLockPaths)
             {
                 PackageDefinition = packageDefinition;
@@ -1317,6 +1699,8 @@ namespace Deucarian.PackageInstaller.Editor
                 InstalledPackageReference = installedPackageReference ?? string.Empty;
                 SourceType = sourceType;
                 InstalledVersion = installedVersion ?? string.Empty;
+                HasInstalledChannel = hasInstalledChannel;
+                InstalledChannel = installedChannel;
                 PackageLockPaths = packageLockPaths ?? Array.Empty<string>();
             }
 
@@ -1336,7 +1720,44 @@ namespace Deucarian.PackageInstaller.Editor
 
             public string InstalledVersion { get; }
 
+            public bool HasInstalledChannel { get; }
+
+            public PackageChannel InstalledChannel { get; }
+
             public IReadOnlyList<string> PackageLockPaths { get; }
+        }
+
+        private sealed class TargetedUpdateCheckRequest
+        {
+            public TargetedUpdateCheckRequest(
+                UpdateCheckItem item,
+                int generation,
+                double dueTime)
+            {
+                Item = item;
+                Generation = generation;
+                DueTime = dueTime;
+            }
+
+            public UpdateCheckItem Item { get; }
+
+            public int Generation { get; }
+
+            public double DueTime { get; }
+
+            public Task<PackageUpdateStatus> Task { get; private set; }
+
+            public void Start()
+            {
+                Task = System.Threading.Tasks.Task.Run(() => CheckItem(Item));
+            }
+
+            public bool Matches(PackageChannel channel, string selectedUrl)
+            {
+                return Item != null &&
+                       Item.Channel == channel &&
+                       string.Equals(Item.SelectedUrl, selectedUrl ?? string.Empty, StringComparison.Ordinal);
+            }
         }
     }
 }

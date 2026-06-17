@@ -1558,6 +1558,12 @@ namespace Deucarian.PackageInstaller.Editor
                             ". Remove those bridge packages first.",
                             VisualStatusKind.UpdateAvailable);
                     }
+                    else if (updateStatus.Kind == PackageUpdateStatusKind.SwitchAvailable)
+                    {
+                        DrawInlineHelp(
+                            "A switch is available for the selected channel.",
+                            VisualStatusKind.UpdateAvailable);
+                    }
                     else if (updateStatus.IsUpdateAvailable)
                     {
                         DrawInlineHelp("An update is available for the selected channel.", VisualStatusKind.UpdateAvailable);
@@ -1623,7 +1629,10 @@ namespace Deucarian.PackageInstaller.Editor
         {
             using (new EditorGUI.DisabledScope(!updateStatus.IsUpdateAvailable || queuedOrInstalling || actionsBusy))
             {
-                if (GUILayout.Button("Update", _primaryButtonStyle, GUILayout.Width(104f)))
+                if (GUILayout.Button(
+                        GetUpdateActionLabel(updateStatus, GetSelectedChannel(packageDefinition)),
+                        _primaryButtonStyle,
+                        GUILayout.Width(156f)))
                 {
                     UpdatePackage(packageDefinition);
                 }
@@ -1655,7 +1664,10 @@ namespace Deucarian.PackageInstaller.Editor
         {
             using (new EditorGUI.DisabledScope(!updateStatus.IsUpdateAvailable || queuedOrInstalling || actionsBusy))
             {
-                if (GUILayout.Button("Update", _primaryButtonStyle, GUILayout.ExpandWidth(true)))
+                if (GUILayout.Button(
+                        GetUpdateActionLabel(updateStatus, GetSelectedChannel(packageDefinition)),
+                        _primaryButtonStyle,
+                        GUILayout.ExpandWidth(true)))
                 {
                     UpdatePackage(packageDefinition);
                 }
@@ -2751,6 +2763,11 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 if (updateStatus.IsUpdateAvailable)
                 {
+                    if (updateStatus.Kind == PackageUpdateStatusKind.SwitchAvailable)
+                    {
+                        return new VisualStatus("SW", "Switch", VisualStatusKind.UpdateAvailable);
+                    }
+
                     return new VisualStatus("UP", "Update", VisualStatusKind.UpdateAvailable);
                 }
 
@@ -2878,7 +2895,15 @@ namespace Deucarian.PackageInstaller.Editor
             _selectedChannels[packageDefinition.PackageId] = channel;
             _autoSelectedChannelPackageIds.Remove(packageDefinition.PackageId);
             EditorPrefs.SetInt(GetChannelPreferenceKey(packageDefinition.PackageId), (int)channel);
-            _packageUpdateCheckService.Invalidate(packageDefinition.PackageId);
+
+            if (_packageDetectionService.IsInstalled(packageDefinition.PackageId))
+            {
+                _packageUpdateCheckService.CheckForUpdate(packageDefinition, channel);
+            }
+            else
+            {
+                _packageUpdateCheckService.Invalidate(packageDefinition.PackageId);
+            }
         }
 
         private void SetAutoSelectedChannel(PackageDefinition packageDefinition, PackageChannel channel)
@@ -3173,7 +3198,8 @@ namespace Deucarian.PackageInstaller.Editor
                 return status.Label + " (" + status.ShortLatestRevision + ")";
             }
 
-            if (status.Kind == PackageUpdateStatusKind.UpdateAvailable)
+            if (status.Kind == PackageUpdateStatusKind.UpdateAvailable ||
+                status.Kind == PackageUpdateStatusKind.SwitchAvailable)
             {
                 return status.Label + " (" + status.ShortInstalledRevision + " -> " + status.ShortLatestRevision + ")";
             }
@@ -3189,6 +3215,16 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             return status.Label;
+        }
+
+        private static string GetUpdateActionLabel(PackageUpdateStatus status, PackageChannel channel)
+        {
+            if (status != null && status.Kind == PackageUpdateStatusKind.SwitchAvailable)
+            {
+                return "Switch to " + GetChannelLabel(channel);
+            }
+
+            return "Update to " + GetChannelLabel(channel);
         }
 
         private static string GetSampleImportStatusText(PackageSampleImportStatus status)

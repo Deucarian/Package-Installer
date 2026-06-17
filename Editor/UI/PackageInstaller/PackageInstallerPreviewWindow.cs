@@ -774,7 +774,7 @@ namespace Deucarian.PackageInstaller.Editor
             installButton.SetEnabled(!busy && packageDefinition.HasPackageReference);
             row.Add(installButton);
 
-            Button updateButton = CreateButton("Update", () =>
+            Button updateButton = CreateButton(GetUpdateActionLabel(updateStatus, GetSelectedChannel(packageDefinition)), () =>
             {
                 _packageInstallService.Install(
                     packageDefinition,
@@ -990,7 +990,16 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             _selectedChannels[packageDefinition.PackageId] = channel;
-            _packageUpdateCheckService?.Invalidate(packageDefinition.PackageId);
+
+            if (_packageDetectionService != null &&
+                _packageDetectionService.IsInstalled(packageDefinition.PackageId))
+            {
+                _packageUpdateCheckService?.CheckForUpdate(packageDefinition, channel);
+            }
+            else
+            {
+                _packageUpdateCheckService?.Invalidate(packageDefinition.PackageId);
+            }
         }
 
         private IEnumerable<PackageChannel> GetChannelOptions(PackageDefinition packageDefinition)
@@ -1131,7 +1140,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (updateStatus.IsUpdateAvailable)
             {
-                return "Update";
+                return updateStatus.Kind == PackageUpdateStatusKind.SwitchAvailable ? "Switch" : "Update";
             }
 
             if (updateStatus.Kind == PackageUpdateStatusKind.UpToDate)
@@ -1150,7 +1159,8 @@ namespace Deucarian.PackageInstaller.Editor
         private string GetPackageBadgeClass(PackageDefinition packageDefinition)
         {
             string label = GetPackageStatusLabel(packageDefinition);
-            if (string.Equals(label, "Update", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(label, "Update", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(label, "Switch", StringComparison.OrdinalIgnoreCase))
             {
                 return "deucarian-badge--warning";
             }
@@ -1206,7 +1216,8 @@ namespace Deucarian.PackageInstaller.Editor
                 return "Unknown";
             }
 
-            if (status.Kind == PackageUpdateStatusKind.UpdateAvailable)
+            if (status.Kind == PackageUpdateStatusKind.UpdateAvailable ||
+                status.Kind == PackageUpdateStatusKind.SwitchAvailable)
             {
                 return status.Label + " (" + status.ShortInstalledRevision + " -> " + status.ShortLatestRevision + ")";
             }
@@ -1222,6 +1233,16 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             return status.Label;
+        }
+
+        private static string GetUpdateActionLabel(PackageUpdateStatus status, PackageChannel channel)
+        {
+            if (status != null && status.Kind == PackageUpdateStatusKind.SwitchAvailable)
+            {
+                return "Switch to " + GetChannelLabel(channel);
+            }
+
+            return "Update to " + GetChannelLabel(channel);
         }
 
         private static string GetReferenceName(string packageReference)
