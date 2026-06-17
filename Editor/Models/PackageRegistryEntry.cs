@@ -12,5 +12,6 @@ namespace Deucarian.PackageInstaller.Editor
         public string stableUrl;
         public string developmentUrl;
         public string[] dependencies;
+        public string[] optionalCompanions;
     }
 }

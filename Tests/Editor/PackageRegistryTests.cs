@@ -285,6 +285,12 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                     "com.deucarian.logging"
                 },
                 objectLoading.dependencies);
+            CollectionAssert.AreEqual(
+                new[]
+                {
+                    "com.deucarian.diagnostics"
+                },
+                objectLoading.optionalCompanions);
 
             PackageRegistryEntry bridge = result.Registry.packages
                 .Single(package => package.id == "com.deucarian.object-loading.api-bridge");
@@ -297,6 +303,31 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                     "com.deucarian.api"
                 },
                 bridge.dependencies);
+        }
+
+        [Test]
+        public void BundledRegistryIncludesDiagnosticsPackage()
+        {
+            string registryJson = File.ReadAllText(GetBundledRegistryPath());
+            PackageRegistryLoadResult result = new PackageRegistryLoader()
+                .LoadFromJson(registryJson, PackageRegistrySource.Bundled);
+
+            Assert.IsTrue(result.IsValid, result.ErrorMessage);
+
+            PackageRegistryEntry diagnostics = result.Registry.packages
+                .Single(package => package.id == "com.deucarian.diagnostics");
+            Assert.AreEqual("Deucarian Diagnostics", diagnostics.displayName);
+            Assert.AreEqual("Tools", diagnostics.category);
+            CollectionAssert.AreEqual(
+                new[]
+                {
+                    "com.deucarian.editor",
+                    "com.deucarian.logging"
+                },
+                diagnostics.dependencies);
+
+            Assert.IsFalse(result.Registry.packages.Any(
+                package => package.id == "com.deucarian.diagnostics-suite"));
         }
 
         [Test]

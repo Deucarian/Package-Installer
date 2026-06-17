@@ -16,6 +16,7 @@ namespace Deucarian.PackageInstaller.Editor
             string developmentUrl = null,
             string displayVersion = null,
             IEnumerable<PackageExtraDefinition> extras = null,
+            IEnumerable<string> optionalCompanions = null,
             string category = null)
         {
             if (string.IsNullOrWhiteSpace(displayName))
@@ -40,6 +41,7 @@ namespace Deucarian.PackageInstaller.Editor
                 : category.Trim();
             DisplayVersion = displayVersion ?? string.Empty;
             Extras = ToReadOnlyList(extras);
+            OptionalCompanions = ToReadOnlyList(optionalCompanions);
         }
 
         public string DisplayName { get; }
@@ -59,6 +61,8 @@ namespace Deucarian.PackageInstaller.Editor
         public IReadOnlyList<string> Dependencies { get; }
 
         public IReadOnlyList<PackageExtraDefinition> Extras { get; }
+
+        public IReadOnlyList<string> OptionalCompanions { get; }
 
         public PackageType PackageType { get; }
 

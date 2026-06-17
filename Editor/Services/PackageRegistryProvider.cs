@@ -147,6 +147,7 @@ namespace Deucarian.PackageInstaller.Editor
                 entry.dependencies,
                 ParsePackageType(category),
                 entry.developmentUrl,
+                optionalCompanions: entry.optionalCompanions,
                 category: category);
         }
 

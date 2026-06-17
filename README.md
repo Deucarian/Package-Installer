@@ -82,7 +82,7 @@ The current bundled fallback registry includes these package entries:
 - UI: UI Binding, Theming
 - World: Object Selection
 - Bridge: UI Binding + Core State Bridge, Object Loading API Bridge, ObjectSelection + CoreState Bridge, Session + API Bridge
-- Tools: Package Installer
+- Tools: Package Installer, Diagnostics
 - Suites: Selection Suite
 
 Registered packages are first-class UPM packages with their own package IDs:
@@ -101,6 +101,7 @@ Registered packages are first-class UPM packages with their own package IDs:
 - `com.deucarian.object-selection.core-state-bridge`
 - `com.deucarian.session.api-bridge`
 - `com.deucarian.selection-suite`
+- `com.deucarian.diagnostics`
 - `com.deucarian.package-installer`
 
 `Install All` installs all missing registered packages in dependency order. Single install, reinstall, single update, and update-all operations install missing registered Deucarian dependencies first, then install the requested package.
@@ -126,6 +127,7 @@ The registry schema uses `schemaVersion` 1 and contains:
 - `stableUrl`: the stable Git URL or UPM identifier passed to `UnityEditor.PackageManager.Client.Add`.
 - `developmentUrl`: optional development-channel Git URL or UPM identifier. If this is empty, the Development channel is disabled for that package.
 - `dependencies`: package IDs that should be installed before this package is installed, reinstalled, or updated. Bridge packages are just packages in the `Bridge` category with dependencies.
+- `optionalCompanions`: package IDs shown as optional integrations that should not be installed as required dependencies.
 
 Set `stableUrl` and, when available, `developmentUrl` to the UPM identifier or Git URL. Bridge packages should also list their dependency package IDs in `dependencies`.
 

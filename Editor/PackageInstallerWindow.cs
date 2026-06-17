@@ -967,6 +967,7 @@ namespace Deucarian.PackageInstaller.Editor
             DrawStatusPanel(packageDefinition);
             DrawChannelPanel(packageDefinition);
             DrawActionsPanel(packageDefinition);
+            DrawOptionalCompanionsPanel(packageDefinition);
             DrawExtrasPanel(packageDefinition);
             DrawAdvancedPanel(packageDefinition);
         }
@@ -978,6 +979,7 @@ namespace Deucarian.PackageInstaller.Editor
             DrawRequirementsPanel(packageDefinition);
             DrawChannelPanel(packageDefinition);
             DrawActionsPanel(packageDefinition);
+            DrawOptionalCompanionsPanel(packageDefinition);
             DrawExtrasPanel(packageDefinition);
             DrawAdvancedPanel(packageDefinition);
         }
@@ -1399,6 +1401,99 @@ namespace Deucarian.PackageInstaller.Editor
             _packageUpdateCheckService.Invalidate(packageDefinition.PackageId);
         }
 
+        private void DrawOptionalCompanionsPanel(PackageDefinition packageDefinition)
+        {
+            if (packageDefinition == null || packageDefinition.OptionalCompanions.Count == 0)
+            {
+                return;
+            }
+
+            DrawPanel("Optional Companions", () =>
+            {
+                EditorGUILayout.LabelField("Install optional tooling that enhances this package without becoming a required dependency.", _mutedMiniLabelStyle);
+                GUILayout.Space(6f);
+
+                foreach (string companionId in packageDefinition.OptionalCompanions)
+                {
+                    if (!PackageRegistryProvider.TryGetPackage(companionId, out PackageDefinition companionDefinition))
+                    {
+                        DrawInlineHelp("Optional companion is unavailable: " + companionId, VisualStatusKind.Failed);
+                        continue;
+                    }
+
+                    DrawOptionalCompanionRow(companionDefinition);
+                }
+            });
+        }
+
+        private void DrawOptionalCompanionRow(PackageDefinition companionDefinition)
+        {
+            bool installed = _packageDetectionService.IsInstalled(companionDefinition.PackageId);
+            bool queuedOrInstalling = _packageInstallService.IsQueuedOrInstalling(companionDefinition.PackageId);
+            bool actionsBusy = IsAnyOperationBusy();
+            VisualStatus status = GetPackageVisualStatus(companionDefinition);
+
+            Rect rect = BeginSurface(
+                _sampleRowStyle,
+                _sampleRowBackgroundColor,
+                _separatorColor,
+                GUILayout.ExpandWidth(true));
+
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                Rect markerRect = GUILayoutUtility.GetRect(30f, 30f, GUILayout.Width(30f), GUILayout.Height(30f));
+                DrawInlineMarker(markerRect, status.Marker, status.Kind);
+
+                GUILayout.Space(8f);
+
+                using (new EditorGUILayout.VerticalScope(GUILayout.ExpandWidth(true)))
+                {
+                    EditorGUILayout.LabelField(
+                        new GUIContent(companionDefinition.DisplayName, GetPackageTooltip(companionDefinition)),
+                        _rowTitleStyle);
+
+                    string description = GetOptionalCompanionDescription(companionDefinition);
+                    EditorGUILayout.LabelField(
+                        new GUIContent(description, description),
+                        _mutedMiniLabelStyle);
+                }
+
+                GUILayout.Space(8f);
+
+                using (new EditorGUI.DisabledScope(installed || queuedOrInstalling || actionsBusy))
+                {
+                    string label = installed
+                        ? "Installed"
+                        : companionDefinition.PackageId == "com.deucarian.diagnostics"
+                            ? "Install Diagnostics"
+                            : "Install";
+
+                    if (GUILayout.Button(label, _secondaryButtonStyle, GUILayout.Width(148f)))
+                    {
+                        _packageDependencyInstaller.InstallWithDependencies(companionDefinition, GetSelectedChannel);
+                    }
+                }
+            }
+
+            EditorGUILayout.EndVertical();
+            DrawBorder(rect, _separatorColor);
+        }
+
+        private static string GetOptionalCompanionDescription(PackageDefinition companionDefinition)
+        {
+            if (companionDefinition == null)
+            {
+                return string.Empty;
+            }
+
+            if (companionDefinition.PackageId == "com.deucarian.diagnostics")
+            {
+                return "Adds runtime/editor diagnostics support.";
+            }
+
+            return companionDefinition.Description;
+        }
+
         private void DrawExtrasPanel(PackageDefinition packageDefinition)
         {
             DrawPanel("Extras / Samples", () =>
@@ -1616,6 +1711,9 @@ namespace Deucarian.PackageInstaller.Editor
             DrawSelectableValue("Dependencies", packageDefinition.Dependencies.Count == 0
                 ? "-"
                 : string.Join(", ", packageDefinition.Dependencies.ToArray()));
+            DrawSelectableValue("Optional companions", packageDefinition.OptionalCompanions.Count == 0
+                ? "-"
+                : string.Join(", ", packageDefinition.OptionalCompanions.ToArray()));
 
             if (!string.IsNullOrWhiteSpace(updateStatus.Message))
             {

@@ -72,7 +72,7 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 if (package.dependencies == null)
                 {
-                    continue;
+                    package.dependencies = Array.Empty<string>();
                 }
 
                 foreach (string dependencyId in package.dependencies)
@@ -86,6 +86,26 @@ namespace Deucarian.PackageInstaller.Editor
                     if (!packageIds.Contains(dependencyId.Trim()))
                     {
                         message = "Package " + package.id + " depends on unknown package id " + dependencyId + ".";
+                        return false;
+                    }
+                }
+
+                if (package.optionalCompanions == null)
+                {
+                    continue;
+                }
+
+                foreach (string companionId in package.optionalCompanions)
+                {
+                    if (string.IsNullOrWhiteSpace(companionId))
+                    {
+                        message = "Package " + package.id + " contains an empty optional companion id.";
+                        return false;
+                    }
+
+                    if (!packageIds.Contains(companionId.Trim()))
+                    {
+                        message = "Package " + package.id + " references unknown optional companion id " + companionId + ".";
                         return false;
                     }
                 }

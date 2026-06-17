@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-06-15",
+  "updatedAt": "2026-06-17",
   "packages": [
     {
       "id": "com.deucarian.editor",
@@ -51,6 +51,9 @@
       "developmentUrl": "https://github.com/Deucarian/Object-Loading.git#develop",
       "dependencies": [
         "com.deucarian.logging"
+      ],
+      "optionalCompanions": [
+        "com.deucarian.diagnostics"
       ]
     },
     {
@@ -103,6 +106,18 @@
       "description": "Editor installer window for installing and composing Deucarian Unity UPM packages.",
       "stableUrl": "https://github.com/Deucarian/Package-Installer.git#main",
       "developmentUrl": "https://github.com/Deucarian/Package-Installer.git#develop",
+      "dependencies": [
+        "com.deucarian.editor",
+        "com.deucarian.logging"
+      ]
+    },
+    {
+      "id": "com.deucarian.diagnostics",
+      "displayName": "Deucarian Diagnostics",
+      "category": "Tools",
+      "description": "Local diagnostics snapshots, providers, JSON export, and developer-facing runtime/editor views for Deucarian Unity projects.",
+      "stableUrl": "https://github.com/Deucarian/Diagnostics.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Diagnostics.git#develop",
       "dependencies": [
         "com.deucarian.editor",
         "com.deucarian.logging"
