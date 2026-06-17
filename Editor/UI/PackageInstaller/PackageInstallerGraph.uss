@@ -61,23 +61,23 @@
 
 .dpi-graph-operation {
     flex-shrink: 0;
-    height: 106px;
-    min-height: 106px;
-    max-height: 106px;
+    height: 96px;
+    min-height: 96px;
+    max-height: 96px;
     margin-top: 0;
     overflow: hidden;
 }
 
 .dpi-graph-operation--expanded {
-    height: 262px;
-    min-height: 262px;
-    max-height: 262px;
+    height: 172px;
+    min-height: 172px;
+    max-height: 236px;
 }
 
 .dpi-graph-operation--collapsed {
-    height: 106px;
-    min-height: 106px;
-    max-height: 106px;
+    height: 96px;
+    min-height: 96px;
+    max-height: 96px;
 }
 
 .dpi-ecosystem-graph {

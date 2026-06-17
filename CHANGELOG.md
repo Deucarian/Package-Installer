@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.15 - 2026-06-17
+
+- Kept the Package Installer footer version visible while operation details are expanded.
+- Compacted the graph operation details drawer so small summaries no longer reserve excessive empty height.
+
 ## 1.1.14 - 2026-06-16
 
 - Made update checks source-aware so npm/scoped-registry packages compare installed package versions against npmjs `latest` instead of requiring Git revisions.

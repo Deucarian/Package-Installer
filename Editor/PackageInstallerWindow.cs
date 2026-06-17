@@ -12,16 +12,18 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed class PackageInstallerWindow : EditorWindow
     {
         private const string WindowTitle = "Package Installer";
-        private const string PackageVersion = "1.1.14";
+        private const string PackageVersion = "1.1.15";
         private const float MinWindowWidth = 850f;
         private const float MinWindowHeight = 650f;
         private const float SidebarWidth = 340f;
         private const float SidebarRowMinHeight = 94f;
         private const float SidebarRowMaxHeight = 150f;
         private const float DetailLabelWidth = 118f;
-        private const float OperationDrawerHeight = 132f;
-        private const float GraphOperationCollapsedHeight = 106f;
-        private const float GraphOperationExpandedHeight = 262f;
+        private const float OperationDrawerMinHeight = 28f;
+        private const float OperationDrawerMaxHeight = 86f;
+        private const float GraphOperationCollapsedHeight = 96f;
+        private const float GraphOperationExpandedBaseHeight = 144f;
+        private const float GraphOperationExpandedMaxHeight = 236f;
         private const string ChannelPreferencePrefix = "Deucarian.PackageInstaller.SelectedChannel.";
         private const string AdvancedFoldoutPreferencePrefix = "Deucarian.PackageInstaller.AdvancedFoldout.";
         private const string CategoryFoldoutPreferencePrefix = "Deucarian.PackageInstaller.CategoryFoldout.";
@@ -389,9 +391,10 @@ namespace Deucarian.PackageInstaller.Editor
                 _graphOperationContainer.style.display = graphMode ? DisplayStyle.Flex : DisplayStyle.None;
                 _graphOperationContainer.EnableInClassList("dpi-graph-operation--expanded", _operationDetailsExpanded);
                 _graphOperationContainer.EnableInClassList("dpi-graph-operation--collapsed", !_operationDetailsExpanded);
-                _graphOperationContainer.style.height = _operationDetailsExpanded
-                    ? GraphOperationExpandedHeight
-                    : GraphOperationCollapsedHeight;
+                float graphOperationHeight = GetGraphOperationHeight();
+                _graphOperationContainer.style.height = graphOperationHeight;
+                _graphOperationContainer.style.minHeight = graphOperationHeight;
+                _graphOperationContainer.style.maxHeight = graphOperationHeight;
             }
 
             if (_listViewButton != null)
@@ -545,23 +548,12 @@ namespace Deucarian.PackageInstaller.Editor
         {
             EnsureStyles();
             DrawGlobalOperationArea();
-
-            if (!_operationDetailsExpanded)
-            {
-                DrawGraphFooterVersion();
-            }
+            DrawGraphFooterVersion();
         }
 
         private void DrawGraphFooterVersion()
         {
-            using (new EditorGUILayout.HorizontalScope(GUILayout.ExpandWidth(true)))
-            {
-                GUILayout.FlexibleSpace();
-                EditorGUILayout.LabelField(
-                    "com.deucarian.package-installer " + PackageVersion,
-                    DeucarianEditorStyles.FooterVersionText,
-                    GUILayout.MaxWidth(360f));
-            }
+            DeucarianEditorChrome.DrawFooterVersion("com.deucarian.package-installer", PackageVersion);
         }
 
         private void DrawListViewGui()
@@ -2227,10 +2219,58 @@ namespace Deucarian.PackageInstaller.Editor
 
             _operationDetailsScrollPosition = EditorGUILayout.BeginScrollView(
                 _operationDetailsScrollPosition,
-                GUILayout.Height(OperationDrawerHeight),
+                GUILayout.Height(GetOperationDrawerScrollHeight()),
                 GUILayout.ExpandWidth(true));
             DrawLastOperationSummaryContent();
             EditorGUILayout.EndScrollView();
+        }
+
+        private float GetGraphOperationHeight()
+        {
+            if (!_operationDetailsExpanded)
+            {
+                return GraphOperationCollapsedHeight;
+            }
+
+            return Mathf.Min(
+                GraphOperationExpandedMaxHeight,
+                GraphOperationExpandedBaseHeight + GetOperationDrawerScrollHeight());
+        }
+
+        private float GetOperationDrawerScrollHeight()
+        {
+            const float lineHeight = 18f;
+            const float verticalPadding = 8f;
+            int lineCount = GetOperationDrawerContentLineCount();
+            float contentHeight = lineCount * lineHeight + verticalPadding;
+
+            return Mathf.Clamp(contentHeight, OperationDrawerMinHeight, OperationDrawerMaxHeight);
+        }
+
+        private int GetOperationDrawerContentLineCount()
+        {
+            int lineCount = 0;
+
+            if (!string.IsNullOrWhiteSpace(GetLastOperationSummary()))
+            {
+                lineCount++;
+            }
+
+            IReadOnlyList<string> operationMessages = GetLastOperationMessages();
+
+            if (operationMessages != null)
+            {
+                lineCount += operationMessages.Count;
+            }
+
+            IReadOnlyList<PackageInstallProgressItem> progressItems = GetLastProgressItems();
+
+            if (progressItems != null)
+            {
+                lineCount += progressItems.Count;
+            }
+
+            return Mathf.Max(1, lineCount);
         }
 
         private void DrawOperationSettingsRow()
