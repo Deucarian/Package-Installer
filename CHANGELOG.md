@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.1.16 - 2026-06-17
+
+- Renamed Package Installer registry, graph, and UI terminology from Bridge packages to Integration packages.
+- Updated bundled fallback registry package IDs, categories, relationship metadata, and tests to use the new integration package identities.
+- Added migration coverage for the old bridge package IDs that are replaced by integration package IDs.
+
+## 1.1.15 - 2026-06-17
+
+- Kept the Package Installer footer version visible while operation details are expanded.
+- Compacted the graph operation details drawer so small summaries no longer reserve excessive empty height.
+
 ## 1.1.14 - 2026-06-16
 
 - Made update checks source-aware so npm/scoped-registry packages compare installed package versions against npmjs `latest` instead of requiring Git revisions.

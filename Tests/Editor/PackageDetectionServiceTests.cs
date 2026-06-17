@@ -76,6 +76,30 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void RegistryInstalledDevVersionUsesDevelopmentChannel()
+        {
+            PackageDefinition packageDefinition = CreatePackage();
+
+            using (PackageDetectionService detectionService = new PackageDetectionService())
+            {
+                detectionService.ReplaceInstalledPackageForTests(
+                    packageDefinition.PackageId,
+                    "1.2.4-dev.7",
+                    PackageInstallSourceType.Registry,
+                    "1.2.4-dev.7");
+
+                bool found = detectionService.TryGetInstalledPackageChannel(
+                    packageDefinition,
+                    out PackageChannel channel,
+                    out string packageReference);
+
+                Assert.IsTrue(found);
+                Assert.AreEqual(PackageChannel.Development, channel);
+                Assert.AreEqual("1.2.4-dev.7", packageReference);
+            }
+        }
+
+        [Test]
         public void SourceDetectorClassifiesKnownUnitySources()
         {
             Assert.AreEqual(
@@ -99,7 +123,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 PackageInstallSourceType.Registry,
                 PackageInstallSourceUtility.Detect(
                     string.Empty,
-                    "com.deucarian.editor@0.1.2",
+                    "com.deucarian.editor@1.0.0",
                     string.Empty,
                     string.Empty));
         }

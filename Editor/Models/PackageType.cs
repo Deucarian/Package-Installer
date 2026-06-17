@@ -4,6 +4,6 @@ namespace Deucarian.PackageInstaller.Editor
     {
         Core,
         UI,
-        Bridge
+        Integration
     }
 }

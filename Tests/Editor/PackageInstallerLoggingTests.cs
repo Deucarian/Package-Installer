@@ -88,6 +88,14 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void SwitchAvailableStatusDoesNotReachConsoleSinkByDefault()
+        {
+            PackageUpdateCheckService.LogStatusForTests(CreateSwitchAvailableStatus());
+
+            Assert.AreEqual(0, _sink.Entries.Count);
+        }
+
+        [Test]
         public void FailedUpdateCheckStatusStillLogsError()
         {
             PackageDefinition packageDefinition = CreatePackage();
@@ -151,6 +159,17 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 packageDefinition.StableUrl,
                 "0123456789abcdef0123456789abcdef01234567",
                 "fedcba9876543210fedcba9876543210fedcba98");
+        }
+
+        private static PackageUpdateStatus CreateSwitchAvailableStatus()
+        {
+            PackageDefinition packageDefinition = CreatePackage();
+            return PackageUpdateStatus.SwitchAvailable(
+                packageDefinition,
+                PackageChannel.Development,
+                packageDefinition.DevelopmentUrl,
+                "1.2.3",
+                "1.2.4-dev.7");
         }
 
         private static PackageDefinition CreatePackage()

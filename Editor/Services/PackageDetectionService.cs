@@ -214,7 +214,18 @@ namespace Deucarian.PackageInstaller.Editor
                     out PackageInstallSourceType sourceType) &&
                 sourceType == PackageInstallSourceType.Registry)
             {
-                channel = PackageChannel.Stable;
+                if (TryGetInstalledPackageVersion(
+                        packageDefinition.PackageId,
+                        out string installedVersion) &&
+                    IsDevelopmentRegistryVersion(installedVersion))
+                {
+                    channel = PackageChannel.Development;
+                }
+                else
+                {
+                    channel = PackageChannel.Stable;
+                }
+
                 return true;
             }
 
@@ -484,6 +495,12 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             return referenceName;
+        }
+
+        private static bool IsDevelopmentRegistryVersion(string version)
+        {
+            return !string.IsNullOrWhiteSpace(version) &&
+                   version.IndexOf("-dev.", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private static IReadOnlyList<string> GetPackageLockPaths()

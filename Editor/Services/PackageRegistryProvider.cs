@@ -30,10 +30,10 @@ namespace Deucarian.PackageInstaller.Editor
         }
 
         public static IReadOnlyList<PackageDefinition> StandalonePackages =>
-            All.Where(package => !package.IsBridge).ToArray();
+            All.Where(package => !package.IsIntegration).ToArray();
 
-        public static IReadOnlyList<PackageDefinition> BridgePackages =>
-            GetPackagesByCategory("Bridge");
+        public static IReadOnlyList<PackageDefinition> IntegrationPackages =>
+            GetPackagesByCategory("Integration");
 
         public static IReadOnlyList<string> Categories =>
             All.Select(package => package.Category)
@@ -148,7 +148,12 @@ namespace Deucarian.PackageInstaller.Editor
                 ParsePackageType(category),
                 entry.developmentUrl,
                 optionalCompanions: entry.optionalCompanions,
-                category: category);
+                category: category,
+                metadataType: entry.type,
+                optionalIntegrations: entry.optionalIntegrations,
+                integrationTargets: entry.integrationTargets,
+                suiteMembers: entry.suiteMembers,
+                recommendedWith: entry.recommendedWith);
         }
 
         private static IReadOnlyList<PackageDefinition> EnsureInstallerPackageDefinition(
@@ -177,7 +182,8 @@ namespace Deucarian.PackageInstaller.Editor
                 Array.Empty<string>(),
                 PackageType.Core,
                 "https://github.com/Deucarian/Package-Installer.git#develop",
-                category: "Tools");
+                category: "Tools",
+                metadataType: "Tool");
         }
 
         private static PackageType ParsePackageType(string category)
@@ -187,9 +193,9 @@ namespace Deucarian.PackageInstaller.Editor
                 return PackageType.UI;
             }
 
-            if (string.Equals(category, "Bridge", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(category, "Integration", StringComparison.OrdinalIgnoreCase))
             {
-                return PackageType.Bridge;
+                return PackageType.Integration;
             }
 
             return PackageType.Core;
@@ -284,7 +290,7 @@ namespace Deucarian.PackageInstaller.Editor
                 return 3;
             }
 
-            if (string.Equals(category, "Bridge", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(category, "Integration", StringComparison.OrdinalIgnoreCase))
             {
                 return 4;
             }

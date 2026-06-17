@@ -15,8 +15,8 @@ namespace Deucarian.PackageInstaller.Editor
         internal const string CheckOnStartupPreferenceKey =
             "Deucarian.PackageInstaller.Preview.CheckOnStartup";
 
-        private const string WindowTitle = "Package Installer Preview";
-        private const string PreviewMenuPath = "Tools/Deucarian/Package Installer/Open Preview";
+        private const string WindowTitle = "Package Installer Preview (Development)";
+        private const string PreviewMenuPath = "Tools/Deucarian/Development/Package Installer Preview";
         private const float MinWindowWidth = 980f;
         private const float MinWindowHeight = 640f;
 
@@ -188,7 +188,7 @@ namespace Deucarian.PackageInstaller.Editor
             VisualElement titleBlock = new VisualElement();
             titleBlock.AddToClassList("dpi-title-block");
             titleBlock.Add(new Label("Deucarian Package Installer") { name = "dpi-window-title" });
-            titleBlock.Add(new Label("Discover. Install. Elevate.") { name = "dpi-window-tagline" });
+            titleBlock.Add(new Label("Package Registry & Installer") { name = "dpi-window-tagline" });
             header.Add(titleBlock);
 
             TextField search = new TextField("Search") { name = "dpi-search" };
@@ -391,7 +391,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             PackageDefinition[] visiblePackages = GetVisiblePackages().ToArray();
             PackageDefinition[] featured = visiblePackages
-                .Where(package => !package.IsBridge)
+                .Where(package => !package.IsIntegration)
                 .Take(4)
                 .ToArray();
 
@@ -415,7 +415,7 @@ namespace Deucarian.PackageInstaller.Editor
             AddSection("Recently updated", section =>
             {
                 PackageDefinition[] recent = visiblePackages
-                    .Where(package => !package.IsBridge)
+                    .Where(package => !package.IsIntegration)
                     .Skip(4)
                     .Take(5)
                     .ToArray();
@@ -423,7 +423,7 @@ namespace Deucarian.PackageInstaller.Editor
                 if (recent.Length == 0)
                 {
                     recent = visiblePackages
-                        .Where(package => !package.IsBridge)
+                        .Where(package => !package.IsIntegration)
                         .Take(5)
                         .ToArray();
                 }
@@ -524,21 +524,21 @@ namespace Deucarian.PackageInstaller.Editor
                 }
             });
 
-            AddSection("Bridge groups", section =>
+            AddSection("Integration groups", section =>
             {
-                PackageDefinition[] bridgePackages = GetVisiblePackages()
-                    .Where(package => package.IsBridge)
+                PackageDefinition[] integrationPackages = GetVisiblePackages()
+                    .Where(package => package.IsIntegration)
                     .ToArray();
 
-                if (bridgePackages.Length == 0)
+                if (integrationPackages.Length == 0)
                 {
-                    section.Add(CreateMutedLabel("No bridge packages match the current search."));
+                    section.Add(CreateMutedLabel("No integration packages match the current search."));
                     return;
                 }
 
-                foreach (PackageDefinition bridgePackage in bridgePackages)
+                foreach (PackageDefinition integrationPackage in integrationPackages)
                 {
-                    section.Add(CreatePackageRow(bridgePackage, includeActions: true));
+                    section.Add(CreatePackageRow(integrationPackage, includeActions: true));
                 }
             });
         }
@@ -600,11 +600,19 @@ namespace Deucarian.PackageInstaller.Editor
 
             _detailScroll.Add(CreateLabel(packageDefinition.DisplayName, "dpi-detail-title"));
             _detailScroll.Add(CreateLabel(packageDefinition.Description, "dpi-detail-subtitle"));
+            PackageUpdateStatus updateStatus = _packageUpdateCheckService.GetStatus(
+                packageDefinition,
+                GetSelectedChannel(packageDefinition));
 
             AddDetailSection("Overview", section =>
             {
                 section.Add(CreateKeyValueRow("Status", GetPackageStatusLabel(packageDefinition)));
-                section.Add(CreateKeyValueRow("Version", GetPackageVersionText(packageDefinition)));
+                section.Add(CreateKeyValueRow("Version", GetPackageVersionText(packageDefinition, updateStatus)));
+                if (updateStatus.HasUnbumpedPackageVersionWarning)
+                {
+                    section.Add(CreateKeyValueRow("Version warning", updateStatus.PackageVersionWarningMessage));
+                }
+
                 section.Add(CreateKeyValueRow("Channel", GetChannelLabel(GetSelectedChannel(packageDefinition))));
                 section.Add(CreateChannelField(packageDefinition));
                 section.Add(CreateActionRow(packageDefinition));
@@ -648,11 +656,11 @@ namespace Deucarian.PackageInstaller.Editor
             advanced.Add(CreateKeyValueRow("Development ref", GetReferenceName(packageDefinition.DevelopmentUrl)));
             advanced.Add(CreateKeyValueRow("Registry source", PackageRegistryProvider.StatusMessage));
             advanced.Add(CreateKeyValueRow("Detection", GetDetectionDetails(packageDefinition)));
+            advanced.Add(CreateKeyValueRow("Installed version", updateStatus.InstalledVersion));
+            advanced.Add(CreateKeyValueRow("Target version", updateStatus.LatestVersion));
             advanced.Add(CreateKeyValueRow(
                 "Update status",
-                GetUpdateStatusText(_packageUpdateCheckService.GetStatus(
-                    packageDefinition,
-                    GetSelectedChannel(packageDefinition)))));
+                GetUpdateStatusText(updateStatus)));
             _detailScroll.Add(advanced);
         }
 
@@ -672,7 +680,7 @@ namespace Deucarian.PackageInstaller.Editor
             VisualElement copy = new VisualElement();
             copy.AddToClassList("dpi-hero-copy");
             copy.Add(CreateLabel("Deucarian Package Installer", "dpi-hero-title"));
-            copy.Add(CreateLabel("Discover. Install. Elevate.", "dpi-hero-subtitle"));
+            copy.Add(CreateLabel("Package Registry & Installer", "dpi-hero-subtitle"));
             hero.Add(copy);
 
             _mainScroll.Add(hero);
@@ -774,7 +782,7 @@ namespace Deucarian.PackageInstaller.Editor
             installButton.SetEnabled(!busy && packageDefinition.HasPackageReference);
             row.Add(installButton);
 
-            Button updateButton = CreateButton("Update", () =>
+            Button updateButton = CreateButton(GetUpdateActionLabel(updateStatus, GetSelectedChannel(packageDefinition)), () =>
             {
                 _packageInstallService.Install(
                     packageDefinition,
@@ -956,7 +964,7 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            PackageDefinition nextSelection = GetVisiblePackages().FirstOrDefault(package => !package.IsBridge) ??
+            PackageDefinition nextSelection = GetVisiblePackages().FirstOrDefault(package => !package.IsIntegration) ??
                                               GetVisiblePackages().FirstOrDefault();
             _selectedPackageId = nextSelection != null ? nextSelection.PackageId : string.Empty;
         }
@@ -990,7 +998,16 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             _selectedChannels[packageDefinition.PackageId] = channel;
-            _packageUpdateCheckService?.Invalidate(packageDefinition.PackageId);
+
+            if (_packageDetectionService != null &&
+                _packageDetectionService.IsInstalled(packageDefinition.PackageId))
+            {
+                _packageUpdateCheckService?.CheckForUpdate(packageDefinition, channel);
+            }
+            else
+            {
+                _packageUpdateCheckService?.Invalidate(packageDefinition.PackageId);
+            }
         }
 
         private IEnumerable<PackageChannel> GetChannelOptions(PackageDefinition packageDefinition)
@@ -1131,7 +1148,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (updateStatus.IsUpdateAvailable)
             {
-                return "Update";
+                return updateStatus.Kind == PackageUpdateStatusKind.SwitchAvailable ? "Switch" : "Update";
             }
 
             if (updateStatus.Kind == PackageUpdateStatusKind.UpToDate)
@@ -1150,7 +1167,8 @@ namespace Deucarian.PackageInstaller.Editor
         private string GetPackageBadgeClass(PackageDefinition packageDefinition)
         {
             string label = GetPackageStatusLabel(packageDefinition);
-            if (string.Equals(label, "Update", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(label, "Update", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(label, "Switch", StringComparison.OrdinalIgnoreCase))
             {
                 return "deucarian-badge--warning";
             }
@@ -1171,13 +1189,27 @@ namespace Deucarian.PackageInstaller.Editor
 
         private string GetPackageVersionText(PackageDefinition packageDefinition)
         {
+            return GetPackageVersionText(packageDefinition, null);
+        }
+
+        private string GetPackageVersionText(PackageDefinition packageDefinition, PackageUpdateStatus status)
+        {
             if (_packageDetectionService.TryGetInstalledPackage(
                     packageDefinition.PackageId,
                     out PackageManagerPackageInfo packageInfo) &&
                 packageInfo != null &&
                 !string.IsNullOrWhiteSpace(packageInfo.version))
             {
-                return "Installed " + packageInfo.version;
+                string currentVersion = status != null && !string.IsNullOrWhiteSpace(status.InstalledVersion)
+                    ? status.InstalledVersion
+                    : packageInfo.version;
+
+                if (status != null && status.HasPackageVersionTransition)
+                {
+                    return currentVersion + " -> " + status.LatestVersion;
+                }
+
+                return currentVersion;
             }
 
             return packageDefinition.HasDisplayVersion
@@ -1206,7 +1238,8 @@ namespace Deucarian.PackageInstaller.Editor
                 return "Unknown";
             }
 
-            if (status.Kind == PackageUpdateStatusKind.UpdateAvailable)
+            if (status.Kind == PackageUpdateStatusKind.UpdateAvailable ||
+                status.Kind == PackageUpdateStatusKind.SwitchAvailable)
             {
                 return status.Label + " (" + status.ShortInstalledRevision + " -> " + status.ShortLatestRevision + ")";
             }
@@ -1222,6 +1255,16 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             return status.Label;
+        }
+
+        private static string GetUpdateActionLabel(PackageUpdateStatus status, PackageChannel channel)
+        {
+            if (status != null && status.Kind == PackageUpdateStatusKind.SwitchAvailable)
+            {
+                return "Switch to " + GetChannelLabel(channel);
+            }
+
+            return "Update to " + GetChannelLabel(channel);
         }
 
         private static string GetReferenceName(string packageReference)
@@ -1254,7 +1297,7 @@ namespace Deucarian.PackageInstaller.Editor
                 return 2;
             }
 
-            if (string.Equals(category, "Bridge", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(category, "Integration", StringComparison.OrdinalIgnoreCase))
             {
                 return 3;
             }

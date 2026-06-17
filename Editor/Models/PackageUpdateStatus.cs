@@ -7,6 +7,7 @@ namespace Deucarian.PackageInstaller.Editor
         Checking,
         UpToDate,
         UpdateAvailable,
+        SwitchAvailable,
         CannotDetermine,
         Failed
     }
@@ -23,6 +24,8 @@ namespace Deucarian.PackageInstaller.Editor
             string selectedUrl,
             string installedRevision,
             string latestRevision,
+            string installedVersion,
+            string latestVersion,
             string message)
         {
             Kind = kind;
@@ -32,6 +35,8 @@ namespace Deucarian.PackageInstaller.Editor
             SelectedUrl = selectedUrl ?? string.Empty;
             InstalledRevision = installedRevision ?? string.Empty;
             LatestRevision = latestRevision ?? string.Empty;
+            InstalledVersion = installedVersion ?? string.Empty;
+            LatestVersion = latestVersion ?? string.Empty;
             Message = message ?? string.Empty;
         }
 
@@ -49,15 +54,39 @@ namespace Deucarian.PackageInstaller.Editor
 
         public string LatestRevision { get; }
 
+        public string InstalledVersion { get; }
+
+        public string LatestVersion { get; }
+
         public string Message { get; }
 
         public bool IsChecking => Kind == PackageUpdateStatusKind.Checking;
 
-        public bool IsUpdateAvailable => Kind == PackageUpdateStatusKind.UpdateAvailable;
+        public bool IsUpdateAvailable =>
+            Kind == PackageUpdateStatusKind.UpdateAvailable ||
+            Kind == PackageUpdateStatusKind.SwitchAvailable;
 
         public string ShortInstalledRevision => ShortenRevision(InstalledRevision);
 
         public string ShortLatestRevision => ShortenRevision(LatestRevision);
+
+        public bool HasPackageVersionTransition =>
+            !string.IsNullOrWhiteSpace(InstalledVersion) &&
+            !string.IsNullOrWhiteSpace(LatestVersion) &&
+            !string.Equals(InstalledVersion, LatestVersion, System.StringComparison.OrdinalIgnoreCase);
+
+        public bool HasUnbumpedPackageVersionWarning =>
+            IsUpdateAvailable &&
+            !string.IsNullOrWhiteSpace(InstalledVersion) &&
+            !string.IsNullOrWhiteSpace(LatestVersion) &&
+            string.Equals(InstalledVersion, LatestVersion, System.StringComparison.OrdinalIgnoreCase);
+
+        public string PackageVersionWarningMessage =>
+            HasUnbumpedPackageVersionWarning
+                ? Kind == PackageUpdateStatusKind.SwitchAvailable
+                    ? "Switch available, but package version was not bumped."
+                    : "Update available, but package version was not bumped."
+                : string.Empty;
 
         public string Label
         {
@@ -73,6 +102,8 @@ namespace Deucarian.PackageInstaller.Editor
                         return "Up to date";
                     case PackageUpdateStatusKind.UpdateAvailable:
                         return "Update available";
+                    case PackageUpdateStatusKind.SwitchAvailable:
+                        return "Switch available";
                     case PackageUpdateStatusKind.CannotDetermine:
                         return "Cannot determine update";
                     case PackageUpdateStatusKind.Failed:
@@ -187,6 +218,40 @@ namespace Deucarian.PackageInstaller.Editor
                 message);
         }
 
+        public static PackageUpdateStatus SwitchAvailable(
+            PackageDefinition packageDefinition,
+            PackageChannel channel,
+            string selectedUrl,
+            string installedRevision,
+            string latestRevision)
+        {
+            return SwitchAvailable(
+                packageDefinition,
+                channel,
+                selectedUrl,
+                installedRevision,
+                latestRevision,
+                "Installed package differs from the selected channel.");
+        }
+
+        public static PackageUpdateStatus SwitchAvailable(
+            PackageDefinition packageDefinition,
+            PackageChannel channel,
+            string selectedUrl,
+            string installedRevision,
+            string latestRevision,
+            string message)
+        {
+            return Create(
+                PackageUpdateStatusKind.SwitchAvailable,
+                packageDefinition,
+                channel,
+                selectedUrl,
+                installedRevision,
+                latestRevision,
+                message);
+        }
+
         public static PackageUpdateStatus CannotDetermine(
             PackageDefinition packageDefinition,
             PackageChannel channel,
@@ -241,7 +306,24 @@ namespace Deucarian.PackageInstaller.Editor
                 selectedUrl,
                 installedRevision,
                 latestRevision,
+                string.Empty,
+                string.Empty,
                 message);
+        }
+
+        public PackageUpdateStatus WithPackageVersions(string installedVersion, string latestVersion)
+        {
+            return new PackageUpdateStatus(
+                Kind,
+                PackageId,
+                DisplayName,
+                Channel,
+                SelectedUrl,
+                InstalledRevision,
+                LatestRevision,
+                installedVersion,
+                latestVersion,
+                Message);
         }
 
         private static string ShortenRevision(string revision)

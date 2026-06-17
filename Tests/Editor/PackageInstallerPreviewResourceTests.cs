@@ -1,3 +1,4 @@
+using Deucarian.Editor;
 using NUnit.Framework;
 
 namespace Deucarian.PackageInstaller.Editor.Tests
@@ -5,7 +6,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
     internal sealed class PackageInstallerPreviewResourceTests
     {
         [Test]
-        public void PreviewResourcePaths_AreCentralizedAndStable()
+        public void PreviewResourcePaths_KeepSharedAssetsInEditorPackage()
         {
             Assert.AreEqual(
                 "Packages/com.deucarian.package-installer/Editor/UI/PackageInstaller/PackageInstallerPreviewWindow.uxml",
@@ -15,13 +16,13 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 PackageInstallerPreviewResources.UssPath);
             Assert.AreEqual(
                 "Packages/com.deucarian.editor/Editor/Assets/Logos/DeucarianPlaceholderLogo.png",
-                PackageInstallerPreviewResources.PlaceholderLogoPath);
+                DeucarianEditorUIResources.PlaceholderLogoPath);
             Assert.AreEqual(
                 "Packages/com.deucarian.editor/Editor/Assets/Images/DeucarianPackageInstallerPlaceholderHero.png",
-                PackageInstallerPreviewResources.PackageInstallerPlaceholderHeroPath);
+                DeucarianEditorUIResources.PackageInstallerPlaceholderHeroPath);
             Assert.AreEqual(
                 "Packages/com.deucarian.editor/Editor/Assets/Icons/DeucarianPackagePlaceholderIcon.png",
-                PackageInstallerPreviewResources.PackagePlaceholderIconPath);
+                DeucarianEditorUIResources.PackagePlaceholderIconPath);
         }
     }
 }

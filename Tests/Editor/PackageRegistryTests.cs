@@ -12,7 +12,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         private const string ValidRegistryJson =
             "{ \"schemaVersion\": 1, \"updatedAt\": \"2026-06-05\", \"packages\": [" +
             "{ \"id\": \"com.deucarian.core-state\", \"displayName\": \"Deucarian Core State\", \"category\": \"Core\", \"description\": \"Core package.\", \"stableUrl\": \"https://github.com/Deucarian/Core-State.git#main\", \"developmentUrl\": \"https://github.com/Deucarian/Core-State.git#develop\", \"dependencies\": [] }," +
-            "{ \"id\": \"com.deucarian.core-state.bridge\", \"displayName\": \"Core Bridge\", \"category\": \"Bridge\", \"description\": \"Bridge package.\", \"stableUrl\": \"https://github.com/Deucarian/Core-State-Bridge.git#main\", \"developmentUrl\": \"https://github.com/Deucarian/Core-State-Bridge.git#develop\", \"dependencies\": [\"com.deucarian.core-state\"] }" +
+            "{ \"id\": \"com.deucarian.core-state.integration\", \"displayName\": \"Core Integration\", \"category\": \"Integration\", \"description\": \"Integration package.\", \"stableUrl\": \"https://github.com/Deucarian/Core-State-Integration.git#main\", \"developmentUrl\": \"https://github.com/Deucarian/Core-State-Integration.git#develop\", \"dependencies\": [\"com.deucarian.core-state\"] }" +
             "] }";
 
         [Test]
@@ -59,7 +59,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         {
             string json =
                 "{ \"schemaVersion\": 1, \"packages\": [" +
-                "{ \"id\": \"com.deucarian.bridge\", \"displayName\": \"Bridge\", \"category\": \"Bridge\", \"stableUrl\": \"https://example.com/bridge.git#main\", \"dependencies\": [\"com.deucarian.missing\"] }" +
+                "{ \"id\": \"com.deucarian.integration\", \"displayName\": \"Integration\", \"category\": \"Integration\", \"stableUrl\": \"https://example.com/integration.git#main\", \"dependencies\": [\"com.deucarian.missing\"] }" +
                 "] }";
 
             PackageRegistryLoadResult result = new PackageRegistryLoader()
@@ -67,6 +67,20 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
             Assert.IsFalse(result.IsValid);
             StringAssert.Contains("depends on unknown package id", result.ErrorMessage);
+        }
+
+        [Test]
+        public void UnknownOptionalGraphRelationshipDoesNotRejectRegistry()
+        {
+            string json =
+                "{ \"schemaVersion\": 1, \"packages\": [" +
+                "{ \"id\": \"com.deucarian.core\", \"displayName\": \"Core\", \"category\": \"Core\", \"stableUrl\": \"https://example.com/core.git#main\", \"dependencies\": [], \"optionalIntegrations\": [\"com.deucarian.optional-missing\"] }" +
+                "] }";
+
+            PackageRegistryLoadResult result = new PackageRegistryLoader()
+                .LoadFromJson(json, PackageRegistrySource.Bundled);
+
+            Assert.IsTrue(result.IsValid, result.ErrorMessage);
         }
 
         [Test]
@@ -215,6 +229,33 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void GitHubPackageJsonUrlCanOverrideReferenceWithResolvedRevision()
+        {
+            const string revision = "0123456789abcdef0123456789abcdef01234567";
+
+            bool resolved = PackageRegistryPackageNameValidator.TryCreateGitHubPackageJsonUrl(
+                "https://github.com/Deucarian/Example.git?path=/Packages/Example#develop",
+                revision,
+                out string packageJsonUrl);
+
+            Assert.IsTrue(resolved);
+            Assert.AreEqual(
+                "https://raw.githubusercontent.com/Deucarian/Example/" + revision + "/Packages/Example/package.json",
+                packageJsonUrl);
+        }
+
+        [Test]
+        public void PackageJsonVersionCanBeRead()
+        {
+            bool found = PackageRegistryPackageNameValidator.TryReadPackageVersion(
+                "{ \"name\": \"com.deucarian.example\", \"version\": \"1.2.3\" }",
+                out string version);
+
+            Assert.IsTrue(found);
+            Assert.AreEqual("1.2.3", version);
+        }
+
+        [Test]
         public void RemoteRegistryPackageFetchFailureReportsPackageJsonUrl()
         {
             RunAsync(async () =>
@@ -267,7 +308,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
-        public void BundledRegistryIncludesObjectLoadingAndApiBridge()
+        public void BundledRegistryIncludesObjectLoadingAndApiIntegration()
         {
             string registryJson = File.ReadAllText(GetBundledRegistryPath());
             PackageRegistryLoadResult result = new PackageRegistryLoader()
@@ -292,17 +333,17 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 },
                 objectLoading.optionalCompanions);
 
-            PackageRegistryEntry bridge = result.Registry.packages
-                .Single(package => package.id == "com.deucarian.object-loading.api-bridge");
-            Assert.AreEqual("Deucarian Object Loading API Bridge", bridge.displayName);
-            Assert.AreEqual("Bridge", bridge.category);
+            PackageRegistryEntry integration = result.Registry.packages
+                .Single(package => package.id == "com.deucarian.object-loading.api-integration");
+            Assert.AreEqual("Deucarian Object Loading API Integration", integration.displayName);
+            Assert.AreEqual("Integration", integration.category);
             CollectionAssert.AreEqual(
                 new[]
                 {
                     "com.deucarian.object-loading",
                     "com.deucarian.api"
                 },
-                bridge.dependencies);
+                integration.dependencies);
         }
 
         [Test]
@@ -365,9 +406,28 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
             Assert.AreEqual("Editor", editor.category);
             StringAssert.Contains("Editor.git#main", editor.stableUrl);
+            StringAssert.Contains("Editor.git#develop", editor.developmentUrl);
             CollectionAssert.AreEqual(new[] { "com.deucarian.editor" }, logging.dependencies);
             CollectionAssert.AreEqual(new[] { "com.deucarian.editor", "com.deucarian.logging" }, theming.dependencies);
             CollectionAssert.AreEqual(new[] { "com.deucarian.editor", "com.deucarian.logging" }, packageInstaller.dependencies);
+        }
+
+        [Test]
+        public void BundledRegistryProvidesStableAndDevelopmentChannels()
+        {
+            string registryJson = File.ReadAllText(GetBundledRegistryPath());
+            PackageRegistryLoadResult result = new PackageRegistryLoader()
+                .LoadFromJson(registryJson, PackageRegistrySource.Bundled);
+
+            Assert.IsTrue(result.IsValid, result.ErrorMessage);
+
+            foreach (PackageRegistryEntry package in result.Registry.packages)
+            {
+                StringAssert.StartsWith("https://github.com/Deucarian/", package.stableUrl, package.id);
+                StringAssert.EndsWith(".git#main", package.stableUrl, package.id);
+                StringAssert.StartsWith("https://github.com/Deucarian/", package.developmentUrl, package.id);
+                StringAssert.EndsWith(".git#develop", package.developmentUrl, package.id);
+            }
         }
 
         [Test]

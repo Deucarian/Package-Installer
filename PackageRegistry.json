@@ -22,8 +22,8 @@
       "developmentUrl": "https://github.com/Deucarian/Core-State.git#develop",
       "dependencies": [],
       "optionalIntegrations": [
-        "com.deucarian.ui-binding.core-state-bridge",
-        "com.deucarian.object-selection.core-state-bridge"
+        "com.deucarian.ui-binding.core-state-integration",
+        "com.deucarian.object-selection.core-state-integration"
       ],
       "recommendedWith": [
         "com.deucarian.selection-suite"
@@ -41,8 +41,8 @@
         "com.deucarian.logging"
       ],
       "optionalIntegrations": [
-        "com.deucarian.session.api-bridge",
-        "com.deucarian.object-loading.api-bridge"
+        "com.deucarian.session.api-integration",
+        "com.deucarian.object-loading.api-integration"
       ]
     },
     {
@@ -72,7 +72,7 @@
         "com.deucarian.diagnostics"
       ],
       "optionalIntegrations": [
-        "com.deucarian.object-loading.api-bridge"
+        "com.deucarian.object-loading.api-integration"
       ]
     },
     {
@@ -87,7 +87,7 @@
         "com.deucarian.logging"
       ],
       "optionalIntegrations": [
-        "com.deucarian.session.api-bridge"
+        "com.deucarian.session.api-integration"
       ]
     },
     {
@@ -100,7 +100,7 @@
       "developmentUrl": "https://github.com/Deucarian/UI-Binding.git#develop",
       "dependencies": [],
       "optionalIntegrations": [
-        "com.deucarian.ui-binding.core-state-bridge"
+        "com.deucarian.ui-binding.core-state-integration"
       ],
       "recommendedWith": [
         "com.deucarian.selection-suite"
@@ -131,7 +131,7 @@
         "com.deucarian.logging"
       ],
       "optionalIntegrations": [
-        "com.deucarian.object-selection.core-state-bridge"
+        "com.deucarian.object-selection.core-state-integration"
       ],
       "recommendedWith": [
         "com.deucarian.selection-suite"
@@ -163,10 +163,10 @@
       ]
     },
     {
-      "id": "com.deucarian.session.api-bridge",
-      "displayName": "Deucarian Session API Bridge",
-      "category": "Bridge",
-      "type": "Bridge",
+      "id": "com.deucarian.session.api-integration",
+      "displayName": "Deucarian Session API Integration",
+      "category": "Integration",
+      "type": "Integration",
       "description": "Integration package connecting Session authentication to API.",
       "stableUrl": "https://github.com/Deucarian/Session-API-Bridge.git#main",
       "developmentUrl": "https://github.com/Deucarian/Session-API-Bridge.git#develop",
@@ -174,16 +174,16 @@
         "com.deucarian.session",
         "com.deucarian.api"
       ],
-      "bridgeTargets": [
+      "integrationTargets": [
         "com.deucarian.session",
         "com.deucarian.api"
       ]
     },
     {
-      "id": "com.deucarian.object-loading.api-bridge",
-      "displayName": "Deucarian Object Loading API Bridge",
-      "category": "Bridge",
-      "type": "Bridge",
+      "id": "com.deucarian.object-loading.api-integration",
+      "displayName": "Deucarian Object Loading API Integration",
+      "category": "Integration",
+      "type": "Integration",
       "description": "Optional integration package that lets Object Loading downloads go through API.",
       "stableUrl": "https://github.com/Deucarian/Object-Loading-API-Bridge.git#main",
       "developmentUrl": "https://github.com/Deucarian/Object-Loading-API-Bridge.git#develop",
@@ -191,16 +191,16 @@
         "com.deucarian.object-loading",
         "com.deucarian.api"
       ],
-      "bridgeTargets": [
+      "integrationTargets": [
         "com.deucarian.object-loading",
         "com.deucarian.api"
       ]
     },
     {
-      "id": "com.deucarian.ui-binding.core-state-bridge",
-      "displayName": "Deucarian UI Binding Core State Bridge",
-      "category": "Bridge",
-      "type": "Bridge",
+      "id": "com.deucarian.ui-binding.core-state-integration",
+      "displayName": "Deucarian UI Binding Core State Integration",
+      "category": "Integration",
+      "type": "Integration",
       "description": "Integration package connecting UI Binding containers to Core State repositories and selection services.",
       "stableUrl": "https://github.com/Deucarian/UI-Binding-CoreState-Bridge.git#main",
       "developmentUrl": "https://github.com/Deucarian/UI-Binding-CoreState-Bridge.git#develop",
@@ -208,16 +208,16 @@
         "com.deucarian.ui-binding",
         "com.deucarian.core-state"
       ],
-      "bridgeTargets": [
+      "integrationTargets": [
         "com.deucarian.ui-binding",
         "com.deucarian.core-state"
       ]
     },
     {
-      "id": "com.deucarian.object-selection.core-state-bridge",
-      "displayName": "Deucarian Object Selection Core State Bridge",
-      "category": "Bridge",
-      "type": "Bridge",
+      "id": "com.deucarian.object-selection.core-state-integration",
+      "displayName": "Deucarian Object Selection Core State Integration",
+      "category": "Integration",
+      "type": "Integration",
       "description": "Integration package synchronizing Object Selection and Core State selections through shared keys.",
       "stableUrl": "https://github.com/Deucarian/Object-Selection-Bridge.git#main",
       "developmentUrl": "https://github.com/Deucarian/Object-Selection-Bridge.git#develop",
@@ -226,7 +226,7 @@
         "com.deucarian.core-state",
         "com.deucarian.logging"
       ],
-      "bridgeTargets": [
+      "integrationTargets": [
         "com.deucarian.object-selection",
         "com.deucarian.core-state"
       ]
@@ -236,22 +236,22 @@
       "displayName": "Deucarian Selection Suite",
       "category": "Suites",
       "type": "Suite",
-      "description": "Curated bundle that installs Core State, UI Binding, Object Selection, and both Core State selection bridges.",
+      "description": "Curated bundle that installs Core State, UI Binding, Object Selection, and both Core State selection integrations.",
       "stableUrl": "https://github.com/Deucarian/Selection-Suite.git#main",
       "developmentUrl": "https://github.com/Deucarian/Selection-Suite.git#develop",
       "dependencies": [
         "com.deucarian.core-state",
         "com.deucarian.ui-binding",
         "com.deucarian.object-selection",
-        "com.deucarian.ui-binding.core-state-bridge",
-        "com.deucarian.object-selection.core-state-bridge"
+        "com.deucarian.ui-binding.core-state-integration",
+        "com.deucarian.object-selection.core-state-integration"
       ],
       "suiteMembers": [
         "com.deucarian.core-state",
         "com.deucarian.ui-binding",
         "com.deucarian.object-selection",
-        "com.deucarian.ui-binding.core-state-bridge",
-        "com.deucarian.object-selection.core-state-bridge"
+        "com.deucarian.ui-binding.core-state-integration",
+        "com.deucarian.object-selection.core-state-integration"
       ]
     }
   ]
