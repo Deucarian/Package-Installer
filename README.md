@@ -14,13 +14,13 @@ Tools > Deucarian > Package Installer
 
 The installer keeps its Unity Editor entry point at `Tools > Deucarian > Package Installer`. This package does not own the Theming, Logging, Object Loading, Session, or Selection menu groups; those packages provide their own package-local menu items under the shared `Tools > Deucarian` menu.
 
-The UI Toolkit preview foundation is available from:
+The UI Toolkit preview foundation is a development-only window available from:
 
 ```text
-Tools > Deucarian > Package Installer > Open Preview
+Tools > Deucarian > Development > Package Installer Preview
 ```
 
-The preview is separate from the stable IMGUI installer and does not replace the existing entry point.
+The preview is separate from the real installer and does not replace the existing production entry point.
 
 The installer can install standalone packages, bridge packages, and explicitly declared package samples without making this package a runtime dependency of any other package.
 
@@ -213,13 +213,13 @@ Package-specific UI Toolkit files for the preview live in:
 - `Editor/UI/PackageInstaller/PackageInstallerPreviewWindow.uxml`
 - `Editor/UI/PackageInstaller/PackageInstallerPreviewWindow.uss`
 
-Shared Deucarian branding placeholders live in `com.deucarian.editor`, not in this package:
+Shared Deucarian UI assets live in `com.deucarian.editor`, not in this package:
 
 - Logo: `com.deucarian.editor/Editor/Assets/Logos/DeucarianPlaceholderLogo.png`
 - Package Installer hero: `com.deucarian.editor/Editor/Assets/Images/DeucarianPackageInstallerPlaceholderHero.png`
 - Default package icon: `com.deucarian.editor/Editor/Assets/Icons/DeucarianPackagePlaceholderIcon.png`
 
-Drop the real logo, hero, and default package icon into those exact shared paths when the brand assets are ready. The installer preview centralizes those package paths in `PackageInstallerPreviewResources`.
+Package Installer loads those shared assets through `DeucarianEditorUIResources` and keeps only package-specific UXML/USS in this package.
 
 ## Why Editor-Only
 

@@ -15,8 +15,8 @@ namespace Deucarian.PackageInstaller.Editor
         internal const string CheckOnStartupPreferenceKey =
             "Deucarian.PackageInstaller.Preview.CheckOnStartup";
 
-        private const string WindowTitle = "Package Installer Preview";
-        private const string PreviewMenuPath = "Tools/Deucarian/Package Installer/Open Preview";
+        private const string WindowTitle = "Package Installer Preview (Development)";
+        private const string PreviewMenuPath = "Tools/Deucarian/Development/Package Installer Preview";
         private const float MinWindowWidth = 980f;
         private const float MinWindowHeight = 640f;
 
@@ -188,7 +188,7 @@ namespace Deucarian.PackageInstaller.Editor
             VisualElement titleBlock = new VisualElement();
             titleBlock.AddToClassList("dpi-title-block");
             titleBlock.Add(new Label("Deucarian Package Installer") { name = "dpi-window-title" });
-            titleBlock.Add(new Label("Discover. Install. Elevate.") { name = "dpi-window-tagline" });
+            titleBlock.Add(new Label("Package Registry & Installer") { name = "dpi-window-tagline" });
             header.Add(titleBlock);
 
             TextField search = new TextField("Search") { name = "dpi-search" };
@@ -672,7 +672,7 @@ namespace Deucarian.PackageInstaller.Editor
             VisualElement copy = new VisualElement();
             copy.AddToClassList("dpi-hero-copy");
             copy.Add(CreateLabel("Deucarian Package Installer", "dpi-hero-title"));
-            copy.Add(CreateLabel("Discover. Install. Elevate.", "dpi-hero-subtitle"));
+            copy.Add(CreateLabel("Package Registry & Installer", "dpi-hero-subtitle"));
             hero.Add(copy);
 
             _mainScroll.Add(hero);

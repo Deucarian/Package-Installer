@@ -9,7 +9,7 @@
       "type": "Core",
       "description": "Shared editor tooling and branded editor UI helpers for Deucarian Unity packages.",
       "stableUrl": "https://github.com/Deucarian/Editor.git#main",
-      "developmentUrl": "",
+      "developmentUrl": "https://github.com/Deucarian/Editor.git#develop",
       "dependencies": []
     },
     {

@@ -379,6 +379,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
             Assert.AreEqual("Editor", editor.category);
             StringAssert.Contains("Editor.git#main", editor.stableUrl);
+            StringAssert.Contains("Editor.git#develop", editor.developmentUrl);
             CollectionAssert.AreEqual(new[] { "com.deucarian.editor" }, logging.dependencies);
             CollectionAssert.AreEqual(new[] { "com.deucarian.editor", "com.deucarian.logging" }, theming.dependencies);
             CollectionAssert.AreEqual(new[] { "com.deucarian.editor", "com.deucarian.logging" }, packageInstaller.dependencies);

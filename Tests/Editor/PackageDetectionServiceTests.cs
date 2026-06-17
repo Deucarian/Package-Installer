@@ -99,7 +99,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 PackageInstallSourceType.Registry,
                 PackageInstallSourceUtility.Detect(
                     string.Empty,
-                    "com.deucarian.editor@0.1.2",
+                    "com.deucarian.editor@1.0.0",
                     string.Empty,
                     string.Empty));
         }

@@ -4,7 +4,7 @@
             <ui:Image name="dpi-logo" class="dpi-logo" />
             <ui:VisualElement class="dpi-title-block">
                 <ui:Label name="dpi-window-title" text="Deucarian Package Installer" class="deucarian-header__title dpi-window-title" />
-                <ui:Label name="dpi-window-tagline" text="Discover. Install. Elevate." class="deucarian-header__subtitle dpi-window-tagline" />
+                <ui:Label name="dpi-window-tagline" text="Package Registry &amp; Installer" class="deucarian-header__subtitle dpi-window-tagline" />
             </ui:VisualElement>
             <ui:VisualElement class="dpi-header-spacer" />
             <ui:TextField name="dpi-search" label="Search" class="dpi-search" />
