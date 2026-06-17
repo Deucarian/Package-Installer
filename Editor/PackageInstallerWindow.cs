@@ -247,7 +247,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void CreateGUI()
         {
-            VisualElement content = DeucarianEditorVisualShell.CreateWindowShell(rootVisualElement);
+            VisualElement content = PackageInstallerVisualShell.CreateWindowShell(rootVisualElement);
 
             if (content == null)
             {
@@ -292,7 +292,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void BuildViewToolbar(VisualElement content)
         {
-            VisualElement toolbar = DeucarianEditorVisualShell.CreateToolbarRow();
+            VisualElement toolbar = PackageInstallerVisualShell.CreateToolbarRow();
             toolbar.AddToClassList("dpi-view-toolbar");
 
             _listViewButton = CreateViewToggleButton("List View", InstallerViewMode.List);
@@ -503,20 +503,20 @@ namespace Deucarian.PackageInstaller.Editor
             _stylesInitialized = true;
             _lastProSkin = proSkin;
 
-            _mainBackgroundColor = DeucarianEditorVisualShell.DeepBackground;
-            _sidebarBackgroundColor = DeucarianEditorVisualShell.MainPanel;
-            _detailsBackgroundColor = DeucarianEditorVisualShell.MainPanel;
-            _panelBackgroundColor = DeucarianEditorVisualShell.NestedSurface;
-            _headerPanelBackgroundColor = DeucarianEditorVisualShell.HeaderPanel;
-            _sampleRowBackgroundColor = DeucarianEditorVisualShell.NestedSurface;
-            _panelBorderColor = DeucarianEditorVisualShell.Border;
-            _interactiveBorderColor = DeucarianEditorVisualShell.InteractiveBorder;
-            _separatorColor = DeucarianEditorVisualShell.SubtleBorder;
+            _mainBackgroundColor = PackageInstallerVisualShell.DeepBackground;
+            _sidebarBackgroundColor = PackageInstallerVisualShell.MainPanel;
+            _detailsBackgroundColor = PackageInstallerVisualShell.MainPanel;
+            _panelBackgroundColor = PackageInstallerVisualShell.NestedSurface;
+            _headerPanelBackgroundColor = PackageInstallerVisualShell.HeaderPanel;
+            _sampleRowBackgroundColor = PackageInstallerVisualShell.NestedSurface;
+            _panelBorderColor = PackageInstallerVisualShell.Border;
+            _interactiveBorderColor = PackageInstallerVisualShell.InteractiveBorder;
+            _separatorColor = PackageInstallerVisualShell.SubtleBorder;
             _rowBackgroundColor = new Color(32f / 255f, 47f / 255f, 56f / 255f, 0.46f);
             _rowHoverColor = new Color(32f / 255f, 47f / 255f, 56f / 255f, 0.62f);
             _rowSelectedColor = new Color(35f / 255f, 62f / 255f, 66f / 255f, 0.58f);
-            _textColor = DeucarianEditorVisualShell.Text;
-            _mutedTextColor = DeucarianEditorVisualShell.MutedText;
+            _textColor = PackageInstallerVisualShell.Text;
+            _mutedTextColor = PackageInstallerVisualShell.MutedText;
 
             _windowStyle = new GUIStyle();
             _windowStyle.padding = new RectOffset(12, 12, 10, 10);
@@ -586,7 +586,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void DrawWindowBackground()
         {
-            DeucarianEditorVisualShell.DrawWindowBackground(
+            PackageInstallerVisualShell.DrawWindowBackground(
                 new Rect(0f, 0f, position.width, position.height),
                 _mainBackgroundColor);
         }
@@ -1088,7 +1088,7 @@ namespace Deucarian.PackageInstaller.Editor
             if (Event.current.type == EventType.Repaint)
             {
                 Color background = selected ? _rowSelectedColor : hover ? _rowHoverColor : _rowBackgroundColor;
-                DeucarianEditorVisualShell.DrawInsetSurface(
+                PackageInstallerVisualShell.DrawInsetSurface(
                     rowRect,
                     background,
                     selected || hover ? _interactiveBorderColor : _separatorColor,
@@ -1308,7 +1308,7 @@ namespace Deucarian.PackageInstaller.Editor
             if (Event.current.type == EventType.Repaint)
             {
                 Color color = GetStatusColor(statusKind);
-                DeucarianEditorVisualShell.DrawInsetSurface(
+                PackageInstallerVisualShell.DrawInsetSurface(
                     rect,
                     DeucarianEditorColors.WithAlpha(color, 0.12f),
                     DeucarianEditorColors.WithAlpha(color, 0.58f),
@@ -1459,7 +1459,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (Event.current.type == EventType.Repaint)
             {
-                DeucarianEditorVisualShell.DrawInsetSurface(rowRect, _sampleRowBackgroundColor, _separatorColor, 6f);
+                PackageInstallerVisualShell.DrawInsetSurface(rowRect, _sampleRowBackgroundColor, _separatorColor, 6f);
             }
 
             Rect markerRect = new Rect(rowRect.x + 8f, rowRect.y + 5f, 28f, 18f);
@@ -2571,7 +2571,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static void DrawSurface(Rect rect, Color backgroundColor, Color borderColor)
         {
-            DeucarianEditorVisualShell.DrawFrostedSurface(rect, backgroundColor, borderColor);
+            PackageInstallerVisualShell.DrawFrostedSurface(rect, backgroundColor, borderColor);
         }
 
         private void DrawHorizontalSeparator()
@@ -2589,7 +2589,7 @@ namespace Deucarian.PackageInstaller.Editor
             if (Event.current.type == EventType.Repaint)
             {
                 Color color = GetStatusColor(statusKind);
-                DeucarianEditorVisualShell.DrawInsetSurface(
+                PackageInstallerVisualShell.DrawInsetSurface(
                     rect,
                     new Color(color.r, color.g, color.b, 0.16f),
                     new Color(color.r, color.g, color.b, 0.65f),
