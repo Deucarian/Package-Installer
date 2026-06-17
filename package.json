@@ -1,6 +1,6 @@
 {
   "name": "com.deucarian.package-installer",
-  "version": "1.1.12",
+  "version": "1.1.14",
   "displayName": "Deucarian Package Installer",
   "description": "Editor-only installer window for installing and composing Deucarian Unity UPM packages.",
   "unity": "2021.3",
@@ -15,6 +15,6 @@
   ],
   "dependencies": {
     "com.deucarian.editor": "0.1.2",
-    "com.deucarian.logging": "0.2.5"
+    "com.deucarian.logging": "0.2.6"
   }
 }

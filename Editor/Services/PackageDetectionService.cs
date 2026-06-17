@@ -15,6 +15,10 @@ namespace Deucarian.PackageInstaller.Editor
             new Dictionary<string, PackageManagerPackageInfo>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, string> _installedPackageReferences =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, PackageInstallSourceType> _installedPackageSourceTypes =
+            new Dictionary<string, PackageInstallSourceType>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, string> _installedPackageVersions =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private readonly IReadOnlyList<string> _packageLockPaths;
 
         private ListRequest _listRequest;
@@ -63,6 +67,8 @@ namespace Deucarian.PackageInstaller.Editor
         {
             _installedPackages.Clear();
             _installedPackageReferences.Clear();
+            _installedPackageSourceTypes.Clear();
+            _installedPackageVersions.Clear();
 
             if (packageIds == null)
             {
@@ -90,10 +96,51 @@ namespace Deucarian.PackageInstaller.Editor
             if (string.IsNullOrWhiteSpace(packageReference))
             {
                 _installedPackageReferences.Remove(packageId.Trim());
+                _installedPackageSourceTypes[packageId.Trim()] = PackageInstallSourceType.Unknown;
                 return;
             }
 
             _installedPackageReferences[packageId.Trim()] = packageReference.Trim();
+            _installedPackageSourceTypes[packageId.Trim()] = PackageInstallSourceUtility.Detect(
+                string.Empty,
+                string.Empty,
+                packageReference,
+                string.Empty);
+        }
+
+        internal void ReplaceInstalledPackageForTests(
+            string packageId,
+            string packageReference,
+            PackageInstallSourceType sourceType,
+            string version = "")
+        {
+            if (string.IsNullOrWhiteSpace(packageId))
+            {
+                return;
+            }
+
+            string normalizedPackageId = packageId.Trim();
+            _installedPackages[normalizedPackageId] = null;
+
+            if (string.IsNullOrWhiteSpace(packageReference))
+            {
+                _installedPackageReferences.Remove(normalizedPackageId);
+            }
+            else
+            {
+                _installedPackageReferences[normalizedPackageId] = packageReference.Trim();
+            }
+
+            _installedPackageSourceTypes[normalizedPackageId] = sourceType;
+
+            if (string.IsNullOrWhiteSpace(version))
+            {
+                _installedPackageVersions.Remove(normalizedPackageId);
+            }
+            else
+            {
+                _installedPackageVersions[normalizedPackageId] = version.Trim();
+            }
         }
 
         public bool TryGetInstalledPackage(string packageId, out PackageManagerPackageInfo packageInfo)
@@ -120,6 +167,31 @@ namespace Deucarian.PackageInstaller.Editor
                    !string.IsNullOrWhiteSpace(packageReference);
         }
 
+        public bool TryGetInstalledPackageSourceType(string packageId, out PackageInstallSourceType sourceType)
+        {
+            sourceType = PackageInstallSourceType.Unknown;
+
+            if (string.IsNullOrWhiteSpace(packageId))
+            {
+                return false;
+            }
+
+            return _installedPackageSourceTypes.TryGetValue(packageId, out sourceType);
+        }
+
+        public bool TryGetInstalledPackageVersion(string packageId, out string version)
+        {
+            version = string.Empty;
+
+            if (string.IsNullOrWhiteSpace(packageId))
+            {
+                return false;
+            }
+
+            return _installedPackageVersions.TryGetValue(packageId, out version) &&
+                   !string.IsNullOrWhiteSpace(version);
+        }
+
         public bool TryGetInstalledPackageChannel(
             PackageDefinition packageDefinition,
             out PackageChannel channel,
@@ -128,8 +200,25 @@ namespace Deucarian.PackageInstaller.Editor
             channel = PackageChannel.Stable;
             packageReference = string.Empty;
 
-            if (packageDefinition == null ||
-                !TryGetInstalledPackageReference(packageDefinition.PackageId, out packageReference))
+            if (packageDefinition == null)
+            {
+                return false;
+            }
+
+            bool hasInstalledPackageReference = TryGetInstalledPackageReference(
+                packageDefinition.PackageId,
+                out packageReference);
+
+            if (TryGetInstalledPackageSourceType(
+                    packageDefinition.PackageId,
+                    out PackageInstallSourceType sourceType) &&
+                sourceType == PackageInstallSourceType.Registry)
+            {
+                channel = PackageChannel.Stable;
+                return true;
+            }
+
+            if (!hasInstalledPackageReference)
             {
                 return false;
             }
@@ -184,6 +273,8 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 _installedPackages.Clear();
                 _installedPackageReferences.Clear();
+                _installedPackageSourceTypes.Clear();
+                _installedPackageVersions.Clear();
 
                 foreach (PackageManagerPackageInfo packageInfo in _listRequest.Result)
                 {
@@ -195,6 +286,32 @@ namespace Deucarian.PackageInstaller.Editor
                             TryExtractReferenceFromPackageManagerPackageId(packageInfo.packageId, packageInfo.name, out packageReference))
                         {
                             _installedPackageReferences[packageInfo.name] = packageReference;
+                        }
+
+                        PackageInstallSourceType sourceType = PackageInstallSourceUtility.Detect(
+                            packageInfo.source.ToString(),
+                            packageInfo.packageId,
+                            packageReference,
+                            packageInfo.resolvedPath);
+                        _installedPackageSourceTypes[packageInfo.name] = sourceType;
+
+                        if (!string.IsNullOrWhiteSpace(packageInfo.version))
+                        {
+                            _installedPackageVersions[packageInfo.name] = packageInfo.version.Trim();
+                        }
+                        else if (PackageInstallSourceUtility.TryExtractRegistryVersion(
+                                     packageInfo.packageId,
+                                     packageInfo.name,
+                                     out string packageIdVersion))
+                        {
+                            _installedPackageVersions[packageInfo.name] = packageIdVersion;
+                        }
+                        else if (PackageInstallSourceUtility.TryExtractRegistryVersion(
+                                     packageReference,
+                                     packageInfo.name,
+                                     out string packageReferenceVersion))
+                        {
+                            _installedPackageVersions[packageInfo.name] = packageReferenceVersion;
                         }
                     }
                 }

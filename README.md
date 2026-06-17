@@ -14,6 +14,14 @@ Tools > Deucarian > Package Installer
 
 The installer keeps its Unity Editor entry point at `Tools > Deucarian > Package Installer`. This package does not own the Theming, Logging, Object Loading, Session, or Selection menu groups; those packages provide their own package-local menu items under the shared `Tools > Deucarian` menu.
 
+The UI Toolkit preview foundation is available from:
+
+```text
+Tools > Deucarian > Package Installer > Open Preview
+```
+
+The preview is separate from the stable IMGUI installer and does not replace the existing entry point.
+
 The installer can install standalone packages, bridge packages, and explicitly declared package samples without making this package a runtime dependency of any other package.
 
 Package ID: `com.deucarian.package-installer`
@@ -139,9 +147,9 @@ Run the package's EditMode tests in Unity. The registry tests validate bundled f
 
 ## Update Checks
 
-`Check for Updates` compares installed registry packages against the selected Stable or Development channel. Git packages are compared by installed revision and the latest revision returned by `git ls-remote`.
+`Check for Updates` is source-aware. Git-installed packages are compared by installed revision and the latest revision returned by `git ls-remote`. Scoped-registry/npm-installed packages are compared by installed package version and the npmjs `latest` dist-tag.
 
-Unknown installed revisions are shown as "Cannot determine update" while the package remains installed. Missing Git, network failures, local/file packages, and non-Git UPM identifiers are reported as update-check messages instead of blocking the installer.
+Unknown installed revisions or versions are shown as "Cannot determine update" while the package remains installed. Missing Git metadata, unavailable registry metadata, local/file packages, and embedded packages stay neutral instead of marking the row as failed.
 
 The installer can also check for updates automatically when Unity starts and when the Package Installer window opens. Startup checks run at most once per editor session, and window-open checks are throttled so reopening the window does not repeatedly hit remotes. These settings are stored in `EditorPrefs` and can be toggled from the window header.
 
@@ -181,12 +189,13 @@ This package is editor-only and exposes no runtime API for game code.
 The user-facing entry point is the Unity menu item:
 
 ```text
-Tools/Deucarian/Package Installer
+Deucarian/Package Installer
 ```
 
 The implementation is split into internal editor classes:
 
 - `PackageInstallerWindow`: IMGUI window and coordination.
+- `PackageInstallerPreviewWindow`: UI Toolkit preview window for the future ecosystem browser direction.
 - `PackageRegistryProvider`, `PackageRegistryLoader`, and `PackageRegistryValidator`: bundled and remote registry loading.
 - `PackageDefinition`, `PackageChannel`, and `PackageExtraDefinition`: installer data models.
 - `PackageInstallService`: Unity Package Manager install, update, and remove operations.
@@ -194,6 +203,21 @@ The implementation is split into internal editor classes:
 - `PackageDetectionService`: installed package detection through `Client.List`.
 - `PackageUpdateCheckService`: Git revision comparison for installed Git packages.
 - `PackageSampleImportService`: explicit sample import through Unity sample APIs or a safe copy fallback.
+
+## UI Toolkit Preview Assets
+
+Package-specific UI Toolkit files for the preview live in:
+
+- `Editor/UI/PackageInstaller/PackageInstallerPreviewWindow.uxml`
+- `Editor/UI/PackageInstaller/PackageInstallerPreviewWindow.uss`
+
+Shared Deucarian branding placeholders live in `com.deucarian.editor`, not in this package:
+
+- Logo: `com.deucarian.editor/Editor/Assets/Logos/DeucarianPlaceholderLogo.png`
+- Package Installer hero: `com.deucarian.editor/Editor/Assets/Images/DeucarianPackageInstallerPlaceholderHero.png`
+- Default package icon: `com.deucarian.editor/Editor/Assets/Icons/DeucarianPackagePlaceholderIcon.png`
+
+Drop the real logo, hero, and default package icon into those exact shared paths when the brand assets are ready. The installer preview centralizes those package paths in `PackageInstallerPreviewResources`.
 
 ## Why Editor-Only
 
@@ -207,7 +231,7 @@ Keeping the installer editor-only ensures:
 
 ## Versioning
 
-Current package version: `1.1.12`.
+Current package version: `1.1.14`.
 
 Branch strategy:
 

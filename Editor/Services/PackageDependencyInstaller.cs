@@ -303,6 +303,10 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (installPlan.Steps.Count == 0)
             {
+                _packageInstallService.RecordCompletedOperation(
+                    operationName,
+                    alreadyInstalledMessage,
+                    installPlan.Messages);
                 PackageInstallerLog.Install.Info(alreadyInstalledMessage);
                 return;
             }
@@ -310,7 +314,8 @@ namespace Deucarian.PackageInstaller.Editor
             _packageInstallService.InstallMany(
                 installPlan.Packages,
                 installPlan.GetChannel,
-                operationName);
+                operationName,
+                installPlan.Messages);
         }
 
         private bool AddPackageToPlan(

@@ -1,0 +1,39 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" editor-extension-mode="True">
+    <ui:VisualElement name="dpi-root" class="deucarian-editor deucarian-window dpi-root">
+        <ui:VisualElement name="dpi-header" class="deucarian-header dpi-header">
+            <ui:Image name="dpi-logo" class="dpi-logo" />
+            <ui:VisualElement class="dpi-title-block">
+                <ui:Label name="dpi-window-title" text="Deucarian Package Installer" class="deucarian-header__title dpi-window-title" />
+                <ui:Label name="dpi-window-tagline" text="Discover. Install. Elevate." class="deucarian-header__subtitle dpi-window-tagline" />
+            </ui:VisualElement>
+            <ui:VisualElement class="dpi-header-spacer" />
+            <ui:TextField name="dpi-search" label="Search" class="dpi-search" />
+            <ui:VisualElement class="dpi-header-actions">
+                <ui:VisualElement class="dpi-stat-row">
+                    <ui:Label name="dpi-package-count" text="0 packages" class="deucarian-badge dpi-stat" />
+                    <ui:Label name="dpi-updates-count" text="0 updates" class="deucarian-badge dpi-stat" />
+                </ui:VisualElement>
+                <ui:Label name="dpi-registry-source" text="Using bundled registry" class="deucarian-muted dpi-registry-source" />
+                <ui:VisualElement class="dpi-action-row">
+                    <ui:Button name="dpi-refresh-button" text="Refresh" class="deucarian-button dpi-small-button" />
+                    <ui:Button name="dpi-check-updates-button" text="Check Updates" class="deucarian-button dpi-small-button" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:VisualElement name="dpi-body" class="dpi-body">
+            <ui:VisualElement name="dpi-sidebar" class="deucarian-sidebar dpi-sidebar">
+                <ui:Button name="dpi-nav-browse" text="Browse" class="deucarian-sidebar__button" />
+                <ui:Button name="dpi-nav-installed" text="Installed" class="deucarian-sidebar__button" />
+                <ui:Button name="dpi-nav-updates" text="Updates" class="deucarian-sidebar__button" />
+                <ui:Button name="dpi-nav-collections" text="Collections" class="deucarian-sidebar__button" />
+                <ui:Button name="dpi-nav-settings" text="Settings" class="deucarian-sidebar__button" />
+                <ui:VisualElement class="dpi-sidebar-fill" />
+                <ui:Label name="dpi-sidebar-status" text="All systems operational" class="deucarian-muted dpi-sidebar-status" />
+            </ui:VisualElement>
+            <ui:VisualElement name="dpi-content" class="dpi-content">
+                <ui:ScrollView name="dpi-main-scroll" class="dpi-main-scroll" />
+                <ui:ScrollView name="dpi-detail-scroll" class="dpi-detail-scroll" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

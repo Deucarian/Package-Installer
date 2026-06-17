@@ -78,6 +78,27 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void GitPackageWithMissingRevisionReturnsNeutralCannotDetermineStatus()
+        {
+            PackageDefinition packageDefinition = CreatePackage();
+
+            PackageUpdateStatus status = PackageUpdateCheckService.CheckItemForTests(
+                packageDefinition,
+                PackageChannel.Stable,
+                packageDefinition.StableUrl,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                PackageInstallSourceType.Git,
+                string.Empty,
+                Array.Empty<string>());
+
+            Assert.AreEqual(PackageUpdateStatusKind.CannotDetermine, status.Kind);
+            Assert.AreEqual(LogType.Log, PackageUpdateCheckService.GetLogType(status));
+            Assert.IsFalse(PackageUpdateCheckService.TryCreateLogMessage(status, out _, out _));
+        }
+
+        [Test]
         public void InstalledPackageReferenceRevisionIsUsedForUpdateCheck()
         {
             const string revision = "0123456789abcdef0123456789abcdef01234567";
@@ -156,7 +177,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
-        public void CannotDetermineUpdateStatusLogsAsError()
+        public void CannotDetermineUpdateStatusLogsAsNeutral()
         {
             PackageDefinition packageDefinition = CreatePackage();
             PackageUpdateStatus status = PackageUpdateStatus.CannotDetermine(
@@ -166,7 +187,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 string.Empty,
                 "The package is installed, but Unity did not expose a Git revision for this package.");
 
-            Assert.AreEqual(LogType.Error, PackageUpdateCheckService.GetLogType(status));
+            Assert.AreEqual(LogType.Log, PackageUpdateCheckService.GetLogType(status));
+            Assert.IsFalse(PackageUpdateCheckService.TryCreateLogMessage(status, out _, out _));
         }
 
         [Test]
@@ -198,6 +220,120 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual(LogType.Log, PackageUpdateCheckService.GetLogType(status));
         }
 
+        [Test]
+        public void RegistryPackageInstalledAtLatestVersionReturnsUpToDate()
+        {
+            PackageDefinition packageDefinition = CreatePackage();
+
+            PackageUpdateStatus status = CheckRegistryPackageForTests(
+                packageDefinition,
+                installedVersion: "1.2.3",
+                latestVersion: "1.2.3");
+
+            Assert.AreEqual(PackageUpdateStatusKind.UpToDate, status.Kind);
+            Assert.AreEqual("1.2.3", status.InstalledRevision);
+            Assert.AreEqual("1.2.3", status.LatestRevision);
+            Assert.IsFalse(status.IsUpdateAvailable);
+        }
+
+        [Test]
+        public void RegistryPackageInstalledBelowLatestVersionReturnsUpdateAvailable()
+        {
+            PackageDefinition packageDefinition = CreatePackage();
+
+            PackageUpdateStatus status = CheckRegistryPackageForTests(
+                packageDefinition,
+                installedVersion: "1.2.2",
+                latestVersion: "1.2.3");
+
+            Assert.AreEqual(PackageUpdateStatusKind.UpdateAvailable, status.Kind);
+            Assert.AreEqual("1.2.2", status.InstalledRevision);
+            Assert.AreEqual("1.2.3", status.LatestRevision);
+            Assert.IsTrue(status.IsUpdateAvailable);
+        }
+
+        [Test]
+        public void RegistryPackageWithoutLatestVersionReturnsCannotDetermine()
+        {
+            PackageDefinition packageDefinition = CreatePackage();
+
+            PackageUpdateStatus status = CheckRegistryPackageForTests(
+                packageDefinition,
+                installedVersion: "1.2.3",
+                latestVersion: string.Empty);
+
+            Assert.AreEqual(PackageUpdateStatusKind.CannotDetermine, status.Kind);
+            Assert.AreEqual(LogType.Log, PackageUpdateCheckService.GetLogType(status));
+            Assert.IsFalse(status.IsUpdateAvailable);
+        }
+
+        [Test]
+        public void RegistryPackageVersionCanBeReadFromPackageIdMetadata()
+        {
+            PackageDefinition packageDefinition = CreatePackage();
+            PackageUpdateCheckService.RegistryLatestVersionResolverForTests =
+                _ => PackageUpdateCheckService.RegistryLatestVersionResult.Ok("1.2.3");
+
+            try
+            {
+                PackageUpdateStatus status = PackageUpdateCheckService.CheckItemForTests(
+                    packageDefinition,
+                    PackageChannel.Stable,
+                    packageDefinition.StableUrl,
+                    packageDefinition.PackageId + "@1.2.3",
+                    string.Empty,
+                    string.Empty,
+                    PackageInstallSourceType.Registry,
+                    string.Empty,
+                    Array.Empty<string>());
+
+                Assert.AreEqual(PackageUpdateStatusKind.UpToDate, status.Kind);
+                Assert.AreEqual("1.2.3", status.InstalledRevision);
+            }
+            finally
+            {
+                PackageUpdateCheckService.RegistryLatestVersionResolverForTests = null;
+            }
+        }
+
+        [Test]
+        public void NpmLatestDistTagCanBeReadFromRegistryMetadata()
+        {
+            bool found = PackageUpdateCheckService.TryReadNpmLatestVersion(
+                "{\"dist-tags\":{\"dev\":\"1.2.4-dev.7\",\"latest\":\"1.2.3\"}}",
+                out string latestVersion);
+
+            Assert.IsTrue(found);
+            Assert.AreEqual("1.2.3", latestVersion);
+        }
+
+        [Test]
+        public void SemanticVersionComparisonDetectsOlderInstalledVersion()
+        {
+            bool compared = PackageUpdateCheckService.TryCompareSemanticVersions(
+                "1.2.2",
+                "1.2.3",
+                out int comparison,
+                out string message);
+
+            Assert.IsTrue(compared, message);
+            Assert.Less(comparison, 0);
+        }
+
+        [Test]
+        public void EmptyUpdateCheckIsSilentAndDoesNotRecordFailure()
+        {
+            using (PackageDetectionService detectionService = new PackageDetectionService())
+            using (PackageUpdateCheckService updateCheckService = new PackageUpdateCheckService(detectionService))
+            {
+                updateCheckService.CheckForUpdates(new[] { CreatePackage() }, _ => PackageChannel.Stable);
+
+                Assert.IsFalse(updateCheckService.IsChecking);
+                Assert.AreEqual(string.Empty, updateCheckService.LastFailureMessage);
+                Assert.AreEqual(PackageUpdateStatusKind.NotInstalled, updateCheckService.GetStatus(CreatePackage(), PackageChannel.Stable).Kind);
+            }
+        }
+
         private static PackageDefinition CreatePackage(
             string stableUrl = "https://github.com/Deucarian/Object-Loading.git#main")
         {
@@ -210,6 +346,35 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 PackageType.Core,
                 "https://github.com/Deucarian/Object-Loading.git#develop",
                 category: "Core");
+        }
+
+        private static PackageUpdateStatus CheckRegistryPackageForTests(
+            PackageDefinition packageDefinition,
+            string installedVersion,
+            string latestVersion)
+        {
+            PackageUpdateCheckService.RegistryLatestVersionResolverForTests =
+                string.IsNullOrWhiteSpace(latestVersion)
+                    ? _ => PackageUpdateCheckService.RegistryLatestVersionResult.Fail("Could not fetch latest npmjs version.")
+                    : _ => PackageUpdateCheckService.RegistryLatestVersionResult.Ok(latestVersion);
+
+            try
+            {
+                return PackageUpdateCheckService.CheckItemForTests(
+                    packageDefinition,
+                    PackageChannel.Stable,
+                    packageDefinition.StableUrl,
+                    packageDefinition.PackageId + "@" + installedVersion,
+                    string.Empty,
+                    installedVersion,
+                    PackageInstallSourceType.Registry,
+                    installedVersion,
+                    Array.Empty<string>());
+            }
+            finally
+            {
+                PackageUpdateCheckService.RegistryLatestVersionResolverForTests = null;
+            }
         }
     }
 }
