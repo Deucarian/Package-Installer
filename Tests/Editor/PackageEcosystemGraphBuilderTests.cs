@@ -126,10 +126,115 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
             view.SetGraph(graph, core.PackageId, actionsEnabled: true);
 
+            Assert.IsNull(view.Q<ScrollView>());
+            Assert.IsNotNull(view.Q<VisualElement>("ecosystem-graph-viewport"));
+            Assert.IsNotNull(view.Q<VisualElement>("ecosystem-graph-content"));
             Assert.IsNotNull(view.Q<VisualElement>("ecosystem-graph-edge-layer"));
             Assert.AreEqual(3, FindByClass(view, "dpi-graph-node").Count);
             Assert.AreEqual(1, FindByClass(view, "dpi-graph-node--bridge").Count);
             Assert.IsTrue(FindByClass(view, "dpi-graph-node__action").Count >= 1);
+        }
+
+        [Test]
+        public void Layout_CalculatesOrbitalPositionsWithoutNodeOverlap()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+
+            PackageGraphLayoutResult layout = new PackageGraphLayout().Calculate(graph);
+
+            Assert.AreEqual(graph.Nodes.Count, layout.NodeRects.Count);
+            Assert.IsTrue(layout.RingGuides.Count >= 4);
+            Assert.AreEqual(
+                PackageGraphLayoutRing.Foundation,
+                layout.NodeRings["com.deucarian.object-loading"]);
+            Assert.AreEqual(
+                PackageGraphLayoutRing.Runtime,
+                layout.NodeRings["com.deucarian.diagnostics"]);
+            AssertNoOverlaps(layout.NodeRects.Values.ToArray());
+        }
+
+        [Test]
+        public void Focus_SelectingObjectLoadingShowsDependencyBridgeAndCompanionContext()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+
+            PackageGraphFocus focus = PackageGraphFocus.Create(
+                graph,
+                "com.deucarian.object-loading",
+                Array.Empty<string>());
+
+            Assert.IsTrue(focus.IsPackageRelated("com.deucarian.logging"));
+            Assert.IsTrue(focus.IsPackageRelated("com.deucarian.object-loading.api-bridge"));
+            Assert.IsTrue(focus.IsPackageRelated("com.deucarian.api"));
+            Assert.IsTrue(focus.IsPackageRelated("com.deucarian.diagnostics"));
+            Assert.IsFalse(focus.IsPackageRelated("com.deucarian.theming"));
+
+            AssertEdgeVisible(
+                graph,
+                focus,
+                "com.deucarian.logging",
+                "com.deucarian.object-loading",
+                PackageGraphEdgeKind.HardDependency);
+            AssertEdgeVisible(
+                graph,
+                focus,
+                "com.deucarian.object-loading",
+                "com.deucarian.object-loading.api-bridge",
+                PackageGraphEdgeKind.Bridge);
+            AssertEdgeVisible(
+                graph,
+                focus,
+                "com.deucarian.api",
+                "com.deucarian.object-loading.api-bridge",
+                PackageGraphEdgeKind.Bridge);
+            AssertEdgeVisible(
+                graph,
+                focus,
+                "com.deucarian.object-loading",
+                "com.deucarian.diagnostics",
+                PackageGraphEdgeKind.OptionalIntegration);
+
+            PackageGraphEdge unrelatedThemingEdge = graph.Edges.Single(edge =>
+                edge.FromPackageId == "com.deucarian.editor" &&
+                edge.ToPackageId == "com.deucarian.theming");
+            Assert.IsFalse(focus.IsEdgeVisible(unrelatedThemingEdge));
+        }
+
+        [Test]
+        public void Focus_ExpandsSuiteMembershipOnlyWhenFocusedOrExpanded()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+            PackageGraphSuiteRegion selectionSuite = graph.SuiteRegions.Single(region =>
+                region.SuitePackageId == "com.deucarian.selection-suite");
+            PackageGraphEdge suiteMembershipEdge = graph.Edges.Single(edge =>
+                edge.Kind == PackageGraphEdgeKind.SuiteMembership &&
+                edge.FromPackageId == selectionSuite.SuitePackageId &&
+                edge.ToPackageId == "com.deucarian.ui-binding");
+
+            PackageGraphFocus overview = PackageGraphFocus.Create(graph, string.Empty, Array.Empty<string>());
+
+            Assert.IsFalse(overview.IsSuiteRegionVisible(selectionSuite));
+            Assert.IsFalse(overview.IsEdgeVisible(suiteMembershipEdge));
+
+            PackageGraphFocus expandedOverview = PackageGraphFocus.Create(
+                graph,
+                string.Empty,
+                new[] { selectionSuite.SuitePackageId });
+
+            Assert.IsTrue(expandedOverview.IsSuiteRegionVisible(selectionSuite));
+            Assert.IsTrue(expandedOverview.IsEdgeVisible(suiteMembershipEdge));
+
+            PackageGraphFocus focusedSuite = PackageGraphFocus.Create(
+                graph,
+                selectionSuite.SuitePackageId,
+                Array.Empty<string>());
+
+            Assert.IsTrue(focusedSuite.IsSuiteRegionVisible(selectionSuite));
+            Assert.IsTrue(focusedSuite.IsEdgeVisible(suiteMembershipEdge));
+            Assert.IsTrue(focusedSuite.IsPackageRelated("com.deucarian.object-selection.core-state-bridge"));
         }
 
         private static PackageDefinition CreatePackage(
@@ -140,7 +245,9 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             string[] dependencies = null,
             string[] optionalIntegrations = null,
             string[] bridgeTargets = null,
-            string[] suiteMembers = null)
+            string[] suiteMembers = null,
+            string[] optionalCompanions = null,
+            string[] recommendedWith = null)
         {
             return new PackageDefinition(
                 displayName,
@@ -154,7 +261,205 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 metadataType: metadataType,
                 optionalIntegrations: optionalIntegrations,
                 bridgeTargets: bridgeTargets,
-                suiteMembers: suiteMembers);
+                suiteMembers: suiteMembers,
+                optionalCompanions: optionalCompanions,
+                recommendedWith: recommendedWith);
+        }
+
+        private static PackageDefinition[] CreateDefaultGraphPackages()
+        {
+            return new[]
+            {
+                CreatePackage("Deucarian Editor", "com.deucarian.editor", "Editor"),
+                CreatePackage(
+                    "Deucarian Logging",
+                    "com.deucarian.logging",
+                    "Core",
+                    dependencies: new[] { "com.deucarian.editor" }),
+                CreatePackage(
+                    "Deucarian API",
+                    "com.deucarian.api",
+                    "Core",
+                    dependencies: new[] { "com.deucarian.logging" },
+                    optionalIntegrations: new[]
+                    {
+                        "com.deucarian.session.api-bridge",
+                        "com.deucarian.object-loading.api-bridge"
+                    }),
+                CreatePackage(
+                    "Deucarian Core State",
+                    "com.deucarian.core-state",
+                    "Core",
+                    recommendedWith: new[] { "com.deucarian.selection-suite" }),
+                CreatePackage(
+                    "Deucarian Object Loading",
+                    "com.deucarian.object-loading",
+                    "Core",
+                    dependencies: new[] { "com.deucarian.logging" },
+                    optionalIntegrations: new[] { "com.deucarian.object-loading.api-bridge" },
+                    optionalCompanions: new[] { "com.deucarian.diagnostics" }),
+                CreatePackage(
+                    "Deucarian Session",
+                    "com.deucarian.session",
+                    "Core",
+                    dependencies: new[] { "com.deucarian.logging" },
+                    optionalIntegrations: new[] { "com.deucarian.session.api-bridge" }),
+                CreatePackage(
+                    "Deucarian UI Binding",
+                    "com.deucarian.ui-binding",
+                    "UI",
+                    "OptionalIntegration",
+                    optionalIntegrations: new[] { "com.deucarian.ui-binding.core-state-bridge" },
+                    recommendedWith: new[] { "com.deucarian.selection-suite" }),
+                CreatePackage(
+                    "Deucarian Object Selection",
+                    "com.deucarian.object-selection",
+                    "World",
+                    "OptionalIntegration",
+                    dependencies: new[] { "com.deucarian.logging" },
+                    optionalIntegrations: new[] { "com.deucarian.object-selection.core-state-bridge" },
+                    recommendedWith: new[] { "com.deucarian.selection-suite" }),
+                CreatePackage(
+                    "Deucarian Theming",
+                    "com.deucarian.theming",
+                    "UI",
+                    "OptionalIntegration",
+                    dependencies: new[]
+                    {
+                        "com.deucarian.editor",
+                        "com.deucarian.logging"
+                    }),
+                CreatePackage(
+                    "Deucarian Diagnostics",
+                    "com.deucarian.diagnostics",
+                    "Tools",
+                    "OptionalIntegration",
+                    dependencies: new[]
+                    {
+                        "com.deucarian.editor",
+                        "com.deucarian.logging"
+                    }),
+                CreatePackage(
+                    "Deucarian Package Installer",
+                    "com.deucarian.package-installer",
+                    "Tools",
+                    "Tool",
+                    dependencies: new[]
+                    {
+                        "com.deucarian.editor",
+                        "com.deucarian.logging"
+                    }),
+                CreatePackage(
+                    "Deucarian Session API Bridge",
+                    "com.deucarian.session.api-bridge",
+                    "Bridge",
+                    "Bridge",
+                    dependencies: new[]
+                    {
+                        "com.deucarian.session",
+                        "com.deucarian.api"
+                    },
+                    bridgeTargets: new[]
+                    {
+                        "com.deucarian.session",
+                        "com.deucarian.api"
+                    }),
+                CreatePackage(
+                    "Deucarian Object Loading API Bridge",
+                    "com.deucarian.object-loading.api-bridge",
+                    "Bridge",
+                    "Bridge",
+                    dependencies: new[]
+                    {
+                        "com.deucarian.object-loading",
+                        "com.deucarian.api"
+                    },
+                    bridgeTargets: new[]
+                    {
+                        "com.deucarian.object-loading",
+                        "com.deucarian.api"
+                    }),
+                CreatePackage(
+                    "Deucarian UI Binding Core State Bridge",
+                    "com.deucarian.ui-binding.core-state-bridge",
+                    "Bridge",
+                    "Bridge",
+                    dependencies: new[]
+                    {
+                        "com.deucarian.ui-binding",
+                        "com.deucarian.core-state"
+                    },
+                    bridgeTargets: new[]
+                    {
+                        "com.deucarian.ui-binding",
+                        "com.deucarian.core-state"
+                    }),
+                CreatePackage(
+                    "Deucarian Object Selection Core State Bridge",
+                    "com.deucarian.object-selection.core-state-bridge",
+                    "Bridge",
+                    "Bridge",
+                    dependencies: new[]
+                    {
+                        "com.deucarian.object-selection",
+                        "com.deucarian.core-state"
+                    },
+                    bridgeTargets: new[]
+                    {
+                        "com.deucarian.object-selection",
+                        "com.deucarian.core-state"
+                    }),
+                CreatePackage(
+                    "Deucarian Selection Suite",
+                    "com.deucarian.selection-suite",
+                    "Suites",
+                    "Suite",
+                    dependencies: new[]
+                    {
+                        "com.deucarian.core-state",
+                        "com.deucarian.ui-binding",
+                        "com.deucarian.object-selection",
+                        "com.deucarian.ui-binding.core-state-bridge",
+                        "com.deucarian.object-selection.core-state-bridge"
+                    },
+                    suiteMembers: new[]
+                    {
+                        "com.deucarian.core-state",
+                        "com.deucarian.ui-binding",
+                        "com.deucarian.object-selection",
+                        "com.deucarian.ui-binding.core-state-bridge",
+                        "com.deucarian.object-selection.core-state-bridge"
+                    })
+            };
+        }
+
+        private static void AssertEdgeVisible(
+            PackageGraphModel graph,
+            PackageGraphFocus focus,
+            string fromPackageId,
+            string toPackageId,
+            PackageGraphEdgeKind kind)
+        {
+            PackageGraphEdge edge = graph.Edges.Single(candidate =>
+                candidate.Kind == kind &&
+                candidate.FromPackageId == fromPackageId &&
+                candidate.ToPackageId == toPackageId);
+
+            Assert.IsTrue(focus.IsEdgeVisible(edge), edge.Key);
+            Assert.IsTrue(focus.IsEdgeEmphasized(edge), edge.Key);
+        }
+
+        private static void AssertNoOverlaps(IReadOnlyList<UnityEngine.Rect> rects)
+        {
+            for (int firstIndex = 0; firstIndex < rects.Count; firstIndex++)
+            {
+                for (int secondIndex = firstIndex + 1; secondIndex < rects.Count; secondIndex++)
+                {
+                    Assert.IsFalse(
+                        rects[firstIndex].Overlaps(rects[secondIndex]),
+                        rects[firstIndex] + " overlaps " + rects[secondIndex]);
+                }
+            }
         }
 
         private static List<VisualElement> FindByClass(VisualElement root, string className)

@@ -10,6 +10,7 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed class PackageGraphView : VisualElement
     {
         private readonly PackageGraphCanvas _canvas;
+        private readonly PackageGraphViewport _viewport;
 
         public PackageGraphView(
             Action<PackageDefinition> packageSelected,
@@ -17,25 +18,46 @@ namespace Deucarian.PackageInstaller.Editor
         {
             AddToClassList("dpi-ecosystem-graph");
 
+            _canvas = new PackageGraphCanvas(packageSelected, packageAction);
+            _viewport = new PackageGraphViewport();
+            _viewport.SetContent(_canvas);
+
+            VisualElement header = new VisualElement();
+            header.AddToClassList("dpi-ecosystem-graph__header");
+            Add(header);
+
             VisualElement legend = new VisualElement();
             legend.AddToClassList("dpi-ecosystem-graph__legend");
             legend.Add(CreateLegendItem("Solid", "Hard dependency", "dpi-graph-legend__line--solid"));
-            legend.Add(CreateLegendItem("Dashed", "Bridge / integration", "dpi-graph-legend__line--dashed"));
-            legend.Add(CreateLegendItem("Bright", "Installed / active", "dpi-graph-legend__line--active"));
-            legend.Add(CreateLegendItem("Dim", "Available path", "dpi-graph-legend__line--possible"));
-            Add(legend);
+            legend.Add(CreateLegendItem("Dashed", "Bridge / optional", "dpi-graph-legend__line--dashed"));
+            legend.Add(CreateLegendItem("Focus", "Selected relationship", "dpi-graph-legend__line--active"));
+            legend.Add(CreateLegendItem("Warn", "Missing dependency", "dpi-graph-legend__line--warning"));
+            header.Add(legend);
 
-            ScrollView scrollView = new ScrollView(ScrollViewMode.VerticalAndHorizontal);
-            scrollView.AddToClassList("dpi-ecosystem-graph__scroll");
-            Add(scrollView);
+            VisualElement toolbar = new VisualElement();
+            toolbar.AddToClassList("dpi-ecosystem-graph__toolbar");
+            toolbar.Add(CreateToolbarButton("Fit", () => _viewport.FitToContent(_canvas.GetContentBounds())));
+            toolbar.Add(CreateToolbarButton("100%", _viewport.ResetZoom));
+            toolbar.Add(CreateToolbarButton("Center", () => _viewport.CenterOn(_canvas.GetHubCenter())));
+            header.Add(toolbar);
 
-            _canvas = new PackageGraphCanvas(packageSelected, packageAction);
-            scrollView.Add(_canvas);
+            Add(_viewport);
         }
 
         public void SetGraph(PackageGraphModel graph, string selectedPackageId, bool actionsEnabled)
         {
-            _canvas.SetGraph(graph, selectedPackageId, actionsEnabled);
+            SetGraph(graph, selectedPackageId, selectedPackageId, actionsEnabled);
+        }
+
+        public void SetGraph(
+            PackageGraphModel graph,
+            string selectedPackageId,
+            string focusedPackageId,
+            bool actionsEnabled)
+        {
+            _canvas.SetGraph(graph, selectedPackageId, focusedPackageId, actionsEnabled);
+            _viewport.SetContentSize(_canvas.ContentSize.x, _canvas.ContentSize.y);
+            _viewport.EnsureInitialFrame(_canvas.GetContentBounds());
         }
 
         private static VisualElement CreateLegendItem(string marker, string label, string markerClass)
@@ -54,34 +76,327 @@ namespace Deucarian.PackageInstaller.Editor
 
             return item;
         }
+
+        private static Button CreateToolbarButton(string label, Action action)
+        {
+            Button button = new Button(action)
+            {
+                text = label,
+                tooltip = label
+            };
+            button.AddToClassList("dpi-ecosystem-graph__toolbar-button");
+            return button;
+        }
+    }
+
+    internal sealed class PackageGraphViewport : VisualElement
+    {
+        private const float MinZoom = 0.35f;
+        private const float MaxZoom = 1.75f;
+        private const float FitPadding = 72f;
+        private const float PanMargin = 220f;
+
+        private readonly VisualElement _contentRoot;
+        private Vector2 _pan;
+        private Vector2 _lastMousePosition;
+        private float _zoom = 1f;
+        private float _contentWidth = PackageGraphLayout.CanvasWidth;
+        private float _contentHeight = PackageGraphLayout.CanvasHeight;
+        private Rect _initialBounds;
+        private bool _initialized;
+        private bool _hasInitialBounds;
+        private bool _panning;
+
+        public PackageGraphViewport()
+        {
+            name = "ecosystem-graph-viewport";
+            AddToClassList("dpi-ecosystem-graph__viewport");
+            focusable = true;
+
+            _contentRoot = new VisualElement { name = "ecosystem-graph-content" };
+            _contentRoot.AddToClassList("dpi-ecosystem-graph__content");
+            _contentRoot.style.position = Position.Absolute;
+            _contentRoot.style.left = 0f;
+            _contentRoot.style.top = 0f;
+            _contentRoot.style.width = _contentWidth;
+            _contentRoot.style.height = _contentHeight;
+            Add(_contentRoot);
+
+            RegisterCallback<WheelEvent>(HandleWheel);
+            RegisterCallback<MouseDownEvent>(HandleMouseDown);
+            RegisterCallback<MouseMoveEvent>(HandleMouseMove);
+            RegisterCallback<MouseUpEvent>(HandleMouseUp);
+            RegisterCallback<MouseCaptureOutEvent>(_ => _panning = false);
+            RegisterCallback<GeometryChangedEvent>(_ =>
+            {
+                if (!_initialized && _hasInitialBounds)
+                {
+                    FitToContent(_initialBounds);
+                    return;
+                }
+
+                ClampAndApplyTransform();
+            });
+
+            ApplyTransform();
+        }
+
+        public float Zoom => _zoom;
+
+        public Vector2 Pan => _pan;
+
+        public void SetContent(VisualElement content)
+        {
+            _contentRoot.Clear();
+
+            if (content != null)
+            {
+                _contentRoot.Add(content);
+            }
+        }
+
+        public void SetContentSize(float width, float height)
+        {
+            _contentWidth = Mathf.Max(1f, width);
+            _contentHeight = Mathf.Max(1f, height);
+            _contentRoot.style.width = _contentWidth;
+            _contentRoot.style.height = _contentHeight;
+            ClampAndApplyTransform();
+        }
+
+        public void EnsureInitialFrame(Rect worldBounds)
+        {
+            _initialBounds = worldBounds;
+            _hasInitialBounds = true;
+
+            if (_initialized || !HasViewportSize())
+            {
+                return;
+            }
+
+            FitToContent(worldBounds);
+        }
+
+        public void FitToContent(Rect worldBounds)
+        {
+            if (!HasViewportSize())
+            {
+                return;
+            }
+
+            Rect bounds = NormalizeBounds(worldBounds);
+            float availableWidth = Mathf.Max(1f, contentRect.width - FitPadding * 2f);
+            float availableHeight = Mathf.Max(1f, contentRect.height - FitPadding * 2f);
+            float fitZoom = Mathf.Min(availableWidth / bounds.width, availableHeight / bounds.height);
+            _zoom = Mathf.Clamp(fitZoom, MinZoom, MaxZoom);
+            _pan = GetViewportCenter() - bounds.center * _zoom;
+            _initialized = true;
+            ClampAndApplyTransform();
+        }
+
+        public void ResetZoom()
+        {
+            if (!HasViewportSize())
+            {
+                return;
+            }
+
+            Vector2 viewportCenter = GetViewportCenter();
+            Vector2 worldCenter = ViewportToWorld(viewportCenter);
+            _zoom = 1f;
+            _pan = viewportCenter - worldCenter * _zoom;
+            _initialized = true;
+            ClampAndApplyTransform();
+        }
+
+        public void CenterOn(Vector2 worldPoint)
+        {
+            if (!HasViewportSize())
+            {
+                return;
+            }
+
+            _pan = GetViewportCenter() - worldPoint * _zoom;
+            _initialized = true;
+            ClampAndApplyTransform();
+        }
+
+        public Vector2 WorldToViewport(Vector2 worldPoint)
+        {
+            return worldPoint * _zoom + _pan;
+        }
+
+        public Vector2 ViewportToWorld(Vector2 viewportPoint)
+        {
+            return (viewportPoint - _pan) / Mathf.Max(0.001f, _zoom);
+        }
+
+        private void HandleWheel(WheelEvent evt)
+        {
+            if (!HasViewportSize() || Mathf.Abs(evt.delta.y) <= 0.01f)
+            {
+                return;
+            }
+
+            float zoomMultiplier = evt.delta.y > 0f ? 0.90f : 1.10f;
+            ZoomAround(evt.localMousePosition, _zoom * zoomMultiplier);
+            evt.StopPropagation();
+        }
+
+        private void HandleMouseDown(MouseDownEvent evt)
+        {
+            if (!ShouldStartPan(evt))
+            {
+                return;
+            }
+
+            _panning = true;
+            _lastMousePosition = evt.localMousePosition;
+            MouseCaptureController.CaptureMouse(this);
+            Focus();
+            evt.StopPropagation();
+        }
+
+        private void HandleMouseMove(MouseMoveEvent evt)
+        {
+            if (!_panning || !MouseCaptureController.HasMouseCapture(this))
+            {
+                return;
+            }
+
+            Vector2 nextMousePosition = evt.localMousePosition;
+            _pan += nextMousePosition - _lastMousePosition;
+            _lastMousePosition = nextMousePosition;
+            _initialized = true;
+            ClampAndApplyTransform();
+            evt.StopPropagation();
+        }
+
+        private void HandleMouseUp(MouseUpEvent evt)
+        {
+            if (!_panning)
+            {
+                return;
+            }
+
+            _panning = false;
+
+            if (MouseCaptureController.HasMouseCapture(this))
+            {
+                MouseCaptureController.ReleaseMouse(this);
+            }
+
+            evt.StopPropagation();
+        }
+
+        private void ZoomAround(Vector2 viewportPoint, float targetZoom)
+        {
+            float nextZoom = Mathf.Clamp(targetZoom, MinZoom, MaxZoom);
+
+            if (Mathf.Approximately(nextZoom, _zoom))
+            {
+                return;
+            }
+
+            Vector2 worldPoint = ViewportToWorld(viewportPoint);
+            _zoom = nextZoom;
+            _pan = viewportPoint - worldPoint * _zoom;
+            _initialized = true;
+            ClampAndApplyTransform();
+        }
+
+        private void ClampAndApplyTransform()
+        {
+            ClampPan();
+            ApplyTransform();
+        }
+
+        private void ApplyTransform()
+        {
+            _contentRoot.style.translate = new Translate(_pan.x, _pan.y, 0f);
+            _contentRoot.style.scale = new Scale(new Vector3(_zoom, _zoom, 1f));
+            _contentRoot.EnableInClassList("dpi-ecosystem-graph__content--low-zoom", _zoom < 0.55f);
+            MarkDirtyRepaint();
+            _contentRoot.MarkDirtyRepaint();
+        }
+
+        private void ClampPan()
+        {
+            if (!HasViewportSize())
+            {
+                return;
+            }
+
+            _pan.x = ClampAxis(_pan.x, _contentWidth * _zoom, contentRect.width);
+            _pan.y = ClampAxis(_pan.y, _contentHeight * _zoom, contentRect.height);
+        }
+
+        private static float ClampAxis(float pan, float scaledContentSize, float viewportSize)
+        {
+            if (scaledContentSize <= viewportSize - PanMargin * 2f)
+            {
+                return (viewportSize - scaledContentSize) * 0.5f;
+            }
+
+            float min = viewportSize - scaledContentSize - PanMargin;
+            float max = PanMargin;
+            return Mathf.Clamp(pan, min, max);
+        }
+
+        private bool HasViewportSize()
+        {
+            return contentRect.width > 1f && contentRect.height > 1f;
+        }
+
+        private Vector2 GetViewportCenter()
+        {
+            return new Vector2(contentRect.width * 0.5f, contentRect.height * 0.5f);
+        }
+
+        private static Rect NormalizeBounds(Rect bounds)
+        {
+            if (bounds.width <= 0.01f || bounds.height <= 0.01f)
+            {
+                return new Rect(
+                    PackageGraphLayout.GraphCenter.x - 1f,
+                    PackageGraphLayout.GraphCenter.y - 1f,
+                    2f,
+                    2f);
+            }
+
+            return bounds;
+        }
+
+        private static bool ShouldStartPan(MouseDownEvent evt)
+        {
+            return evt.button == 2 ||
+                   evt.button == 1 ||
+                   (evt.button == 0 && evt.altKey);
+        }
     }
 
     internal sealed class PackageGraphCanvas : VisualElement
     {
-        private const float CanvasWidth = 1380f;
-        private const float MinimumCanvasHeight = 760f;
-        private const float NodeWidth = 258f;
-        private const float NodeHeight = 118f;
-        private const float NodeSpacing = 24f;
-        private const float ToolLaneX = 36f;
-        private const float CoreLaneX = 36f;
-        private const float RuntimeLaneX = 372f;
-        private const float BridgeLaneX = 704f;
-        private const float SuiteLaneX = 1038f;
-
         private readonly Action<PackageDefinition> _packageSelected;
         private readonly Action<PackageDefinition, PackageGraphNodeAction> _packageAction;
+        private readonly PackageGraphLayout _layout = new PackageGraphLayout();
+        private readonly HashSet<string> _expandedSuiteIds =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private readonly VisualElement _guideLayer;
         private readonly VisualElement _suiteLayer;
         private readonly PackageGraphEdgeLayer _edgeLayer;
         private readonly VisualElement _nodeLayer;
-        private readonly Dictionary<string, Rect> _nodeRects =
-            new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
 
         private PackageGraphModel _graph =
-            new PackageGraphModel(Array.Empty<PackageGraphNode>(), Array.Empty<PackageGraphEdge>(), Array.Empty<PackageGraphSuiteRegion>());
+            new PackageGraphModel(
+                Array.Empty<PackageGraphNode>(),
+                Array.Empty<PackageGraphEdge>(),
+                Array.Empty<PackageGraphSuiteRegion>());
+        private PackageGraphLayoutResult _layoutResult;
         private string _selectedPackageId = string.Empty;
+        private string _focusedPackageId = string.Empty;
+        private string _hoveredPackageId = string.Empty;
         private bool _actionsEnabled;
-        private float _canvasHeight = MinimumCanvasHeight;
 
         public PackageGraphCanvas(
             Action<PackageDefinition> packageSelected,
@@ -91,8 +406,14 @@ namespace Deucarian.PackageInstaller.Editor
             _packageAction = packageAction;
             name = "ecosystem-graph-canvas";
             AddToClassList("dpi-ecosystem-graph__canvas");
-            style.width = CanvasWidth;
-            style.height = MinimumCanvasHeight;
+            style.width = PackageGraphLayout.CanvasWidth;
+            style.height = PackageGraphLayout.CanvasHeight;
+
+            _guideLayer = new VisualElement { name = "ecosystem-graph-guide-layer" };
+            _guideLayer.AddToClassList("dpi-ecosystem-graph__guide-layer");
+            _guideLayer.pickingMode = PickingMode.Ignore;
+            StretchToCanvas(_guideLayer);
+            Add(_guideLayer);
 
             _suiteLayer = new VisualElement { name = "ecosystem-graph-suite-layer" };
             _suiteLayer.AddToClassList("dpi-ecosystem-graph__suite-layer");
@@ -112,163 +433,179 @@ namespace Deucarian.PackageInstaller.Editor
             Add(_nodeLayer);
         }
 
-        public void SetGraph(PackageGraphModel graph, string selectedPackageId, bool actionsEnabled)
+        public Vector2 ContentSize
+        {
+            get
+            {
+                return _layoutResult != null
+                    ? new Vector2(_layoutResult.CanvasWidth, _layoutResult.CanvasHeight)
+                    : new Vector2(PackageGraphLayout.CanvasWidth, PackageGraphLayout.CanvasHeight);
+            }
+        }
+
+        public Rect GetContentBounds()
+        {
+            if (_layoutResult == null)
+            {
+                return new Rect(0f, 0f, PackageGraphLayout.CanvasWidth, PackageGraphLayout.CanvasHeight);
+            }
+
+            Rect bounds = _layoutResult.HubRect;
+            bool hasBounds = bounds.width > 0.01f && bounds.height > 0.01f;
+
+            foreach (Rect nodeRect in _layoutResult.NodeRects.Values)
+            {
+                bounds = hasBounds
+                    ? Union(bounds, nodeRect)
+                    : nodeRect;
+                hasBounds = true;
+            }
+
+            if (!hasBounds)
+            {
+                bounds = new Rect(
+                    PackageGraphLayout.GraphCenter.x - 1f,
+                    PackageGraphLayout.GraphCenter.y - 1f,
+                    2f,
+                    2f);
+            }
+
+            bounds.x -= 36f;
+            bounds.y -= 36f;
+            bounds.width += 72f;
+            bounds.height += 72f;
+            return bounds;
+        }
+
+        public Vector2 GetHubCenter()
+        {
+            return _layoutResult != null
+                ? _layoutResult.HubRect.center
+                : PackageGraphLayout.GraphCenter;
+        }
+
+        public void SetGraph(
+            PackageGraphModel graph,
+            string selectedPackageId,
+            string focusedPackageId,
+            bool actionsEnabled)
         {
             _graph = graph ?? new PackageGraphModel(
                 Array.Empty<PackageGraphNode>(),
                 Array.Empty<PackageGraphEdge>(),
                 Array.Empty<PackageGraphSuiteRegion>());
             _selectedPackageId = selectedPackageId ?? string.Empty;
+            _focusedPackageId = focusedPackageId ?? string.Empty;
             _actionsEnabled = actionsEnabled;
             Rebuild();
         }
 
         private void Rebuild()
         {
-            _nodeRects.Clear();
+            _guideLayer.Clear();
             _suiteLayer.Clear();
             _nodeLayer.Clear();
 
-            IReadOnlyList<PackageGraphNode> nodes = _graph.Nodes;
-            CalculateNodeLayout(nodes);
-            style.height = _canvasHeight;
-            _suiteLayer.style.height = _canvasHeight;
-            _edgeLayer.style.height = _canvasHeight;
-            _nodeLayer.style.height = _canvasHeight;
+            _layoutResult = _layout.Calculate(_graph);
+            style.width = _layoutResult.CanvasWidth;
+            style.height = _layoutResult.CanvasHeight;
+            _guideLayer.style.width = _layoutResult.CanvasWidth;
+            _guideLayer.style.height = _layoutResult.CanvasHeight;
+            _suiteLayer.style.width = _layoutResult.CanvasWidth;
+            _suiteLayer.style.height = _layoutResult.CanvasHeight;
+            _edgeLayer.style.width = _layoutResult.CanvasWidth;
+            _edgeLayer.style.height = _layoutResult.CanvasHeight;
+            _nodeLayer.style.width = _layoutResult.CanvasWidth;
+            _nodeLayer.style.height = _layoutResult.CanvasHeight;
 
-            DrawSuiteRegions();
+            PackageGraphFocus focus = PackageGraphFocus.Create(
+                _graph,
+                GetActiveFocusPackageId(),
+                _expandedSuiteIds);
 
-            foreach (PackageGraphNode node in nodes)
+            DrawGuides();
+            DrawSuiteRegions(focus);
+            DrawNodes(focus);
+            _edgeLayer.SetGraph(_graph, _layoutResult.NodeRects, _layoutResult.CanvasHeight, focus);
+        }
+
+        private string GetActiveFocusPackageId()
+        {
+            if (!string.IsNullOrWhiteSpace(_hoveredPackageId) &&
+                _graph.TryGetNode(_hoveredPackageId, out _))
             {
-                if (!_nodeRects.TryGetValue(node.PackageId, out Rect rect))
+                return _hoveredPackageId;
+            }
+
+            return !string.IsNullOrWhiteSpace(_focusedPackageId) &&
+                   _graph.TryGetNode(_focusedPackageId, out _)
+                ? _focusedPackageId
+                : string.Empty;
+        }
+
+        private void DrawGuides()
+        {
+            foreach (PackageGraphRingGuide guide in _layoutResult.RingGuides)
+            {
+                VisualElement ringGuide = new VisualElement();
+                ringGuide.AddToClassList("dpi-graph-ring-guide");
+                ringGuide.AddToClassList("dpi-graph-ring-guide--" + GetRingClass(guide.Ring));
+                ringGuide.style.left = guide.Center.x - guide.RadiusX;
+                ringGuide.style.top = guide.Center.y - guide.RadiusY;
+                ringGuide.style.width = guide.RadiusX * 2f;
+                ringGuide.style.height = guide.RadiusY * 2f;
+
+                Label label = new Label(guide.Label);
+                label.AddToClassList("dpi-graph-ring-guide__label");
+                ringGuide.Add(label);
+                _guideLayer.Add(ringGuide);
+            }
+
+            VisualElement hub = new VisualElement();
+            hub.AddToClassList("dpi-graph-hub");
+            hub.style.left = _layoutResult.HubRect.x;
+            hub.style.top = _layoutResult.HubRect.y;
+            hub.style.width = _layoutResult.HubRect.width;
+            hub.style.height = _layoutResult.HubRect.height;
+
+            Image hubIcon = new Image
+            {
+                image = DeucarianEditorIcons.GetPackageIcon("package-installer"),
+                scaleMode = ScaleMode.ScaleToFit
+            };
+            hubIcon.AddToClassList("dpi-graph-hub__icon");
+            hub.Add(hubIcon);
+
+            Label title = new Label("Deucarian");
+            title.AddToClassList("dpi-graph-hub__title");
+            hub.Add(title);
+
+            Label subtitle = new Label("Unity Package System");
+            subtitle.AddToClassList("dpi-graph-hub__subtitle");
+            hub.Add(subtitle);
+            _guideLayer.Add(hub);
+        }
+
+        private void DrawSuiteRegions(PackageGraphFocus focus)
+        {
+            foreach (PackageGraphSuiteRegion region in _graph.SuiteRegions)
+            {
+                if (!focus.IsSuiteRegionVisible(region))
                 {
                     continue;
                 }
 
-                bool selected = string.Equals(node.PackageId, _selectedPackageId, StringComparison.OrdinalIgnoreCase);
-                PackageGraphNodeElement nodeElement = new PackageGraphNodeElement(
-                    node,
-                    selected,
-                    _actionsEnabled,
-                    _packageSelected,
-                    _packageAction);
-                nodeElement.style.left = rect.x;
-                nodeElement.style.top = rect.y;
-                nodeElement.style.width = rect.width;
-                nodeElement.style.height = rect.height;
-                _nodeLayer.Add(nodeElement);
-            }
-
-            _edgeLayer.SetGraph(_graph, _nodeRects, _canvasHeight);
-        }
-
-        private void CalculateNodeLayout(IReadOnlyList<PackageGraphNode> nodes)
-        {
-            float maxHeight = MinimumCanvasHeight;
-
-            PlaceGroup(
-                nodes.Where(node => node.NodeType == PackageGraphNodeType.Tool),
-                ToolLaneX,
-                34f,
-                ref maxHeight);
-            PlaceGroup(
-                nodes.Where(node => node.NodeType == PackageGraphNodeType.Core),
-                CoreLaneX,
-                232f,
-                ref maxHeight);
-            PlaceGroup(
-                nodes.Where(node => node.NodeType == PackageGraphNodeType.Integration),
-                RuntimeLaneX,
-                154f,
-                ref maxHeight);
-            PlaceBridgeGroup(
-                nodes.Where(node => node.NodeType == PackageGraphNodeType.Bridge),
-                BridgeLaneX,
-                154f,
-                ref maxHeight);
-            PlaceGroup(
-                nodes.Where(node => node.NodeType == PackageGraphNodeType.Suite),
-                SuiteLaneX,
-                270f,
-                ref maxHeight);
-
-            _canvasHeight = Mathf.Max(MinimumCanvasHeight, maxHeight + 64f);
-        }
-
-        private void PlaceGroup(
-            IEnumerable<PackageGraphNode> nodes,
-            float x,
-            float startY,
-            ref float maxHeight)
-        {
-            float y = startY;
-
-            foreach (PackageGraphNode node in nodes.OrderBy(node => node.DisplayName, StringComparer.OrdinalIgnoreCase))
-            {
-                Rect rect = new Rect(x, y, NodeWidth, NodeHeight);
-                _nodeRects[node.PackageId] = rect;
-                y += NodeHeight + NodeSpacing;
-                maxHeight = Mathf.Max(maxHeight, rect.yMax);
-            }
-        }
-
-        private void PlaceBridgeGroup(
-            IEnumerable<PackageGraphNode> nodes,
-            float x,
-            float startY,
-            ref float maxHeight)
-        {
-            float y = startY;
-
-            foreach (PackageGraphNode node in nodes.OrderBy(node => GetBridgeAnchorY(node.PackageId)))
-            {
-                float desiredY = GetBridgeAnchorY(node.PackageId);
-
-                if (desiredY <= 0f)
-                {
-                    desiredY = y + NodeHeight * 0.5f;
-                }
-
-                y = Mathf.Max(y, desiredY - NodeHeight * 0.5f);
-                Rect rect = new Rect(x, y, NodeWidth, NodeHeight);
-                _nodeRects[node.PackageId] = rect;
-                y += NodeHeight + NodeSpacing;
-                maxHeight = Mathf.Max(maxHeight, rect.yMax);
-            }
-        }
-
-        private float GetBridgeAnchorY(string bridgePackageId)
-        {
-            PackageGraphEdge[] bridgeEdges = _graph.Edges
-                .Where(edge =>
-                    edge.Kind == PackageGraphEdgeKind.Bridge &&
-                    string.Equals(edge.ToPackageId, bridgePackageId, StringComparison.OrdinalIgnoreCase) &&
-                    _nodeRects.ContainsKey(edge.FromPackageId))
-                .ToArray();
-
-            if (bridgeEdges.Length == 0)
-            {
-                return 0f;
-            }
-
-            return bridgeEdges.Average(edge => _nodeRects[edge.FromPackageId].center.y);
-        }
-
-        private void DrawSuiteRegions()
-        {
-            foreach (PackageGraphSuiteRegion region in _graph.SuiteRegions)
-            {
                 List<Rect> memberRects = new List<Rect>();
 
                 foreach (string memberPackageId in region.MemberPackageIds)
                 {
-                    if (_nodeRects.TryGetValue(memberPackageId, out Rect memberRect))
+                    if (_layoutResult.NodeRects.TryGetValue(memberPackageId, out Rect memberRect))
                     {
                         memberRects.Add(memberRect);
                     }
                 }
 
-                if (_nodeRects.TryGetValue(region.SuitePackageId, out Rect suiteRect))
+                if (_layoutResult.NodeRects.TryGetValue(region.SuitePackageId, out Rect suiteRect))
                 {
                     memberRects.Add(suiteRect);
                 }
@@ -290,13 +627,16 @@ namespace Deucarian.PackageInstaller.Editor
                         Mathf.Max(bounds.yMax, rect.yMax));
                 }
 
-                bounds.x -= 22f;
-                bounds.y -= 26f;
-                bounds.width += 44f;
-                bounds.height += 52f;
+                bounds.x -= 28f;
+                bounds.y -= 30f;
+                bounds.width += 56f;
+                bounds.height += 60f;
 
                 VisualElement suiteRegion = new VisualElement();
                 suiteRegion.AddToClassList("dpi-graph-suite-region");
+                suiteRegion.EnableInClassList(
+                    "dpi-graph-suite-region--expanded",
+                    _expandedSuiteIds.Contains(region.SuitePackageId));
                 suiteRegion.style.left = bounds.x;
                 suiteRegion.style.top = bounds.y;
                 suiteRegion.style.width = bounds.width;
@@ -309,11 +649,103 @@ namespace Deucarian.PackageInstaller.Editor
             }
         }
 
+        private void DrawNodes(PackageGraphFocus focus)
+        {
+            foreach (PackageGraphNode node in _graph.Nodes)
+            {
+                if (!_layoutResult.NodeRects.TryGetValue(node.PackageId, out Rect rect))
+                {
+                    continue;
+                }
+
+                PackageGraphLayoutRing ring = _layoutResult.NodeRings.TryGetValue(
+                    node.PackageId,
+                    out PackageGraphLayoutRing nodeRing)
+                    ? nodeRing
+                    : PackageGraphLayoutRing.Foundation;
+                bool selected = string.Equals(
+                    node.PackageId,
+                    _selectedPackageId,
+                    StringComparison.OrdinalIgnoreCase);
+                bool previewed = string.Equals(
+                    node.PackageId,
+                    _hoveredPackageId,
+                    StringComparison.OrdinalIgnoreCase);
+                bool related = focus.IsPackageRelated(node.PackageId);
+                bool dimmed = focus.HasFocus && !related;
+                PackageGraphNodeElement nodeElement = new PackageGraphNodeElement(
+                    node,
+                    ring,
+                    selected,
+                    related,
+                    dimmed,
+                    previewed,
+                    _expandedSuiteIds.Contains(node.PackageId),
+                    _actionsEnabled,
+                    _packageSelected,
+                    _packageAction,
+                    ToggleSuiteExpanded,
+                    SetPreviewPackage,
+                    ClearPreviewPackage);
+                nodeElement.style.left = rect.x;
+                nodeElement.style.top = rect.y;
+                nodeElement.style.width = rect.width;
+                nodeElement.style.height = rect.height;
+                _nodeLayer.Add(nodeElement);
+            }
+        }
+
         private string GetSuiteRegionLabel(string suitePackageId)
         {
             PackageGraphNode suiteNode = _graph.Nodes.FirstOrDefault(node =>
                 string.Equals(node.PackageId, suitePackageId, StringComparison.OrdinalIgnoreCase));
-            return suiteNode != null ? suiteNode.DisplayName + " membership" : "Suite membership";
+            return suiteNode != null ? suiteNode.DisplayName + " composition" : "Suite composition";
+        }
+
+        private void ToggleSuiteExpanded(string suitePackageId)
+        {
+            if (string.IsNullOrWhiteSpace(suitePackageId))
+            {
+                return;
+            }
+
+            if (!_expandedSuiteIds.Add(suitePackageId.Trim()))
+            {
+                _expandedSuiteIds.Remove(suitePackageId.Trim());
+            }
+
+            Rebuild();
+        }
+
+        private void SetPreviewPackage(string packageId)
+        {
+            if (string.Equals(_hoveredPackageId, packageId, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            _hoveredPackageId = packageId ?? string.Empty;
+            Rebuild();
+        }
+
+        private void ClearPreviewPackage(string packageId)
+        {
+            if (!string.Equals(_hoveredPackageId, packageId, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            _hoveredPackageId = string.Empty;
+            Rebuild();
+        }
+
+        private static Rect Union(Rect first, Rect second)
+        {
+            return Rect.MinMaxRect(
+                Mathf.Min(first.xMin, second.xMin),
+                Mathf.Min(first.yMin, second.yMin),
+                Mathf.Max(first.xMax, second.xMax),
+                Mathf.Max(first.yMax, second.yMax));
         }
 
         private static void StretchToCanvas(VisualElement element)
@@ -321,20 +753,39 @@ namespace Deucarian.PackageInstaller.Editor
             element.style.position = Position.Absolute;
             element.style.left = 0f;
             element.style.top = 0f;
-            element.style.width = CanvasWidth;
-            element.style.height = Length.Percent(100f);
+            element.style.width = PackageGraphLayout.CanvasWidth;
+            element.style.height = PackageGraphLayout.CanvasHeight;
+        }
+
+        private static string GetRingClass(PackageGraphLayoutRing ring)
+        {
+            switch (ring)
+            {
+                case PackageGraphLayoutRing.Runtime:
+                    return "runtime";
+                case PackageGraphLayoutRing.Bridge:
+                    return "bridge";
+                case PackageGraphLayoutRing.Suite:
+                    return "suite";
+                default:
+                    return "foundation";
+            }
         }
     }
 
     internal sealed class PackageGraphEdgeLayer : VisualElement
     {
-        private const int CurveSamples = 30;
+        private const int CurveSamples = 32;
 
         private readonly Dictionary<string, Rect> _nodeRects =
             new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
 
         private PackageGraphModel _graph =
-            new PackageGraphModel(Array.Empty<PackageGraphNode>(), Array.Empty<PackageGraphEdge>(), Array.Empty<PackageGraphSuiteRegion>());
+            new PackageGraphModel(
+                Array.Empty<PackageGraphNode>(),
+                Array.Empty<PackageGraphEdge>(),
+                Array.Empty<PackageGraphSuiteRegion>());
+        private PackageGraphFocus _focus = PackageGraphFocus.Create(null, string.Empty, null);
 
         public PackageGraphEdgeLayer()
         {
@@ -344,12 +795,14 @@ namespace Deucarian.PackageInstaller.Editor
         public void SetGraph(
             PackageGraphModel graph,
             IReadOnlyDictionary<string, Rect> nodeRects,
-            float canvasHeight)
+            float canvasHeight,
+            PackageGraphFocus focus)
         {
             _graph = graph ?? new PackageGraphModel(
                 Array.Empty<PackageGraphNode>(),
                 Array.Empty<PackageGraphEdge>(),
                 Array.Empty<PackageGraphSuiteRegion>());
+            _focus = focus ?? PackageGraphFocus.Create(_graph, string.Empty, null);
             _nodeRects.Clear();
 
             if (nodeRects != null)
@@ -375,26 +828,37 @@ namespace Deucarian.PackageInstaller.Editor
 
             foreach (PackageGraphEdge edge in _graph.Edges)
             {
-                if (!_nodeRects.TryGetValue(edge.FromPackageId, out Rect fromRect) ||
+                if (!_focus.IsEdgeVisible(edge) ||
+                    !_nodeRects.TryGetValue(edge.FromPackageId, out Rect fromRect) ||
                     !_nodeRects.TryGetValue(edge.ToPackageId, out Rect toRect))
                 {
                     continue;
                 }
 
-                DrawEdge(painter, edge, fromRect, toRect);
+                DrawEdge(painter, edge, fromRect, toRect, _focus.IsEdgeEmphasized(edge), _focus.HasFocus);
             }
         }
 
-        private static void DrawEdge(Painter2D painter, PackageGraphEdge edge, Rect fromRect, Rect toRect)
+        private static void DrawEdge(
+            Painter2D painter,
+            PackageGraphEdge edge,
+            Rect fromRect,
+            Rect toRect,
+            bool emphasized,
+            bool focusMode)
         {
             Vector2 start = GetPort(fromRect, toRect);
             Vector2 end = GetPort(toRect, fromRect);
-            float direction = end.x >= start.x ? 1f : -1f;
-            float handleLength = Mathf.Max(76f, Mathf.Abs(end.x - start.x) * 0.42f);
-            Vector2 controlA = start + new Vector2(handleLength * direction, 0f);
-            Vector2 controlB = end - new Vector2(handleLength * direction, 0f);
-            Color color = GetEdgeColor(edge);
-            float width = GetEdgeWidth(edge);
+            Vector2 control = GetArcControlPoint(start, end, edge, emphasized);
+            Vector2 controlA = Vector2.Lerp(start, control, 0.72f);
+            Vector2 controlB = Vector2.Lerp(end, control, 0.72f);
+            Color color = GetEdgeColor(edge, emphasized, focusMode);
+            float width = GetEdgeWidth(edge, emphasized, focusMode);
+
+            if (color.a <= 0.01f || width <= 0.01f)
+            {
+                return;
+            }
 
             painter.strokeColor = color;
             painter.lineWidth = width;
@@ -411,7 +875,10 @@ namespace Deucarian.PackageInstaller.Editor
                 painter.Stroke();
             }
 
-            DrawPortMarker(painter, start, color, width);
+            if (emphasized)
+            {
+                DrawPortMarker(painter, start, color, width);
+            }
 
             if (edge.State == PackageGraphEdgeState.Warning)
             {
@@ -421,22 +888,59 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static Vector2 GetPort(Rect fromRect, Rect toRect)
         {
-            if (toRect.xMin >= fromRect.xMax)
+            Vector2 delta = toRect.center - fromRect.center;
+
+            if (delta.sqrMagnitude < 0.01f)
             {
-                return new Vector2(fromRect.xMax, fromRect.center.y);
+                return fromRect.center;
             }
 
-            if (toRect.xMax <= fromRect.xMin)
+            float scaleX = Mathf.Abs(delta.x) > 0.01f
+                ? (fromRect.width * 0.5f) / Mathf.Abs(delta.x)
+                : float.PositiveInfinity;
+            float scaleY = Mathf.Abs(delta.y) > 0.01f
+                ? (fromRect.height * 0.5f) / Mathf.Abs(delta.y)
+                : float.PositiveInfinity;
+            float scale = Mathf.Min(scaleX, scaleY);
+            return fromRect.center + delta * Mathf.Clamp01(scale);
+        }
+
+        private static Vector2 GetArcControlPoint(
+            Vector2 start,
+            Vector2 end,
+            PackageGraphEdge edge,
+            bool emphasized)
+        {
+            Vector2 midpoint = (start + end) * 0.5f;
+            Vector2 outward = midpoint - PackageGraphLayout.GraphCenter;
+
+            if (outward.sqrMagnitude < 1f)
             {
-                return new Vector2(fromRect.xMin, fromRect.center.y);
+                Vector2 delta = end - start;
+                outward = new Vector2(-delta.y, delta.x);
             }
 
-            if (toRect.center.y >= fromRect.center.y)
+            if (outward.sqrMagnitude < 1f)
             {
-                return new Vector2(fromRect.center.x, fromRect.yMax);
+                outward = Vector2.up;
             }
 
-            return new Vector2(fromRect.center.x, fromRect.yMin);
+            float distance = Mathf.Max(70f, Vector2.Distance(start, end) * 0.16f);
+
+            if (edge.Kind == PackageGraphEdgeKind.Bridge)
+            {
+                distance += 24f;
+            }
+            else if (edge.Kind == PackageGraphEdgeKind.SuiteMembership)
+            {
+                distance += 36f;
+            }
+            else if (!emphasized)
+            {
+                distance *= 0.72f;
+            }
+
+            return midpoint + outward.normalized * distance;
         }
 
         private static bool IsDashed(PackageGraphEdgeKind kind)
@@ -447,39 +951,46 @@ namespace Deucarian.PackageInstaller.Editor
                    kind == PackageGraphEdgeKind.SuiteMembership;
         }
 
-        private static Color GetEdgeColor(PackageGraphEdge edge)
+        private static Color GetEdgeColor(PackageGraphEdge edge, bool emphasized, bool focusMode)
         {
             if (edge.State == PackageGraphEdgeState.Warning)
             {
-                return new Color(0.94f, 0.64f, 0.27f, 0.92f);
+                return new Color(0.94f, 0.64f, 0.27f, emphasized ? 0.94f : 0.62f);
             }
 
-            if (edge.State == PackageGraphEdgeState.Active)
+            if (emphasized)
             {
-                return new Color(0.24f, 0.82f, 0.75f, 0.96f);
+                if (edge.Kind == PackageGraphEdgeKind.HardDependency)
+                {
+                    return new Color(0.34f, 0.70f, 0.98f, 0.90f);
+                }
+
+                return new Color(0.24f, 0.82f, 0.75f, 0.92f);
             }
 
-            if (edge.Kind == PackageGraphEdgeKind.HardDependency)
+            if (focusMode)
             {
-                return new Color(0.44f, 0.55f, 0.76f, 0.54f);
+                return new Color(0.42f, 0.54f, 0.70f, 0.22f);
             }
 
-            return new Color(0.28f, 0.62f, 0.82f, 0.40f);
+            return edge.Kind == PackageGraphEdgeKind.HardDependency
+                ? new Color(0.42f, 0.54f, 0.72f, 0.24f)
+                : new Color(0.28f, 0.58f, 0.76f, 0.14f);
         }
 
-        private static float GetEdgeWidth(PackageGraphEdge edge)
+        private static float GetEdgeWidth(PackageGraphEdge edge, bool emphasized, bool focusMode)
         {
-            if (edge.State == PackageGraphEdgeState.Active)
+            if (emphasized)
             {
-                return 3.1f;
+                return edge.State == PackageGraphEdgeState.Warning ? 2.7f : 3f;
             }
 
-            if (edge.State == PackageGraphEdgeState.Warning)
+            if (focusMode)
             {
-                return 2.6f;
+                return 1.2f;
             }
 
-            return edge.Kind == PackageGraphEdgeKind.HardDependency ? 2f : 1.55f;
+            return edge.Kind == PackageGraphEdgeKind.HardDependency ? 1.45f : 1f;
         }
 
         private static void DrawDashedBezier(
@@ -490,7 +1001,7 @@ namespace Deucarian.PackageInstaller.Editor
             Vector2 end)
         {
             const float dashLength = 12f;
-            const float gapLength = 7f;
+            const float gapLength = 8f;
 
             bool draw = true;
             float segmentCursor = 0f;
@@ -587,20 +1098,35 @@ namespace Deucarian.PackageInstaller.Editor
 
         public PackageGraphNodeElement(
             PackageGraphNode node,
+            PackageGraphLayoutRing ring,
             bool selected,
+            bool related,
+            bool dimmed,
+            bool previewed,
+            bool suiteExpanded,
             bool actionsEnabled,
             Action<PackageDefinition> packageSelected,
-            Action<PackageDefinition, PackageGraphNodeAction> packageAction)
+            Action<PackageDefinition, PackageGraphNodeAction> packageAction,
+            Action<string> suiteToggled,
+            Action<string> previewPackage,
+            Action<string> clearPreviewPackage)
         {
             _node = node ?? throw new ArgumentNullException(nameof(node));
 
             AddToClassList("dpi-graph-node");
             AddToClassList("dpi-graph-node--" + GetNodeClass(node.NodeType));
             AddToClassList("dpi-graph-node--status-" + GetStatusClass(node.Status));
+            AddToClassList("dpi-graph-node--ring-" + GetRingClass(ring));
             EnableInClassList("dpi-graph-node--installed", node.IsInstalled);
             EnableInClassList("dpi-graph-node--selected", selected);
+            EnableInClassList("dpi-graph-node--related", related && !selected);
+            EnableInClassList("dpi-graph-node--dimmed", dimmed);
+            EnableInClassList("dpi-graph-node--previewed", previewed);
             EnableInClassList("dpi-graph-node--missing", !node.IsRegistered);
             tooltip = GetTooltip(node);
+
+            RegisterCallback<MouseEnterEvent>(_ => previewPackage?.Invoke(node.PackageId));
+            RegisterCallback<MouseLeaveEvent>(_ => clearPreviewPackage?.Invoke(node.PackageId));
 
             if (node.PackageDefinition != null && packageSelected != null)
             {
@@ -630,6 +1156,18 @@ namespace Deucarian.PackageInstaller.Editor
             Label packageId = new Label(node.PackageId);
             packageId.AddToClassList("dpi-graph-node__package-id");
             titleBlock.Add(packageId);
+
+            if (node.NodeType == PackageGraphNodeType.Suite)
+            {
+                Button expandButton = new Button(() => suiteToggled?.Invoke(node.PackageId))
+                {
+                    text = suiteExpanded ? "-" : "+",
+                    tooltip = suiteExpanded ? "Collapse suite composition" : "Expand suite composition"
+                };
+                expandButton.AddToClassList("dpi-graph-node__suite-toggle");
+                expandButton.RegisterCallback<ClickEvent>(evt => evt.StopPropagation());
+                header.Add(expandButton);
+            }
 
             VisualElement badges = new VisualElement();
             badges.AddToClassList("dpi-graph-node__badges");
@@ -684,6 +1222,21 @@ namespace Deucarian.PackageInstaller.Editor
                     return "integration";
                 default:
                     return "core";
+            }
+        }
+
+        private static string GetRingClass(PackageGraphLayoutRing ring)
+        {
+            switch (ring)
+            {
+                case PackageGraphLayoutRing.Runtime:
+                    return "runtime";
+                case PackageGraphLayoutRing.Bridge:
+                    return "bridge";
+                case PackageGraphLayoutRing.Suite:
+                    return "suite";
+                default:
+                    return "foundation";
             }
         }
 

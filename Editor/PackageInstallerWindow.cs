@@ -101,6 +101,7 @@ namespace Deucarian.PackageInstaller.Editor
         private Vector2 _operationDetailsScrollPosition;
         private SelectionKind _selectionKind = SelectionKind.Package;
         private string _selectedPackageId = string.Empty;
+        private string _graphFocusedPackageId = string.Empty;
         private string _packageSearchText = string.Empty;
         private bool _showInstalledPackages = true;
         private bool _showNotInstalledPackages = true;
@@ -436,7 +437,7 @@ namespace Deucarian.PackageInstaller.Editor
                         ? _packageUpdateCheckService.GetStatus(packageDefinition, GetSelectedChannel(packageDefinition))
                         : null))
                 .Build(PackageRegistryProvider.All);
-            _graphView.SetGraph(graph, _selectedPackageId, !IsAnyOperationBusy());
+            _graphView.SetGraph(graph, _selectedPackageId, _graphFocusedPackageId, !IsAnyOperationBusy());
             _graphDetailsContainer?.MarkDirtyRepaint();
             _graphOperationContainer?.MarkDirtyRepaint();
             UpdateViewVisibility();
@@ -452,6 +453,7 @@ namespace Deucarian.PackageInstaller.Editor
             SelectDefinition(
                 packageDefinition,
                 packageDefinition.IsBridge ? SelectionKind.Bridge : SelectionKind.Package);
+            _graphFocusedPackageId = packageDefinition.PackageId;
             RefreshGraphView();
         }
 
@@ -465,6 +467,7 @@ namespace Deucarian.PackageInstaller.Editor
             SelectDefinition(
                 packageDefinition,
                 packageDefinition.IsBridge ? SelectionKind.Bridge : SelectionKind.Package);
+            _graphFocusedPackageId = packageDefinition.PackageId;
 
             switch (action)
             {
