@@ -1726,6 +1726,9 @@ namespace Deucarian.PackageInstaller.Editor
                 DrawStatusBadge(hasSummary ? GetLastSummaryStatusLabel(summaryKind) : "Idle", summaryKind, GUILayout.Width(118f));
             }
 
+            DrawOperationSettingsRow();
+            GUILayout.Space(4f);
+
             _operationDetailsScrollPosition = EditorGUILayout.BeginScrollView(
                 _operationDetailsScrollPosition,
                 GUILayout.Height(OperationDrawerHeight),
@@ -1734,12 +1737,31 @@ namespace Deucarian.PackageInstaller.Editor
             EditorGUILayout.EndScrollView();
         }
 
+        private void DrawOperationSettingsRow()
+        {
+            bool verboseConsoleLogging = PackageInstallerLoggingPreferences.VerboseConsoleLogging;
+            bool nextVerboseConsoleLogging = EditorGUILayout.ToggleLeft(
+                new GUIContent(
+                    "Verbose Console Logging",
+                    "Send normal Package Installer info messages to the Unity Console. Warnings and errors are always logged."),
+                verboseConsoleLogging,
+                GUILayout.Width(190f));
+
+            if (nextVerboseConsoleLogging != verboseConsoleLogging)
+            {
+                PackageInstallerLoggingPreferences.VerboseConsoleLogging = nextVerboseConsoleLogging;
+            }
+        }
+
         private void DrawLastOperationSummaryContent()
         {
             string summary = GetLastOperationSummary();
             IReadOnlyList<PackageInstallProgressItem> progressItems = GetLastProgressItems();
+            IReadOnlyList<string> operationMessages = GetLastOperationMessages();
 
-            if (string.IsNullOrWhiteSpace(summary) && (progressItems == null || progressItems.Count == 0))
+            if (string.IsNullOrWhiteSpace(summary) &&
+                (operationMessages == null || operationMessages.Count == 0) &&
+                (progressItems == null || progressItems.Count == 0))
             {
                 EditorGUILayout.LabelField(
                     new GUIContent("No operations have completed yet.", "No operations have completed yet."),
@@ -1752,6 +1774,7 @@ namespace Deucarian.PackageInstaller.Editor
                 EditorGUILayout.LabelField(new GUIContent(summary, summary), _miniLabelStyle);
             }
 
+            DrawOperationMessages(operationMessages, int.MaxValue);
             DrawProgressItemSummary(progressItems, int.MaxValue);
         }
 
@@ -1936,8 +1959,10 @@ namespace Deucarian.PackageInstaller.Editor
         private bool HasLastOperationDetails()
         {
             IReadOnlyList<PackageInstallProgressItem> progressItems = GetLastProgressItems();
+            IReadOnlyList<string> operationMessages = GetLastOperationMessages();
 
             return !string.IsNullOrWhiteSpace(GetLastOperationSummary()) ||
+                   (operationMessages != null && operationMessages.Count > 0) ||
                    (progressItems != null && progressItems.Count > 0);
         }
 
@@ -1947,6 +1972,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             return !string.IsNullOrWhiteSpace(_packageSampleImportService.LastErrorMessage) ||
                    !string.IsNullOrWhiteSpace(_packageInstallService.LastErrorMessage) ||
+                   !string.IsNullOrWhiteSpace(_packageUpdateCheckService.LastFailureMessage) ||
                    (progressItems != null && progressItems.Any(item => item.State == PackageInstallProgressItemState.Failed));
         }
 
@@ -2008,6 +2034,16 @@ namespace Deucarian.PackageInstaller.Editor
             return Array.Empty<PackageInstallProgressItem>();
         }
 
+        private IReadOnlyList<string> GetLastOperationMessages()
+        {
+            if (_packageInstallService.HasProgress)
+            {
+                return _packageInstallService.OperationMessages;
+            }
+
+            return Array.Empty<string>();
+        }
+
         private VisualStatusKind GetLastSummaryStatusKind(IReadOnlyList<PackageInstallProgressItem> progressItems)
         {
             if (progressItems != null && progressItems.Any(item => item.State == PackageInstallProgressItemState.Failed))
@@ -2061,7 +2097,36 @@ namespace Deucarian.PackageInstaller.Editor
                 }
 
                 VisualStatusKind kind = GetProgressItemStatusKind(item.State);
-                DrawColoredLabel(GetProgressItemStateLabel(item.State) + ": " + item.DisplayName, _mutedMiniLabelStyle, GetStatusColor(kind));
+                string itemMessage = string.IsNullOrWhiteSpace(item.Message)
+                    ? item.DisplayName
+                    : item.Message;
+                DrawColoredLabel(GetProgressItemStateLabel(item.State) + ": " + itemMessage, _mutedMiniLabelStyle, GetStatusColor(kind));
+                drawn++;
+
+                if (drawn >= maxItems)
+                {
+                    break;
+                }
+            }
+        }
+
+        private void DrawOperationMessages(IReadOnlyList<string> operationMessages, int maxItems)
+        {
+            if (operationMessages == null || operationMessages.Count == 0)
+            {
+                return;
+            }
+
+            int drawn = 0;
+
+            foreach (string message in operationMessages)
+            {
+                if (string.IsNullOrWhiteSpace(message))
+                {
+                    continue;
+                }
+
+                DrawColoredLabel(message, _mutedMiniLabelStyle, GetStatusColor(VisualStatusKind.Info));
                 drawn++;
 
                 if (drawn >= maxItems)
@@ -2678,6 +2743,16 @@ namespace Deucarian.PackageInstaller.Editor
             if (_packageDetectionService.IsRefreshing)
             {
                 return "Refreshing installed packages...";
+            }
+
+            if (!string.IsNullOrWhiteSpace(_packageUpdateCheckService.LastFailureMessage))
+            {
+                return _packageUpdateCheckService.LastFailureMessage;
+            }
+
+            if (!string.IsNullOrWhiteSpace(_packageUpdateCheckService.LastStatusMessage))
+            {
+                return _packageUpdateCheckService.LastStatusMessage;
             }
 
             return string.Empty;

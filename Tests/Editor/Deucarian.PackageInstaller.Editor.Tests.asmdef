@@ -2,7 +2,8 @@
   "name": "Deucarian.PackageInstaller.Editor.Tests",
   "rootNamespace": "Deucarian.PackageInstaller.Editor.Tests",
   "references": [
-    "Deucarian.PackageInstaller.Editor"
+    "Deucarian.PackageInstaller.Editor",
+    "Deucarian.Logging"
   ],
   "includePlatforms": [
     "Editor"

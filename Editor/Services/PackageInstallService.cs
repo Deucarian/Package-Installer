@@ -50,6 +50,7 @@ namespace Deucarian.PackageInstaller.Editor
         private readonly Queue<QueuedPackageInstall> _installQueue = new Queue<QueuedPackageInstall>();
         private readonly HashSet<string> _queuedOrInstallingPackageIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly List<PackageInstallProgressItem> _progressItems = new List<PackageInstallProgressItem>();
+        private readonly List<string> _operationMessages = new List<string>();
         private readonly Dictionary<string, PackageInstallProgressItem> _progressItemsByPackageId =
             new Dictionary<string, PackageInstallProgressItem>(StringComparer.OrdinalIgnoreCase);
 
@@ -106,6 +107,8 @@ namespace Deucarian.PackageInstaller.Editor
         public string LastErrorMessage => _lastErrorMessage;
 
         public IReadOnlyList<PackageInstallProgressItem> ProgressItems => _progressItems;
+
+        public IReadOnlyList<string> OperationMessages => _operationMessages;
 
         public bool ResumeSavedOperation()
         {
@@ -232,6 +235,15 @@ namespace Deucarian.PackageInstaller.Editor
             Func<PackageDefinition, PackageChannel> channelSelector,
             string operationName)
         {
+            InstallMany(packageDefinitions, channelSelector, operationName, Array.Empty<string>());
+        }
+
+        public void InstallMany(
+            IEnumerable<PackageDefinition> packageDefinitions,
+            Func<PackageDefinition, PackageChannel> channelSelector,
+            string operationName,
+            IEnumerable<string> operationMessages)
+        {
             if (packageDefinitions == null)
             {
                 return;
@@ -258,7 +270,8 @@ namespace Deucarian.PackageInstaller.Editor
 
             BeginOperation(
                 string.IsNullOrWhiteSpace(operationName) ? "Install Packages" : operationName,
-                packages);
+                packages,
+                operationMessages);
 
             foreach (PackageDefinition packageDefinition in packages)
             {
@@ -269,6 +282,21 @@ namespace Deucarian.PackageInstaller.Editor
             StartNextRequestIfNeeded();
             CompleteOperationIfIdle();
             SavePendingOperationState();
+            NotifyStateChanged();
+        }
+
+        internal void RecordCompletedOperation(
+            string operationName,
+            string summaryMessage,
+            IEnumerable<string> operationMessages)
+        {
+            BeginOperation(
+                string.IsNullOrWhiteSpace(operationName) ? "Package Operation" : operationName,
+                Array.Empty<PackageDefinition>(),
+                operationMessages);
+
+            _lastStatusMessage = summaryMessage ?? string.Empty;
+            _lastErrorMessage = string.Empty;
             NotifyStateChanged();
         }
 
@@ -487,7 +515,10 @@ namespace Deucarian.PackageInstaller.Editor
             NotifyStateChanged();
         }
 
-        private void BeginOperation(string operationName, IEnumerable<PackageDefinition> packages)
+        private void BeginOperation(
+            string operationName,
+            IEnumerable<PackageDefinition> packages,
+            IEnumerable<string> operationMessages = null)
         {
             _currentOperationName = operationName ?? string.Empty;
             _lastStatusMessage = "Queued " + _currentOperationName + ".";
@@ -497,7 +528,16 @@ namespace Deucarian.PackageInstaller.Editor
             _failedSteps = 0;
             _skippedSteps = 0;
             _progressItems.Clear();
+            _operationMessages.Clear();
             _progressItemsByPackageId.Clear();
+
+            foreach (string message in operationMessages ?? Array.Empty<string>())
+            {
+                if (!string.IsNullOrWhiteSpace(message))
+                {
+                    _operationMessages.Add(message.Trim());
+                }
+            }
 
             foreach (PackageDefinition packageDefinition in packages)
             {

@@ -161,6 +161,7 @@ namespace Deucarian.PackageInstaller.Editor
         private static Task<PackageUpdateStatus[]> CheckTask;
         private static IReadOnlyList<UpdateCheckItem> ActiveCheckItems = Array.Empty<UpdateCheckItem>();
         private static string LastFailureMessageValue = string.Empty;
+        private static string LastStatusMessageValue = string.Empty;
         private static event Action SharedStateChanged;
         internal static Func<string, RegistryLatestVersionResult> RegistryLatestVersionResolverForTests;
 
@@ -183,6 +184,8 @@ namespace Deucarian.PackageInstaller.Editor
         public DateTime? LastCheckedUtc => PackageUpdateCheckPreferences.LastCheckedUtc;
 
         public string LastFailureMessage => LastFailureMessageValue;
+
+        public string LastStatusMessage => LastStatusMessageValue;
 
         public void CheckForUpdates(
             IEnumerable<PackageDefinition> packageDefinitions,
@@ -243,6 +246,7 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             LastFailureMessageValue = string.Empty;
+            LastStatusMessageValue = "Checking for package updates...";
 
             if (checkItems.Count == 0)
             {
@@ -319,6 +323,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             Statuses.Clear();
             LastFailureMessageValue = string.Empty;
+            LastStatusMessageValue = string.Empty;
             NotifySharedStateChanged();
         }
 
@@ -703,6 +708,7 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             LastFailureMessageValue = GetFailureSummary(results);
+            LastStatusMessageValue = GetCompletionSummary(results);
             PackageUpdateCheckPreferences.LastCheckedUtc = DateTime.UtcNow;
             CheckTask = null;
             ActiveCheckItems = Array.Empty<UpdateCheckItem>();
@@ -1062,6 +1068,11 @@ namespace Deucarian.PackageInstaller.Editor
             LogMessage(logType, message);
         }
 
+        internal static void LogStatusForTests(PackageUpdateStatus status)
+        {
+            LogStatus(status);
+        }
+
         internal static bool TryCreateLogMessage(
             PackageUpdateStatus status,
             out LogType logType,
@@ -1146,6 +1157,23 @@ namespace Deucarian.PackageInstaller.Editor
 
             return failures.Length + " update checks failed. First: " +
                    failures[0].DisplayName + ": " + failures[0].Message;
+        }
+
+        private static string GetCompletionSummary(IEnumerable<PackageUpdateStatus> statuses)
+        {
+            PackageUpdateStatus[] completedStatuses = (statuses ?? Array.Empty<PackageUpdateStatus>())
+                .Where(status => status != null)
+                .ToArray();
+            int updateCount = completedStatuses.Count(status => status.IsUpdateAvailable);
+            int failureCount = completedStatuses.Count(status => status.Kind == PackageUpdateStatusKind.Failed);
+
+            if (failureCount > 0)
+            {
+                return "Checked for updates. " + updateCount + " updates available, " +
+                       failureCount + " failed.";
+            }
+
+            return "Checked for updates. " + updateCount + " updates available.";
         }
 
         internal sealed class RegistryLatestVersionResult
