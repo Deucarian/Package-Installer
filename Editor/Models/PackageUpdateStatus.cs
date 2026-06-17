@@ -24,6 +24,8 @@ namespace Deucarian.PackageInstaller.Editor
             string selectedUrl,
             string installedRevision,
             string latestRevision,
+            string installedVersion,
+            string latestVersion,
             string message)
         {
             Kind = kind;
@@ -33,6 +35,8 @@ namespace Deucarian.PackageInstaller.Editor
             SelectedUrl = selectedUrl ?? string.Empty;
             InstalledRevision = installedRevision ?? string.Empty;
             LatestRevision = latestRevision ?? string.Empty;
+            InstalledVersion = installedVersion ?? string.Empty;
+            LatestVersion = latestVersion ?? string.Empty;
             Message = message ?? string.Empty;
         }
 
@@ -50,6 +54,10 @@ namespace Deucarian.PackageInstaller.Editor
 
         public string LatestRevision { get; }
 
+        public string InstalledVersion { get; }
+
+        public string LatestVersion { get; }
+
         public string Message { get; }
 
         public bool IsChecking => Kind == PackageUpdateStatusKind.Checking;
@@ -61,6 +69,24 @@ namespace Deucarian.PackageInstaller.Editor
         public string ShortInstalledRevision => ShortenRevision(InstalledRevision);
 
         public string ShortLatestRevision => ShortenRevision(LatestRevision);
+
+        public bool HasPackageVersionTransition =>
+            !string.IsNullOrWhiteSpace(InstalledVersion) &&
+            !string.IsNullOrWhiteSpace(LatestVersion) &&
+            !string.Equals(InstalledVersion, LatestVersion, System.StringComparison.OrdinalIgnoreCase);
+
+        public bool HasUnbumpedPackageVersionWarning =>
+            IsUpdateAvailable &&
+            !string.IsNullOrWhiteSpace(InstalledVersion) &&
+            !string.IsNullOrWhiteSpace(LatestVersion) &&
+            string.Equals(InstalledVersion, LatestVersion, System.StringComparison.OrdinalIgnoreCase);
+
+        public string PackageVersionWarningMessage =>
+            HasUnbumpedPackageVersionWarning
+                ? Kind == PackageUpdateStatusKind.SwitchAvailable
+                    ? "Switch available, but package version was not bumped."
+                    : "Update available, but package version was not bumped."
+                : string.Empty;
 
         public string Label
         {
@@ -280,7 +306,24 @@ namespace Deucarian.PackageInstaller.Editor
                 selectedUrl,
                 installedRevision,
                 latestRevision,
+                string.Empty,
+                string.Empty,
                 message);
+        }
+
+        public PackageUpdateStatus WithPackageVersions(string installedVersion, string latestVersion)
+        {
+            return new PackageUpdateStatus(
+                Kind,
+                PackageId,
+                DisplayName,
+                Channel,
+                SelectedUrl,
+                InstalledRevision,
+                LatestRevision,
+                installedVersion,
+                latestVersion,
+                Message);
         }
 
         private static string ShortenRevision(string revision)

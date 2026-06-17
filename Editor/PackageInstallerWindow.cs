@@ -1403,7 +1403,7 @@ namespace Deucarian.PackageInstaller.Editor
                     out PackageManagerPackageInfo packageInfo))
             {
                 DrawKeyValueRow("Package", "Installed");
-                DrawKeyValueRow("Version", packageInfo.version);
+                DrawKeyValueRow("Version", GetPackageVersionText(packageInfo.version, updateStatus));
             }
             else
             {
@@ -1420,7 +1420,11 @@ namespace Deucarian.PackageInstaller.Editor
                 DrawKeyValueRow("Dependencies", GetDependencyDisplayNames(packageDefinition));
             }
 
-            if (updateStatus.Kind == PackageUpdateStatusKind.CannotDetermine && !string.IsNullOrWhiteSpace(updateStatus.Message))
+            if (updateStatus.HasUnbumpedPackageVersionWarning)
+            {
+                DrawInlineHelp(updateStatus.PackageVersionWarningMessage, VisualStatusKind.UpdateAvailable);
+            }
+            else if (updateStatus.Kind == PackageUpdateStatusKind.CannotDetermine && !string.IsNullOrWhiteSpace(updateStatus.Message))
             {
                 DrawInlineHelp(updateStatus.Message, VisualStatusKind.Info);
             }
@@ -1696,6 +1700,7 @@ namespace Deucarian.PackageInstaller.Editor
                 packageDefinition,
                 GetSelectedChannel);
             _packageUpdateCheckService.Invalidate(packageDefinition.PackageId);
+            _checkUpdatesAfterDetectionRefresh = true;
         }
 
         private void ReinstallPackage(PackageDefinition packageDefinition)
@@ -2027,6 +2032,8 @@ namespace Deucarian.PackageInstaller.Editor
 
             DrawSelectableValue("Installed rev", updateStatus.InstalledRevision);
             DrawSelectableValue("Latest rev", updateStatus.LatestRevision);
+            DrawSelectableValue("Installed version", updateStatus.InstalledVersion);
+            DrawSelectableValue("Target version", updateStatus.LatestVersion);
             DrawSelectableValue("Dependencies", packageDefinition.Dependencies.Count == 0
                 ? "-"
                 : string.Join(", ", packageDefinition.Dependencies.ToArray()));
@@ -3215,6 +3222,23 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             return status.Label;
+        }
+
+        private static string GetPackageVersionText(string installedVersion, PackageUpdateStatus status)
+        {
+            string resolvedInstalledVersion = status != null && !string.IsNullOrWhiteSpace(status.InstalledVersion)
+                ? status.InstalledVersion
+                : installedVersion;
+            string currentVersion = string.IsNullOrWhiteSpace(resolvedInstalledVersion)
+                ? "-"
+                : resolvedInstalledVersion.Trim();
+
+            if (status != null && status.HasPackageVersionTransition)
+            {
+                return currentVersion + " -> " + status.LatestVersion;
+            }
+
+            return currentVersion;
         }
 
         private static string GetUpdateActionLabel(PackageUpdateStatus status, PackageChannel channel)

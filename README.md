@@ -242,6 +242,13 @@ Branch strategy:
 
 Use branch refs for active development and stable release tags when tags are available.
 
+Channel-visible package changes must bump the package's `package.json` version. If `develop` and
+`main` point to different package content, their package versions should not misleadingly appear
+identical unless the package content is intentionally unchanged. Package Installer compares both
+the installed/target revision and the installed/target package version; when a channel switch is
+available but the package version did not change, it surfaces a warning so maintainers can catch
+missed version bumps before publishing.
+
 ## Validation Notes
 
 The installer uses:

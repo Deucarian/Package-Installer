@@ -229,6 +229,33 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void GitHubPackageJsonUrlCanOverrideReferenceWithResolvedRevision()
+        {
+            const string revision = "0123456789abcdef0123456789abcdef01234567";
+
+            bool resolved = PackageRegistryPackageNameValidator.TryCreateGitHubPackageJsonUrl(
+                "https://github.com/Deucarian/Example.git?path=/Packages/Example#develop",
+                revision,
+                out string packageJsonUrl);
+
+            Assert.IsTrue(resolved);
+            Assert.AreEqual(
+                "https://raw.githubusercontent.com/Deucarian/Example/" + revision + "/Packages/Example/package.json",
+                packageJsonUrl);
+        }
+
+        [Test]
+        public void PackageJsonVersionCanBeRead()
+        {
+            bool found = PackageRegistryPackageNameValidator.TryReadPackageVersion(
+                "{ \"name\": \"com.deucarian.example\", \"version\": \"1.2.3\" }",
+                out string version);
+
+            Assert.IsTrue(found);
+            Assert.AreEqual("1.2.3", version);
+        }
+
+        [Test]
         public void RemoteRegistryPackageFetchFailureReportsPackageJsonUrl()
         {
             RunAsync(async () =>

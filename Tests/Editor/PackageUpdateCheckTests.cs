@@ -246,6 +246,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual(PackageUpdateStatusKind.UpToDate, status.Kind);
             Assert.AreEqual("1.2.3", status.InstalledRevision);
             Assert.AreEqual("1.2.3", status.LatestRevision);
+            Assert.AreEqual("1.2.3", status.InstalledVersion);
+            Assert.AreEqual("1.2.3", status.LatestVersion);
             Assert.IsFalse(status.IsUpdateAvailable);
         }
 
@@ -262,6 +264,9 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual(PackageUpdateStatusKind.UpdateAvailable, status.Kind);
             Assert.AreEqual("1.2.2", status.InstalledRevision);
             Assert.AreEqual("1.2.3", status.LatestRevision);
+            Assert.AreEqual("1.2.2", status.InstalledVersion);
+            Assert.AreEqual("1.2.3", status.LatestVersion);
+            Assert.IsTrue(status.HasPackageVersionTransition);
             Assert.IsTrue(status.IsUpdateAvailable);
         }
 
@@ -289,6 +294,9 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual(PackageUpdateStatusKind.SwitchAvailable, status.Kind);
             Assert.AreEqual("1.2.3", status.InstalledRevision);
             Assert.AreEqual("1.2.4-dev.7", status.LatestRevision);
+            Assert.AreEqual("1.2.3", status.InstalledVersion);
+            Assert.AreEqual("1.2.4-dev.7", status.LatestVersion);
+            Assert.IsTrue(status.HasPackageVersionTransition);
             Assert.IsTrue(status.IsUpdateAvailable);
         }
 
@@ -316,7 +324,78 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual(PackageUpdateStatusKind.SwitchAvailable, status.Kind);
             Assert.AreEqual("1.2.4-dev.7", status.InstalledRevision);
             Assert.AreEqual("1.2.3", status.LatestRevision);
+            Assert.AreEqual("1.2.4-dev.7", status.InstalledVersion);
+            Assert.AreEqual("1.2.3", status.LatestVersion);
+            Assert.IsTrue(status.HasPackageVersionTransition);
             Assert.IsTrue(status.IsUpdateAvailable);
+        }
+
+        [Test]
+        public void GitPackageSwitchResolvesTargetPackageVersion()
+        {
+            const string installedRevision = "0123456789abcdef0123456789abcdef01234567";
+            const string latestRevision = "fedcba9876543210fedcba9876543210fedcba98";
+            PackageDefinition packageDefinition = CreatePackage();
+            PackageUpdateCheckService.GitPackageVersionResolverForTests =
+                (_, channel, revision) =>
+                {
+                    Assert.AreEqual(PackageChannel.Development, channel);
+                    Assert.AreEqual(latestRevision, revision);
+                    return PackageUpdateCheckService.PackageVersionResult.Ok("1.1.15");
+                };
+
+            PackageUpdateStatus status = PackageUpdateCheckService.CheckItemForTests(
+                packageDefinition,
+                PackageChannel.Development,
+                "https://github.com/Deucarian/Object-Loading.git#" + latestRevision,
+                string.Empty,
+                string.Empty,
+                "https://github.com/Deucarian/Object-Loading.git#" + installedRevision,
+                PackageInstallSourceType.Git,
+                "1.1.14",
+                hasInstalledChannel: true,
+                installedChannel: PackageChannel.Stable,
+                packageLockPaths: Array.Empty<string>());
+
+            Assert.AreEqual(PackageUpdateStatusKind.SwitchAvailable, status.Kind);
+            Assert.AreEqual(installedRevision, status.InstalledRevision);
+            Assert.AreEqual(latestRevision, status.LatestRevision);
+            Assert.AreEqual("1.1.14", status.InstalledVersion);
+            Assert.AreEqual("1.1.15", status.LatestVersion);
+            Assert.IsTrue(status.HasPackageVersionTransition);
+            Assert.IsFalse(status.HasUnbumpedPackageVersionWarning);
+        }
+
+        [Test]
+        public void GitPackageSwitchWarnsWhenTargetContentChangedWithoutVersionBump()
+        {
+            const string installedRevision = "0123456789abcdef0123456789abcdef01234567";
+            const string latestRevision = "fedcba9876543210fedcba9876543210fedcba98";
+            PackageDefinition packageDefinition = CreatePackage();
+            PackageUpdateCheckService.GitPackageVersionResolverForTests =
+                (_, __, ___) => PackageUpdateCheckService.PackageVersionResult.Ok("1.1.14");
+
+            PackageUpdateStatus status = PackageUpdateCheckService.CheckItemForTests(
+                packageDefinition,
+                PackageChannel.Development,
+                "https://github.com/Deucarian/Object-Loading.git#" + latestRevision,
+                string.Empty,
+                string.Empty,
+                "https://github.com/Deucarian/Object-Loading.git#" + installedRevision,
+                PackageInstallSourceType.Git,
+                "1.1.14",
+                hasInstalledChannel: true,
+                installedChannel: PackageChannel.Stable,
+                packageLockPaths: Array.Empty<string>());
+
+            Assert.AreEqual(PackageUpdateStatusKind.SwitchAvailable, status.Kind);
+            Assert.AreEqual("1.1.14", status.InstalledVersion);
+            Assert.AreEqual("1.1.14", status.LatestVersion);
+            Assert.IsFalse(status.HasPackageVersionTransition);
+            Assert.IsTrue(status.HasUnbumpedPackageVersionWarning);
+            Assert.AreEqual(
+                "Switch available, but package version was not bumped.",
+                status.PackageVersionWarningMessage);
         }
 
         [Test]

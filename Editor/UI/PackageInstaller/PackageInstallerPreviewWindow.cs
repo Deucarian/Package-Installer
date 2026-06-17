@@ -600,11 +600,19 @@ namespace Deucarian.PackageInstaller.Editor
 
             _detailScroll.Add(CreateLabel(packageDefinition.DisplayName, "dpi-detail-title"));
             _detailScroll.Add(CreateLabel(packageDefinition.Description, "dpi-detail-subtitle"));
+            PackageUpdateStatus updateStatus = _packageUpdateCheckService.GetStatus(
+                packageDefinition,
+                GetSelectedChannel(packageDefinition));
 
             AddDetailSection("Overview", section =>
             {
                 section.Add(CreateKeyValueRow("Status", GetPackageStatusLabel(packageDefinition)));
-                section.Add(CreateKeyValueRow("Version", GetPackageVersionText(packageDefinition)));
+                section.Add(CreateKeyValueRow("Version", GetPackageVersionText(packageDefinition, updateStatus)));
+                if (updateStatus.HasUnbumpedPackageVersionWarning)
+                {
+                    section.Add(CreateKeyValueRow("Version warning", updateStatus.PackageVersionWarningMessage));
+                }
+
                 section.Add(CreateKeyValueRow("Channel", GetChannelLabel(GetSelectedChannel(packageDefinition))));
                 section.Add(CreateChannelField(packageDefinition));
                 section.Add(CreateActionRow(packageDefinition));
@@ -648,11 +656,11 @@ namespace Deucarian.PackageInstaller.Editor
             advanced.Add(CreateKeyValueRow("Development ref", GetReferenceName(packageDefinition.DevelopmentUrl)));
             advanced.Add(CreateKeyValueRow("Registry source", PackageRegistryProvider.StatusMessage));
             advanced.Add(CreateKeyValueRow("Detection", GetDetectionDetails(packageDefinition)));
+            advanced.Add(CreateKeyValueRow("Installed version", updateStatus.InstalledVersion));
+            advanced.Add(CreateKeyValueRow("Target version", updateStatus.LatestVersion));
             advanced.Add(CreateKeyValueRow(
                 "Update status",
-                GetUpdateStatusText(_packageUpdateCheckService.GetStatus(
-                    packageDefinition,
-                    GetSelectedChannel(packageDefinition)))));
+                GetUpdateStatusText(updateStatus)));
             _detailScroll.Add(advanced);
         }
 
@@ -1181,13 +1189,27 @@ namespace Deucarian.PackageInstaller.Editor
 
         private string GetPackageVersionText(PackageDefinition packageDefinition)
         {
+            return GetPackageVersionText(packageDefinition, null);
+        }
+
+        private string GetPackageVersionText(PackageDefinition packageDefinition, PackageUpdateStatus status)
+        {
             if (_packageDetectionService.TryGetInstalledPackage(
                     packageDefinition.PackageId,
                     out PackageManagerPackageInfo packageInfo) &&
                 packageInfo != null &&
                 !string.IsNullOrWhiteSpace(packageInfo.version))
             {
-                return "Installed " + packageInfo.version;
+                string currentVersion = status != null && !string.IsNullOrWhiteSpace(status.InstalledVersion)
+                    ? status.InstalledVersion
+                    : packageInfo.version;
+
+                if (status != null && status.HasPackageVersionTransition)
+                {
+                    return currentVersion + " -> " + status.LatestVersion;
+                }
+
+                return currentVersion;
             }
 
             return packageDefinition.HasDisplayVersion

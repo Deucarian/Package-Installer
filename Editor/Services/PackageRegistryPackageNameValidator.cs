@@ -93,6 +93,14 @@ namespace Deucarian.PackageInstaller.Editor
 
         internal static bool TryCreateGitHubPackageJsonUrl(string packageUrl, out string packageJsonUrl)
         {
+            return TryCreateGitHubPackageJsonUrl(packageUrl, string.Empty, out packageJsonUrl);
+        }
+
+        internal static bool TryCreateGitHubPackageJsonUrl(
+            string packageUrl,
+            string referenceNameOverride,
+            out string packageJsonUrl)
+        {
             packageJsonUrl = string.Empty;
 
             if (string.IsNullOrWhiteSpace(packageUrl))
@@ -108,7 +116,9 @@ namespace Deucarian.PackageInstaller.Editor
                 return false;
             }
 
-            string referenceName = trimmedUrl.Substring(hashIndex + 1).Trim();
+            string referenceName = string.IsNullOrWhiteSpace(referenceNameOverride)
+                ? trimmedUrl.Substring(hashIndex + 1).Trim()
+                : referenceNameOverride.Trim();
             string urlWithoutReference = trimmedUrl.Substring(0, hashIndex);
             string packagePath = string.Empty;
             int queryIndex = urlWithoutReference.IndexOf('?');
@@ -176,6 +186,33 @@ namespace Deucarian.PackageInstaller.Editor
                 }
 
                 packageName = manifest.name.Trim();
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        internal static bool TryReadPackageVersion(string packageJson, out string packageVersion)
+        {
+            packageVersion = string.Empty;
+
+            if (string.IsNullOrWhiteSpace(packageJson))
+            {
+                return false;
+            }
+
+            try
+            {
+                PackageManifest manifest = JsonUtility.FromJson<PackageManifest>(packageJson);
+
+                if (manifest == null || string.IsNullOrWhiteSpace(manifest.version))
+                {
+                    return false;
+                }
+
+                packageVersion = manifest.version.Trim();
                 return true;
             }
             catch
@@ -256,6 +293,7 @@ namespace Deucarian.PackageInstaller.Editor
         private sealed class PackageManifest
         {
             public string name;
+            public string version;
         }
     }
 }

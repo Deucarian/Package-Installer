@@ -142,6 +142,7 @@ namespace Deucarian.PackageInstaller.Editor
     {
         private const int GitTimeoutMilliseconds = 15000;
         private const int NpmTimeoutMilliseconds = 15000;
+        private const int PackageManifestTimeoutMilliseconds = 15000;
         private const string NpmRegistryUrl = "https://registry.npmjs.org/";
         private const double TargetedCheckDebounceSeconds = 0.15d;
 
@@ -169,6 +170,7 @@ namespace Deucarian.PackageInstaller.Editor
         private static event Action SharedStateChanged;
         internal static Func<string, RegistryLatestVersionResult> RegistryLatestVersionResolverForTests;
         internal static Func<string, PackageChannel, RegistryLatestVersionResult> RegistryChannelVersionResolverForTests;
+        internal static Func<PackageDefinition, PackageChannel, string, PackageVersionResult> GitPackageVersionResolverForTests;
 
         public PackageUpdateCheckService(PackageDetectionService packageDetectionService)
         {
@@ -544,7 +546,8 @@ namespace Deucarian.PackageInstaller.Editor
                         item.Channel,
                         item.SelectedUrl,
                         item.InstalledVersion,
-                        "Update checks are not available for " + sourceType.ToString().ToLowerInvariant() + " packages.");
+                        "Update checks are not available for " + sourceType.ToString().ToLowerInvariant() + " packages.")
+                        .WithPackageVersions(item.InstalledVersion, string.Empty);
                 }
 
                 if (string.IsNullOrWhiteSpace(item.SelectedUrl))
@@ -578,7 +581,8 @@ namespace Deucarian.PackageInstaller.Editor
                         item.Channel,
                         item.SelectedUrl,
                         string.Empty,
-                        "The package is installed, but Unity did not expose a Git revision for this package.");
+                        "The package is installed, but Unity did not expose a Git revision for this package.")
+                        .WithPackageVersions(item.InstalledVersion, string.Empty);
                 }
 
                 if (!TryGetRemoteRevision(remoteUrl, reference, out string latestRevision, out string remoteMessage))
@@ -591,6 +595,13 @@ namespace Deucarian.PackageInstaller.Editor
                         remoteMessage);
                 }
 
+                PackageVersionResult latestPackageVersionResult =
+                    ResolveGitPackageVersion(item, latestRevision);
+                string latestPackageVersion = latestPackageVersionResult != null &&
+                                              latestPackageVersionResult.Success
+                    ? latestPackageVersionResult.Version
+                    : string.Empty;
+
                 if (RevisionsMatch(installedRevision, latestRevision))
                 {
                     return PackageUpdateStatus.UpToDate(
@@ -598,14 +609,16 @@ namespace Deucarian.PackageInstaller.Editor
                         item.Channel,
                         item.SelectedUrl,
                         installedRevision,
-                        latestRevision);
+                        latestRevision)
+                        .WithPackageVersions(item.InstalledVersion, latestPackageVersion);
                 }
 
                 return CreateAvailableStatus(
                     item,
                     installedRevision,
                     latestRevision,
-                    "Installed revision differs from the selected channel.");
+                    "Installed revision differs from the selected channel.")
+                    .WithPackageVersions(item.InstalledVersion, latestPackageVersion);
             }
             catch (Exception exception)
             {
@@ -627,7 +640,8 @@ namespace Deucarian.PackageInstaller.Editor
                     item.Channel,
                     item.SelectedUrl,
                     string.Empty,
-                    "The package is installed from a registry, but Unity did not expose an installed version.");
+                    "The package is installed from a registry, but Unity did not expose an installed version.")
+                    .WithPackageVersions(item.InstalledVersion, string.Empty);
             }
 
             RegistryLatestVersionResult latestVersionResult = ResolveRegistryChannelVersion(
@@ -641,7 +655,8 @@ namespace Deucarian.PackageInstaller.Editor
                     item.Channel,
                     item.SelectedUrl,
                     installedVersion,
-                    latestVersionResult.Message);
+                    latestVersionResult.Message)
+                    .WithPackageVersions(installedVersion, string.Empty);
             }
 
             if (!TryCompareSemanticVersions(
@@ -655,7 +670,8 @@ namespace Deucarian.PackageInstaller.Editor
                     item.Channel,
                     item.SelectedUrl,
                     installedVersion,
-                    compareMessage);
+                    compareMessage)
+                    .WithPackageVersions(installedVersion, latestVersionResult.Version);
             }
 
             bool exactVersionMatch = string.Equals(
@@ -671,14 +687,16 @@ namespace Deucarian.PackageInstaller.Editor
                     item.SelectedUrl,
                     installedVersion,
                     latestVersionResult.Version,
-                    "Installed registry version is up to date for the selected channel.");
+                    "Installed registry version is up to date for the selected channel.")
+                    .WithPackageVersions(installedVersion, latestVersionResult.Version);
             }
 
             return CreateAvailableStatus(
                 item,
                 installedVersion,
                 latestVersionResult.Version,
-                "Installed registry version differs from the selected npmjs dist-tag.");
+                "Installed registry version differs from the selected npmjs dist-tag.")
+                .WithPackageVersions(installedVersion, latestVersionResult.Version);
         }
 
         private static bool TryGetInstalledRegistryVersion(UpdateCheckItem item, out string installedVersion)
@@ -806,6 +824,79 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 return RegistryLatestVersionResult.Fail(
                     "Could not fetch npmjs " + distTag + " version: " + exception.GetBaseException().Message);
+            }
+        }
+
+        private static PackageVersionResult ResolveGitPackageVersion(
+            UpdateCheckItem item,
+            string targetRevision)
+        {
+            Func<PackageDefinition, PackageChannel, string, PackageVersionResult> resolver =
+                GitPackageVersionResolverForTests;
+            if (resolver != null)
+            {
+                return resolver(item.PackageDefinition, item.Channel, targetRevision);
+            }
+
+            if (item == null || string.IsNullOrWhiteSpace(item.SelectedUrl))
+            {
+                return PackageVersionResult.Fail("Cannot resolve target package version without a selected package URL.");
+            }
+
+            string referenceOverride = string.IsNullOrWhiteSpace(targetRevision)
+                ? string.Empty
+                : targetRevision.Trim();
+
+            if (!PackageRegistryPackageNameValidator.TryCreateGitHubPackageJsonUrl(
+                    item.SelectedUrl,
+                    referenceOverride,
+                    out string packageJsonUrl))
+            {
+                return PackageVersionResult.Fail("Could not resolve target package.json URL.");
+            }
+
+            return FetchPackageVersion(packageJsonUrl);
+        }
+
+        private static PackageVersionResult FetchPackageVersion(string packageJsonUrl)
+        {
+            if (string.IsNullOrWhiteSpace(packageJsonUrl))
+            {
+                return PackageVersionResult.Fail("Cannot fetch package version without a package.json URL.");
+            }
+
+            try
+            {
+                HttpWebRequest request = (HttpWebRequest)WebRequest.Create(packageJsonUrl);
+                request.Method = "GET";
+                request.Timeout = PackageManifestTimeoutMilliseconds;
+                request.ReadWriteTimeout = PackageManifestTimeoutMilliseconds;
+
+                using (WebResponse response = request.GetResponse())
+                using (Stream responseStream = response.GetResponseStream())
+                using (StreamReader reader = new StreamReader(responseStream))
+                {
+                    string packageJson = reader.ReadToEnd();
+
+                    if (!PackageRegistryPackageNameValidator.TryReadPackageVersion(
+                            packageJson,
+                            out string packageVersion))
+                    {
+                        return PackageVersionResult.Fail("Target package.json did not include a version.");
+                    }
+
+                    if (!PackageInstallSourceUtility.LooksLikeStableOrPrereleaseVersion(packageVersion))
+                    {
+                        return PackageVersionResult.Fail("Target package.json version is not valid SemVer.");
+                    }
+
+                    return PackageVersionResult.Ok(packageVersion);
+                }
+            }
+            catch (Exception exception)
+            {
+                return PackageVersionResult.Fail(
+                    "Could not fetch target package version: " + exception.GetBaseException().Message);
             }
         }
 
@@ -1069,6 +1160,7 @@ namespace Deucarian.PackageInstaller.Editor
             TargetedCheckGeneration = 0;
             RegistryLatestVersionResolverForTests = null;
             RegistryChannelVersionResolverForTests = null;
+            GitPackageVersionResolverForTests = null;
             EditorApplication.update -= UpdateShared;
             EditorApplication.update -= UpdateTargetedChecks;
             IsTargetedUpdateRegistered = false;
@@ -1081,7 +1173,11 @@ namespace Deucarian.PackageInstaller.Editor
             foreach (PackageUpdateStatus status in results)
             {
                 Statuses[status.PackageId] = status;
-                LogStatus(status);
+
+                if (status.Kind == PackageUpdateStatusKind.Failed)
+                {
+                    LogStatus(status);
+                }
             }
 
             LastFailureMessageValue = GetFailureSummary(results);
@@ -1579,6 +1675,32 @@ namespace Deucarian.PackageInstaller.Editor
             public static RegistryLatestVersionResult Fail(string message)
             {
                 return new RegistryLatestVersionResult(false, string.Empty, message);
+            }
+        }
+
+        internal sealed class PackageVersionResult
+        {
+            private PackageVersionResult(bool success, string version, string message)
+            {
+                Success = success;
+                Version = version ?? string.Empty;
+                Message = message ?? string.Empty;
+            }
+
+            public bool Success { get; }
+
+            public string Version { get; }
+
+            public string Message { get; }
+
+            public static PackageVersionResult Ok(string version)
+            {
+                return new PackageVersionResult(true, version, string.Empty);
+            }
+
+            public static PackageVersionResult Fail(string message)
+            {
+                return new PackageVersionResult(false, string.Empty, message);
             }
         }
 
