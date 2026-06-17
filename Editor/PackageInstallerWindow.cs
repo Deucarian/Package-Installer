@@ -538,21 +538,29 @@ namespace Deucarian.PackageInstaller.Editor
         private void DrawGraphDetailsGui()
         {
             EnsureStyles();
-
-            using (new EditorGUILayout.VerticalScope(_windowStyle, GUILayout.ExpandHeight(true)))
-            {
-                DrawDetailsPane();
-            }
+            DrawDetailsPane();
         }
 
         private void DrawGraphOperationGui()
         {
             EnsureStyles();
+            DrawGlobalOperationArea();
 
-            using (new EditorGUILayout.VerticalScope(_windowStyle))
+            if (!_operationDetailsExpanded)
             {
-                DrawGlobalOperationArea();
-                DeucarianEditorChrome.DrawFooterVersion("com.deucarian.package-installer", PackageVersion);
+                DrawGraphFooterVersion();
+            }
+        }
+
+        private void DrawGraphFooterVersion()
+        {
+            using (new EditorGUILayout.HorizontalScope(GUILayout.ExpandWidth(true)))
+            {
+                GUILayout.FlexibleSpace();
+                EditorGUILayout.LabelField(
+                    "com.deucarian.package-installer " + PackageVersion,
+                    DeucarianEditorStyles.FooterVersionText,
+                    GUILayout.MaxWidth(360f));
             }
         }
 
