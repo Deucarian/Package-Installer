@@ -102,8 +102,11 @@ namespace Deucarian.PackageInstaller.Editor
         private Color _mainBackgroundColor;
         private Color _sidebarBackgroundColor;
         private Color _detailsBackgroundColor;
+        private Color _panelBackgroundColor;
+        private Color _headerPanelBackgroundColor;
         private Color _sampleRowBackgroundColor;
         private Color _panelBorderColor;
+        private Color _interactiveBorderColor;
         private Color _separatorColor;
         private Color _rowBackgroundColor;
         private Color _rowHoverColor;
@@ -241,17 +244,20 @@ namespace Deucarian.PackageInstaller.Editor
             _stylesInitialized = true;
             _lastProSkin = proSkin;
 
-            _mainBackgroundColor = DeucarianEditorColors.HeaderBackground;
-            _sidebarBackgroundColor = DeucarianEditorColors.SectionBackground;
-            _detailsBackgroundColor = DeucarianEditorColors.SectionBackground;
-            _sampleRowBackgroundColor = DeucarianEditorColors.WithAlpha(DeucarianEditorColors.SectionBackground, 0.92f);
-            _panelBorderColor = DeucarianEditorColors.Border;
-            _separatorColor = DeucarianEditorColors.Border;
-            _rowBackgroundColor = DeucarianEditorColors.WithAlpha(DeucarianEditorColors.SectionBackground, 0.88f);
-            _rowHoverColor = DeucarianEditorColors.WithAlpha(DeucarianEditorColors.Blue, proSkin ? 0.24f : 0.14f);
-            _rowSelectedColor = DeucarianEditorColors.WithAlpha(DeucarianEditorColors.Teal, proSkin ? 0.34f : 0.20f);
-            _textColor = DeucarianEditorColors.BodyText;
-            _mutedTextColor = DeucarianEditorColors.MutedText;
+            _mainBackgroundColor = new Color(0.012f, 0.020f, 0.035f);
+            _sidebarBackgroundColor = new Color(23f / 255f, 32f / 255f, 39f / 255f, 0.72f);
+            _detailsBackgroundColor = new Color(23f / 255f, 32f / 255f, 39f / 255f, 0.72f);
+            _panelBackgroundColor = new Color(32f / 255f, 47f / 255f, 56f / 255f, 0.62f);
+            _headerPanelBackgroundColor = new Color(35f / 255f, 52f / 255f, 61f / 255f, 0.68f);
+            _sampleRowBackgroundColor = new Color(32f / 255f, 47f / 255f, 56f / 255f, 0.62f);
+            _panelBorderColor = new Color(90f / 255f, 111f / 255f, 160f / 255f, 0.35f);
+            _interactiveBorderColor = new Color(59f / 255f, 166f / 255f, 154f / 255f, 0.55f);
+            _separatorColor = new Color(90f / 255f, 111f / 255f, 160f / 255f, 0.24f);
+            _rowBackgroundColor = new Color(32f / 255f, 47f / 255f, 56f / 255f, 0.46f);
+            _rowHoverColor = new Color(32f / 255f, 47f / 255f, 56f / 255f, 0.62f);
+            _rowSelectedColor = new Color(35f / 255f, 62f / 255f, 66f / 255f, 0.58f);
+            _textColor = new Color(0.88f, 0.93f, 0.96f);
+            _mutedTextColor = new Color(0.58f, 0.68f, 0.75f);
 
             _windowStyle = new GUIStyle();
             _windowStyle.padding = new RectOffset(12, 12, 10, 10);
@@ -321,10 +327,9 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void DrawWindowBackground()
         {
-            if (Event.current.type == EventType.Repaint)
-            {
-                EditorGUI.DrawRect(new Rect(0f, 0f, position.width, position.height), _mainBackgroundColor);
-            }
+            PackageInstallerTheme.DrawWindowBackground(
+                new Rect(0f, 0f, position.width, position.height),
+                _mainBackgroundColor);
         }
 
         private void DrawHeader()
@@ -336,7 +341,11 @@ namespace Deucarian.PackageInstaller.Editor
                 "Deucarian Package Installer",
                 "Install, update, remove, and compose Deucarian packages through first-class bridge packages.");
 
-            DeucarianEditorChrome.BeginSection();
+            BeginSurface(
+                DeucarianEditorStyles.SectionBox,
+                _headerPanelBackgroundColor,
+                _panelBorderColor,
+                GUILayout.ExpandWidth(true));
 
             using (new EditorGUILayout.HorizontalScope())
             {
@@ -365,7 +374,7 @@ namespace Deucarian.PackageInstaller.Editor
             GUILayout.Space(6f);
             DrawHeaderUpdateControls(compact);
 
-            DeucarianEditorChrome.EndSection();
+            EditorGUILayout.EndVertical();
             GUILayout.Space(8f);
         }
 
@@ -820,8 +829,11 @@ namespace Deucarian.PackageInstaller.Editor
             if (Event.current.type == EventType.Repaint)
             {
                 Color background = selected ? _rowSelectedColor : hover ? _rowHoverColor : _rowBackgroundColor;
-                EditorGUI.DrawRect(rowRect, background);
-                DrawBorder(rowRect, selected ? GetStatusColor(status.Kind) : _separatorColor);
+                PackageInstallerTheme.DrawInsetSurface(
+                    rowRect,
+                    background,
+                    selected || hover ? _interactiveBorderColor : _separatorColor,
+                    6f);
 
                 if (selected)
                 {
@@ -1037,8 +1049,11 @@ namespace Deucarian.PackageInstaller.Editor
             if (Event.current.type == EventType.Repaint)
             {
                 Color color = GetStatusColor(statusKind);
-                EditorGUI.DrawRect(rect, DeucarianEditorColors.WithAlpha(color, 0.12f));
-                DrawBorder(rect, DeucarianEditorColors.WithAlpha(color, 0.58f));
+                PackageInstallerTheme.DrawInsetSurface(
+                    rect,
+                    DeucarianEditorColors.WithAlpha(color, 0.12f),
+                    DeucarianEditorColors.WithAlpha(color, 0.58f),
+                    6f);
             }
 
             Texture2D icon = DeucarianEditorIcons.GetPackageIcon(GetPackageIconKey(packageDefinition));
@@ -1185,8 +1200,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (Event.current.type == EventType.Repaint)
             {
-                EditorGUI.DrawRect(rowRect, _sampleRowBackgroundColor);
-                DrawBorder(rowRect, _separatorColor);
+                PackageInstallerTheme.DrawInsetSurface(rowRect, _sampleRowBackgroundColor, _separatorColor, 6f);
             }
 
             Rect markerRect = new Rect(rowRect.x + 8f, rowRect.y + 5f, 28f, 18f);
@@ -1756,7 +1770,11 @@ namespace Deucarian.PackageInstaller.Editor
         private void DrawGlobalOperationArea()
         {
             OperationProgressView operation = GetCurrentOperationProgress();
-            DeucarianEditorChrome.BeginSection();
+            BeginSurface(
+                DeucarianEditorStyles.SectionBox,
+                _headerPanelBackgroundColor,
+                _panelBorderColor,
+                GUILayout.ExpandWidth(true));
 
             DrawGlobalOperationBar(operation);
 
@@ -1768,7 +1786,7 @@ namespace Deucarian.PackageInstaller.Editor
                 DrawOperationSummaryDrawer();
             }
 
-            DeucarianEditorChrome.EndSection();
+            EditorGUILayout.EndVertical();
         }
 
         private void DrawGlobalOperationBar(OperationProgressView operation)
@@ -2275,7 +2293,8 @@ namespace Deucarian.PackageInstaller.Editor
                 DeucarianEditorChrome.DrawSectionHeader(title);
             }
 
-            EditorGUILayout.BeginVertical(DeucarianEditorStyles.SectionBox, options);
+            Rect rect = EditorGUILayout.BeginVertical(DeucarianEditorStyles.SectionBox, options);
+            DrawSurface(rect, _panelBackgroundColor, _panelBorderColor);
             content?.Invoke();
             EditorGUILayout.EndVertical();
             GUILayout.Space(8f);
@@ -2294,26 +2313,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static void DrawSurface(Rect rect, Color backgroundColor, Color borderColor)
         {
-            if (Event.current.type != EventType.Repaint || rect.width <= 0f || rect.height <= 0f)
-            {
-                return;
-            }
-
-            EditorGUI.DrawRect(rect, backgroundColor);
-            DrawBorder(rect, borderColor);
-        }
-
-        private static void DrawBorder(Rect rect, Color color)
-        {
-            if (rect.width <= 0f || rect.height <= 0f)
-            {
-                return;
-            }
-
-            EditorGUI.DrawRect(new Rect(rect.x, rect.y, rect.width, 1f), color);
-            EditorGUI.DrawRect(new Rect(rect.x, rect.yMax - 1f, rect.width, 1f), color);
-            EditorGUI.DrawRect(new Rect(rect.x, rect.y, 1f, rect.height), color);
-            EditorGUI.DrawRect(new Rect(rect.xMax - 1f, rect.y, 1f, rect.height), color);
+            PackageInstallerTheme.DrawFrostedSurface(rect, backgroundColor, borderColor);
         }
 
         private void DrawHorizontalSeparator()
@@ -2331,8 +2331,11 @@ namespace Deucarian.PackageInstaller.Editor
             if (Event.current.type == EventType.Repaint)
             {
                 Color color = GetStatusColor(statusKind);
-                EditorGUI.DrawRect(rect, new Color(color.r, color.g, color.b, 0.16f));
-                DrawBorder(rect, new Color(color.r, color.g, color.b, 0.65f));
+                PackageInstallerTheme.DrawInsetSurface(
+                    rect,
+                    new Color(color.r, color.g, color.b, 0.16f),
+                    new Color(color.r, color.g, color.b, 0.65f),
+                    5f);
             }
 
             DrawColoredRectLabel(rect, text, _markerStyle, GetStatusColor(statusKind));
