@@ -12,7 +12,7 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed class PackageInstallerWindow : EditorWindow
     {
         private const string WindowTitle = "Package Installer";
-        private const string PackageVersion = "1.1.25";
+        private const string PackageVersion = "1.1.26";
         private const float MinWindowWidth = 850f;
         private const float MinWindowHeight = 650f;
         private const float SidebarWidth = 340f;
@@ -108,9 +108,8 @@ namespace Deucarian.PackageInstaller.Editor
         private SelectionKind _selectionKind = SelectionKind.Package;
         private string _selectedPackageId = string.Empty;
         private string _graphFocusedPackageId = string.Empty;
-        private string _packageSearchText = string.Empty;
-        private bool _showInstalledPackages = true;
-        private bool _showNotInstalledPackages = true;
+        private readonly PackageVisibilityFilterState _visibilityFilterState =
+            new PackageVisibilityFilterState();
         private bool _checkUpdatesAfterDetectionRefresh;
         private bool _operationDetailsExpanded;
         private InstallerViewMode _viewMode = DefaultInstallerViewMode;
@@ -179,6 +178,24 @@ namespace Deucarian.PackageInstaller.Editor
         internal static bool DefaultsToEcosystemGraphForTests => DefaultInstallerViewMode == InstallerViewMode.EcosystemGraph;
 
         internal static IReadOnlyList<string> ViewToggleOrderForTests => new[] { "Ecosystem Graph", "List View" };
+
+        internal static bool ShouldClearGraphSelectionForFilters(
+            string selectedPackageId,
+            string focusedPackageId,
+            ISet<string> visiblePackageIds)
+        {
+            if (visiblePackageIds == null)
+            {
+                return false;
+            }
+
+            bool selectionHidden = !string.IsNullOrWhiteSpace(selectedPackageId) &&
+                                   !visiblePackageIds.Contains(selectedPackageId);
+            bool focusHidden = !string.IsNullOrWhiteSpace(focusedPackageId) &&
+                               !visiblePackageIds.Contains(focusedPackageId);
+
+            return selectionHidden || focusHidden;
+        }
 
         private void OnEnable()
         {
@@ -300,7 +317,9 @@ namespace Deucarian.PackageInstaller.Editor
             _graphView = new PackageGraphView(
                 HandleGraphPackageSelected,
                 HandleGraphPackageAction,
-                ClearGraphSelection);
+                ClearGraphSelection,
+                _visibilityFilterState,
+                HandleVisibilityFilterChanged);
             _graphContentRow.Add(_graphView);
 
             _graphDetailsContainer = new IMGUIContainer(DrawGraphDetailsGui);
@@ -477,11 +496,58 @@ namespace Deucarian.PackageInstaller.Editor
                         ? _packageUpdateCheckService.GetStatus(packageDefinition, GetSelectedChannel(packageDefinition))
                         : null))
                 .Build(PackageRegistryProvider.All);
-            _graphView.SetGraph(graph, _selectedPackageId, _graphFocusedPackageId, !IsAnyOperationBusy());
+            HashSet<string> visiblePackageIds = PackageVisibilityFilter.CreateVisiblePackageIdSet(
+                graph,
+                _visibilityFilterState);
+
+            ClearGraphSelectionIfHidden(visiblePackageIds);
+
+            PackageVisibilityFilterCounts filterCounts = PackageVisibilityFilter.CalculateCounts(
+                graph,
+                _visibilityFilterState);
+            int hiddenRelatedCount = PackageVisibilityFilter.CountHiddenRelatedPackages(
+                graph,
+                _graphFocusedPackageId,
+                visiblePackageIds);
+
+            _graphView.SetGraph(
+                graph,
+                _selectedPackageId,
+                _graphFocusedPackageId,
+                !IsAnyOperationBusy(),
+                visiblePackageIds,
+                filterCounts,
+                hiddenRelatedCount);
             _graphDetailsContainer?.MarkDirtyRepaint();
             _operationDrawerContainer?.MarkDirtyRepaint();
             _operationFooterContainer?.MarkDirtyRepaint();
             UpdateViewVisibility();
+        }
+
+        private void HandleVisibilityFilterChanged()
+        {
+            RefreshGraphView();
+            Repaint();
+        }
+
+        private void ClearGraphSelectionIfHidden(ISet<string> visiblePackageIds)
+        {
+            if (_viewMode != InstallerViewMode.EcosystemGraph || visiblePackageIds == null)
+            {
+                return;
+            }
+
+            if (!ShouldClearGraphSelectionForFilters(
+                    _selectedPackageId,
+                    _graphFocusedPackageId,
+                    visiblePackageIds))
+            {
+                return;
+            }
+
+            _selectedPackageId = string.Empty;
+            _graphFocusedPackageId = string.Empty;
+            _detailsScrollPosition = Vector2.zero;
         }
 
         private void HandleGraphPackageSelected(PackageDefinition packageDefinition)
@@ -913,10 +979,7 @@ namespace Deucarian.PackageInstaller.Editor
             return PackageListFilter.CreateCategoryViews(
                 PackageRegistryProvider.All,
                 PackageRegistryProvider.Categories,
-                new PackageListFilterOptions(
-                    _packageSearchText,
-                    _showInstalledPackages,
-                    _showNotInstalledPackages),
+                _visibilityFilterState,
                 package => _packageDetectionService.IsInstalled(package.PackageId),
                 IsCategoryExpanded);
         }
@@ -932,11 +995,11 @@ namespace Deucarian.PackageInstaller.Editor
             EditorGUI.BeginChangeCheck();
             string nextSearchText = EditorGUILayout.TextField(
                 new GUIContent("Search", "Search package names, package IDs, descriptions, URLs, versions, and dependencies."),
-                _packageSearchText);
+                _visibilityFilterState.SearchText);
 
-            if (EditorGUI.EndChangeCheck() && nextSearchText != _packageSearchText)
+            if (EditorGUI.EndChangeCheck() && _visibilityFilterState.SetSearchText(nextSearchText))
             {
-                _packageSearchText = nextSearchText ?? string.Empty;
+                RefreshGraphView();
                 Repaint();
             }
 
@@ -946,18 +1009,19 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 bool nextShowInstalled = EditorGUILayout.ToggleLeft(
                     new GUIContent("Installed", "Show packages that Unity reports as installed."),
-                    _showInstalledPackages,
+                    _visibilityFilterState.ShowInstalled,
                     GUILayout.Width(92f));
                 bool nextShowNotInstalled = EditorGUILayout.ToggleLeft(
                     new GUIContent("Not Installed", "Show packages that Unity does not report as installed."),
-                    _showNotInstalledPackages,
+                    _visibilityFilterState.ShowNotInstalled,
                     GUILayout.Width(118f));
 
-                if (nextShowInstalled != _showInstalledPackages ||
-                    nextShowNotInstalled != _showNotInstalledPackages)
+                if (_visibilityFilterState.Set(
+                        _visibilityFilterState.SearchText,
+                        nextShowInstalled,
+                        nextShowNotInstalled))
                 {
-                    _showInstalledPackages = nextShowInstalled;
-                    _showNotInstalledPackages = nextShowNotInstalled;
+                    RefreshGraphView();
                     Repaint();
                 }
             }

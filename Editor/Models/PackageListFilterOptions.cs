@@ -2,6 +2,14 @@ namespace Deucarian.PackageInstaller.Editor
 {
     internal sealed class PackageListFilterOptions
     {
+        public PackageListFilterOptions(PackageVisibilityFilterState filterState)
+            : this(
+                filterState != null ? filterState.SearchText : string.Empty,
+                filterState == null || filterState.ShowInstalled,
+                filterState == null || filterState.ShowNotInstalled)
+        {
+        }
+
         public PackageListFilterOptions(
             string searchText,
             bool showInstalled,

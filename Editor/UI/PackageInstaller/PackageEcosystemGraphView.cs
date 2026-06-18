@@ -12,6 +12,20 @@ namespace Deucarian.PackageInstaller.Editor
     {
         private readonly PackageGraphCanvas _canvas;
         private readonly PackageGraphViewport _viewport;
+        private readonly PackageVisibilityFilterState _filterState;
+        private readonly Action _filterChanged;
+        private readonly TextField _searchField;
+        private readonly Button _installedFilterButton;
+        private readonly Button _notInstalledFilterButton;
+        private readonly Button _clearFiltersButton;
+        private readonly Label _visibleCountLabel;
+        private readonly Label _hiddenRelatedLabel;
+        private readonly VisualElement _emptyState;
+        private readonly Label _emptyStateTitle;
+        private readonly Button _emptyStateActionButton;
+        private PackageVisibilityFilterCounts _filterCounts =
+            new PackageVisibilityFilterCounts(0, 0, 0, 0);
+        private int _hiddenRelatedCount;
         private bool _hasAppliedGraphFrame;
 
         public PackageGraphView(
@@ -25,9 +39,21 @@ namespace Deucarian.PackageInstaller.Editor
             Action<PackageDefinition> packageSelected,
             Action<PackageDefinition, PackageGraphNodeAction> packageAction,
             Action selectionCleared)
+            : this(packageSelected, packageAction, selectionCleared, null, null)
+        {
+        }
+
+        public PackageGraphView(
+            Action<PackageDefinition> packageSelected,
+            Action<PackageDefinition, PackageGraphNodeAction> packageAction,
+            Action selectionCleared,
+            PackageVisibilityFilterState filterState,
+            Action filterChanged)
         {
             AddToClassList("dpi-ecosystem-graph");
             focusable = true;
+            _filterState = filterState ?? new PackageVisibilityFilterState();
+            _filterChanged = filterChanged;
 
             _canvas = new PackageGraphCanvas(packageSelected, packageAction, selectionCleared);
             _viewport = new PackageGraphViewport(selectionCleared);
@@ -37,6 +63,75 @@ namespace Deucarian.PackageInstaller.Editor
             VisualElement header = new VisualElement();
             header.AddToClassList("dpi-ecosystem-graph__header");
             Add(header);
+
+            VisualElement filterRow = new VisualElement();
+            filterRow.AddToClassList("dpi-ecosystem-graph__filter-row");
+            header.Add(filterRow);
+
+            _searchField = new TextField
+            {
+                name = "ecosystem-graph-search"
+            };
+            _searchField.AddToClassList("dpi-ecosystem-graph__search");
+            _searchField.tooltip = "Search package names, package IDs, categories, package types, descriptions, URLs, versions, and dependencies.";
+            _searchField.SetValueWithoutNotify(_filterState.SearchText);
+            _searchField.RegisterValueChangedCallback(evt =>
+            {
+                if (_filterState.SetSearchText(evt.newValue))
+                {
+                    _filterChanged?.Invoke();
+                    UpdateFilterControls();
+                }
+            });
+            _searchField.RegisterCallback<KeyDownEvent>(HandleSearchKeyDown);
+            filterRow.Add(_searchField);
+
+            _installedFilterButton = CreateFilterToggleButton(() =>
+            {
+                if (_filterState.SetShowInstalled(!_filterState.ShowInstalled))
+                {
+                    _filterChanged?.Invoke();
+                    UpdateFilterControls();
+                }
+            });
+            filterRow.Add(_installedFilterButton);
+
+            _notInstalledFilterButton = CreateFilterToggleButton(() =>
+            {
+                if (_filterState.SetShowNotInstalled(!_filterState.ShowNotInstalled))
+                {
+                    _filterChanged?.Invoke();
+                    UpdateFilterControls();
+                }
+            });
+            filterRow.Add(_notInstalledFilterButton);
+
+            _clearFiltersButton = new Button(ClearFilters)
+            {
+                text = "Clear",
+                tooltip = "Clear search and show all package visibility states."
+            };
+            _clearFiltersButton.AddToClassList("dpi-ecosystem-graph__filter-clear");
+            filterRow.Add(_clearFiltersButton);
+
+            _visibleCountLabel = new Label("0 visible");
+            _visibleCountLabel.AddToClassList("dpi-ecosystem-graph__visible-count");
+            filterRow.Add(_visibleCountLabel);
+
+            _hiddenRelatedLabel = new Label();
+            _hiddenRelatedLabel.AddToClassList("dpi-ecosystem-graph__hidden-related");
+            filterRow.Add(_hiddenRelatedLabel);
+
+            VisualElement filterSpacer = new VisualElement();
+            filterSpacer.AddToClassList("deucarian-toolbar-spacer");
+            filterRow.Add(filterSpacer);
+
+            VisualElement toolbar = new VisualElement();
+            toolbar.AddToClassList("dpi-ecosystem-graph__toolbar");
+            toolbar.Add(CreateToolbarButton("Fit", () => _viewport.FitToContent(_canvas.GetContentBounds())));
+            toolbar.Add(CreateToolbarButton("100%", _viewport.ResetZoom));
+            toolbar.Add(CreateToolbarButton("Center", () => _viewport.CenterOn(_canvas.GetActiveCenter())));
+            filterRow.Add(toolbar);
 
             VisualElement legend = new VisualElement();
             legend.AddToClassList("dpi-ecosystem-graph__legend");
@@ -63,14 +158,19 @@ namespace Deucarian.PackageInstaller.Editor
             legend.Add(CreateLegendItem("Attention", "Update / missing dependency", "dpi-graph-legend__line--warning"));
             header.Add(legend);
 
-            VisualElement toolbar = new VisualElement();
-            toolbar.AddToClassList("dpi-ecosystem-graph__toolbar");
-            toolbar.Add(CreateToolbarButton("Fit", () => _viewport.FitToContent(_canvas.GetContentBounds())));
-            toolbar.Add(CreateToolbarButton("100%", _viewport.ResetZoom));
-            toolbar.Add(CreateToolbarButton("Center", () => _viewport.CenterOn(_canvas.GetActiveCenter())));
-            header.Add(toolbar);
-
             Add(_viewport);
+
+            _emptyState = new VisualElement();
+            _emptyState.AddToClassList("dpi-ecosystem-graph__empty-state");
+            _emptyStateTitle = new Label();
+            _emptyStateTitle.AddToClassList("dpi-ecosystem-graph__empty-title");
+            _emptyState.Add(_emptyStateTitle);
+            _emptyStateActionButton = new Button(ClearFilters);
+            _emptyStateActionButton.AddToClassList("dpi-ecosystem-graph__empty-action");
+            _emptyState.Add(_emptyStateActionButton);
+            _viewport.Add(_emptyState);
+
+            UpdateFilterControls();
         }
 
         public void SetGraph(PackageGraphModel graph, string selectedPackageId, bool actionsEnabled)
@@ -84,13 +184,35 @@ namespace Deucarian.PackageInstaller.Editor
             string focusedPackageId,
             bool actionsEnabled)
         {
+            SetGraph(
+                graph,
+                selectedPackageId,
+                focusedPackageId,
+                actionsEnabled,
+                null,
+                null,
+                0);
+        }
+
+        public void SetGraph(
+            PackageGraphModel graph,
+            string selectedPackageId,
+            string focusedPackageId,
+            bool actionsEnabled,
+            IReadOnlyCollection<string> visiblePackageIds,
+            PackageVisibilityFilterCounts filterCounts,
+            int hiddenRelatedCount)
+        {
             string previousLayoutFocusPackageId = _canvas.LayoutFocusPackageId;
             bool shouldForceInitialFrame = !_hasAppliedGraphFrame && graph != null && graph.Nodes.Count > 0;
-            _canvas.SetGraph(graph, selectedPackageId, focusedPackageId, actionsEnabled);
+            _canvas.SetGraph(graph, selectedPackageId, focusedPackageId, actionsEnabled, visiblePackageIds);
             _viewport.SetLayoutMode(_canvas.LayoutMode);
             _viewport.SetContentSize(_canvas.ContentSize.x, _canvas.ContentSize.y);
             _viewport.EnsureInitialFrame(_canvas.GetContentBounds(), shouldForceInitialFrame);
             _hasAppliedGraphFrame = _hasAppliedGraphFrame || shouldForceInitialFrame;
+            _filterCounts = filterCounts ?? PackageVisibilityFilter.CalculateCounts(graph, _filterState);
+            _hiddenRelatedCount = Math.Max(0, hiddenRelatedCount);
+            UpdateFilterControls();
 
             if (!string.Equals(
                     previousLayoutFocusPackageId,
@@ -112,6 +234,121 @@ namespace Deucarian.PackageInstaller.Editor
             _viewport.SetLayoutMode(_canvas.LayoutMode);
             _viewport.SetContentSize(_canvas.ContentSize.x, _canvas.ContentSize.y);
             _viewport.EnsureInitialFrame(_canvas.GetContentBounds(), force: true);
+        }
+
+        private void HandleSearchKeyDown(KeyDownEvent evt)
+        {
+            if (evt.keyCode != KeyCode.Escape || string.IsNullOrWhiteSpace(_filterState.SearchText))
+            {
+                return;
+            }
+
+            if (_filterState.SetSearchText(string.Empty))
+            {
+                _searchField.SetValueWithoutNotify(string.Empty);
+                _filterChanged?.Invoke();
+                UpdateFilterControls();
+            }
+
+            evt.StopPropagation();
+        }
+
+        private void ClearFilters()
+        {
+            if (_filterState.Reset())
+            {
+                _searchField.SetValueWithoutNotify(string.Empty);
+                _filterChanged?.Invoke();
+            }
+
+            UpdateFilterControls();
+        }
+
+        private void ShowAllPackages()
+        {
+            if (_filterState.Set(string.Empty, showInstalled: true, showNotInstalled: true))
+            {
+                _searchField.SetValueWithoutNotify(string.Empty);
+                _filterChanged?.Invoke();
+            }
+
+            UpdateFilterControls();
+        }
+
+        private void UpdateFilterControls()
+        {
+            PackageVisibilityFilterCounts counts = _filterCounts ?? new PackageVisibilityFilterCounts(0, 0, 0, 0);
+            _searchField.SetValueWithoutNotify(_filterState.SearchText);
+            UpdateFilterToggleButton(
+                _installedFilterButton,
+                _filterState.ShowInstalled,
+                "Installed",
+                counts.InstalledCount);
+            UpdateFilterToggleButton(
+                _notInstalledFilterButton,
+                _filterState.ShowNotInstalled,
+                "Not installed",
+                counts.NotInstalledCount);
+
+            _clearFiltersButton.SetEnabled(!_filterState.IsDefault);
+            _visibleCountLabel.text = counts.VisibleCount + " visible";
+            _hiddenRelatedLabel.text = _hiddenRelatedCount > 0
+                ? _hiddenRelatedCount + " related hidden by filters"
+                : string.Empty;
+            _hiddenRelatedLabel.style.display = _hiddenRelatedCount > 0 ? DisplayStyle.Flex : DisplayStyle.None;
+            UpdateEmptyState(counts);
+        }
+
+        private void UpdateEmptyState(PackageVisibilityFilterCounts counts)
+        {
+            bool showEmptyState = counts != null && counts.TotalCount > 0 && counts.VisibleCount == 0;
+            _emptyState.style.display = showEmptyState ? DisplayStyle.Flex : DisplayStyle.None;
+
+            if (!showEmptyState)
+            {
+                return;
+            }
+
+            if (!_filterState.HasAnyVisibilityEnabled)
+            {
+                _emptyStateTitle.text = "No package visibility filters selected.";
+                _emptyStateActionButton.text = "Show all packages";
+                _emptyStateActionButton.tooltip = "Enable Installed and Not installed packages.";
+                _emptyStateActionButton.clicked -= ClearFilters;
+                _emptyStateActionButton.clicked -= ShowAllPackages;
+                _emptyStateActionButton.clicked += ShowAllPackages;
+                return;
+            }
+
+            _emptyStateTitle.text = "No packages match the current filters.";
+            _emptyStateActionButton.text = "Clear filters";
+            _emptyStateActionButton.tooltip = "Clear search and show all package visibility states.";
+            _emptyStateActionButton.clicked -= ClearFilters;
+            _emptyStateActionButton.clicked -= ShowAllPackages;
+            _emptyStateActionButton.clicked += ClearFilters;
+        }
+
+        private static Button CreateFilterToggleButton(Action action)
+        {
+            Button button = new Button(action);
+            button.AddToClassList("dpi-ecosystem-graph__filter-toggle");
+            return button;
+        }
+
+        private static void UpdateFilterToggleButton(
+            Button button,
+            bool active,
+            string label,
+            int count)
+        {
+            if (button == null)
+            {
+                return;
+            }
+
+            button.text = (active ? "[x] " : "[ ] ") + label + " " + count;
+            button.tooltip = (active ? "Hide " : "Show ") + label.ToLowerInvariant() + " packages.";
+            button.EnableInClassList("dpi-ecosystem-graph__filter-toggle--active", active);
         }
 
         private static VisualElement CreateLegendItem(
@@ -553,6 +790,13 @@ namespace Deucarian.PackageInstaller.Editor
                 Array.Empty<PackageGraphNode>(),
                 Array.Empty<PackageGraphEdge>(),
                 Array.Empty<PackageGraphSuiteRegion>());
+        private PackageGraphModel _visibleGraph =
+            new PackageGraphModel(
+                Array.Empty<PackageGraphNode>(),
+                Array.Empty<PackageGraphEdge>(),
+                Array.Empty<PackageGraphSuiteRegion>());
+        private HashSet<string> _visiblePackageIds =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private PackageGraphLayoutResult _layoutResult;
         private string _selectedPackageId = string.Empty;
         private string _focusedPackageId = string.Empty;
@@ -653,6 +897,10 @@ namespace Deucarian.PackageInstaller.Editor
 
         public PackageGraphLayoutMode LayoutMode => _layoutResult != null ? _layoutResult.Mode : PackageGraphLayoutMode.Overview;
 
+        internal IReadOnlyDictionary<string, Rect> NodeRectsForTests => _layoutResult != null
+            ? _layoutResult.NodeRects
+            : new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
+
         public bool SetViewportSize(Vector2 viewportSize)
         {
             if (viewportSize.x <= 1f || viewportSize.y <= 1f)
@@ -682,10 +930,24 @@ namespace Deucarian.PackageInstaller.Editor
             string focusedPackageId,
             bool actionsEnabled)
         {
+            SetGraph(graph, selectedPackageId, focusedPackageId, actionsEnabled, null);
+        }
+
+        public void SetGraph(
+            PackageGraphModel graph,
+            string selectedPackageId,
+            string focusedPackageId,
+            bool actionsEnabled,
+            IReadOnlyCollection<string> visiblePackageIds)
+        {
             _graph = graph ?? new PackageGraphModel(
                 Array.Empty<PackageGraphNode>(),
                 Array.Empty<PackageGraphEdge>(),
                 Array.Empty<PackageGraphSuiteRegion>());
+            _visiblePackageIds = visiblePackageIds == null
+                ? new HashSet<string>(_graph.Nodes.Select(node => node.PackageId), StringComparer.OrdinalIgnoreCase)
+                : new HashSet<string>(visiblePackageIds, StringComparer.OrdinalIgnoreCase);
+            _visibleGraph = PackageVisibilityFilter.CreateVisibleGraph(_graph, _visiblePackageIds);
             _selectedPackageId = selectedPackageId ?? string.Empty;
             _focusedPackageId = focusedPackageId ?? string.Empty;
             _actionsEnabled = actionsEnabled;
@@ -703,7 +965,21 @@ namespace Deucarian.PackageInstaller.Editor
             PackageGraphLayoutMode layoutMode = string.IsNullOrWhiteSpace(_layoutFocusPackageId)
                 ? PackageGraphLayoutMode.Overview
                 : PackageGraphLayoutMode.Focus;
-            _layoutResult = _layout.Calculate(_graph, layoutMode, _layoutFocusPackageId, _viewportSize);
+            PackageGraphLayoutResult fullLayoutResult = _layout.Calculate(
+                _graph,
+                layoutMode,
+                _layoutFocusPackageId,
+                _viewportSize);
+            _currentFocus = PackageGraphFocus.Create(
+                _graph,
+                _layoutFocusPackageId);
+            _actionFocus = PackageGraphFocus.Create(
+                _visibleGraph,
+                _layoutFocusPackageId);
+            PackageGraphFocus edgeFocus = PackageGraphFocus.Create(
+                _visibleGraph,
+                _layoutFocusPackageId);
+            _layoutResult = CreateVisibleLayoutResult(fullLayoutResult, _currentFocus);
             style.width = _layoutResult.CanvasWidth;
             style.height = _layoutResult.CanvasHeight;
             _guideLayer.style.width = _layoutResult.CanvasWidth;
@@ -713,27 +989,58 @@ namespace Deucarian.PackageInstaller.Editor
             _nodeLayer.style.width = _layoutResult.CanvasWidth;
             _nodeLayer.style.height = _layoutResult.CanvasHeight;
 
-            _currentFocus = PackageGraphFocus.Create(
-                _graph,
-                _layoutFocusPackageId);
-            _actionFocus = PackageGraphFocus.Create(
-                _graph,
-                _layoutFocusPackageId);
-
             DrawGuides();
             StartLayoutTransition(previousRects);
             DrawNodes(_currentFocus);
             DrawUnrelatedSummary();
             ApplyAnimatedLayout();
-            _edgeLayer.SetGraph(_graph, _animatedNodeRects, _layoutResult.CanvasHeight, _currentFocus);
+            _edgeLayer.SetGraph(_visibleGraph, _animatedNodeRects, _layoutResult.CanvasHeight, edgeFocus);
         }
 
         private string GetLayoutFocusPackageId()
         {
             return !string.IsNullOrWhiteSpace(_focusedPackageId) &&
-                   _graph.TryGetNode(_focusedPackageId, out _)
+                   _graph.TryGetNode(_focusedPackageId, out _) &&
+                   _visiblePackageIds.Contains(_focusedPackageId)
                 ? _focusedPackageId
                 : string.Empty;
+        }
+
+        private PackageGraphLayoutResult CreateVisibleLayoutResult(
+            PackageGraphLayoutResult fullLayoutResult,
+            PackageGraphFocus fullFocus)
+        {
+            if (fullLayoutResult == null)
+            {
+                return null;
+            }
+
+            Dictionary<string, Rect> visibleNodeRects = fullLayoutResult.NodeRects
+                .Where(pair => _visiblePackageIds.Contains(pair.Key))
+                .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
+            Dictionary<string, PackageGraphLayoutRing> visibleNodeRings = fullLayoutResult.NodeRings
+                .Where(pair => _visiblePackageIds.Contains(pair.Key))
+                .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
+            int visibleUnrelatedCount = fullLayoutResult.Mode == PackageGraphLayoutMode.Focus && fullFocus != null
+                ? _visibleGraph.Nodes.Count(node => !fullFocus.IsPackageRelated(node.PackageId))
+                : 0;
+            Rect unrelatedSummaryRect = visibleUnrelatedCount > 0
+                ? fullLayoutResult.UnrelatedSummaryRect
+                : default(Rect);
+
+            return new PackageGraphLayoutResult(
+                fullLayoutResult.Mode,
+                fullLayoutResult.FocusPackageId,
+                fullLayoutResult.CanvasWidth,
+                fullLayoutResult.CanvasHeight,
+                fullLayoutResult.HubRect,
+                fullLayoutResult.ActiveCenter,
+                visibleNodeRects,
+                visibleNodeRings,
+                fullLayoutResult.RingGuides,
+                fullLayoutResult.SectorLabels,
+                visibleUnrelatedCount,
+                unrelatedSummaryRect);
         }
 
         private Dictionary<string, Rect> CaptureCurrentNodeRects()

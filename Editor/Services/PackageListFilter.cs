@@ -9,6 +9,21 @@ namespace Deucarian.PackageInstaller.Editor
         public static IReadOnlyList<PackageCategoryListView> CreateCategoryViews(
             IEnumerable<PackageDefinition> packages,
             IEnumerable<string> orderedCategories,
+            PackageVisibilityFilterState filterState,
+            Func<PackageDefinition, bool> isInstalled,
+            Func<string, bool> isCategoryExpanded)
+        {
+            return CreateCategoryViews(
+                packages,
+                orderedCategories,
+                new PackageListFilterOptions(filterState),
+                isInstalled,
+                isCategoryExpanded);
+        }
+
+        public static IReadOnlyList<PackageCategoryListView> CreateCategoryViews(
+            IEnumerable<PackageDefinition> packages,
+            IEnumerable<string> orderedCategories,
             PackageListFilterOptions options,
             Func<PackageDefinition, bool> isInstalled,
             Func<string, bool> isCategoryExpanded)
@@ -18,6 +33,10 @@ namespace Deucarian.PackageInstaller.Editor
                 : Array.Empty<PackageDefinition>();
             string[] categories = GetCategories(packageArray, orderedCategories);
             PackageListFilterOptions activeOptions = options ?? new PackageListFilterOptions(string.Empty, true, true);
+            PackageVisibilityFilterState activeFilterState = new PackageVisibilityFilterState(
+                activeOptions.SearchText,
+                activeOptions.ShowInstalled,
+                activeOptions.ShowNotInstalled);
             Func<PackageDefinition, bool> installedPredicate = isInstalled ?? (_ => false);
             Func<string, bool> expandedPredicate = isCategoryExpanded ?? (_ => true);
             List<PackageCategoryListView> views = new List<PackageCategoryListView>();
@@ -35,8 +54,10 @@ namespace Deucarian.PackageInstaller.Editor
 
                 int installedCount = categoryPackages.Count(installedPredicate);
                 PackageDefinition[] filteredPackages = categoryPackages
-                    .Where(package => IsVisibleByInstalledFilter(package, activeOptions, installedPredicate))
-                    .Where(package => MatchesSearch(package, activeOptions.SearchText))
+                    .Where(package => PackageVisibilityFilter.IsVisible(
+                        package,
+                        activeFilterState,
+                        installedPredicate))
                     .ToArray();
                 bool isExpanded = expandedPredicate(category);
 
@@ -81,46 +102,5 @@ namespace Deucarian.PackageInstaller.Editor
             return packageCategories;
         }
 
-        private static bool IsVisibleByInstalledFilter(
-            PackageDefinition packageDefinition,
-            PackageListFilterOptions options,
-            Func<PackageDefinition, bool> isInstalled)
-        {
-            bool installed = isInstalled(packageDefinition);
-            return installed ? options.ShowInstalled : options.ShowNotInstalled;
-        }
-
-        private static bool MatchesSearch(PackageDefinition packageDefinition, string searchText)
-        {
-            if (packageDefinition == null || string.IsNullOrWhiteSpace(searchText))
-            {
-                return true;
-            }
-
-            string[] tokens = searchText
-                .Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-
-            if (tokens.Length == 0)
-            {
-                return true;
-            }
-
-            string searchableText = string.Join(
-                "\n",
-                new[]
-                {
-                    packageDefinition.DisplayName,
-                    packageDefinition.PackageId,
-                    packageDefinition.Category,
-                    packageDefinition.Description,
-                    packageDefinition.DisplayVersion,
-                    packageDefinition.StableUrl,
-                    packageDefinition.DevelopmentUrl,
-                    string.Join(" ", packageDefinition.Dependencies.ToArray())
-                });
-
-            return tokens.All(token =>
-                searchableText.IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0);
-        }
     }
 }

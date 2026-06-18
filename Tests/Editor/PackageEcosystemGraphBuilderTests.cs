@@ -306,6 +306,221 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void VisibilityFilter_UpdateAvailablePackagesCountAsInstalled()
+        {
+            PackageDefinition installed = CreatePackage("Installed", "com.example.installed", "Core");
+            PackageDefinition update = CreatePackage("Update", "com.example.update", "Core");
+            PackageDefinition absent = CreatePackage("Absent", "com.example.absent", "Core");
+            PackageGraphModel graph = new PackageGraphBuilder(
+                    packageId => packageId == installed.PackageId || packageId == update.PackageId,
+                    _ => PackageChannel.Stable,
+                    package => package.PackageId == update.PackageId
+                        ? PackageUpdateStatus.UpdateAvailable(
+                            package,
+                            PackageChannel.Stable,
+                            package.GetUrl(PackageChannel.Stable),
+                            "1111111",
+                            "2222222")
+                        : PackageUpdateStatus.UpToDate(
+                            package,
+                            PackageChannel.Stable,
+                            package.GetUrl(PackageChannel.Stable),
+                            "1111111",
+                            "1111111"))
+                .Build(new[] { installed, update, absent });
+            PackageVisibilityFilterState installedOnly = new PackageVisibilityFilterState(
+                string.Empty,
+                showInstalled: true,
+                showNotInstalled: false);
+
+            HashSet<string> visibleIds = PackageVisibilityFilter.CreateVisiblePackageIdSet(graph, installedOnly);
+            PackageVisibilityFilterCounts counts = PackageVisibilityFilter.CalculateCounts(graph, installedOnly);
+
+            Assert.AreEqual(2, counts.InstalledCount);
+            Assert.AreEqual(1, counts.NotInstalledCount);
+            Assert.AreEqual(2, counts.VisibleCount);
+            CollectionAssert.Contains(visibleIds, update.PackageId);
+            CollectionAssert.DoesNotContain(visibleIds, absent.PackageId);
+        }
+
+        [Test]
+        public void VisibilityFilter_CreateVisibleGraphRemovesHiddenNodesAndEdges()
+        {
+            PackageDefinition logging = CreatePackage("Logging", "com.example.logging", "Core");
+            PackageDefinition session = CreatePackage(
+                "Session",
+                "com.example.session",
+                "Core",
+                dependencies: new[] { logging.PackageId });
+            PackageGraphModel graph = new PackageGraphBuilder(packageId => packageId == logging.PackageId)
+                .Build(new[] { logging, session });
+            PackageVisibilityFilterState installedOnly = new PackageVisibilityFilterState(
+                string.Empty,
+                showInstalled: true,
+                showNotInstalled: false);
+
+            HashSet<string> visibleIds = PackageVisibilityFilter.CreateVisiblePackageIdSet(graph, installedOnly);
+            PackageGraphModel visibleGraph = PackageVisibilityFilter.CreateVisibleGraph(graph, visibleIds);
+
+            Assert.AreEqual(1, visibleGraph.Nodes.Count);
+            Assert.AreEqual(logging.PackageId, visibleGraph.Nodes[0].PackageId);
+            Assert.IsEmpty(visibleGraph.Edges);
+        }
+
+        [Test]
+        public void GraphCanvas_FilteredOverviewKeepsStablePositionsAndFitBounds()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+            Vector2 compactViewport = new Vector2(900f, 620f);
+            PackageGraphLayoutResult fullLayout = new PackageGraphLayout().Calculate(
+                graph,
+                PackageGraphLayoutMode.Overview,
+                string.Empty,
+                compactViewport);
+            HashSet<string> visibleIds = new HashSet<string>(
+                new[]
+                {
+                    "com.deucarian.logging",
+                    "com.deucarian.session"
+                },
+                StringComparer.OrdinalIgnoreCase);
+            PackageGraphCanvas canvas = new PackageGraphCanvas(_ => { }, (_, __) => { }, () => { });
+
+            canvas.SetViewportSize(compactViewport);
+            canvas.SetGraph(graph, string.Empty, string.Empty, actionsEnabled: true, visibleIds);
+
+            Assert.AreEqual(2, canvas.NodeRectsForTests.Count);
+            AssertRectsEqual(
+                fullLayout.NodeRects["com.deucarian.logging"],
+                canvas.NodeRectsForTests["com.deucarian.logging"],
+                0.1f);
+            AssertRectsEqual(
+                fullLayout.NodeRects["com.deucarian.session"],
+                canvas.NodeRectsForTests["com.deucarian.session"],
+                0.1f);
+            Assert.IsFalse(canvas.NodeRectsForTests.ContainsKey("com.deucarian.api"));
+            AssertRectsEqual(
+                CreateExpectedFitBounds(fullLayout, visibleIds),
+                canvas.GetContentBounds(),
+                0.1f);
+        }
+
+        [Test]
+        public void VisibilityFilter_HidingFocusedPackageClearsFocusAndSelection()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+            HashSet<string> visibleIds = new HashSet<string>(
+                graph.Nodes
+                    .Select(node => node.PackageId)
+                    .Where(packageId => !string.Equals(
+                        packageId,
+                        "com.deucarian.session",
+                        StringComparison.OrdinalIgnoreCase)),
+                StringComparer.OrdinalIgnoreCase);
+            PackageGraphCanvas canvas = new PackageGraphCanvas(_ => { }, (_, __) => { }, () => { });
+
+            canvas.SetGraph(
+                graph,
+                "com.deucarian.session",
+                "com.deucarian.session",
+                actionsEnabled: true,
+                visibleIds);
+
+            Assert.IsTrue(PackageInstallerWindow.ShouldClearGraphSelectionForFilters(
+                "com.deucarian.session",
+                "com.deucarian.session",
+                visibleIds));
+            Assert.AreEqual(PackageGraphLayoutMode.Overview, canvas.LayoutMode);
+        }
+
+        [Test]
+        public void VisibilityFilter_CountsHiddenRelatedPackages()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+            HashSet<string> visibleIds = new HashSet<string>(
+                graph.Nodes
+                    .Select(node => node.PackageId)
+                    .Where(packageId => !string.Equals(
+                        packageId,
+                        "com.deucarian.logging",
+                        StringComparison.OrdinalIgnoreCase)),
+                StringComparer.OrdinalIgnoreCase);
+
+            int hiddenRelatedCount = PackageVisibilityFilter.CountHiddenRelatedPackages(
+                graph,
+                "com.deucarian.session",
+                visibleIds);
+
+            Assert.AreEqual(1, hiddenRelatedCount);
+        }
+
+        [Test]
+        public void GraphView_FilterEmptyStateDistinguishesDisabledTogglesFromNoMatches()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+            PackageVisibilityFilterState disabledState = new PackageVisibilityFilterState(
+                string.Empty,
+                showInstalled: false,
+                showNotInstalled: false);
+            PackageGraphView disabledView = new PackageGraphView(
+                _ => { },
+                (_, __) => { },
+                null,
+                disabledState,
+                null);
+            HashSet<string> disabledIds = PackageVisibilityFilter.CreateVisiblePackageIdSet(graph, disabledState);
+
+            disabledView.SetGraph(
+                graph,
+                string.Empty,
+                string.Empty,
+                actionsEnabled: true,
+                disabledIds,
+                PackageVisibilityFilter.CalculateCounts(graph, disabledState),
+                hiddenRelatedCount: 0);
+
+            Assert.IsEmpty(FindByClass(disabledView, "dpi-graph-node"));
+            Assert.AreEqual(
+                "No package visibility filters selected.",
+                FindByClass(disabledView, "dpi-ecosystem-graph__empty-title")
+                    .OfType<Label>()
+                    .Single()
+                    .text);
+
+            PackageVisibilityFilterState searchState = new PackageVisibilityFilterState(
+                "no-such-package",
+                showInstalled: true,
+                showNotInstalled: true);
+            PackageGraphView searchView = new PackageGraphView(
+                _ => { },
+                (_, __) => { },
+                null,
+                searchState,
+                null);
+            HashSet<string> searchIds = PackageVisibilityFilter.CreateVisiblePackageIdSet(graph, searchState);
+
+            searchView.SetGraph(
+                graph,
+                string.Empty,
+                string.Empty,
+                actionsEnabled: true,
+                searchIds,
+                PackageVisibilityFilter.CalculateCounts(graph, searchState),
+                hiddenRelatedCount: 0);
+
+            Assert.AreEqual(
+                "No packages match the current filters.",
+                FindByClass(searchView, "dpi-ecosystem-graph__empty-title")
+                    .OfType<Label>()
+                    .Single()
+                    .text);
+        }
+
+        [Test]
         public void GraphView_DisablesSelectedNodeActionDuringLayoutTransition()
         {
             PackageDefinition package = CreatePackage("Installable", "com.example.installable", "Core");
@@ -1010,11 +1225,24 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
         private static Rect CreateExpectedFitBounds(PackageGraphLayoutResult layout)
         {
-            Rect bounds = layout.HubRect;
+            return CreateExpectedFitBounds(layout, layout.NodeRects.Keys);
+        }
 
-            foreach (Rect nodeRect in layout.NodeRects.Values)
+        private static Rect CreateExpectedFitBounds(
+            PackageGraphLayoutResult layout,
+            IEnumerable<string> visiblePackageIds)
+        {
+            Rect bounds = layout.HubRect;
+            HashSet<string> visibleIds = new HashSet<string>(
+                visiblePackageIds ?? Array.Empty<string>(),
+                StringComparer.OrdinalIgnoreCase);
+
+            foreach (KeyValuePair<string, Rect> nodeRect in layout.NodeRects)
             {
-                bounds = Union(bounds, nodeRect);
+                if (visibleIds.Contains(nodeRect.Key))
+                {
+                    bounds = Union(bounds, nodeRect.Value);
+                }
             }
 
             return Expand(bounds, 16f);

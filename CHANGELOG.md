@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.26 - 2026-06-18
+
+- Added shared Installed / Not installed visibility filters and package search across List View and Ecosystem Graph.
+- Filtered graph rendering now hides package nodes, shortcut actions, and relationship edges while preserving semantic overview positions.
+- Added graph empty states, visible counts, and hidden-related package indicators for filtered focus mode.
+
 ## 1.1.25 - 2026-06-18
 
 - Made Ecosystem Graph the default Package Installer view and placed it before List View in the toggle.
