@@ -162,9 +162,35 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 .OfType<Label>()
                 .Single();
             Assert.AreEqual("Update available", updateBadge.text);
-            Assert.AreEqual(
-                "Update",
-                FindByClass(view, "dpi-graph-node__action").OfType<Button>().Single().text);
+            Assert.IsEmpty(FindByClass(view, "dpi-graph-node__action"));
+
+            PackageGraphView selectedView = new PackageGraphView(_ => { }, (_, __) => { });
+
+            selectedView.SetGraph(graph, update.PackageId, actionsEnabled: true);
+
+            Button selectedAction = FindByClass(selectedView, "dpi-graph-node__action")
+                .OfType<Button>()
+                .Single();
+            Assert.AreEqual("Update", selectedAction.text);
+            Assert.IsTrue(selectedAction.enabledSelf);
+        }
+
+        [Test]
+        public void GraphView_DisablesSelectedNodeActionDuringLayoutTransition()
+        {
+            PackageDefinition package = CreatePackage("Installable", "com.example.installable", "Core");
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(new[] { package });
+            PackageGraphView view = new PackageGraphView(_ => { }, (_, __) => { });
+
+            view.SetGraph(graph, string.Empty, actionsEnabled: true);
+            view.SetGraph(graph, package.PackageId, actionsEnabled: true);
+
+            Button selectedAction = FindByClass(view, "dpi-graph-node__action")
+                .OfType<Button>()
+                .Single();
+            Assert.AreEqual("Install", selectedAction.text);
+            Assert.IsFalse(selectedAction.enabledSelf);
         }
 
         [Test]

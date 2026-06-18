@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.20 - 2026-06-18
+
+- Limited Ecosystem Graph node action buttons to the selected package so first-click graph navigation cannot accidentally run install/update/reinstall actions.
+- Kept selected-node actions disabled while graph layout transitions are animating.
+
 ## 1.1.19 - 2026-06-17
 
 - Refined the Ecosystem Graph overview into one deterministic Deucarian-centered package orbit with sector labels.

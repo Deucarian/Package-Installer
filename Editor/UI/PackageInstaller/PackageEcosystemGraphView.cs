@@ -975,6 +975,7 @@ namespace Deucarian.PackageInstaller.Editor
                     StringComparison.OrdinalIgnoreCase);
                 bool related = focus.IsPackageRelated(node.PackageId);
                 bool dimmed = focus.HasFocus && !related;
+                bool nodeActionsEnabled = selected && _actionsEnabled && !_interactionsLocked;
                 PackageGraphNodeElement nodeElement = new PackageGraphNodeElement(
                     node,
                     ring,
@@ -983,7 +984,7 @@ namespace Deucarian.PackageInstaller.Editor
                     dimmed,
                     previewed,
                     _expandedSuiteIds.Contains(node.PackageId),
-                    _actionsEnabled && !_interactionsLocked,
+                    nodeActionsEnabled,
                     !_interactionsLocked,
                     _packageSelected,
                     _packageAction,
@@ -1922,11 +1923,14 @@ namespace Deucarian.PackageInstaller.Editor
             channel.AddToClassList("dpi-graph-node__channel");
             footer.Add(channel);
 
-            if (node.PrimaryAction != PackageGraphNodeAction.None)
+            if (selected && node.PrimaryAction != PackageGraphNodeAction.None)
             {
                 Button actionButton = new Button(() =>
                 {
-                    packageAction?.Invoke(node.PackageDefinition, node.PrimaryAction);
+                    if (actionsEnabled && interactionsEnabled)
+                    {
+                        packageAction?.Invoke(node.PackageDefinition, node.PrimaryAction);
+                    }
                 })
                 {
                     text = node.PrimaryActionLabel
