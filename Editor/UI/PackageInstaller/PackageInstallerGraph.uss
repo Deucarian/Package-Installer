@@ -287,6 +287,30 @@
     -unity-font-style: bold;
 }
 
+.dpi-graph-sector-label {
+    position: absolute;
+    color: rgba(154, 194, 202, 0.62);
+    font-size: 11px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+}
+
+.dpi-graph-sector-label--foundation {
+    color: rgba(154, 184, 230, 0.62);
+}
+
+.dpi-graph-sector-label--runtime {
+    color: rgba(126, 199, 215, 0.58);
+}
+
+.dpi-graph-sector-label--integration {
+    color: rgba(105, 218, 204, 0.60);
+}
+
+.dpi-graph-sector-label--suite {
+    color: rgba(169, 151, 219, 0.58);
+}
+
 .dpi-graph-hub {
     position: absolute;
     align-items: center;
@@ -441,7 +465,11 @@
 }
 
 .dpi-graph-node--dimmed {
-    opacity: 0.34;
+    opacity: 0.24;
+}
+
+.dpi-graph-node--locked {
+    opacity: 0.72;
 }
 
 .dpi-graph-node--installed {

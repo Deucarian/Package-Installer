@@ -494,6 +494,7 @@ namespace Deucarian.PackageInstaller.Editor
         private IVisualElementScheduledItem _layoutAnimationItem;
         private double _layoutAnimationStartedAt;
         private bool _layoutAnimationActive;
+        private bool _interactionsLocked;
         private bool _actionsEnabled;
 
         public PackageGraphCanvas(
@@ -697,6 +698,7 @@ namespace Deucarian.PackageInstaller.Editor
             if (!shouldAnimate)
             {
                 _layoutAnimationActive = false;
+                _interactionsLocked = false;
                 _layoutAnimationItem?.Pause();
                 CopyTargetRectsToAnimatedRects();
                 return;
@@ -704,6 +706,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             _layoutAnimationStartedAt = EditorApplication.timeSinceStartup;
             _layoutAnimationActive = true;
+            _interactionsLocked = true;
 
             if (_layoutAnimationItem == null)
             {
@@ -737,9 +740,11 @@ namespace Deucarian.PackageInstaller.Editor
             if (t >= 1f)
             {
                 _layoutAnimationActive = false;
+                _interactionsLocked = false;
                 _layoutAnimationItem?.Pause();
                 CopyTargetRectsToAnimatedRects();
                 ApplyAnimatedLayout();
+                Rebuild();
             }
         }
 
@@ -789,6 +794,18 @@ namespace Deucarian.PackageInstaller.Editor
                 label.AddToClassList("dpi-graph-ring-guide__label");
                 ringGuide.Add(label);
                 _guideLayer.Add(ringGuide);
+            }
+
+            foreach (PackageGraphSectorLabel sectorLabel in _layoutResult.SectorLabels)
+            {
+                Label label = new Label(sectorLabel.Label);
+                label.AddToClassList("dpi-graph-sector-label");
+                label.AddToClassList("dpi-graph-sector-label--" + GetRingClass(sectorLabel.Ring));
+                label.style.left = sectorLabel.Position.x - 92f;
+                label.style.top = sectorLabel.Position.y - 12f;
+                label.style.width = 184f;
+                label.style.height = 24f;
+                _guideLayer.Add(label);
             }
 
             VisualElement hub = new VisualElement();
@@ -966,7 +983,8 @@ namespace Deucarian.PackageInstaller.Editor
                     dimmed,
                     previewed,
                     _expandedSuiteIds.Contains(node.PackageId),
-                    _actionsEnabled,
+                    _actionsEnabled && !_interactionsLocked,
+                    !_interactionsLocked,
                     _packageSelected,
                     _packageAction,
                     _selectionCleared,
@@ -1795,6 +1813,7 @@ namespace Deucarian.PackageInstaller.Editor
             bool previewed,
             bool suiteExpanded,
             bool actionsEnabled,
+            bool interactionsEnabled,
             Action<PackageDefinition> packageSelected,
             Action<PackageDefinition, PackageGraphNodeAction> packageAction,
             Action selectionCleared,
@@ -1812,17 +1831,27 @@ namespace Deucarian.PackageInstaller.Editor
             EnableInClassList("dpi-graph-node--selected", selected);
             EnableInClassList("dpi-graph-node--related", related && !selected);
             EnableInClassList("dpi-graph-node--dimmed", dimmed);
+            EnableInClassList("dpi-graph-node--locked", !interactionsEnabled);
             EnableInClassList("dpi-graph-node--previewed", previewed);
             EnableInClassList("dpi-graph-node--missing", !node.IsRegistered);
             tooltip = GetTooltip(node);
 
-            RegisterCallback<MouseEnterEvent>(_ => previewPackage?.Invoke(node.PackageId));
-            RegisterCallback<MouseLeaveEvent>(_ => clearPreviewPackage?.Invoke(node.PackageId));
+            if (interactionsEnabled)
+            {
+                RegisterCallback<MouseEnterEvent>(_ => previewPackage?.Invoke(node.PackageId));
+                RegisterCallback<MouseLeaveEvent>(_ => clearPreviewPackage?.Invoke(node.PackageId));
+            }
 
             if (node.PackageDefinition != null && packageSelected != null)
             {
                 RegisterCallback<ClickEvent>(evt =>
                 {
+                    if (!interactionsEnabled)
+                    {
+                        evt.StopPropagation();
+                        return;
+                    }
+
                     if (selected)
                     {
                         selectionCleared?.Invoke();
@@ -1862,12 +1891,19 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (node.NodeType == PackageGraphNodeType.Suite)
             {
-                Button expandButton = new Button(() => suiteToggled?.Invoke(node.PackageId))
+                Button expandButton = new Button(() =>
+                {
+                    if (interactionsEnabled)
+                    {
+                        suiteToggled?.Invoke(node.PackageId);
+                    }
+                })
                 {
                     text = suiteExpanded ? "-" : "+",
                     tooltip = suiteExpanded ? "Collapse suite composition" : "Expand suite composition"
                 };
                 expandButton.AddToClassList("dpi-graph-node__suite-toggle");
+                expandButton.SetEnabled(interactionsEnabled);
                 expandButton.RegisterCallback<ClickEvent>(evt => evt.StopPropagation());
                 header.Add(expandButton);
             }

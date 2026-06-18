@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.19 - 2026-06-17
+
+- Refined the Ecosystem Graph overview into one deterministic Deucarian-centered package orbit with sector labels.
+- Moved unrelated focus-mode packages into a compact dimmed side stack.
+- Locked graph node selection, hover focus, and node actions while layout transitions are animating.
+
 ## 1.1.18 - 2026-06-17
 
 - Added explicit overview and focus layout modes for the Ecosystem Graph.

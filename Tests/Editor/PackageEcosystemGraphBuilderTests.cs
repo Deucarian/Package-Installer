@@ -233,7 +233,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
-        public void Layout_CalculatesOrbitalPositionsWithoutNodeOverlap()
+        public void Layout_CalculatesSingleCircleOverviewWithoutNodeOverlap()
         {
             PackageGraphModel graph = new PackageGraphBuilder(_ => false)
                 .Build(CreateDefaultGraphPackages());
@@ -242,7 +242,13 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
             Assert.AreEqual(PackageGraphLayoutMode.Overview, layout.Mode);
             Assert.AreEqual(graph.Nodes.Count, layout.NodeRects.Count);
-            Assert.IsTrue(layout.RingGuides.Count >= 4);
+            Assert.AreEqual(1, layout.RingGuides.Count);
+            Assert.AreEqual("Deucarian Ecosystem Orbit", layout.RingGuides[0].Label);
+            Assert.AreEqual(4, layout.SectorLabels.Count);
+            Assert.IsTrue(layout.SectorLabels.Any(label => label.Label == "Core / Foundation"));
+            Assert.IsTrue(layout.SectorLabels.Any(label => label.Label == "UI / Runtime / Tooling"));
+            Assert.IsTrue(layout.SectorLabels.Any(label => label.Label == "Integrations"));
+            Assert.IsTrue(layout.SectorLabels.Any(label => label.Label == "Suites"));
             Assert.AreEqual(
                 PackageGraphLayoutRing.Foundation,
                 layout.NodeRings["com.deucarian.object-loading"]);
@@ -252,6 +258,12 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual(
                 PackageGraphLayoutRing.Runtime,
                 layout.NodeRings["com.deucarian.package-installer"]);
+            foreach (Rect nodeRect in layout.NodeRects.Values)
+            {
+                Assert.That(
+                    Vector2.Distance(nodeRect.center, PackageGraphLayout.GraphCenter),
+                    Is.EqualTo(780f).Within(1.5f));
+            }
             AssertNoOverlaps(layout.NodeRects.Values.ToArray());
         }
 
@@ -270,6 +282,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Rect logging = layout.NodeRects["com.deucarian.logging"];
             Rect api = layout.NodeRects["com.deucarian.api"];
             Rect sessionIntegration = layout.NodeRects["com.deucarian.session.api-integration"];
+            Rect theming = layout.NodeRects["com.deucarian.theming"];
 
             Assert.AreEqual(PackageGraphLayoutMode.Focus, layout.Mode);
             Assert.AreEqual("com.deucarian.session", layout.FocusPackageId);
@@ -277,8 +290,10 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.Less(logging.center.x, session.center.x);
             Assert.Less(api.center.x, session.center.x);
             Assert.Greater(sessionIntegration.center.y, session.center.y);
+            Assert.Greater(theming.center.x, session.center.x + 500f);
             Assert.AreEqual(layout.ActiveCenter, session.center);
             Assert.IsTrue(layout.RingGuides.Any(guide => guide.Label == "Required packages"));
+            Assert.IsTrue(layout.RingGuides.Any(guide => guide.Label == "Unrelated package stack"));
             AssertNoOverlaps(layout.NodeRects.Values.ToArray());
         }
 

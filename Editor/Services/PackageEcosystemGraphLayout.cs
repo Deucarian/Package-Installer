@@ -30,7 +30,8 @@ namespace Deucarian.PackageInstaller.Editor
             Vector2 activeCenter,
             IReadOnlyDictionary<string, Rect> nodeRects,
             IReadOnlyDictionary<string, PackageGraphLayoutRing> nodeRings,
-            IEnumerable<PackageGraphRingGuide> ringGuides)
+            IEnumerable<PackageGraphRingGuide> ringGuides,
+            IEnumerable<PackageGraphSectorLabel> sectorLabels = null)
         {
             Mode = mode;
             FocusPackageId = focusPackageId ?? string.Empty;
@@ -43,6 +44,9 @@ namespace Deucarian.PackageInstaller.Editor
             RingGuides = ringGuides == null
                 ? Array.Empty<PackageGraphRingGuide>()
                 : ringGuides.Where(guide => guide != null).ToArray();
+            SectorLabels = sectorLabels == null
+                ? Array.Empty<PackageGraphSectorLabel>()
+                : sectorLabels.Where(label => label != null).ToArray();
         }
 
         public PackageGraphLayoutMode Mode { get; }
@@ -62,6 +66,8 @@ namespace Deucarian.PackageInstaller.Editor
         public IReadOnlyDictionary<string, PackageGraphLayoutRing> NodeRings { get; }
 
         public IReadOnlyList<PackageGraphRingGuide> RingGuides { get; }
+
+        public IReadOnlyList<PackageGraphSectorLabel> SectorLabels { get; }
     }
 
     internal sealed class PackageGraphRingGuide
@@ -86,20 +92,37 @@ namespace Deucarian.PackageInstaller.Editor
         public float RadiusY { get; }
     }
 
+    internal sealed class PackageGraphSectorLabel
+    {
+        public PackageGraphSectorLabel(string label, PackageGraphLayoutRing ring, Vector2 position)
+        {
+            Label = label ?? string.Empty;
+            Ring = ring;
+            Position = position;
+        }
+
+        public string Label { get; }
+
+        public PackageGraphLayoutRing Ring { get; }
+
+        public Vector2 Position { get; }
+    }
+
     internal sealed class PackageGraphLayout
     {
-        public const float CanvasWidth = 1500f;
-        public const float CanvasHeight = 1080f;
+        public const float CanvasWidth = 2300f;
+        public const float CanvasHeight = 1900f;
         public const float NodeWidth = 238f;
         public const float NodeHeight = 136f;
 
         private const float HubWidth = 210f;
         private const float HubHeight = 112f;
         private const float NodeGap = 18f;
+        private const float OverviewOrbitRadius = 780f;
         private const float FocusGridGapX = 42f;
         private const float FocusGridGapY = 26f;
 
-        public static readonly Vector2 GraphCenter = new Vector2(730f, 500f);
+        public static readonly Vector2 GraphCenter = new Vector2(1150f, 950f);
 
         public PackageGraphLayoutResult Calculate(PackageGraphModel graph)
         {
@@ -128,7 +151,6 @@ namespace Deucarian.PackageInstaller.Editor
             if (focusNode == null)
             {
                 PlaceOverview(nodes, nodeRects, nodeRings);
-                ResolveOverlaps(nodeRects, nodeRings, string.Empty);
 
                 Rect overviewHubRect = CreateOverviewHubRect();
                 return new PackageGraphLayoutResult(
@@ -140,7 +162,8 @@ namespace Deucarian.PackageInstaller.Editor
                     overviewHubRect.center,
                     nodeRects,
                     nodeRings,
-                    CreateOverviewRingGuides());
+                    CreateOverviewRingGuides(),
+                    CreateOverviewSectorLabels(nodeRects, nodeRings));
             }
 
             PlaceFocus(graph, nodes, focusNode, nodeRects, nodeRings);
@@ -185,10 +208,33 @@ namespace Deucarian.PackageInstaller.Editor
             IDictionary<string, Rect> nodeRects,
             IReadOnlyDictionary<string, PackageGraphLayoutRing> nodeRings)
         {
-            PlaceRing(nodes, PackageGraphLayoutRing.Foundation, nodeRects, nodeRings);
-            PlaceRing(nodes, PackageGraphLayoutRing.Runtime, nodeRects, nodeRings);
-            PlaceRing(nodes, PackageGraphLayoutRing.Integration, nodeRects, nodeRings);
-            PlaceRing(nodes, PackageGraphLayoutRing.Suite, nodeRects, nodeRings);
+            PackageGraphNode[] orderedNodes = nodes
+                .Where(node => node != null)
+                .OrderBy(node => nodeRings.TryGetValue(node.PackageId, out PackageGraphLayoutRing ring)
+                    ? GetRingPriority(ring)
+                    : 0)
+                .ThenBy(node => GetRingSortIndex(node, nodeRings.TryGetValue(node.PackageId, out PackageGraphLayoutRing ring)
+                    ? ring
+                    : PackageGraphLayoutRing.Foundation))
+                .ThenBy(node => node.DisplayName, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            if (orderedNodes.Length == 0)
+            {
+                return;
+            }
+
+            float[] angles = CreateEvenAngles(-132f, 228f, orderedNodes.Length, includeEnd: false);
+
+            for (int index = 0; index < orderedNodes.Length; index++)
+            {
+                PackageGraphNode node = orderedNodes[index];
+                float radians = angles[index] * Mathf.Deg2Rad;
+                Vector2 nodeCenter = new Vector2(
+                    GraphCenter.x + Mathf.Cos(radians) * OverviewOrbitRadius,
+                    GraphCenter.y + Mathf.Sin(radians) * OverviewOrbitRadius);
+                nodeRects[node.PackageId] = ClampToCanvas(CenteredRect(nodeCenter));
+            }
         }
 
         private static void PlaceFocus(
@@ -221,36 +267,36 @@ namespace Deucarian.PackageInstaller.Editor
 
             PlaceCluster(
                 MergeGroups(providers, supportProviders),
-                new Vector2(355f, 328f),
+                new Vector2(700f, 750f),
                 1,
                 nodeRects,
                 placed);
             PlaceCluster(
                 dependents,
-                new Vector2(1105f, 328f),
-                1,
+                new Vector2(1550f, 740f),
+                2,
                 nodeRects,
                 placed);
             PlaceCluster(
                 integrationNodes,
-                new Vector2(730f, 735f),
+                new Vector2(1150f, 1260f),
                 2,
                 nodeRects,
                 placed);
             PlaceCluster(
                 optionalCompanions,
-                new Vector2(390f, 790f),
+                new Vector2(700f, 380f),
                 1,
                 nodeRects,
                 placed);
             PlaceCluster(
                 suiteNodes,
-                new Vector2(1080f, 790f),
+                new Vector2(1550f, 380f),
                 1,
                 nodeRects,
                 placed);
 
-            PlaceUnrelatedOuterNodes(nodes, nodeRects, nodeRings, placed);
+            PlaceUnrelatedStack(nodes, nodeRects, nodeRings, placed);
         }
 
         private static List<PackageGraphNode> GetProviderNodes(
@@ -443,7 +489,7 @@ namespace Deucarian.PackageInstaller.Editor
             }
         }
 
-        private static void PlaceUnrelatedOuterNodes(
+        private static void PlaceUnrelatedStack(
             IEnumerable<PackageGraphNode> nodes,
             IDictionary<string, Rect> nodeRects,
             IReadOnlyDictionary<string, PackageGraphLayoutRing> nodeRings,
@@ -465,55 +511,25 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            float[] angles = CreateEvenAngles(-164f, 196f, remainingNodes.Length);
+            const int stackColumns = 2;
+            const float stackCenterX = 1990f;
+            const float stackTopY = 380f;
+            const float stackGapX = 24f;
+            const float stackGapY = 16f;
+            float stepX = NodeWidth + stackGapX;
+            float stepY = NodeHeight + stackGapY;
 
             for (int index = 0; index < remainingNodes.Length; index++)
             {
                 PackageGraphNode node = remainingNodes[index];
-                PackageGraphLayoutRing ring = nodeRings.TryGetValue(node.PackageId, out PackageGraphLayoutRing nodeRing)
-                    ? nodeRing
-                    : PackageGraphLayoutRing.Foundation;
-                Vector2 radius = GetFocusOuterRadius(ring);
-                float radians = angles[index] * Mathf.Deg2Rad;
+                int column = index % stackColumns;
+                int row = index / stackColumns;
+                float originX = stackCenterX - ((stackColumns - 1) * stepX) * 0.5f;
                 Vector2 nodeCenter = new Vector2(
-                    GraphCenter.x + Mathf.Cos(radians) * radius.x,
-                    GraphCenter.y + Mathf.Sin(radians) * radius.y);
+                    originX + column * stepX,
+                    stackTopY + row * stepY);
                 nodeRects[node.PackageId] = ClampToCanvas(CenteredRect(nodeCenter));
                 placed.Add(node.PackageId);
-            }
-        }
-
-        private static void PlaceRing(
-            IEnumerable<PackageGraphNode> allNodes,
-            PackageGraphLayoutRing ring,
-            IDictionary<string, Rect> nodeRects,
-            IReadOnlyDictionary<string, PackageGraphLayoutRing> nodeRings)
-        {
-            PackageGraphNode[] ringNodes = allNodes
-                .Where(node => nodeRings.TryGetValue(node.PackageId, out PackageGraphLayoutRing nodeRing) &&
-                               nodeRing == ring)
-                .OrderBy(node => GetRingSortIndex(node, ring))
-                .ThenBy(node => node.DisplayName, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-
-            if (ringNodes.Length == 0)
-            {
-                return;
-            }
-
-            Vector2 radius = GetRingRadius(ring);
-            float[] angles = GetRingAngles(ring, ringNodes.Length);
-
-            for (int index = 0; index < ringNodes.Length; index++)
-            {
-                PackageGraphNode node = ringNodes[index];
-                float radians = angles[index] * Mathf.Deg2Rad;
-                Vector2 nodeCenter = new Vector2(
-                    GraphCenter.x + Mathf.Cos(radians) * radius.x,
-                    GraphCenter.y + Mathf.Sin(radians) * radius.y);
-                Rect rect = CenteredRect(nodeCenter);
-
-                nodeRects[node.PackageId] = ClampToCanvas(rect);
             }
         }
 
@@ -547,77 +563,7 @@ namespace Deucarian.PackageInstaller.Editor
             return PackageGraphLayoutRing.Foundation;
         }
 
-        private static Vector2 GetRingRadius(PackageGraphLayoutRing ring)
-        {
-            switch (ring)
-            {
-                case PackageGraphLayoutRing.Runtime:
-                    return new Vector2(560f, 380f);
-                case PackageGraphLayoutRing.Integration:
-                    return new Vector2(620f, 350f);
-                case PackageGraphLayoutRing.Suite:
-                    return new Vector2(470f, 450f);
-                default:
-                    return new Vector2(330f, 245f);
-            }
-        }
-
-        private static Vector2 GetFocusOuterRadius(PackageGraphLayoutRing ring)
-        {
-            switch (ring)
-            {
-                case PackageGraphLayoutRing.Runtime:
-                    return new Vector2(575f, 425f);
-                case PackageGraphLayoutRing.Integration:
-                    return new Vector2(625f, 405f);
-                case PackageGraphLayoutRing.Suite:
-                    return new Vector2(610f, 430f);
-                default:
-                    return new Vector2(535f, 410f);
-            }
-        }
-
-        private static float[] GetRingAngles(PackageGraphLayoutRing ring, int count)
-        {
-            if (count <= 0)
-            {
-                return Array.Empty<float>();
-            }
-
-            switch (ring)
-            {
-                case PackageGraphLayoutRing.Foundation:
-                    return GetPreferredAngles(
-                        new[] { -98f, -48f, 2f, 52f, 112f, 172f, 232f },
-                        -104f,
-                        236f,
-                        count);
-                case PackageGraphLayoutRing.Runtime:
-                    return GetPreferredAngles(
-                        new[] { -170f, -118f, 128f, 170f, -76f, 76f },
-                        -172f,
-                        172f,
-                        count);
-                case PackageGraphLayoutRing.Integration:
-                    return CreateEvenAngles(-72f, 72f, count);
-                case PackageGraphLayoutRing.Suite:
-                    return CreateEvenAngles(count <= 3 ? 100f : 72f, count <= 3 ? 110f : 128f, count);
-                default:
-                    return CreateEvenAngles(0f, 360f, count);
-            }
-        }
-
-        private static float[] GetPreferredAngles(float[] preferredAngles, float fallbackStart, float fallbackEnd, int count)
-        {
-            if (count <= preferredAngles.Length)
-            {
-                return preferredAngles.Take(count).ToArray();
-            }
-
-            return CreateEvenAngles(fallbackStart, fallbackEnd, count);
-        }
-
-        private static float[] CreateEvenAngles(float startAngle, float endAngle, int count)
+        private static float[] CreateEvenAngles(float startAngle, float endAngle, int count, bool includeEnd)
         {
             if (count == 1)
             {
@@ -626,10 +572,11 @@ namespace Deucarian.PackageInstaller.Editor
 
             float[] angles = new float[count];
             float span = endAngle - startAngle;
+            float denominator = includeEnd ? count - 1f : count;
 
             for (int index = 0; index < count; index++)
             {
-                angles[index] = startAngle + span * (index / (float)(count - 1));
+                angles[index] = startAngle + span * (index / denominator);
             }
 
             return angles;
@@ -963,29 +910,92 @@ namespace Deucarian.PackageInstaller.Editor
         private static IEnumerable<PackageGraphRingGuide> CreateOverviewRingGuides()
         {
             yield return new PackageGraphRingGuide(
-                "Core / Foundation",
+                "Deucarian Ecosystem Orbit",
                 PackageGraphLayoutRing.Foundation,
                 GraphCenter,
-                364f,
-                275f);
-            yield return new PackageGraphRingGuide(
-                "UI / World / Runtime / Tooling",
-                PackageGraphLayoutRing.Runtime,
-                GraphCenter,
-                602f,
-                418f);
-            yield return new PackageGraphRingGuide(
-                "Integration Packages",
-                PackageGraphLayoutRing.Integration,
-                GraphCenter,
-                666f,
-                382f);
-            yield return new PackageGraphRingGuide(
-                "Suites",
-                PackageGraphLayoutRing.Suite,
-                GraphCenter,
-                506f,
-                492f);
+                OverviewOrbitRadius,
+                OverviewOrbitRadius);
+        }
+
+        private static IEnumerable<PackageGraphSectorLabel> CreateOverviewSectorLabels(
+            IReadOnlyDictionary<string, Rect> nodeRects,
+            IReadOnlyDictionary<string, PackageGraphLayoutRing> nodeRings)
+        {
+            foreach (PackageGraphLayoutRing ring in new[]
+                     {
+                         PackageGraphLayoutRing.Foundation,
+                         PackageGraphLayoutRing.Runtime,
+                         PackageGraphLayoutRing.Integration,
+                         PackageGraphLayoutRing.Suite
+                     })
+            {
+                Vector2 direction = Vector2.zero;
+                int count = 0;
+
+                foreach (KeyValuePair<string, Rect> nodeRect in nodeRects)
+                {
+                    if (!nodeRings.TryGetValue(nodeRect.Key, out PackageGraphLayoutRing nodeRing) ||
+                        nodeRing != ring)
+                    {
+                        continue;
+                    }
+
+                    Vector2 nodeDirection = nodeRect.Value.center - GraphCenter;
+
+                    if (nodeDirection.sqrMagnitude < 0.01f)
+                    {
+                        continue;
+                    }
+
+                    direction += nodeDirection.normalized;
+                    count++;
+                }
+
+                if (count == 0)
+                {
+                    continue;
+                }
+
+                if (direction.sqrMagnitude < 0.01f)
+                {
+                    direction = GetFallbackSectorDirection(ring);
+                }
+
+                yield return new PackageGraphSectorLabel(
+                    GetSectorLabel(ring),
+                    ring,
+                    GraphCenter + direction.normalized * (OverviewOrbitRadius + 112f));
+            }
+        }
+
+        private static Vector2 GetFallbackSectorDirection(PackageGraphLayoutRing ring)
+        {
+            switch (ring)
+            {
+                case PackageGraphLayoutRing.Runtime:
+                    return new Vector2(1f, -0.2f).normalized;
+                case PackageGraphLayoutRing.Integration:
+                    return new Vector2(0.45f, 1f).normalized;
+                case PackageGraphLayoutRing.Suite:
+                    return new Vector2(-0.9f, 0.4f).normalized;
+                default:
+                    return new Vector2(-0.75f, -0.55f).normalized;
+            }
+        }
+
+        private static string GetSectorLabel(PackageGraphLayoutRing ring)
+        {
+            switch (ring)
+            {
+                case PackageGraphLayoutRing.Runtime:
+                    return "UI / Runtime / Tooling";
+                case PackageGraphLayoutRing.Integration:
+                    return "Integrations";
+                case PackageGraphLayoutRing.Suite:
+                    return "Suites";
+                default:
+                    return "Core / Foundation";
+            }
         }
 
         private static IEnumerable<PackageGraphRingGuide> CreateFocusGuides()
@@ -993,27 +1003,33 @@ namespace Deucarian.PackageInstaller.Editor
             yield return new PackageGraphRingGuide(
                 "Required packages",
                 PackageGraphLayoutRing.Foundation,
-                new Vector2(355f, 328f),
+                new Vector2(700f, 750f),
                 182f,
                 190f);
             yield return new PackageGraphRingGuide(
                 "Dependent packages",
                 PackageGraphLayoutRing.Runtime,
-                new Vector2(1105f, 328f),
-                182f,
-                190f);
+                new Vector2(1550f, 740f),
+                328f,
+                292f);
             yield return new PackageGraphRingGuide(
                 "Integrations",
                 PackageGraphLayoutRing.Integration,
-                new Vector2(730f, 735f),
+                new Vector2(1150f, 1260f),
                 316f,
                 178f);
             yield return new PackageGraphRingGuide(
                 "Companions / Suites",
                 PackageGraphLayoutRing.Suite,
-                new Vector2(735f, 790f),
+                new Vector2(1125f, 380f),
                 584f,
-                224f);
+                184f);
+            yield return new PackageGraphRingGuide(
+                "Unrelated package stack",
+                PackageGraphLayoutRing.Runtime,
+                new Vector2(1990f, 920f),
+                272f,
+                560f);
         }
 
         private sealed class PackageGraphNodePackageIdComparer : IEqualityComparer<PackageGraphNode>
