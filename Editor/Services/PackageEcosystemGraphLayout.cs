@@ -134,8 +134,8 @@ namespace Deucarian.PackageInstaller.Editor
 
         private const float UnrelatedSummaryWidth = 226f;
         private const float UnrelatedSummaryHeight = 58f;
-        private const float HubWidth = 250f;
-        private const float HubHeight = 128f;
+        private const float HubWidth = 310f;
+        private const float HubHeight = 154f;
         private const float NodeGap = 18f;
         private const float FocusGridGapX = 42f;
         private const float FocusGridGapY = 26f;
@@ -151,6 +151,15 @@ namespace Deucarian.PackageInstaller.Editor
             PackageGraphModel graph,
             PackageGraphLayoutMode mode,
             string focusPackageId)
+        {
+            return Calculate(graph, mode, focusPackageId, Vector2.zero);
+        }
+
+        public PackageGraphLayoutResult Calculate(
+            PackageGraphModel graph,
+            PackageGraphLayoutMode mode,
+            string focusPackageId,
+            Vector2 viewportSize)
         {
             PackageGraphNode[] nodes = graph == null
                 ? Array.Empty<PackageGraphNode>()
@@ -168,8 +177,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (focusNode == null)
             {
-                PackageEcosystemSemanticWheelLayout.PlaceOverview(graph, nodes, nodeRects, nodeRings);
-                ResolveOverlaps(nodeRects, nodeRings, string.Empty);
+                PackageEcosystemSemanticWheelLayout.PlaceOverview(graph, nodes, nodeRects, nodeRings, viewportSize);
 
                 Rect overviewHubRect = CreateOverviewHubRect();
                 return new PackageGraphLayoutResult(
@@ -181,8 +189,8 @@ namespace Deucarian.PackageInstaller.Editor
                     overviewHubRect.center,
                     nodeRects,
                     nodeRings,
-                    PackageEcosystemSemanticWheelLayout.CreateRingGuides(),
-                    PackageEcosystemSemanticWheelLayout.CreateSectorLabels());
+                    PackageEcosystemSemanticWheelLayout.CreateRingGuides(viewportSize),
+                    PackageEcosystemSemanticWheelLayout.CreateSectorLabels(viewportSize));
             }
 
             int unrelatedPackageCount = PlaceFocus(graph, nodes, focusNode, nodeRects, nodeRings);

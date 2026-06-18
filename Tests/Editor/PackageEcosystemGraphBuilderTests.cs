@@ -10,6 +10,15 @@ namespace Deucarian.PackageInstaller.Editor.Tests
     internal sealed class PackageGraphBuilderTests
     {
         [Test]
+        public void Window_DefaultsToEcosystemGraphAndOrdersToggleFirst()
+        {
+            Assert.IsTrue(PackageInstallerWindow.DefaultsToEcosystemGraphForTests);
+            CollectionAssert.AreEqual(
+                new[] { "Ecosystem Graph", "List View" },
+                PackageInstallerWindow.ViewToggleOrderForTests.ToArray());
+        }
+
+        [Test]
         public void Build_MapsRegistryMetadataToNodeTypesAndRelationships()
         {
             PackageDefinition core = CreatePackage("Core", "com.example.core", "Core");
@@ -173,6 +182,127 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 .Single();
             Assert.AreEqual("Update", selectedAction.text);
             Assert.IsTrue(selectedAction.enabledSelf);
+        }
+
+        [Test]
+        public void GraphView_ExposesMajorStatusVisualClassesAndLabels()
+        {
+            PackageDefinition installed = CreatePackage("Installed", "com.example.installed", "Core");
+            PackageDefinition notInstalled = CreatePackage("Not Installed", "com.example.not-installed", "Core");
+            PackageDefinition update = CreatePackage("Update", "com.example.update", "Core");
+            PackageDefinition dependency = CreatePackage("Dependency", "com.example.dependency", "Core");
+            PackageDefinition consumer = CreatePackage(
+                "Consumer",
+                "com.example.consumer",
+                "Core",
+                dependencies: new[] { dependency.PackageId },
+                optionalIntegrations: new[] { "com.example.missing" });
+
+            PackageGraphModel graph = new PackageGraphBuilder(
+                    packageId => packageId == installed.PackageId ||
+                                 packageId == update.PackageId ||
+                                 packageId == consumer.PackageId,
+                    _ => PackageChannel.Stable,
+                    package => package.PackageId == update.PackageId
+                        ? PackageUpdateStatus.UpdateAvailable(
+                            package,
+                            PackageChannel.Stable,
+                            package.GetUrl(PackageChannel.Stable),
+                            "1111111",
+                            "2222222")
+                        : PackageUpdateStatus.UpToDate(
+                            package,
+                            PackageChannel.Stable,
+                            package.GetUrl(PackageChannel.Stable),
+                            "1111111",
+                            "1111111"))
+                .Build(new[] { installed, notInstalled, update, dependency, consumer });
+            PackageGraphView view = new PackageGraphView(_ => { }, (_, __) => { });
+
+            view.SetGraph(graph, string.Empty, actionsEnabled: true);
+
+            Assert.IsTrue(FindGraphNode(view, installed.PackageId).ClassListContains("dpi-graph-node--status-installed"));
+            Assert.IsTrue(FindGraphNode(view, notInstalled.PackageId).ClassListContains("dpi-graph-node--status-available"));
+            Assert.IsTrue(FindGraphNode(view, update.PackageId).ClassListContains("dpi-graph-node--status-update"));
+            Assert.IsTrue(FindGraphNode(view, dependency.PackageId).ClassListContains("dpi-graph-node--status-warning"));
+            Assert.IsTrue(FindGraphNode(view, "com.example.missing").ClassListContains("dpi-graph-node--status-missing"));
+            Assert.AreEqual(1, FindByClass(FindGraphNode(view, installed.PackageId), "dpi-graph-node__status-rail--installed").Count);
+            Assert.AreEqual(1, FindByClass(FindGraphNode(view, notInstalled.PackageId), "dpi-graph-node__status-icon--available").Count);
+            Assert.AreEqual(1, FindByClass(FindGraphNode(view, update.PackageId), "dpi-graph-node__badge--update").Count);
+            Assert.AreEqual(1, FindByClass(FindGraphNode(view, dependency.PackageId), "dpi-graph-node__badge--warning").Count);
+            Assert.AreEqual(1, FindByClass(FindGraphNode(view, "com.example.missing"), "dpi-graph-node__badge--missing").Count);
+            Assert.IsTrue(
+                FindByClass(FindGraphNode(view, dependency.PackageId), "dpi-graph-node__badge--warning")
+                    .OfType<Label>()
+                    .Any(label => label.text == "Required by installed package"));
+            Assert.IsTrue(
+                FindByClass(FindGraphNode(view, "com.example.missing"), "dpi-graph-node__badge--missing")
+                    .OfType<Label>()
+                    .Any(label => label.text == "Missing dependency"));
+        }
+
+        [Test]
+        public void Layout_UsesResponsiveOverviewRadiusForCompactViewport()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+            Vector2 compactViewport = new Vector2(900f, 620f);
+            float compactRadius = PackageEcosystemSemanticWheelLayout.GetPrimaryOrbitRadiusForTests(compactViewport);
+
+            PackageGraphLayoutResult layout = new PackageGraphLayout().Calculate(
+                graph,
+                PackageGraphLayoutMode.Overview,
+                string.Empty,
+                compactViewport);
+
+            Assert.Less(compactRadius, PackageEcosystemSemanticWheelLayout.GetPrimaryOrbitRadiusForTests(Vector2.zero));
+            Assert.GreaterOrEqual(compactRadius, 520f);
+            foreach (string packageId in new[]
+                     {
+                         "com.deucarian.editor",
+                         "com.deucarian.logging",
+                         "com.deucarian.core-state",
+                         "com.deucarian.api",
+                         "com.deucarian.session",
+                         "com.deucarian.object-loading",
+                         "com.deucarian.ui-binding",
+                         "com.deucarian.object-selection",
+                         "com.deucarian.theming",
+                         "com.deucarian.diagnostics",
+                         "com.deucarian.package-installer"
+                     })
+            {
+                Assert.That(
+                    Vector2.Distance(layout.NodeRects[packageId].center, PackageGraphLayout.GraphCenter),
+                    Is.EqualTo(compactRadius).Within(1.5f),
+                    packageId);
+            }
+
+            Assert.That(
+                Vector2.Distance(
+                    layout.NodeRects["com.deucarian.selection-suite"].center,
+                    PackageGraphLayout.GraphCenter),
+                Is.LessThanOrEqualTo(760f));
+            AssertNoOverlaps(layout.NodeRects.Values.ToArray());
+        }
+
+        [Test]
+        public void GraphCanvas_FitBoundsUseOnlyVisibleNodesAndHub()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+            Vector2 compactViewport = new Vector2(900f, 620f);
+            PackageGraphLayoutResult layout = new PackageGraphLayout().Calculate(
+                graph,
+                PackageGraphLayoutMode.Overview,
+                string.Empty,
+                compactViewport);
+            PackageGraphCanvas canvas = new PackageGraphCanvas(_ => { }, (_, __) => { }, () => { });
+
+            canvas.SetViewportSize(compactViewport);
+            canvas.SetGraph(graph, string.Empty, string.Empty, actionsEnabled: true);
+
+            AssertRectsEqual(CreateExpectedFitBounds(layout), canvas.GetContentBounds(), 0.1f);
         }
 
         [Test]
@@ -369,14 +499,14 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                     CircularMean(
                         GetAngle(layout.NodeRects["com.deucarian.api"]),
                         GetAngle(layout.NodeRects["com.deucarian.session"]))),
-                Is.LessThanOrEqualTo(12f));
+                Is.LessThanOrEqualTo(24f));
             Assert.That(
                 DeltaAngle(
                     GetAngle(layout.NodeRects["com.deucarian.object-loading.api-integration"]),
                     CircularMean(
                         GetAngle(layout.NodeRects["com.deucarian.api"]),
                         GetAngle(layout.NodeRects["com.deucarian.object-loading"]))),
-                Is.LessThanOrEqualTo(12f));
+                Is.LessThanOrEqualTo(24f));
             AssertNoOverlaps(layout.NodeRects.Values.ToArray());
         }
 
@@ -876,6 +1006,44 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                         rects[firstIndex] + " overlaps " + rects[secondIndex]);
                 }
             }
+        }
+
+        private static Rect CreateExpectedFitBounds(PackageGraphLayoutResult layout)
+        {
+            Rect bounds = layout.HubRect;
+
+            foreach (Rect nodeRect in layout.NodeRects.Values)
+            {
+                bounds = Union(bounds, nodeRect);
+            }
+
+            return Expand(bounds, 16f);
+        }
+
+        private static void AssertRectsEqual(Rect expected, Rect actual, float tolerance)
+        {
+            Assert.That(actual.x, Is.EqualTo(expected.x).Within(tolerance));
+            Assert.That(actual.y, Is.EqualTo(expected.y).Within(tolerance));
+            Assert.That(actual.width, Is.EqualTo(expected.width).Within(tolerance));
+            Assert.That(actual.height, Is.EqualTo(expected.height).Within(tolerance));
+        }
+
+        private static Rect Union(Rect first, Rect second)
+        {
+            float xMin = Mathf.Min(first.xMin, second.xMin);
+            float yMin = Mathf.Min(first.yMin, second.yMin);
+            float xMax = Mathf.Max(first.xMax, second.xMax);
+            float yMax = Mathf.Max(first.yMax, second.yMax);
+            return Rect.MinMaxRect(xMin, yMin, xMax, yMax);
+        }
+
+        private static Rect Expand(Rect rect, float amount)
+        {
+            return new Rect(
+                rect.x - amount,
+                rect.y - amount,
+                rect.width + amount * 2f,
+                rect.height + amount * 2f);
         }
 
         private static List<VisualElement> FindByClass(VisualElement root, string className)

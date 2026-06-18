@@ -58,12 +58,12 @@ namespace Deucarian.PackageInstaller.Editor
     internal static class PackageEcosystemSemanticWheelLayout
     {
         private const float OverviewNodeWidth = 212f;
-        private const float OverviewNodeHeight = 94f;
-        private const float PrimaryOrbitRadius = 650f;
-        private const float IntegrationOrbitRadius = 505f;
-        private const float SuiteOrbitRadius = 790f;
-        private const float SectorLabelRadius = 768f;
-        private const float OverviewNodeGap = 16f;
+        private const float OverviewNodeHeight = 98f;
+        private const float DefaultPrimaryOrbitRadius = 650f;
+        private const float MinPrimaryOrbitRadius = 548f;
+        private const float MaxPrimaryOrbitRadius = 650f;
+        private const float MaxSuiteOrbitRadius = 760f;
+        private const float OverviewNodeGap = 24f;
 
         private static readonly float[] IntegrationAngleOffsets =
         {
@@ -76,29 +76,17 @@ namespace Deucarian.PackageInstaller.Editor
             30f
         };
 
-        private static readonly float[] IntegrationRadii =
-        {
-            IntegrationOrbitRadius,
-            390f,
-            560f,
-            450f,
-            335f
-        };
-
         private static readonly float[] SuiteAngleOffsets =
         {
             0f,
-            -10f,
-            10f,
-            -20f,
-            20f
-        };
-
-        private static readonly float[] SuiteRadii =
-        {
-            SuiteOrbitRadius,
-            860f,
-            730f
+            -15f,
+            15f,
+            -30f,
+            30f,
+            -45f,
+            45f,
+            -60f,
+            60f
         };
 
         private static readonly GroupDefinition[] Groups =
@@ -108,32 +96,32 @@ namespace Deucarian.PackageInstaller.Editor
                 "Foundation",
                 "foundation",
                 PackageGraphLayoutRing.Foundation,
-                -135f,
-                -45f,
+                -150f,
+                -30f,
                 -90f),
             new GroupDefinition(
                 PackageEcosystemGroup.ServicesRuntime,
                 "Services / Runtime",
                 "runtime",
                 PackageGraphLayoutRing.Runtime,
-                -45f,
-                45f,
+                -60f,
+                60f,
                 0f),
             new GroupDefinition(
                 PackageEcosystemGroup.ExperienceUiWorld,
                 "Experience / UI / World",
                 "experience",
                 PackageGraphLayoutRing.Runtime,
-                45f,
-                135f,
+                30f,
+                150f,
                 90f),
             new GroupDefinition(
                 PackageEcosystemGroup.ToolsQuality,
                 "Tools / Quality",
                 "tools",
                 PackageGraphLayoutRing.Runtime,
-                135f,
-                225f,
+                130f,
+                230f,
                 180f)
         };
 
@@ -141,17 +129,19 @@ namespace Deucarian.PackageInstaller.Editor
             PackageGraphModel graph,
             IReadOnlyList<PackageGraphNode> nodes,
             IDictionary<string, Rect> nodeRects,
-            IDictionary<string, PackageGraphLayoutRing> nodeRings)
+            IDictionary<string, PackageGraphLayoutRing> nodeRings,
+            Vector2 viewportSize)
         {
             if (nodes == null || nodes.Count == 0)
             {
                 return;
             }
 
+            WheelMetrics metrics = CreateMetrics(viewportSize);
             Dictionary<string, float> angleByPackageId = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
-            PlaceNormalPackages(nodes, nodeRects, nodeRings, angleByPackageId);
-            PlaceIntegrationPackages(graph, nodes, nodeRects, nodeRings, angleByPackageId);
-            PlaceSuitePackages(graph, nodes, nodeRects, nodeRings, angleByPackageId);
+            PlaceNormalPackages(nodes, nodeRects, nodeRings, angleByPackageId, metrics);
+            PlaceIntegrationPackages(graph, nodes, nodeRects, nodeRings, angleByPackageId, metrics);
+            PlaceSuitePackages(graph, nodes, nodeRects, nodeRings, angleByPackageId, metrics);
         }
 
         public static PackageGraphLayoutRing ResolveRing(PackageGraphNode node)
@@ -176,26 +166,35 @@ namespace Deucarian.PackageInstaller.Editor
                 : PackageGraphLayoutRing.Runtime;
         }
 
-        public static IEnumerable<PackageGraphRingGuide> CreateRingGuides()
+        public static IEnumerable<PackageGraphRingGuide> CreateRingGuides(Vector2 viewportSize)
         {
+            WheelMetrics metrics = CreateMetrics(viewportSize);
+
             yield return new PackageGraphRingGuide(
                 "Semantic Ecosystem Wheel",
                 PackageGraphLayoutRing.Foundation,
                 PackageGraphLayout.GraphCenter,
-                PrimaryOrbitRadius,
-                PrimaryOrbitRadius);
+                metrics.PrimaryOrbitRadius,
+                metrics.PrimaryOrbitRadius);
         }
 
-        public static IEnumerable<PackageGraphSectorLabel> CreateSectorLabels()
+        public static IEnumerable<PackageGraphSectorLabel> CreateSectorLabels(Vector2 viewportSize)
         {
+            WheelMetrics metrics = CreateMetrics(viewportSize);
+
             foreach (GroupDefinition group in Groups)
             {
                 yield return new PackageGraphSectorLabel(
                     group.Label,
                     group.Ring,
-                    PointOnOrbit(group.LabelAngleDegrees, SectorLabelRadius),
+                    PointOnOrbit(group.LabelAngleDegrees, metrics.SectorLabelRadius),
                     group.ClassName);
             }
+        }
+
+        internal static float GetPrimaryOrbitRadiusForTests(Vector2 viewportSize)
+        {
+            return CreateMetrics(viewportSize).PrimaryOrbitRadius;
         }
 
         public static PackageEcosystemGroup ResolveGroup(PackageGraphNode node)
@@ -239,7 +238,8 @@ namespace Deucarian.PackageInstaller.Editor
             IEnumerable<PackageGraphNode> nodes,
             IDictionary<string, Rect> nodeRects,
             IDictionary<string, PackageGraphLayoutRing> nodeRings,
-            IDictionary<string, float> angleByPackageId)
+            IDictionary<string, float> angleByPackageId,
+            WheelMetrics metrics)
         {
             foreach (GroupDefinition group in Groups)
             {
@@ -264,7 +264,7 @@ namespace Deucarian.PackageInstaller.Editor
                 {
                     PackageGraphNode node = groupNodes[index];
                     float angle = angles[index];
-                    nodeRects[node.PackageId] = CenteredRect(PointOnOrbit(angle, PrimaryOrbitRadius));
+                    nodeRects[node.PackageId] = CenteredRect(PointOnOrbit(angle, metrics.PrimaryOrbitRadius));
                     nodeRings[node.PackageId] = group.Ring;
                     angleByPackageId[node.PackageId] = angle;
                 }
@@ -276,7 +276,8 @@ namespace Deucarian.PackageInstaller.Editor
             IEnumerable<PackageGraphNode> nodes,
             IDictionary<string, Rect> nodeRects,
             IDictionary<string, PackageGraphLayoutRing> nodeRings,
-            IDictionary<string, float> angleByPackageId)
+            IDictionary<string, float> angleByPackageId,
+            WheelMetrics metrics)
         {
             PackageOverviewPlacement[] preferredPlacements = nodes
                 .Where(node => node != null && node.NodeType == PackageGraphNodeType.Integration)
@@ -284,20 +285,24 @@ namespace Deucarian.PackageInstaller.Editor
                     node,
                     PackageEcosystemGroup.ServicesRuntime,
                     ResolveIntegrationAngle(graph, node, angleByPackageId),
-                    IntegrationOrbitRadius,
+                    metrics.IntegrationOrbitRadius,
                     PackageGraphLayoutRing.Integration))
                 .OrderBy(placement => UnwrapAngleNear(placement.AngleDegrees, 0f))
                 .ThenBy(placement => GetOverviewOrder(placement.Node))
                 .ThenBy(placement => placement.Node.DisplayName, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 
-            foreach (PackageOverviewPlacement placement in preferredPlacements)
+            for (int index = 0; index < preferredPlacements.Length; index++)
             {
+                PackageOverviewPlacement placement = preferredPlacements[index];
                 PackageGraphNode node = placement.Node;
+                float distributedAngle = NormalizeAngle(
+                    placement.AngleDegrees +
+                    GetDistributionOffset(index, preferredPlacements.Length, 15f));
                 PlacementCandidate candidate = FindPlacementCandidate(
-                    placement.AngleDegrees,
+                    distributedAngle,
                     IntegrationAngleOffsets,
-                    IntegrationRadii,
+                    CreateIntegrationRadii(metrics),
                     nodeRects.Values);
                 nodeRects[node.PackageId] = candidate.Rect;
                 nodeRings[node.PackageId] = PackageGraphLayoutRing.Integration;
@@ -310,7 +315,8 @@ namespace Deucarian.PackageInstaller.Editor
             IEnumerable<PackageGraphNode> nodes,
             IDictionary<string, Rect> nodeRects,
             IDictionary<string, PackageGraphLayoutRing> nodeRings,
-            IDictionary<string, float> angleByPackageId)
+            IDictionary<string, float> angleByPackageId,
+            WheelMetrics metrics)
         {
             PackageOverviewPlacement[] preferredPlacements = nodes
                 .Where(node => node != null && node.NodeType == PackageGraphNodeType.Suite)
@@ -318,7 +324,7 @@ namespace Deucarian.PackageInstaller.Editor
                     node,
                     PackageEcosystemGroup.ExperienceUiWorld,
                     ResolveSuiteAngle(graph, node, angleByPackageId),
-                    SuiteOrbitRadius,
+                    metrics.SuiteOrbitRadius,
                     PackageGraphLayoutRing.Suite))
                 .OrderBy(placement => UnwrapAngleNear(placement.AngleDegrees, 90f))
                 .ThenBy(placement => GetOverviewOrder(placement.Node))
@@ -331,7 +337,7 @@ namespace Deucarian.PackageInstaller.Editor
                 PlacementCandidate candidate = FindPlacementCandidate(
                     placement.AngleDegrees,
                     SuiteAngleOffsets,
-                    SuiteRadii,
+                    CreateSuiteRadii(metrics),
                     nodeRects.Values);
                 nodeRects[node.PackageId] = candidate.Rect;
                 nodeRings[node.PackageId] = PackageGraphLayoutRing.Suite;
@@ -440,6 +446,63 @@ namespace Deucarian.PackageInstaller.Editor
             return angles;
         }
 
+        private static float GetDistributionOffset(int index, int count, float stepDegrees)
+        {
+            if (count <= 1)
+            {
+                return 0f;
+            }
+
+            return (index - (count - 1f) * 0.5f) * stepDegrees;
+        }
+
+        private static WheelMetrics CreateMetrics(Vector2 viewportSize)
+        {
+            if (viewportSize.x <= 1f || viewportSize.y <= 1f)
+            {
+                return new WheelMetrics(
+                    DefaultPrimaryOrbitRadius,
+                    DefaultPrimaryOrbitRadius * 0.54f,
+                    Mathf.Min(MaxSuiteOrbitRadius, DefaultPrimaryOrbitRadius + 104f),
+                    DefaultPrimaryOrbitRadius + 74f);
+            }
+
+            float usableWidth = Mathf.Max(760f, viewportSize.x);
+            float usableHeight = Mathf.Max(560f, viewportSize.y);
+            float responsiveRadius = Mathf.Min(usableWidth * 0.44f, usableHeight * 0.58f);
+            float primaryRadius = Mathf.Clamp(responsiveRadius, MinPrimaryOrbitRadius, MaxPrimaryOrbitRadius);
+            float integrationRadius = Mathf.Clamp(primaryRadius * 0.54f, 300f, primaryRadius - 150f);
+            float suiteRadius = Mathf.Min(
+                MaxSuiteOrbitRadius,
+                primaryRadius + Mathf.Clamp(primaryRadius * 0.16f, 84f, 112f));
+            float sectorLabelRadius = primaryRadius + 68f;
+
+            return new WheelMetrics(primaryRadius, integrationRadius, suiteRadius, sectorLabelRadius);
+        }
+
+        private static float[] CreateIntegrationRadii(WheelMetrics metrics)
+        {
+            return new[]
+            {
+                metrics.IntegrationOrbitRadius,
+                Mathf.Max(285f, metrics.PrimaryOrbitRadius * 0.46f),
+                Mathf.Min(metrics.PrimaryOrbitRadius - 104f, metrics.PrimaryOrbitRadius * 0.70f),
+                Mathf.Max(275f, metrics.PrimaryOrbitRadius * 0.40f),
+                Mathf.Min(metrics.PrimaryOrbitRadius - 72f, metrics.PrimaryOrbitRadius * 0.82f)
+            };
+        }
+
+        private static float[] CreateSuiteRadii(WheelMetrics metrics)
+        {
+            return new[]
+            {
+                metrics.SuiteOrbitRadius,
+                Mathf.Min(MaxSuiteOrbitRadius, metrics.SuiteOrbitRadius + 42f),
+                Mathf.Min(MaxSuiteOrbitRadius, metrics.SuiteOrbitRadius + 84f),
+                Mathf.Max(metrics.PrimaryOrbitRadius + 54f, metrics.SuiteOrbitRadius - 44f)
+            };
+        }
+
         private static PlacementCandidate FindPlacementCandidate(
             float preferredAngle,
             IEnumerable<float> angleOffsets,
@@ -449,35 +512,81 @@ namespace Deucarian.PackageInstaller.Editor
             float[] radiusValues = radii == null ? Array.Empty<float>() : radii.ToArray();
             float[] angleOffsetValues = angleOffsets == null ? new[] { 0f } : angleOffsets.ToArray();
 
-            foreach (float offset in angleOffsetValues)
+            if (TryFindPlacementCandidate(
+                    preferredAngle,
+                    angleOffsetValues,
+                    radiusValues,
+                    existingRects,
+                    OverviewNodeGap,
+                    out PlacementCandidate paddedCandidate))
             {
-                foreach (float radius in radiusValues)
-                {
-                    float angle = NormalizeAngle(preferredAngle + offset);
-                    Rect rect = CenteredRect(PointOnOrbit(angle, radius));
+                return paddedCandidate;
+            }
 
-                    if (!OverlapsAny(rect, existingRects))
-                    {
-                        return new PlacementCandidate(angle, radius, rect);
-                    }
-                }
+            if (TryFindPlacementCandidate(
+                    preferredAngle,
+                    angleOffsetValues,
+                    radiusValues,
+                    existingRects,
+                    4f,
+                    out PlacementCandidate compactCandidate))
+            {
+                return compactCandidate;
+            }
+
+            if (TryFindPlacementCandidate(
+                    preferredAngle,
+                    angleOffsetValues,
+                    radiusValues,
+                    existingRects,
+                    0f,
+                    out PlacementCandidate nonOverlappingCandidate))
+            {
+                return nonOverlappingCandidate;
             }
 
             float fallbackAngle = NormalizeAngle(preferredAngle);
-            float fallbackRadius = radiusValues.Length > 0 ? radiusValues[0] : IntegrationOrbitRadius;
+            float fallbackRadius = radiusValues.Length > 0 ? radiusValues[0] : MinPrimaryOrbitRadius;
             return new PlacementCandidate(
                 fallbackAngle,
                 fallbackRadius,
                 CenteredRect(PointOnOrbit(fallbackAngle, fallbackRadius)));
         }
 
-        private static bool OverlapsAny(Rect rect, IEnumerable<Rect> existingRects)
+        private static bool TryFindPlacementCandidate(
+            float preferredAngle,
+            IReadOnlyList<float> angleOffsets,
+            IReadOnlyList<float> radii,
+            IEnumerable<Rect> existingRects,
+            float requiredGap,
+            out PlacementCandidate candidate)
         {
-            Rect expanded = Expand(rect, OverviewNodeGap);
+            foreach (float offset in angleOffsets)
+            {
+                foreach (float radius in radii)
+                {
+                    float angle = NormalizeAngle(preferredAngle + offset);
+                    Rect rect = CenteredRect(PointOnOrbit(angle, radius));
+
+                    if (!OverlapsAny(rect, existingRects, requiredGap))
+                    {
+                        candidate = new PlacementCandidate(angle, radius, rect);
+                        return true;
+                    }
+                }
+            }
+
+            candidate = default;
+            return false;
+        }
+
+        private static bool OverlapsAny(Rect rect, IEnumerable<Rect> existingRects, float requiredGap)
+        {
+            Rect expanded = Expand(rect, requiredGap);
 
             foreach (Rect existingRect in existingRects)
             {
-                if (expanded.Overlaps(Expand(existingRect, OverviewNodeGap)))
+                if (expanded.Overlaps(Expand(existingRect, requiredGap)))
                 {
                     return true;
                 }
@@ -703,6 +812,29 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             return angle;
+        }
+
+        private sealed class WheelMetrics
+        {
+            public WheelMetrics(
+                float primaryOrbitRadius,
+                float integrationOrbitRadius,
+                float suiteOrbitRadius,
+                float sectorLabelRadius)
+            {
+                PrimaryOrbitRadius = primaryOrbitRadius;
+                IntegrationOrbitRadius = integrationOrbitRadius;
+                SuiteOrbitRadius = suiteOrbitRadius;
+                SectorLabelRadius = sectorLabelRadius;
+            }
+
+            public float PrimaryOrbitRadius { get; }
+
+            public float IntegrationOrbitRadius { get; }
+
+            public float SuiteOrbitRadius { get; }
+
+            public float SectorLabelRadius { get; }
         }
 
         private sealed class GroupDefinition

@@ -327,10 +327,10 @@
     position: absolute;
     align-items: center;
     justify-content: center;
-    padding-left: 12px;
-    padding-right: 12px;
-    padding-top: 10px;
-    padding-bottom: 10px;
+    padding-left: 16px;
+    padding-right: 16px;
+    padding-top: 13px;
+    padding-bottom: 13px;
     border-top-left-radius: 8px;
     border-top-right-radius: 8px;
     border-bottom-right-radius: 8px;
@@ -339,18 +339,18 @@
     border-right-width: 1px;
     border-top-width: 1px;
     border-bottom-width: 1px;
-    border-left-color: rgba(59, 166, 154, 0.38);
-    border-right-color: rgba(59, 166, 154, 0.30);
-    border-top-color: rgba(59, 166, 154, 0.30);
-    border-bottom-color: rgba(59, 166, 154, 0.30);
-    background-color: rgba(11, 20, 28, 0.58);
+    border-left-color: rgba(59, 209, 191, 0.52);
+    border-right-color: rgba(59, 209, 191, 0.36);
+    border-top-color: rgba(59, 209, 191, 0.36);
+    border-bottom-color: rgba(59, 209, 191, 0.36);
+    background-color: rgba(13, 28, 37, 0.72);
 }
 
 .dpi-graph-hub__icon {
-    width: 42px;
-    height: 42px;
-    margin-bottom: 7px;
-    opacity: 0.78;
+    width: 56px;
+    height: 56px;
+    margin-bottom: 8px;
+    opacity: 0.90;
 }
 
 .dpi-graph-hub--focus {
@@ -378,13 +378,13 @@
 .dpi-graph-hub__title {
     color: rgba(234, 244, 247, 0.90);
     -unity-font-style: bold;
-    font-size: 16px;
+    font-size: 20px;
 }
 
 .dpi-graph-hub__subtitle {
     margin-top: 2px;
     color: rgba(125, 188, 216, 0.78);
-    font-size: 11px;
+    font-size: 12px;
 }
 
 .dpi-graph-node {
@@ -407,6 +407,39 @@
     border-top-color: rgba(90, 111, 160, 0.30);
     border-bottom-color: rgba(90, 111, 160, 0.30);
     background-color: rgba(24, 36, 46, 0.82);
+}
+
+.dpi-graph-node__status-rail {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 4px;
+    height: 100%;
+    background-color: rgba(90, 111, 160, 0.46);
+}
+
+.dpi-graph-node__status-rail--installed {
+    background-color: rgba(59, 166, 154, 0.82);
+}
+
+.dpi-graph-node__status-rail--available {
+    background-color: rgba(116, 130, 150, 0.64);
+}
+
+.dpi-graph-node__status-rail--update {
+    background-color: rgba(224, 178, 72, 0.96);
+}
+
+.dpi-graph-node__status-rail--warning {
+    background-color: rgba(226, 132, 60, 0.92);
+}
+
+.dpi-graph-node__status-rail--missing {
+    background-color: rgba(229, 96, 76, 0.92);
+}
+
+.dpi-graph-node__status-rail--checking {
+    background-color: rgba(82, 171, 205, 0.72);
 }
 
 .dpi-graph-node:hover {
@@ -563,6 +596,7 @@
 
 .dpi-graph-node--installed {
     border-bottom-color: rgba(59, 166, 154, 0.58);
+    background-color: rgba(25, 43, 49, 0.84);
 }
 
 .dpi-graph-node--companion {
@@ -590,6 +624,18 @@
     background-color: rgba(48, 41, 29, 0.86);
 }
 
+.dpi-graph-node--status-warning {
+    border-bottom-width: 2px;
+    border-bottom-color: rgba(226, 132, 60, 0.82);
+    background-color: rgba(48, 37, 29, 0.84);
+}
+
+.dpi-graph-node--status-missing {
+    border-bottom-width: 2px;
+    border-bottom-color: rgba(229, 96, 76, 0.86);
+    background-color: rgba(48, 31, 31, 0.84);
+}
+
 .dpi-graph-node--status-update:hover {
     border-bottom-color: rgba(240, 194, 88, 0.96);
     background-color: rgba(56, 47, 32, 0.90);
@@ -614,6 +660,47 @@
     opacity: 0.92;
 }
 
+.dpi-graph-node__status-icon {
+    min-width: 24px;
+    height: 18px;
+    margin-right: 7px;
+    padding-left: 4px;
+    padding-right: 4px;
+    border-top-left-radius: 999px;
+    border-top-right-radius: 999px;
+    border-bottom-right-radius: 999px;
+    border-bottom-left-radius: 999px;
+    -unity-text-align: middle-center;
+    font-size: 8px;
+    -unity-font-style: bold;
+    color: rgba(228, 241, 244, 0.90);
+    background-color: rgba(61, 79, 107, 0.72);
+}
+
+.dpi-graph-node__status-icon--installed {
+    background-color: rgba(39, 96, 101, 0.86);
+}
+
+.dpi-graph-node__status-icon--available {
+    color: rgba(209, 222, 228, 0.88);
+    background-color: rgba(43, 49, 59, 0.88);
+}
+
+.dpi-graph-node__status-icon--update {
+    color: rgba(255, 240, 200, 0.98);
+    background-color: rgba(129, 96, 35, 0.94);
+}
+
+.dpi-graph-node__status-icon--warning {
+    color: rgba(255, 226, 194, 0.98);
+    background-color: rgba(137, 75, 35, 0.92);
+}
+
+.dpi-graph-node__status-icon--missing {
+    color: rgba(255, 224, 216, 0.98);
+    background-color: rgba(137, 54, 45, 0.92);
+}
+
 .dpi-graph-node__title-block {
     flex-grow: 1;
     min-width: 0;
@@ -635,8 +722,8 @@
 }
 
 .dpi-ecosystem-graph__content--low-zoom .dpi-graph-node__package-id,
-.dpi-ecosystem-graph__content--low-zoom .dpi-graph-node__badges,
-.dpi-ecosystem-graph__content--low-zoom .dpi-graph-node__footer {
+.dpi-ecosystem-graph__content--low-zoom .dpi-graph-node--stack .dpi-graph-node__badges,
+.dpi-ecosystem-graph__content--low-zoom .dpi-graph-node--stack .dpi-graph-node__footer {
     display: none;
 }
 

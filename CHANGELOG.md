@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.25 - 2026-06-18
+
+- Made Ecosystem Graph the default Package Installer view and placed it before List View in the toggle.
+- Refined semantic wheel framing with viewport-aware overview radius, tighter Fit bounds, and a stronger Deucarian hub.
+- Improved graph node status language with persistent status rails, marker chips, and low-zoom-safe focus actions.
+
 ## 1.1.24 - 2026-06-18
 
 - Reworked the Ecosystem Graph overview into a deterministic semantic wheel with Foundation, Services / Runtime, Experience / UI / World, and Tools / Quality sectors.

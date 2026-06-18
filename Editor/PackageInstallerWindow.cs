@@ -12,7 +12,7 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed class PackageInstallerWindow : EditorWindow
     {
         private const string WindowTitle = "Package Installer";
-        private const string PackageVersion = "1.1.24";
+        private const string PackageVersion = "1.1.25";
         private const float MinWindowWidth = 850f;
         private const float MinWindowHeight = 650f;
         private const float SidebarWidth = 340f;
@@ -33,9 +33,11 @@ namespace Deucarian.PackageInstaller.Editor
 
         private enum InstallerViewMode
         {
-            List,
-            EcosystemGraph
+            EcosystemGraph,
+            List
         }
+
+        private const InstallerViewMode DefaultInstallerViewMode = InstallerViewMode.EcosystemGraph;
 
         private enum SelectionKind
         {
@@ -111,7 +113,7 @@ namespace Deucarian.PackageInstaller.Editor
         private bool _showNotInstalledPackages = true;
         private bool _checkUpdatesAfterDetectionRefresh;
         private bool _operationDetailsExpanded;
-        private InstallerViewMode _viewMode = InstallerViewMode.List;
+        private InstallerViewMode _viewMode = DefaultInstallerViewMode;
 
         private Button _listViewButton;
         private Button _graphViewButton;
@@ -173,6 +175,10 @@ namespace Deucarian.PackageInstaller.Editor
             window.minSize = new Vector2(MinWindowWidth, MinWindowHeight);
             window.Show();
         }
+
+        internal static bool DefaultsToEcosystemGraphForTests => DefaultInstallerViewMode == InstallerViewMode.EcosystemGraph;
+
+        internal static IReadOnlyList<string> ViewToggleOrderForTests => new[] { "Ecosystem Graph", "List View" };
 
         private void OnEnable()
         {
@@ -320,10 +326,10 @@ namespace Deucarian.PackageInstaller.Editor
             VisualElement toolbar = DeucarianEditorVisualShell.CreateToolbarRow();
             toolbar.AddToClassList("dpi-view-toolbar");
 
-            _listViewButton = CreateViewToggleButton("List View", InstallerViewMode.List);
             _graphViewButton = CreateViewToggleButton("Ecosystem Graph", InstallerViewMode.EcosystemGraph);
-            toolbar.Add(_listViewButton);
+            _listViewButton = CreateViewToggleButton("List View", InstallerViewMode.List);
             toolbar.Add(_graphViewButton);
+            toolbar.Add(_listViewButton);
 
             _viewSummaryLabel = new Label();
             _viewSummaryLabel.AddToClassList("dpi-view-toolbar__summary");

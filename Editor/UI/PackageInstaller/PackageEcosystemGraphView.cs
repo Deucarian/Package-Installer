@@ -12,6 +12,7 @@ namespace Deucarian.PackageInstaller.Editor
     {
         private readonly PackageGraphCanvas _canvas;
         private readonly PackageGraphViewport _viewport;
+        private bool _hasAppliedGraphFrame;
 
         public PackageGraphView(
             Action<PackageDefinition> packageSelected,
@@ -30,6 +31,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             _canvas = new PackageGraphCanvas(packageSelected, packageAction, selectionCleared);
             _viewport = new PackageGraphViewport(selectionCleared);
+            _viewport.ViewportSizeChanged += HandleViewportSizeChanged;
             _viewport.SetContent(_canvas);
 
             VisualElement header = new VisualElement();
@@ -83,9 +85,12 @@ namespace Deucarian.PackageInstaller.Editor
             bool actionsEnabled)
         {
             string previousLayoutFocusPackageId = _canvas.LayoutFocusPackageId;
+            bool shouldForceInitialFrame = !_hasAppliedGraphFrame && graph != null && graph.Nodes.Count > 0;
             _canvas.SetGraph(graph, selectedPackageId, focusedPackageId, actionsEnabled);
+            _viewport.SetLayoutMode(_canvas.LayoutMode);
             _viewport.SetContentSize(_canvas.ContentSize.x, _canvas.ContentSize.y);
-            _viewport.EnsureInitialFrame(_canvas.GetContentBounds());
+            _viewport.EnsureInitialFrame(_canvas.GetContentBounds(), shouldForceInitialFrame);
+            _hasAppliedGraphFrame = _hasAppliedGraphFrame || shouldForceInitialFrame;
 
             if (!string.Equals(
                     previousLayoutFocusPackageId,
@@ -95,6 +100,18 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 _viewport.CenterOn(_canvas.GetActiveCenter());
             }
+        }
+
+        private void HandleViewportSizeChanged(Vector2 viewportSize)
+        {
+            if (!_canvas.SetViewportSize(viewportSize))
+            {
+                return;
+            }
+
+            _viewport.SetLayoutMode(_canvas.LayoutMode);
+            _viewport.SetContentSize(_canvas.ContentSize.x, _canvas.ContentSize.y);
+            _viewport.EnsureInitialFrame(_canvas.GetContentBounds(), force: true);
         }
 
         private static VisualElement CreateLegendItem(
@@ -133,9 +150,12 @@ namespace Deucarian.PackageInstaller.Editor
 
     internal sealed class PackageGraphViewport : VisualElement
     {
-        private const float MinZoom = 0.35f;
+        private const float OverviewMinZoom = 0.35f;
+        private const float FocusMinZoom = 0.68f;
         private const float MaxZoom = 1.75f;
-        private const float FitPadding = 72f;
+        private const float FitMarginRatio = 0.10f;
+        private const float MinFitPadding = 28f;
+        private const float MaxFitPadding = 88f;
         private const float PanMargin = 220f;
         private const float PanClickToleranceSqr = 4f;
 
@@ -147,6 +167,8 @@ namespace Deucarian.PackageInstaller.Editor
         private float _zoom = 1f;
         private float _contentWidth = PackageGraphLayout.CanvasWidth;
         private float _contentHeight = PackageGraphLayout.CanvasHeight;
+        private Vector2 _lastReportedViewportSize;
+        private PackageGraphLayoutMode _layoutMode = PackageGraphLayoutMode.Overview;
         private Rect _initialBounds;
         private bool _initialized;
         private bool _hasInitialBounds;
@@ -178,6 +200,8 @@ namespace Deucarian.PackageInstaller.Editor
             RegisterCallback<MouseCaptureOutEvent>(_ => _panning = false);
             RegisterCallback<GeometryChangedEvent>(_ =>
             {
+                ReportViewportSizeIfNeeded();
+
                 if (!_initialized && _hasInitialBounds)
                 {
                     FitToContent(_initialBounds);
@@ -190,9 +214,22 @@ namespace Deucarian.PackageInstaller.Editor
             ApplyTransform();
         }
 
+        public event Action<Vector2> ViewportSizeChanged;
+
         public float Zoom => _zoom;
 
         public Vector2 Pan => _pan;
+
+        public void SetLayoutMode(PackageGraphLayoutMode layoutMode)
+        {
+            _layoutMode = layoutMode;
+
+            if (_zoom < GetMinZoom())
+            {
+                _zoom = GetMinZoom();
+                ClampAndApplyTransform();
+            }
+        }
 
         public void SetContent(VisualElement content)
         {
@@ -213,10 +250,15 @@ namespace Deucarian.PackageInstaller.Editor
             ClampAndApplyTransform();
         }
 
-        public void EnsureInitialFrame(Rect worldBounds)
+        public void EnsureInitialFrame(Rect worldBounds, bool force = false)
         {
             _initialBounds = worldBounds;
             _hasInitialBounds = true;
+
+            if (force)
+            {
+                _initialized = false;
+            }
 
             if (_initialized || !HasViewportSize())
             {
@@ -234,10 +276,11 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             Rect bounds = NormalizeBounds(worldBounds);
-            float availableWidth = Mathf.Max(1f, contentRect.width - FitPadding * 2f);
-            float availableHeight = Mathf.Max(1f, contentRect.height - FitPadding * 2f);
+            float fitPadding = GetFitPadding();
+            float availableWidth = Mathf.Max(1f, contentRect.width - fitPadding * 2f);
+            float availableHeight = Mathf.Max(1f, contentRect.height - fitPadding * 2f);
             float fitZoom = Mathf.Min(availableWidth / bounds.width, availableHeight / bounds.height);
-            _zoom = Mathf.Clamp(fitZoom, MinZoom, MaxZoom);
+            _zoom = Mathf.Clamp(fitZoom, GetMinZoom(), MaxZoom);
             _pan = GetViewportCenter() - bounds.center * _zoom;
             _initialized = true;
             ClampAndApplyTransform();
@@ -372,7 +415,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void ZoomAround(Vector2 viewportPoint, float targetZoom)
         {
-            float nextZoom = Mathf.Clamp(targetZoom, MinZoom, MaxZoom);
+            float nextZoom = Mathf.Clamp(targetZoom, GetMinZoom(), MaxZoom);
 
             if (Mathf.Approximately(nextZoom, _zoom))
             {
@@ -434,6 +477,36 @@ namespace Deucarian.PackageInstaller.Editor
             return new Vector2(contentRect.width * 0.5f, contentRect.height * 0.5f);
         }
 
+        private float GetMinZoom()
+        {
+            return _layoutMode == PackageGraphLayoutMode.Focus ? FocusMinZoom : OverviewMinZoom;
+        }
+
+        private float GetFitPadding()
+        {
+            float smallestViewportAxis = Mathf.Min(contentRect.width, contentRect.height);
+            return Mathf.Clamp(smallestViewportAxis * FitMarginRatio, MinFitPadding, MaxFitPadding);
+        }
+
+        private void ReportViewportSizeIfNeeded()
+        {
+            if (!HasViewportSize())
+            {
+                return;
+            }
+
+            Vector2 viewportSize = new Vector2(contentRect.width, contentRect.height);
+
+            if (Mathf.Abs(viewportSize.x - _lastReportedViewportSize.x) < 1f &&
+                Mathf.Abs(viewportSize.y - _lastReportedViewportSize.y) < 1f)
+            {
+                return;
+            }
+
+            _lastReportedViewportSize = viewportSize;
+            ViewportSizeChanged?.Invoke(viewportSize);
+        }
+
         private static Rect NormalizeBounds(Rect bounds)
         {
             if (bounds.width <= 0.01f || bounds.height <= 0.01f)
@@ -487,6 +560,7 @@ namespace Deucarian.PackageInstaller.Editor
         private string _layoutFocusPackageId = string.Empty;
         private PackageGraphFocus _currentFocus = PackageGraphFocus.Create(null, string.Empty);
         private PackageGraphFocus _actionFocus = PackageGraphFocus.Create(null, string.Empty);
+        private Vector2 _viewportSize;
         private IVisualElementScheduledItem _layoutAnimationItem;
         private double _layoutAnimationStartedAt;
         private bool _layoutAnimationActive;
@@ -552,14 +626,6 @@ namespace Deucarian.PackageInstaller.Editor
                 hasBounds = true;
             }
 
-            if (_layoutResult.HasUnrelatedSummary)
-            {
-                bounds = hasBounds
-                    ? Union(bounds, _layoutResult.UnrelatedSummaryRect)
-                    : _layoutResult.UnrelatedSummaryRect;
-                hasBounds = true;
-            }
-
             if (!hasBounds)
             {
                 bounds = new Rect(
@@ -569,10 +635,10 @@ namespace Deucarian.PackageInstaller.Editor
                     2f);
             }
 
-            bounds.x -= 36f;
-            bounds.y -= 36f;
-            bounds.width += 72f;
-            bounds.height += 72f;
+            bounds.x -= 16f;
+            bounds.y -= 16f;
+            bounds.width += 32f;
+            bounds.height += 32f;
             return bounds;
         }
 
@@ -584,6 +650,31 @@ namespace Deucarian.PackageInstaller.Editor
         }
 
         public string LayoutFocusPackageId => _layoutFocusPackageId;
+
+        public PackageGraphLayoutMode LayoutMode => _layoutResult != null ? _layoutResult.Mode : PackageGraphLayoutMode.Overview;
+
+        public bool SetViewportSize(Vector2 viewportSize)
+        {
+            if (viewportSize.x <= 1f || viewportSize.y <= 1f)
+            {
+                return false;
+            }
+
+            if (Mathf.Abs(viewportSize.x - _viewportSize.x) < 1f &&
+                Mathf.Abs(viewportSize.y - _viewportSize.y) < 1f)
+            {
+                return false;
+            }
+
+            _viewportSize = viewportSize;
+
+            if (_layoutResult != null)
+            {
+                Rebuild();
+            }
+
+            return true;
+        }
 
         public void SetGraph(
             PackageGraphModel graph,
@@ -612,7 +703,7 @@ namespace Deucarian.PackageInstaller.Editor
             PackageGraphLayoutMode layoutMode = string.IsNullOrWhiteSpace(_layoutFocusPackageId)
                 ? PackageGraphLayoutMode.Overview
                 : PackageGraphLayoutMode.Focus;
-            _layoutResult = _layout.Calculate(_graph, layoutMode, _layoutFocusPackageId);
+            _layoutResult = _layout.Calculate(_graph, layoutMode, _layoutFocusPackageId, _viewportSize);
             style.width = _layoutResult.CanvasWidth;
             style.height = _layoutResult.CanvasHeight;
             _guideLayer.style.width = _layoutResult.CanvasWidth;
@@ -1745,6 +1836,7 @@ namespace Deucarian.PackageInstaller.Editor
             AddToClassList("dpi-graph-node--status-" + GetStatusClass(node.Status));
             AddToClassList("dpi-graph-node--ring-" + GetRingClass(ring));
             EnableInClassList("dpi-graph-node--installed", node.IsInstalled);
+            EnableInClassList("dpi-graph-node--actionable", showActions && IsGraphShortcutAction(node.PrimaryAction));
             EnableInClassList("dpi-graph-node--selected", selected);
             EnableInClassList("dpi-graph-node--related", related && !selected);
             EnableInClassList("dpi-graph-node--dimmed", dimmed);
@@ -1752,6 +1844,11 @@ namespace Deucarian.PackageInstaller.Editor
             EnableInClassList("dpi-graph-node--previewed", previewed);
             EnableInClassList("dpi-graph-node--missing", !node.IsRegistered);
             tooltip = GetTooltip(node);
+
+            VisualElement statusRail = new VisualElement();
+            statusRail.AddToClassList("dpi-graph-node__status-rail");
+            statusRail.AddToClassList("dpi-graph-node__status-rail--" + GetStatusClass(node.Status));
+            Add(statusRail);
 
             if (interactionsEnabled)
             {
@@ -1793,6 +1890,11 @@ namespace Deucarian.PackageInstaller.Editor
             };
             icon.AddToClassList("dpi-graph-node__icon");
             header.Add(icon);
+
+            Label statusMarker = new Label(GetStatusMarker(node.Status));
+            statusMarker.AddToClassList("dpi-graph-node__status-icon");
+            statusMarker.AddToClassList("dpi-graph-node__status-icon--" + GetStatusClass(node.Status));
+            header.Add(statusMarker);
 
             VisualElement titleBlock = new VisualElement();
             titleBlock.AddToClassList("dpi-graph-node__title-block");
@@ -1953,6 +2055,25 @@ namespace Deucarian.PackageInstaller.Editor
                         : node.UpdateStatusLabel;
                 default:
                     return "Installed";
+            }
+        }
+
+        private static string GetStatusMarker(PackageGraphNodeStatus status)
+        {
+            switch (status)
+            {
+                case PackageGraphNodeStatus.Missing:
+                    return "!";
+                case PackageGraphNodeStatus.NotInstalled:
+                    return "PKG";
+                case PackageGraphNodeStatus.UpdateAvailable:
+                    return "UP";
+                case PackageGraphNodeStatus.Checking:
+                    return "...";
+                case PackageGraphNodeStatus.Warning:
+                    return "!";
+                default:
+                    return "OK";
             }
         }
 
