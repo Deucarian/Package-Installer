@@ -30,6 +30,9 @@ namespace Deucarian.PackageInstaller.Editor
         private const string OperationDrawerPreferencePrefix = "Deucarian.PackageInstaller.OperationDrawer.";
         private const string GraphStyleSheetPath =
             "Packages/com.deucarian.package-installer/Editor/UI/PackageInstaller/PackageInstallerGraph.uss";
+        private const string InstalledStatusMarker = "\u2713";
+        private const string NotInstalledStatusMarker = "\u25CB";
+        private const string AttentionStatusMarker = "!";
 
         private enum InstallerViewMode
         {
@@ -3114,16 +3117,16 @@ namespace Deucarian.PackageInstaller.Editor
                 {
                     if (updateStatus.Kind == PackageUpdateStatusKind.SwitchAvailable)
                     {
-                        return new VisualStatus("SW", "Switch", VisualStatusKind.UpdateAvailable);
+                        return new VisualStatus(AttentionStatusMarker, "Switch", VisualStatusKind.UpdateAvailable);
                     }
 
-                    return new VisualStatus("UP", "Update", VisualStatusKind.UpdateAvailable);
+                    return new VisualStatus(AttentionStatusMarker, "Update", VisualStatusKind.UpdateAvailable);
                 }
 
-                return new VisualStatus("OK", "Installed", VisualStatusKind.Installed);
+                return new VisualStatus(InstalledStatusMarker, "Installed", VisualStatusKind.Installed);
             }
 
-            return new VisualStatus("--", "Not Installed", VisualStatusKind.NotInstalled);
+            return new VisualStatus(NotInstalledStatusMarker, "Not Installed", VisualStatusKind.NotInstalled);
         }
 
         private Color GetStatusColor(VisualStatusKind statusKind)

@@ -10,6 +10,9 @@ namespace Deucarian.PackageInstaller.Editor
 {
     internal sealed class PackageGraphView : VisualElement
     {
+        private const string InstalledStatusMarker = "\u2713";
+        private const string NotInstalledStatusMarker = "\u25CB";
+
         private readonly PackageGraphCanvas _canvas;
         private readonly PackageGraphViewport _viewport;
         private readonly PackageVisibilityFilterState _filterState;
@@ -119,24 +122,28 @@ namespace Deucarian.PackageInstaller.Editor
             _searchField.RegisterCallback<KeyDownEvent>(HandleSearchKeyDown);
             filterRow.Add(_searchField);
 
-            _installedFilterButton = CreateFilterToggleButton(() =>
-            {
-                if (_filterState.SetShowInstalled(!_filterState.ShowInstalled))
+            _installedFilterButton = CreateFilterToggleButton(
+                () =>
                 {
-                    _filterChanged?.Invoke();
-                    UpdateFilterControls();
-                }
-            });
+                    if (_filterState.SetShowInstalled(!_filterState.ShowInstalled))
+                    {
+                        _filterChanged?.Invoke();
+                        UpdateFilterControls();
+                    }
+                },
+                "installed");
             filterRow.Add(_installedFilterButton);
 
-            _notInstalledFilterButton = CreateFilterToggleButton(() =>
-            {
-                if (_filterState.SetShowNotInstalled(!_filterState.ShowNotInstalled))
+            _notInstalledFilterButton = CreateFilterToggleButton(
+                () =>
                 {
-                    _filterChanged?.Invoke();
-                    UpdateFilterControls();
-                }
-            });
+                    if (_filterState.SetShowNotInstalled(!_filterState.ShowNotInstalled))
+                    {
+                        _filterChanged?.Invoke();
+                        UpdateFilterControls();
+                    }
+                },
+                "not-installed");
             filterRow.Add(_notInstalledFilterButton);
 
             _clearFiltersButton = new Button(ClearFilters)
@@ -451,12 +458,16 @@ namespace Deucarian.PackageInstaller.Editor
                 _installedFilterButton,
                 _filterState.ShowInstalled,
                 "Installed",
-                counts.InstalledCount);
+                counts.InstalledCount,
+                "installed",
+                InstalledStatusMarker);
             UpdateFilterToggleButton(
                 _notInstalledFilterButton,
                 _filterState.ShowNotInstalled,
                 "Not installed",
-                counts.NotInstalledCount);
+                counts.NotInstalledCount,
+                "not-installed",
+                NotInstalledStatusMarker);
 
             _clearFiltersButton.SetEnabled(!_filterState.IsDefault);
             _visibleCountLabel.text = counts.VisibleCount + " visible";
@@ -496,10 +507,11 @@ namespace Deucarian.PackageInstaller.Editor
             _emptyStateActionButton.clicked += ClearFilters;
         }
 
-        private static Button CreateFilterToggleButton(Action action)
+        private static Button CreateFilterToggleButton(Action action, string iconClass)
         {
             Button button = new Button(action);
             button.AddToClassList("dpi-ecosystem-graph__filter-toggle");
+            button.AddToClassList("dpi-ecosystem-graph__filter-toggle--" + iconClass);
             return button;
         }
 
@@ -507,16 +519,52 @@ namespace Deucarian.PackageInstaller.Editor
             Button button,
             bool active,
             string label,
-            int count)
+            int count,
+            string iconClass,
+            string iconText)
         {
             if (button == null)
             {
                 return;
             }
 
-            button.text = (active ? "[x] " : "[ ] ") + label + " " + count;
-            button.tooltip = (active ? "Hide " : "Show ") + label.ToLowerInvariant() + " packages.";
+            button.text = string.Empty;
+            button.Clear();
+            button.Add(CreateFilterIcon(iconClass, iconText));
+            button.Add(CreateFilterLabel(label));
+            button.Add(CreateFilterCount(count));
+            button.tooltip = (active ? "Hide " : "Show ") +
+                             label.ToLowerInvariant() +
+                             " packages. " +
+                             count +
+                             " match the active search.";
             button.EnableInClassList("dpi-ecosystem-graph__filter-toggle--active", active);
+            button.EnableInClassList("dpi-ecosystem-graph__filter-toggle--inactive", !active);
+        }
+
+        private static Label CreateFilterIcon(string iconClass, string iconText)
+        {
+            Label icon = new Label(iconText);
+            icon.pickingMode = PickingMode.Ignore;
+            icon.AddToClassList("dpi-ecosystem-graph__filter-icon");
+            icon.AddToClassList("dpi-ecosystem-graph__filter-icon--" + iconClass);
+            return icon;
+        }
+
+        private static Label CreateFilterLabel(string label)
+        {
+            Label text = new Label(label);
+            text.pickingMode = PickingMode.Ignore;
+            text.AddToClassList("dpi-ecosystem-graph__filter-label");
+            return text;
+        }
+
+        private static Label CreateFilterCount(int count)
+        {
+            Label text = new Label(count.ToString());
+            text.pickingMode = PickingMode.Ignore;
+            text.AddToClassList("dpi-ecosystem-graph__filter-count");
+            return text;
         }
 
         private static VisualElement CreateLegendItem(
@@ -2763,15 +2811,15 @@ namespace Deucarian.PackageInstaller.Editor
                 case PackageGraphNodeStatus.Missing:
                     return "!";
                 case PackageGraphNodeStatus.NotInstalled:
-                    return "PKG";
+                    return "\u25CB";
                 case PackageGraphNodeStatus.UpdateAvailable:
-                    return "UP";
+                    return "!";
                 case PackageGraphNodeStatus.Checking:
                     return "...";
                 case PackageGraphNodeStatus.Warning:
                     return "!";
                 default:
-                    return "OK";
+                    return "\u2713";
             }
         }
 

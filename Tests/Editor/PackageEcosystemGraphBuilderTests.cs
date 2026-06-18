@@ -256,6 +256,24 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual(1, FindByClass(FindGraphNode(view, update.PackageId), "dpi-graph-node__badge--update").Count);
             Assert.AreEqual(1, FindByClass(FindGraphNode(view, dependency.PackageId), "dpi-graph-node__badge--warning").Count);
             Assert.AreEqual(1, FindByClass(FindGraphNode(view, "com.example.missing"), "dpi-graph-node__badge--missing").Count);
+            Assert.AreEqual(
+                "\u2713",
+                FindByClass(FindGraphNode(view, installed.PackageId), "dpi-graph-node__status-icon--installed")
+                    .OfType<Label>()
+                    .Single()
+                    .text);
+            Assert.AreEqual(
+                "\u25CB",
+                FindByClass(FindGraphNode(view, notInstalled.PackageId), "dpi-graph-node__status-icon--available")
+                    .OfType<Label>()
+                    .Single()
+                    .text);
+            Assert.AreEqual(
+                "!",
+                FindByClass(FindGraphNode(view, update.PackageId), "dpi-graph-node__status-icon--update")
+                    .OfType<Label>()
+                    .Single()
+                    .text);
             Assert.IsTrue(
                 FindByClass(FindGraphNode(view, dependency.PackageId), "dpi-graph-node__badge--warning")
                     .OfType<Label>()
@@ -539,6 +557,52 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                     .OfType<Label>()
                     .Single()
                     .text);
+        }
+
+        [Test]
+        public void GraphView_FilterChipsUseStatusIconsInsteadOfBracketMarkers()
+        {
+            PackageDefinition installed = CreatePackage("Installed", "com.example.installed", "Core");
+            PackageDefinition notInstalled = CreatePackage("Not Installed", "com.example.not-installed", "Core");
+            PackageGraphModel graph = new PackageGraphBuilder(packageId => packageId == installed.PackageId)
+                .Build(new[] { installed, notInstalled });
+            PackageVisibilityFilterState filterState = new PackageVisibilityFilterState();
+            PackageGraphView view = new PackageGraphView(
+                _ => { },
+                (_, __) => { },
+                null,
+                filterState,
+                null);
+
+            view.SetGraph(
+                graph,
+                string.Empty,
+                string.Empty,
+                actionsEnabled: true,
+                null,
+                PackageVisibilityFilter.CalculateCounts(graph, filterState),
+                hiddenRelatedCount: 0);
+
+            Button[] filterButtons = FindByClass(view, "dpi-ecosystem-graph__filter-toggle")
+                .OfType<Button>()
+                .ToArray();
+            Label installedIcon = FindByClass(view, "dpi-ecosystem-graph__filter-icon--installed")
+                .OfType<Label>()
+                .Single();
+            Label notInstalledIcon = FindByClass(view, "dpi-ecosystem-graph__filter-icon--not-installed")
+                .OfType<Label>()
+                .Single();
+
+            Assert.AreEqual(2, filterButtons.Length);
+            Assert.IsFalse(filterButtons.Any(button => (button.text ?? string.Empty).Contains("[")));
+            Assert.AreEqual("\u2713", installedIcon.text);
+            Assert.AreEqual("\u25CB", notInstalledIcon.text);
+            CollectionAssert.AreEquivalent(
+                new[] { "Installed", "Not installed" },
+                FindByClass(view, "dpi-ecosystem-graph__filter-label")
+                    .OfType<Label>()
+                    .Select(label => label.text)
+                    .ToArray());
         }
 
         [Test]
