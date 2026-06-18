@@ -158,6 +158,33 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             }
         }
 
+        [Test]
+        public void OptionalCompanionsAreNotInstalledAsDependencies()
+        {
+            PackageDefinition diagnostics = CreatePackage(
+                "Deucarian Diagnostics",
+                "com.deucarian.diagnostics",
+                "Diagnostics package.");
+            PackageDefinition objectLoading = CreatePackage(
+                "Deucarian Object Loading",
+                "com.deucarian.object-loading",
+                "Object loading package.",
+                optionalCompanions: new[] { diagnostics.PackageId });
+
+            using (PlanFixture fixture = new PlanFixture(objectLoading, diagnostics))
+            {
+                PackageDependencyInstallPlan plan = fixture.Installer.CreateInstallPlan(
+                    new[] { objectLoading },
+                    _ => PackageChannel.Stable,
+                    includeInstalledRequestedPackages: false);
+
+                Assert.IsTrue(plan.IsValid, plan.ErrorMessage);
+                CollectionAssert.AreEqual(
+                    new[] { objectLoading.PackageId },
+                    plan.Packages.Select(package => package.PackageId).ToArray());
+            }
+        }
+
         private static string JoinMessages(PackageDependencyInstallPlan plan)
         {
             return string.Join("\n", plan.Messages.ToArray());
@@ -168,6 +195,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             string packageId,
             string description,
             string[] dependencies = null,
+            string[] optionalCompanions = null,
             string stableUrl = null,
             string developmentUrl = null)
         {
@@ -179,6 +207,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 dependencies ?? Array.Empty<string>(),
                 PackageType.Core,
                 developmentUrl,
+                optionalCompanions: optionalCompanions,
                 category: "Core");
         }
 

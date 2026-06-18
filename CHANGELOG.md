@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.27 - 2026-06-18
+
+- Made Ecosystem Graph optional companion edges non-directional with static dotted styling.
+- Updated optional companion legend copy to clarify companions are recommended alongside, not required.
+- Added tests confirming optional companions are ignored by dependency install planning.
+
 ## 1.1.26 - 2026-06-18
 
 - Added shared Installed / Not installed visibility filters and package search across List View and Ecosystem Graph.

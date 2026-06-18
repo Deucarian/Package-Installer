@@ -629,6 +629,9 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                     .OfType<Label>()
                     .Any(label => label.text == "Optional companion"));
             Assert.IsTrue(
+                FindByClass(view, "dpi-graph-legend__item")
+                    .Any(item => item.tooltip == "Recommended alongside, not required"));
+            Assert.IsTrue(
                 FindByClass(view, "dpi-graph-legend__label")
                     .OfType<Label>()
                     .Any(label => label.text == "Suite membership"));
@@ -636,6 +639,25 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual(1, FindByClass(view, "dpi-graph-unrelated-summary").Count);
             Assert.AreEqual(1, FindByClass(view, "dpi-graph-node--integration").Count);
             Assert.IsTrue(FindByClass(view, "dpi-graph-node__action").Count >= 1);
+        }
+
+        [Test]
+        public void GraphEdges_TreatOptionalCompanionsAsNonDirectional()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+            PackageGraphEdge optionalEdge = graph.Edges.Single(edge =>
+                edge.Kind == PackageGraphEdgeKind.OptionalCompanion &&
+                edge.FromPackageId == "com.deucarian.object-loading" &&
+                edge.ToPackageId == "com.deucarian.diagnostics");
+
+            Assert.AreEqual("Optional companion", optionalEdge.Label);
+            Assert.IsFalse(PackageGraphEdgeLayer.AnimatesEdgeForTests(PackageGraphEdgeKind.OptionalCompanion));
+            Assert.IsFalse(PackageGraphEdgeLayer.UsesDirectionalFlowMarkersForTests(PackageGraphEdgeKind.OptionalCompanion));
+            Assert.IsTrue(PackageGraphEdgeLayer.AnimatesEdgeForTests(PackageGraphEdgeKind.HardDependency));
+            Assert.IsTrue(PackageGraphEdgeLayer.UsesDirectionalFlowMarkersForTests(PackageGraphEdgeKind.HardDependency));
+            Assert.IsTrue(PackageGraphEdgeLayer.AnimatesEdgeForTests(PackageGraphEdgeKind.IntegrationConnection));
+            Assert.IsTrue(PackageGraphEdgeLayer.UsesDirectionalFlowMarkersForTests(PackageGraphEdgeKind.IntegrationConnection));
         }
 
         [Test]

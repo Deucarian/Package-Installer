@@ -149,7 +149,7 @@ namespace Deucarian.PackageInstaller.Editor
                 "Dotted",
                 "Optional companion",
                 "dpi-graph-legend__line--optional",
-                "Enhances, not required. Subtle animated markers show direction."));
+                "Recommended alongside, not required"));
             legend.Add(CreateLegendItem(
                 "Halo",
                 "Suite membership",
@@ -1658,16 +1658,19 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (animate)
             {
-                Color pulseColor = new Color(color.r, color.g, color.b, Mathf.Min(0.64f, color.a + 0.06f));
-                DrawFlowMarkers(
-                    painter,
-                    edge.Kind,
-                    start,
-                    controlA,
-                    controlB,
-                    end,
-                    pulseColor,
-                    animationPhase);
+                if (SupportsDirectionalFlowMarkers(edge.Kind))
+                {
+                    Color pulseColor = new Color(color.r, color.g, color.b, Mathf.Min(0.64f, color.a + 0.06f));
+                    DrawFlowMarkers(
+                        painter,
+                        edge.Kind,
+                        start,
+                        controlA,
+                        controlB,
+                        end,
+                        pulseColor,
+                        animationPhase);
+                }
             }
 
             if (edge.State == PackageGraphEdgeState.Warning)
@@ -1747,11 +1750,25 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static bool ShouldAnimate(PackageGraphEdgeKind kind)
         {
-            return kind == PackageGraphEdgeKind.HardDependency ||
-                   kind == PackageGraphEdgeKind.IntegrationConnection ||
-                   kind == PackageGraphEdgeKind.OptionalCompanion ||
+            return SupportsDirectionalFlowMarkers(kind) ||
                    kind == PackageGraphEdgeKind.Recommended ||
                    kind == PackageGraphEdgeKind.SuiteMembership;
+        }
+
+        internal static bool UsesDirectionalFlowMarkersForTests(PackageGraphEdgeKind kind)
+        {
+            return SupportsDirectionalFlowMarkers(kind);
+        }
+
+        internal static bool AnimatesEdgeForTests(PackageGraphEdgeKind kind)
+        {
+            return ShouldAnimate(kind);
+        }
+
+        private static bool SupportsDirectionalFlowMarkers(PackageGraphEdgeKind kind)
+        {
+            return kind == PackageGraphEdgeKind.HardDependency ||
+                   kind == PackageGraphEdgeKind.IntegrationConnection;
         }
 
         private static Color GetEdgeColor(PackageGraphEdge edge, bool emphasized, bool focusMode)
@@ -1954,8 +1971,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static int GetFlowMarkerCount(PackageGraphEdgeKind kind)
         {
-            return kind == PackageGraphEdgeKind.OptionalCompanion ||
-                   kind == PackageGraphEdgeKind.SuiteMembership
+            return kind == PackageGraphEdgeKind.SuiteMembership
                 ? 1
                 : 2;
         }
@@ -1964,8 +1980,6 @@ namespace Deucarian.PackageInstaller.Editor
         {
             switch (kind)
             {
-                case PackageGraphEdgeKind.OptionalCompanion:
-                    return 4.0f;
                 case PackageGraphEdgeKind.IntegrationConnection:
                     return 4.8f;
                 case PackageGraphEdgeKind.SuiteMembership:
@@ -1979,8 +1993,6 @@ namespace Deucarian.PackageInstaller.Editor
         {
             switch (kind)
             {
-                case PackageGraphEdgeKind.OptionalCompanion:
-                    return 0.85f;
                 case PackageGraphEdgeKind.IntegrationConnection:
                     return 1.0f;
                 default:
@@ -1992,8 +2004,6 @@ namespace Deucarian.PackageInstaller.Editor
         {
             switch (kind)
             {
-                case PackageGraphEdgeKind.OptionalCompanion:
-                    return 0.52f;
                 case PackageGraphEdgeKind.SuiteMembership:
                     return 0.48f;
                 default:
