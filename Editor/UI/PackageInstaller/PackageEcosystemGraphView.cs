@@ -491,6 +491,7 @@ namespace Deucarian.PackageInstaller.Editor
         private string _hoveredPackageId = string.Empty;
         private string _layoutFocusPackageId = string.Empty;
         private PackageGraphFocus _currentFocus = PackageGraphFocus.Create(null, string.Empty, null);
+        private PackageGraphFocus _actionFocus = PackageGraphFocus.Create(null, string.Empty, null);
         private IVisualElementScheduledItem _layoutAnimationItem;
         private double _layoutAnimationStartedAt;
         private bool _layoutAnimationActive;
@@ -631,6 +632,10 @@ namespace Deucarian.PackageInstaller.Editor
             _currentFocus = PackageGraphFocus.Create(
                 _graph,
                 GetActiveFocusPackageId(),
+                _expandedSuiteIds);
+            _actionFocus = PackageGraphFocus.Create(
+                _graph,
+                _layoutFocusPackageId,
                 _expandedSuiteIds);
 
             DrawGuides();
@@ -975,15 +980,22 @@ namespace Deucarian.PackageInstaller.Editor
                     StringComparison.OrdinalIgnoreCase);
                 bool related = focus.IsPackageRelated(node.PackageId);
                 bool dimmed = focus.HasFocus && !related;
-                bool nodeActionsEnabled = selected && _actionsEnabled && !_interactionsLocked;
+                PackageGraphNodeVisualMode visualMode = GetNodeVisualMode(dimmed);
+                bool showNodeAction = ShouldShowNodeAction(
+                    node,
+                    _actionFocus,
+                    _actionFocus.IsPackageRelated(node.PackageId));
+                bool nodeActionsEnabled = showNodeAction && _actionsEnabled && !_interactionsLocked;
                 PackageGraphNodeElement nodeElement = new PackageGraphNodeElement(
                     node,
                     ring,
+                    visualMode,
                     selected,
                     related,
                     dimmed,
                     previewed,
                     _expandedSuiteIds.Contains(node.PackageId),
+                    showNodeAction,
                     nodeActionsEnabled,
                     !_interactionsLocked,
                     _packageSelected,
@@ -999,6 +1011,27 @@ namespace Deucarian.PackageInstaller.Editor
                 _nodeLayer.Add(nodeElement);
                 _nodeElements[node.PackageId] = nodeElement;
             }
+        }
+
+        private PackageGraphNodeVisualMode GetNodeVisualMode(bool dimmed)
+        {
+            if (_layoutResult != null && _layoutResult.Mode == PackageGraphLayoutMode.Overview)
+            {
+                return PackageGraphNodeVisualMode.Overview;
+            }
+
+            return dimmed ? PackageGraphNodeVisualMode.Stack : PackageGraphNodeVisualMode.Focus;
+        }
+
+        private static bool ShouldShowNodeAction(
+            PackageGraphNode node,
+            PackageGraphFocus focus,
+            bool related)
+        {
+            return node != null &&
+                   focus != null &&
+                   focus.HasFocus &&
+                   related;
         }
 
         private string GetSuiteRegionLabel(string suitePackageId)
@@ -1117,10 +1150,10 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed class PackageGraphEdgeLayer : VisualElement
     {
         private const int CurveSamples = 32;
-        private const float AnimationFrameMs = 33f;
-        private const float AnimatedDashLength = 14f;
-        private const float AnimatedDashGap = 10f;
-        private const float EdgeEndpointPadding = 8f;
+        private const float AnimationFrameMs = 40f;
+        private const float AnimatedDashLength = 12f;
+        private const float AnimatedDashGap = 12f;
+        private const float EdgeEndpointPadding = 6f;
         private const float MarkerTravelStart = 0.045f;
         private const float MarkerTravelEnd = 0.955f;
 
@@ -1225,7 +1258,7 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            _animationPhase = Mathf.Repeat((float)(EditorApplication.timeSinceStartup * 0.46d), 1f);
+            _animationPhase = Mathf.Repeat((float)(EditorApplication.timeSinceStartup * 0.30d), 1f);
             MarkDirtyRepaint();
         }
 
@@ -1358,7 +1391,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (animate)
             {
-                Color pulseColor = new Color(color.r, color.g, color.b, Mathf.Min(0.86f, color.a + 0.10f));
+                Color pulseColor = new Color(color.r, color.g, color.b, Mathf.Min(0.64f, color.a + 0.06f));
                 DrawFlowMarkers(
                     painter,
                     edge.Kind,
@@ -1416,15 +1449,15 @@ namespace Deucarian.PackageInstaller.Editor
                 outward = Vector2.up;
             }
 
-            float distance = Mathf.Max(70f, Vector2.Distance(start, end) * 0.16f);
+            float distance = Mathf.Max(46f, Vector2.Distance(start, end) * 0.10f);
 
             if (edge.Kind == PackageGraphEdgeKind.IntegrationConnection)
             {
-                distance += 24f;
+                distance += 10f;
             }
             else if (edge.Kind == PackageGraphEdgeKind.SuiteMembership)
             {
-                distance += 36f;
+                distance += 18f;
             }
             else if (!emphasized)
             {
@@ -1465,20 +1498,20 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 if (edge.Kind == PackageGraphEdgeKind.HardDependency)
                 {
-                    return new Color(0.34f, 0.70f, 0.98f, 0.90f);
+                    return new Color(0.34f, 0.70f, 0.98f, 0.76f);
                 }
 
                 if (edge.Kind == PackageGraphEdgeKind.IntegrationConnection)
                 {
-                    return new Color(0.24f, 0.82f, 0.75f, 0.92f);
+                    return new Color(0.24f, 0.82f, 0.75f, 0.72f);
                 }
 
                 if (edge.Kind == PackageGraphEdgeKind.OptionalCompanion)
                 {
-                    return new Color(0.62f, 0.75f, 0.84f, 0.58f);
+                    return new Color(0.62f, 0.75f, 0.84f, 0.44f);
                 }
 
-                return new Color(0.48f, 0.74f, 0.78f, 0.64f);
+                return new Color(0.48f, 0.74f, 0.78f, 0.50f);
             }
 
             if (focusMode)
@@ -1507,15 +1540,20 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 if (edge.State == PackageGraphEdgeState.Warning)
                 {
-                    return 2.7f;
+                    return 2.1f;
                 }
 
-                return edge.Kind == PackageGraphEdgeKind.OptionalCompanion ? 1.8f : 3f;
+                if (edge.Kind == PackageGraphEdgeKind.IntegrationConnection)
+                {
+                    return 1.9f;
+                }
+
+                return edge.Kind == PackageGraphEdgeKind.OptionalCompanion ? 1.15f : 2.15f;
             }
 
             if (focusMode)
             {
-                return edge.Kind == PackageGraphEdgeKind.OptionalCompanion ? 0.95f : 1.2f;
+                return edge.Kind == PackageGraphEdgeKind.OptionalCompanion ? 0.75f : 0.95f;
             }
 
             switch (edge.Kind)
@@ -1551,15 +1589,15 @@ namespace Deucarian.PackageInstaller.Editor
             Vector2 side = tangent.sqrMagnitude < 0.01f
                 ? Vector2.up
                 : new Vector2(-tangent.y, tangent.x).normalized;
-            float offset = emphasized ? 4.2f : 3.2f;
-            Color underlay = new Color(0.04f, 0.12f, 0.14f, Mathf.Min(0.58f, color.a * 0.68f));
+            float offset = emphasized ? 3.0f : 2.2f;
+            Color underlay = new Color(0.04f, 0.12f, 0.14f, Mathf.Min(0.34f, color.a * 0.50f));
 
             painter.strokeColor = underlay;
-            painter.lineWidth = Mathf.Max(2f, width + 1.9f);
+            painter.lineWidth = Mathf.Max(1.4f, width + 1.1f);
             DrawBezierStroke(painter, start, controlA, controlB, end);
 
             painter.strokeColor = color;
-            painter.lineWidth = Mathf.Max(1f, width * 0.62f);
+            painter.lineWidth = Mathf.Max(0.85f, width * 0.54f);
             DrawBezierStroke(
                 painter,
                 start + side * offset,
@@ -1660,13 +1698,13 @@ namespace Deucarian.PackageInstaller.Editor
             switch (kind)
             {
                 case PackageGraphEdgeKind.OptionalCompanion:
-                    return 4.6f;
+                    return 4.0f;
                 case PackageGraphEdgeKind.IntegrationConnection:
-                    return 5.8f;
-                case PackageGraphEdgeKind.SuiteMembership:
                     return 4.8f;
+                case PackageGraphEdgeKind.SuiteMembership:
+                    return 4.2f;
                 default:
-                    return 6.2f;
+                    return 5.0f;
             }
         }
 
@@ -1675,11 +1713,11 @@ namespace Deucarian.PackageInstaller.Editor
             switch (kind)
             {
                 case PackageGraphEdgeKind.OptionalCompanion:
-                    return 1.0f;
+                    return 0.85f;
                 case PackageGraphEdgeKind.IntegrationConnection:
-                    return 1.35f;
+                    return 1.0f;
                 default:
-                    return 1.25f;
+                    return 1.0f;
             }
         }
 
@@ -1688,11 +1726,11 @@ namespace Deucarian.PackageInstaller.Editor
             switch (kind)
             {
                 case PackageGraphEdgeKind.OptionalCompanion:
-                    return 0.68f;
+                    return 0.52f;
                 case PackageGraphEdgeKind.SuiteMembership:
-                    return 0.58f;
+                    return 0.48f;
                 default:
-                    return 0.95f;
+                    return 0.74f;
             }
         }
 
@@ -1801,6 +1839,13 @@ namespace Deucarian.PackageInstaller.Editor
         }
     }
 
+    internal enum PackageGraphNodeVisualMode
+    {
+        Overview,
+        Focus,
+        Stack
+    }
+
     internal sealed class PackageGraphNodeElement : VisualElement
     {
         private readonly PackageGraphNode _node;
@@ -1808,11 +1853,13 @@ namespace Deucarian.PackageInstaller.Editor
         public PackageGraphNodeElement(
             PackageGraphNode node,
             PackageGraphLayoutRing ring,
+            PackageGraphNodeVisualMode visualMode,
             bool selected,
             bool related,
             bool dimmed,
             bool previewed,
             bool suiteExpanded,
+            bool showActions,
             bool actionsEnabled,
             bool interactionsEnabled,
             Action<PackageDefinition> packageSelected,
@@ -1824,8 +1871,10 @@ namespace Deucarian.PackageInstaller.Editor
         {
             _node = node ?? throw new ArgumentNullException(nameof(node));
 
+            name = node.PackageId;
             AddToClassList("dpi-graph-node");
             AddToClassList("dpi-graph-node--" + GetNodeClass(node.NodeType));
+            AddToClassList("dpi-graph-node--" + GetVisualModeClass(visualMode));
             AddToClassList("dpi-graph-node--status-" + GetStatusClass(node.Status));
             AddToClassList("dpi-graph-node--ring-" + GetRingClass(ring));
             EnableInClassList("dpi-graph-node--installed", node.IsInstalled);
@@ -1886,11 +1935,16 @@ namespace Deucarian.PackageInstaller.Editor
             title.AddToClassList("dpi-graph-node__title");
             titleBlock.Add(title);
 
-            Label packageId = new Label(node.PackageId);
-            packageId.AddToClassList("dpi-graph-node__package-id");
-            titleBlock.Add(packageId);
+            bool fullCard = visualMode == PackageGraphNodeVisualMode.Focus;
 
-            if (node.NodeType == PackageGraphNodeType.Suite)
+            if (fullCard)
+            {
+                Label packageId = new Label(node.PackageId);
+                packageId.AddToClassList("dpi-graph-node__package-id");
+                titleBlock.Add(packageId);
+            }
+
+            if (fullCard && node.NodeType == PackageGraphNodeType.Suite)
             {
                 Button expandButton = new Button(() =>
                 {
@@ -1911,19 +1965,26 @@ namespace Deucarian.PackageInstaller.Editor
 
             VisualElement badges = new VisualElement();
             badges.AddToClassList("dpi-graph-node__badges");
-            badges.Add(CreateBadge(GetNodeTypeLabel(node.NodeType), "dpi-graph-node__badge--type"));
+            if (fullCard)
+            {
+                badges.Add(CreateBadge(GetNodeTypeLabel(node.NodeType), "dpi-graph-node__badge--type"));
+            }
             badges.Add(CreateBadge(GetStatusLabel(node), GetStatusBadgeClass(node.Status)));
             Add(badges);
+
+            if (!fullCard)
+            {
+                return;
+            }
 
             VisualElement footer = new VisualElement();
             footer.AddToClassList("dpi-graph-node__footer");
             Add(footer);
-
             Label channel = new Label(node.SelectedChannel.ToString());
             channel.AddToClassList("dpi-graph-node__channel");
             footer.Add(channel);
 
-            if (selected && node.PrimaryAction != PackageGraphNodeAction.None)
+            if (showActions && IsGraphShortcutAction(node.PrimaryAction))
             {
                 Button actionButton = new Button(() =>
                 {
@@ -1939,6 +2000,32 @@ namespace Deucarian.PackageInstaller.Editor
                 actionButton.SetEnabled(actionsEnabled);
                 actionButton.RegisterCallback<ClickEvent>(evt => evt.StopPropagation());
                 footer.Add(actionButton);
+            }
+        }
+
+        private static string GetVisualModeClass(PackageGraphNodeVisualMode visualMode)
+        {
+            switch (visualMode)
+            {
+                case PackageGraphNodeVisualMode.Overview:
+                    return "overview";
+                case PackageGraphNodeVisualMode.Stack:
+                    return "stack";
+                default:
+                    return "focus";
+            }
+        }
+
+        private static bool IsGraphShortcutAction(PackageGraphNodeAction action)
+        {
+            switch (action)
+            {
+                case PackageGraphNodeAction.Install:
+                case PackageGraphNodeAction.Update:
+                case PackageGraphNodeAction.Reinstall:
+                    return true;
+                default:
+                    return false;
             }
         }
 

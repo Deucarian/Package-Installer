@@ -289,10 +289,15 @@
 
 .dpi-graph-sector-label {
     position: absolute;
-    color: rgba(154, 194, 202, 0.62);
-    font-size: 11px;
+    color: rgba(184, 218, 226, 0.72);
+    font-size: 12px;
     -unity-font-style: bold;
     -unity-text-align: middle-center;
+    background-color: rgba(8, 15, 24, 0.36);
+    border-top-left-radius: 999px;
+    border-top-right-radius: 999px;
+    border-bottom-right-radius: 999px;
+    border-bottom-left-radius: 999px;
 }
 
 .dpi-graph-sector-label--foundation {
@@ -327,18 +332,18 @@
     border-right-width: 1px;
     border-top-width: 1px;
     border-bottom-width: 1px;
-    border-left-color: rgba(59, 166, 154, 0.20);
-    border-right-color: rgba(59, 166, 154, 0.20);
-    border-top-color: rgba(59, 166, 154, 0.20);
-    border-bottom-color: rgba(59, 166, 154, 0.20);
-    background-color: rgba(11, 20, 28, 0.38);
+    border-left-color: rgba(59, 166, 154, 0.38);
+    border-right-color: rgba(59, 166, 154, 0.30);
+    border-top-color: rgba(59, 166, 154, 0.30);
+    border-bottom-color: rgba(59, 166, 154, 0.30);
+    background-color: rgba(11, 20, 28, 0.58);
 }
 
 .dpi-graph-hub__icon {
-    width: 34px;
-    height: 34px;
-    margin-bottom: 5px;
-    opacity: 0.62;
+    width: 42px;
+    height: 42px;
+    margin-bottom: 7px;
+    opacity: 0.78;
 }
 
 .dpi-graph-hub--focus {
@@ -364,15 +369,15 @@
 }
 
 .dpi-graph-hub__title {
-    color: rgba(229, 239, 242, 0.76);
+    color: rgba(234, 244, 247, 0.90);
     -unity-font-style: bold;
-    font-size: 13px;
+    font-size: 16px;
 }
 
 .dpi-graph-hub__subtitle {
     margin-top: 2px;
-    color: rgba(125, 174, 205, 0.64);
-    font-size: 10px;
+    color: rgba(125, 188, 216, 0.78);
+    font-size: 11px;
 }
 
 .dpi-graph-suite-region {
@@ -442,6 +447,9 @@
 
 .dpi-graph-node--selected {
     border-left-width: 2px;
+    border-right-width: 2px;
+    border-top-width: 2px;
+    border-bottom-width: 2px;
     border-left-color: rgba(59, 209, 191, 0.92);
     border-right-color: rgba(59, 209, 191, 0.74);
     border-top-color: rgba(59, 209, 191, 0.74);
@@ -466,6 +474,81 @@
 
 .dpi-graph-node--dimmed {
     opacity: 0.24;
+}
+
+.dpi-graph-node--overview {
+    padding-left: 12px;
+    padding-right: 12px;
+    padding-top: 10px;
+    padding-bottom: 8px;
+    background-color: rgba(20, 32, 43, 0.78);
+}
+
+.dpi-graph-node--overview .dpi-graph-node__header {
+    min-height: 42px;
+    max-height: 46px;
+    align-items: center;
+}
+
+.dpi-graph-node--overview .dpi-graph-node__icon {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+}
+
+.dpi-graph-node--overview .dpi-graph-node__title {
+    font-size: 13px;
+    max-height: 34px;
+}
+
+.dpi-graph-node--overview .dpi-graph-node__badges {
+    margin-top: 7px;
+    margin-bottom: 0;
+    min-height: 18px;
+}
+
+.dpi-graph-node--stack {
+    padding-left: 9px;
+    padding-right: 9px;
+    padding-top: 8px;
+    padding-bottom: 7px;
+    border-left-color: rgba(90, 111, 160, 0.24);
+    border-right-color: rgba(90, 111, 160, 0.18);
+    border-top-color: rgba(90, 111, 160, 0.18);
+    border-bottom-color: rgba(90, 111, 160, 0.18);
+    background-color: rgba(17, 26, 36, 0.62);
+    opacity: 0.34;
+}
+
+.dpi-graph-node--stack .dpi-graph-node__header {
+    min-height: 34px;
+    max-height: 38px;
+    align-items: center;
+}
+
+.dpi-graph-node--stack .dpi-graph-node__icon {
+    width: 22px;
+    height: 22px;
+    min-width: 22px;
+    margin-right: 7px;
+    opacity: 0.70;
+}
+
+.dpi-graph-node--stack .dpi-graph-node__title {
+    font-size: 11px;
+    max-height: 28px;
+    color: rgba(205, 221, 226, 0.78);
+}
+
+.dpi-graph-node--stack .dpi-graph-node__badges {
+    margin-top: 5px;
+    margin-bottom: 0;
+    min-height: 16px;
+}
+
+.dpi-graph-node--stack .dpi-graph-node__badge {
+    height: 16px;
+    font-size: 8px;
 }
 
 .dpi-graph-node--locked {

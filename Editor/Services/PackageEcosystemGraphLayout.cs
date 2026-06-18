@@ -110,19 +110,23 @@ namespace Deucarian.PackageInstaller.Editor
 
     internal sealed class PackageGraphLayout
     {
-        public const float CanvasWidth = 2300f;
-        public const float CanvasHeight = 1900f;
+        public const float CanvasWidth = 2100f;
+        public const float CanvasHeight = 1660f;
         public const float NodeWidth = 238f;
         public const float NodeHeight = 136f;
 
-        private const float HubWidth = 210f;
-        private const float HubHeight = 112f;
+        private const float OverviewNodeWidth = 212f;
+        private const float OverviewNodeHeight = 94f;
+        private const float StackNodeWidth = 198f;
+        private const float StackNodeHeight = 84f;
+        private const float HubWidth = 250f;
+        private const float HubHeight = 128f;
         private const float NodeGap = 18f;
-        private const float OverviewOrbitRadius = 780f;
+        private const float OverviewOrbitRadius = 650f;
         private const float FocusGridGapX = 42f;
         private const float FocusGridGapY = 26f;
 
-        public static readonly Vector2 GraphCenter = new Vector2(1150f, 950f);
+        public static readonly Vector2 GraphCenter = new Vector2(1050f, 830f);
 
         public PackageGraphLayoutResult Calculate(PackageGraphModel graph)
         {
@@ -233,7 +237,10 @@ namespace Deucarian.PackageInstaller.Editor
                 Vector2 nodeCenter = new Vector2(
                     GraphCenter.x + Mathf.Cos(radians) * OverviewOrbitRadius,
                     GraphCenter.y + Mathf.Sin(radians) * OverviewOrbitRadius);
-                nodeRects[node.PackageId] = ClampToCanvas(CenteredRect(nodeCenter));
+                nodeRects[node.PackageId] = ClampToCanvas(CenteredRect(
+                    nodeCenter,
+                    OverviewNodeWidth,
+                    OverviewNodeHeight));
             }
         }
 
@@ -267,31 +274,31 @@ namespace Deucarian.PackageInstaller.Editor
 
             PlaceCluster(
                 MergeGroups(providers, supportProviders),
-                new Vector2(700f, 750f),
+                new Vector2(620f, 800f),
                 1,
                 nodeRects,
                 placed);
             PlaceCluster(
                 dependents,
-                new Vector2(1550f, 740f),
+                new Vector2(1435f, 800f),
                 2,
                 nodeRects,
                 placed);
             PlaceCluster(
                 integrationNodes,
-                new Vector2(1150f, 1260f),
+                new Vector2(1050f, 1145f),
                 2,
                 nodeRects,
                 placed);
             PlaceCluster(
                 optionalCompanions,
-                new Vector2(700f, 380f),
+                new Vector2(650f, 475f),
                 1,
                 nodeRects,
                 placed);
             PlaceCluster(
                 suiteNodes,
-                new Vector2(1550f, 380f),
+                new Vector2(1440f, 475f),
                 1,
                 nodeRects,
                 placed);
@@ -512,12 +519,12 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             const int stackColumns = 2;
-            const float stackCenterX = 1990f;
-            const float stackTopY = 380f;
-            const float stackGapX = 24f;
-            const float stackGapY = 16f;
-            float stepX = NodeWidth + stackGapX;
-            float stepY = NodeHeight + stackGapY;
+            const float stackCenterX = 1850f;
+            const float stackTopY = 330f;
+            const float stackGapX = 16f;
+            const float stackGapY = 14f;
+            float stepX = StackNodeWidth + stackGapX;
+            float stepY = StackNodeHeight + stackGapY;
 
             for (int index = 0; index < remainingNodes.Length; index++)
             {
@@ -528,7 +535,10 @@ namespace Deucarian.PackageInstaller.Editor
                 Vector2 nodeCenter = new Vector2(
                     originX + column * stepX,
                     stackTopY + row * stepY);
-                nodeRects[node.PackageId] = ClampToCanvas(CenteredRect(nodeCenter));
+                nodeRects[node.PackageId] = ClampToCanvas(CenteredRect(
+                    nodeCenter,
+                    StackNodeWidth,
+                    StackNodeHeight));
                 placed.Add(node.PackageId);
             }
         }
@@ -650,11 +660,16 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static Rect CenteredRect(Vector2 center)
         {
+            return CenteredRect(center, NodeWidth, NodeHeight);
+        }
+
+        private static Rect CenteredRect(Vector2 center, float width, float height)
+        {
             return new Rect(
-                center.x - NodeWidth * 0.5f,
-                center.y - NodeHeight * 0.5f,
-                NodeWidth,
-                NodeHeight);
+                center.x - width * 0.5f,
+                center.y - height * 0.5f,
+                width,
+                height);
         }
 
         private static Rect CreateOverviewHubRect()
@@ -668,7 +683,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static Rect CreateFocusHubRect()
         {
-            return new Rect(42f, 36f, HubWidth * 0.78f, HubHeight * 0.68f);
+            return new Rect(42f, 36f, HubWidth * 0.72f, HubHeight * 0.62f);
         }
 
         private static Rect ClampToCanvas(Rect rect)
@@ -778,8 +793,8 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static Rect FindNearestFreeRect(Rect preferredRect, IReadOnlyList<Rect> placedRects)
         {
-            float stepX = NodeWidth + NodeGap + 10f;
-            float stepY = NodeHeight + NodeGap + 10f;
+            float stepX = preferredRect.width + NodeGap + 10f;
+            float stepY = preferredRect.height + NodeGap + 10f;
             HashSet<string> visited = new HashSet<string>(StringComparer.Ordinal);
 
             for (int radius = 1; radius <= 6; radius++)
@@ -816,9 +831,9 @@ namespace Deucarian.PackageInstaller.Editor
             Rect best = preferredRect;
             float bestDistance = float.MaxValue;
 
-            for (float y = 24f; y <= CanvasHeight - NodeHeight - 24f; y += stepY)
+            for (float y = 24f; y <= CanvasHeight - preferredRect.height - 24f; y += stepY)
             {
-                for (float x = 24f; x <= CanvasWidth - NodeWidth - 24f; x += stepX)
+                for (float x = 24f; x <= CanvasWidth - preferredRect.width - 24f; x += stepX)
                 {
                     Rect candidate = new Rect(x, y, preferredRect.width, preferredRect.height);
 
@@ -964,7 +979,7 @@ namespace Deucarian.PackageInstaller.Editor
                 yield return new PackageGraphSectorLabel(
                     GetSectorLabel(ring),
                     ring,
-                    GraphCenter + direction.normalized * (OverviewOrbitRadius + 112f));
+                    GraphCenter + direction.normalized * (OverviewOrbitRadius + 82f));
             }
         }
 
@@ -1003,33 +1018,33 @@ namespace Deucarian.PackageInstaller.Editor
             yield return new PackageGraphRingGuide(
                 "Required packages",
                 PackageGraphLayoutRing.Foundation,
-                new Vector2(700f, 750f),
+                new Vector2(620f, 800f),
                 182f,
                 190f);
             yield return new PackageGraphRingGuide(
                 "Dependent packages",
                 PackageGraphLayoutRing.Runtime,
-                new Vector2(1550f, 740f),
+                new Vector2(1435f, 800f),
                 328f,
                 292f);
             yield return new PackageGraphRingGuide(
                 "Integrations",
                 PackageGraphLayoutRing.Integration,
-                new Vector2(1150f, 1260f),
+                new Vector2(1050f, 1145f),
                 316f,
                 178f);
             yield return new PackageGraphRingGuide(
                 "Companions / Suites",
                 PackageGraphLayoutRing.Suite,
-                new Vector2(1125f, 380f),
-                584f,
-                184f);
+                new Vector2(1045f, 475f),
+                548f,
+                170f);
             yield return new PackageGraphRingGuide(
                 "Unrelated package stack",
                 PackageGraphLayoutRing.Runtime,
-                new Vector2(1990f, 920f),
-                272f,
-                560f);
+                new Vector2(1850f, 660f),
+                255f,
+                420f);
         }
 
         private sealed class PackageGraphNodePackageIdComparer : IEqualityComparer<PackageGraphNode>

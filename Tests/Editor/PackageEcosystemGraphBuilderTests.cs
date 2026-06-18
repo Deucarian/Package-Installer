@@ -194,6 +194,37 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void GraphView_ShowsActionsOnlyForFocusedRelationshipContext()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+            PackageGraphView overview = new PackageGraphView(_ => { }, (_, __) => { });
+            PackageGraphView focused = new PackageGraphView(_ => { }, (_, __) => { });
+
+            overview.SetGraph(graph, string.Empty, actionsEnabled: true);
+            focused.SetGraph(graph, "com.deucarian.session", actionsEnabled: true);
+
+            Assert.IsEmpty(FindByClass(overview, "dpi-graph-node__action"));
+            Assert.AreEqual(
+                "Install",
+                FindGraphNodeAction(focused, "com.deucarian.session").text);
+            Assert.AreEqual(
+                "Install",
+                FindGraphNodeAction(focused, "com.deucarian.logging").text);
+            Assert.AreEqual(
+                "Install Integration",
+                FindGraphNodeAction(focused, "com.deucarian.session.api-integration").text);
+            Assert.IsEmpty(
+                FindByClass(
+                    FindGraphNode(focused, "com.deucarian.theming"),
+                    "dpi-graph-node__action"));
+            Assert.AreEqual(graph.Nodes.Count, FindByClass(overview, "dpi-graph-node--overview").Count);
+            Assert.IsEmpty(FindByClass(overview, "dpi-graph-node__package-id"));
+            Assert.IsTrue(FindGraphNode(focused, "com.deucarian.theming").ClassListContains("dpi-graph-node--stack"));
+            Assert.IsTrue(FindGraphNode(focused, "com.deucarian.logging").ClassListContains("dpi-graph-node--focus"));
+        }
+
+        [Test]
         public void Build_MarksMissingInstalledDependencyRequirementAsWarningNode()
         {
             PackageDefinition dependency = CreatePackage("Dependency", "com.example.dependency", "Core");
@@ -288,7 +319,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             {
                 Assert.That(
                     Vector2.Distance(nodeRect.center, PackageGraphLayout.GraphCenter),
-                    Is.EqualTo(780f).Within(1.5f));
+                    Is.EqualTo(650f).Within(1.5f));
             }
             AssertNoOverlaps(layout.NodeRects.Values.ToArray());
         }
@@ -730,6 +761,19 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             return matches;
         }
 
+        private static VisualElement FindGraphNode(VisualElement root, string packageId)
+        {
+            return FindByClass(root, "dpi-graph-node")
+                .Single(node => string.Equals(node.name, packageId, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static Button FindGraphNodeAction(VisualElement root, string packageId)
+        {
+            return FindByClass(FindGraphNode(root, packageId), "dpi-graph-node__action")
+                .OfType<Button>()
+                .Single();
+        }
+
         private static void CollectByClass(VisualElement element, string className, ICollection<VisualElement> matches)
         {
             if (element == null)
@@ -747,5 +791,6 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 CollectByClass(child, className, matches);
             }
         }
+
     }
 }

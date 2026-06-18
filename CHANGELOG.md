@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.21 - 2026-06-18
+
+- Allowed Ecosystem Graph shortcut actions for the selected package and directly related packages in stable focus mode.
+- Kept overview and unrelated dimmed graph nodes free of direct package action buttons.
+- Tightened the overview orbit with simplified package cards, stronger Deucarian hub styling, and clearer sector labels.
+- Compactly stacked unrelated focus-mode packages with simplified dimmed cards.
+- Calmed graph relationship rendering with thinner Integration cables, smaller curves, and slower directional markers.
+
 ## 1.1.20 - 2026-06-18
 
 - Limited Ecosystem Graph node action buttons to the selected package so first-click graph navigation cannot accidentally run install/update/reinstall actions.

@@ -244,7 +244,7 @@ Keeping the installer editor-only ensures:
 
 ## Versioning
 
-Current package version: `1.1.20`.
+Current package version: `1.1.21`.
 
 Branch strategy:
 
