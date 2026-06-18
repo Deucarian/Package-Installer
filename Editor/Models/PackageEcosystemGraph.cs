@@ -302,9 +302,6 @@ namespace Deucarian.PackageInstaller.Editor
 
             focus._relatedPackageIds.Add(normalizedFocusPackageId);
             focus.AddDirectEdges(graph, normalizedFocusPackageId);
-            focus.AddIntegrationContext(graph);
-            focus.AddSuiteContext(graph, normalizedFocusPackageId);
-            focus.AddWarningContext(graph);
 
             return focus;
         }
@@ -352,101 +349,6 @@ namespace Deucarian.PackageInstaller.Editor
 
                 AddFocusEdge(edge);
                 _relatedPackageIds.Add(edge.GetOtherPackageId(packageId));
-            }
-        }
-
-        private void AddIntegrationContext(PackageGraphModel graph)
-        {
-            string[] integrationPackageIds = graph.Nodes
-                .Where(node => node.NodeType == PackageGraphNodeType.Integration &&
-                               _relatedPackageIds.Contains(node.PackageId))
-                .Select(node => node.PackageId)
-                .ToArray();
-
-            foreach (string integrationPackageId in integrationPackageIds)
-            {
-                foreach (PackageGraphEdge edge in graph.Edges.Where(edge =>
-                             (edge.Kind == PackageGraphEdgeKind.IntegrationConnection ||
-                              edge.Kind == PackageGraphEdgeKind.HardDependency) &&
-                             edge.ConnectsPackage(integrationPackageId)))
-                {
-                    AddFocusEdge(edge);
-                    _relatedPackageIds.Add(edge.FromPackageId);
-                    _relatedPackageIds.Add(edge.ToPackageId);
-                }
-            }
-        }
-
-        private void AddSuiteContext(PackageGraphModel graph, string packageId)
-        {
-            foreach (PackageGraphSuiteRegion region in graph.SuiteRegions)
-            {
-                bool packageIsSuite = string.Equals(
-                    region.SuitePackageId,
-                    packageId,
-                    StringComparison.OrdinalIgnoreCase);
-                bool packageIsMember = region.MemberPackageIds.Any(memberPackageId =>
-                    string.Equals(memberPackageId, packageId, StringComparison.OrdinalIgnoreCase));
-
-                if (!packageIsSuite && !packageIsMember)
-                {
-                    continue;
-                }
-
-                if (packageIsSuite)
-                {
-                    foreach (string memberPackageId in region.MemberPackageIds)
-                    {
-                        _relatedPackageIds.Add(memberPackageId);
-                    }
-
-                    foreach (PackageGraphEdge edge in graph.Edges.Where(edge =>
-                                 edge.Kind == PackageGraphEdgeKind.SuiteMembership &&
-                                 string.Equals(
-                                     edge.FromPackageId,
-                                     region.SuitePackageId,
-                                     StringComparison.OrdinalIgnoreCase)))
-                    {
-                        AddFocusEdge(edge);
-                    }
-
-                    continue;
-                }
-
-                _relatedPackageIds.Add(region.SuitePackageId);
-
-                foreach (PackageGraphEdge edge in graph.Edges.Where(edge =>
-                             edge.Kind == PackageGraphEdgeKind.SuiteMembership &&
-                             string.Equals(
-                                 edge.FromPackageId,
-                                 region.SuitePackageId,
-                                 StringComparison.OrdinalIgnoreCase) &&
-                             string.Equals(
-                                 edge.ToPackageId,
-                                 packageId,
-                                 StringComparison.OrdinalIgnoreCase)))
-                {
-                    AddFocusEdge(edge);
-                }
-            }
-        }
-
-        private void AddWarningContext(PackageGraphModel graph)
-        {
-            foreach (PackageGraphEdge edge in graph.Edges)
-            {
-                if (edge.State != PackageGraphEdgeState.Warning)
-                {
-                    continue;
-                }
-
-                if (_relatedPackageIds.Contains(edge.FromPackageId) ||
-                    _relatedPackageIds.Contains(edge.ToPackageId))
-                {
-                    AddFocusEdge(edge);
-                    _relatedPackageIds.Add(edge.FromPackageId);
-                    _relatedPackageIds.Add(edge.ToPackageId);
-                }
             }
         }
 

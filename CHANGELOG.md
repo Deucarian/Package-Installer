@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.23 - 2026-06-18
+
+- Tightened Ecosystem Graph focus mode into a strict selected-package ego layout with fixed dependency, dependent, integration, companion, and suite bands.
+- Collapsed unrelated focus-mode packages into a single compact summary pill instead of scattered dimmed cards.
+- Limited focus-mode relationship context to direct selected-package edges so unrelated graph edges stay hidden.
+
 ## 1.1.22 - 2026-06-18
 
 - Simplified Ecosystem Graph focus mode by removing floating semantic zone labels and large suite composition regions.

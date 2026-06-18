@@ -552,6 +552,14 @@ namespace Deucarian.PackageInstaller.Editor
                 hasBounds = true;
             }
 
+            if (_layoutResult.HasUnrelatedSummary)
+            {
+                bounds = hasBounds
+                    ? Union(bounds, _layoutResult.UnrelatedSummaryRect)
+                    : _layoutResult.UnrelatedSummaryRect;
+                hasBounds = true;
+            }
+
             if (!hasBounds)
             {
                 bounds = new Rect(
@@ -616,7 +624,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             _currentFocus = PackageGraphFocus.Create(
                 _graph,
-                GetActiveFocusPackageId());
+                _layoutFocusPackageId);
             _actionFocus = PackageGraphFocus.Create(
                 _graph,
                 _layoutFocusPackageId);
@@ -624,22 +632,9 @@ namespace Deucarian.PackageInstaller.Editor
             DrawGuides();
             StartLayoutTransition(previousRects);
             DrawNodes(_currentFocus);
+            DrawUnrelatedSummary();
             ApplyAnimatedLayout();
             _edgeLayer.SetGraph(_graph, _animatedNodeRects, _layoutResult.CanvasHeight, _currentFocus);
-        }
-
-        private string GetActiveFocusPackageId()
-        {
-            if (!string.IsNullOrWhiteSpace(_hoveredPackageId) &&
-                _graph.TryGetNode(_hoveredPackageId, out _))
-            {
-                return _hoveredPackageId;
-            }
-
-            return !string.IsNullOrWhiteSpace(_focusedPackageId) &&
-                   _graph.TryGetNode(_focusedPackageId, out _)
-                ? _focusedPackageId
-                : string.Empty;
         }
 
         private string GetLayoutFocusPackageId()
@@ -873,6 +868,33 @@ namespace Deucarian.PackageInstaller.Editor
                 _nodeLayer.Add(nodeElement);
                 _nodeElements[node.PackageId] = nodeElement;
             }
+        }
+
+        private void DrawUnrelatedSummary()
+        {
+            if (_layoutResult == null || !_layoutResult.HasUnrelatedSummary)
+            {
+                return;
+            }
+
+            Label summary = new Label("+" + _layoutResult.UnrelatedPackageCount + " unrelated packages");
+            summary.name = "ecosystem-graph-unrelated-summary";
+            summary.AddToClassList("dpi-graph-unrelated-summary");
+            summary.tooltip = "Return to overview";
+            summary.SetEnabled(!_interactionsLocked);
+            summary.RegisterCallback<ClickEvent>(evt =>
+            {
+                if (_interactionsLocked)
+                {
+                    evt.StopPropagation();
+                    return;
+                }
+
+                _selectionCleared?.Invoke();
+                evt.StopPropagation();
+            });
+            SetElementRect(summary, _layoutResult.UnrelatedSummaryRect);
+            _nodeLayer.Add(summary);
         }
 
         private PackageGraphNodeVisualMode GetNodeVisualMode(bool dimmed)

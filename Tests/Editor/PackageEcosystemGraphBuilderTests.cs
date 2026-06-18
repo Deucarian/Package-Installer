@@ -214,13 +214,16 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual(
                 "Install Integration",
                 FindGraphNodeAction(focused, "com.deucarian.session.api-integration").text);
-            Assert.IsEmpty(
-                FindByClass(
-                    FindGraphNode(focused, "com.deucarian.theming"),
-                    "dpi-graph-node__action"));
             Assert.AreEqual(graph.Nodes.Count, FindByClass(overview, "dpi-graph-node--overview").Count);
+            Assert.Less(FindByClass(focused, "dpi-graph-node").Count, graph.Nodes.Count);
             Assert.IsEmpty(FindByClass(overview, "dpi-graph-node__package-id"));
-            Assert.IsTrue(FindGraphNode(focused, "com.deucarian.theming").ClassListContains("dpi-graph-node--stack"));
+            Assert.IsEmpty(FindByClass(overview, "dpi-graph-unrelated-summary"));
+            Assert.IsFalse(HasGraphNode(focused, "com.deucarian.theming"));
+            Label unrelatedSummary = FindByClass(focused, "dpi-graph-unrelated-summary")
+                .OfType<Label>()
+                .Single();
+            StringAssert.Contains("unrelated packages", unrelatedSummary.text);
+            Assert.AreEqual("Return to overview", unrelatedSummary.tooltip);
             Assert.IsTrue(FindGraphNode(focused, "com.deucarian.logging").ClassListContains("dpi-graph-node--focus"));
         }
 
@@ -284,7 +287,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 FindByClass(view, "dpi-graph-legend__label")
                     .OfType<Label>()
                     .Any(label => label.text == "Suite membership"));
-            Assert.AreEqual(3, FindByClass(view, "dpi-graph-node").Count);
+            Assert.AreEqual(2, FindByClass(view, "dpi-graph-node").Count);
+            Assert.AreEqual(1, FindByClass(view, "dpi-graph-unrelated-summary").Count);
             Assert.AreEqual(1, FindByClass(view, "dpi-graph-node--integration").Count);
             Assert.IsTrue(FindByClass(view, "dpi-graph-node__action").Count >= 1);
         }
@@ -337,19 +341,62 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
             Rect session = layout.NodeRects["com.deucarian.session"];
             Rect logging = layout.NodeRects["com.deucarian.logging"];
-            Rect api = layout.NodeRects["com.deucarian.api"];
             Rect sessionIntegration = layout.NodeRects["com.deucarian.session.api-integration"];
-            Rect theming = layout.NodeRects["com.deucarian.theming"];
 
             Assert.AreEqual(PackageGraphLayoutMode.Focus, layout.Mode);
             Assert.AreEqual("com.deucarian.session", layout.FocusPackageId);
             Assert.That(Vector2.Distance(PackageGraphLayout.GraphCenter, session.center), Is.LessThan(0.1f));
             Assert.Less(logging.center.x, session.center.x);
-            Assert.Less(api.center.x, session.center.x);
+            Assert.That(logging.center.x, Is.EqualTo(600f).Within(0.1f));
+            Assert.That(logging.center.y, Is.EqualTo(PackageGraphLayout.GraphCenter.y).Within(0.1f));
+            Assert.That(sessionIntegration.center.x, Is.EqualTo(PackageGraphLayout.GraphCenter.x).Within(0.1f));
+            Assert.That(sessionIntegration.center.y, Is.EqualTo(1195f).Within(0.1f));
             Assert.Greater(sessionIntegration.center.y, session.center.y);
-            Assert.Greater(theming.center.x, session.center.x + 500f);
+            Assert.IsFalse(layout.NodeRects.ContainsKey("com.deucarian.api"));
+            Assert.IsFalse(layout.NodeRects.ContainsKey("com.deucarian.theming"));
+            Assert.IsTrue(layout.HasUnrelatedSummary);
+            Assert.Greater(layout.UnrelatedPackageCount, 0);
+            Assert.Greater(layout.UnrelatedSummaryRect.center.x, session.center.x + 650f);
+            Assert.Less(layout.UnrelatedSummaryRect.center.y, session.center.y);
             Assert.AreEqual(layout.ActiveCenter, session.center);
             Assert.IsEmpty(layout.RingGuides);
+            AssertNoOverlaps(layout.NodeRects.Values.ToArray());
+        }
+
+        [Test]
+        public void Layout_CentersLoggingAndStacksDependentsInRightColumn()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+
+            PackageGraphLayoutResult layout = new PackageGraphLayout().Calculate(
+                graph,
+                PackageGraphLayoutMode.Focus,
+                "com.deucarian.logging");
+
+            Rect logging = layout.NodeRects["com.deucarian.logging"];
+            Rect editor = layout.NodeRects["com.deucarian.editor"];
+
+            Assert.That(Vector2.Distance(PackageGraphLayout.GraphCenter, logging.center), Is.LessThan(0.1f));
+            Assert.Less(editor.center.x, logging.center.x);
+            foreach (string packageId in new[]
+                     {
+                         "com.deucarian.api",
+                         "com.deucarian.object-loading",
+                         "com.deucarian.session",
+                         "com.deucarian.object-selection",
+                         "com.deucarian.theming",
+                         "com.deucarian.diagnostics",
+                         "com.deucarian.package-installer"
+                     })
+            {
+                Rect dependent = layout.NodeRects[packageId];
+                Assert.Greater(dependent.center.x, logging.center.x);
+                Assert.That(dependent.center.x, Is.EqualTo(1500f).Within(0.1f));
+            }
+
+            Assert.IsTrue(layout.HasUnrelatedSummary);
+            Assert.Greater(layout.UnrelatedPackageCount, 0);
             AssertNoOverlaps(layout.NodeRects.Values.ToArray());
         }
 
@@ -380,7 +427,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
             Assert.IsTrue(focus.IsPackageRelated("com.deucarian.logging"));
             Assert.IsTrue(focus.IsPackageRelated("com.deucarian.object-loading.api-integration"));
-            Assert.IsTrue(focus.IsPackageRelated("com.deucarian.api"));
+            Assert.IsFalse(focus.IsPackageRelated("com.deucarian.api"));
             Assert.IsTrue(focus.IsPackageRelated("com.deucarian.diagnostics"));
             Assert.IsFalse(focus.IsPackageRelated("com.deucarian.theming"));
 
@@ -399,20 +446,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             AssertEdgeVisible(
                 graph,
                 focus,
-                "com.deucarian.api",
-                "com.deucarian.object-loading.api-integration",
-                PackageGraphEdgeKind.HardDependency);
-            AssertEdgeVisible(
-                graph,
-                focus,
                 "com.deucarian.object-loading.api-integration",
                 "com.deucarian.object-loading",
-                PackageGraphEdgeKind.IntegrationConnection);
-            AssertEdgeVisible(
-                graph,
-                focus,
-                "com.deucarian.object-loading.api-integration",
-                "com.deucarian.api",
                 PackageGraphEdgeKind.IntegrationConnection);
             AssertEdgeVisible(
                 graph,
@@ -420,6 +455,18 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 "com.deucarian.object-loading",
                 "com.deucarian.diagnostics",
                 PackageGraphEdgeKind.OptionalCompanion);
+
+            PackageGraphEdge apiRequirementEdge = graph.Edges.Single(edge =>
+                edge.FromPackageId == "com.deucarian.api" &&
+                edge.ToPackageId == "com.deucarian.object-loading.api-integration" &&
+                edge.Kind == PackageGraphEdgeKind.HardDependency);
+            Assert.IsFalse(focus.IsEdgeVisible(apiRequirementEdge));
+
+            PackageGraphEdge apiIntegrationEdge = graph.Edges.Single(edge =>
+                edge.FromPackageId == "com.deucarian.object-loading.api-integration" &&
+                edge.ToPackageId == "com.deucarian.api" &&
+                edge.Kind == PackageGraphEdgeKind.IntegrationConnection);
+            Assert.IsFalse(focus.IsEdgeVisible(apiIntegrationEdge));
 
             PackageGraphEdge unrelatedThemingEdge = graph.Edges.Single(edge =>
                 edge.FromPackageId == "com.deucarian.editor" &&
@@ -499,6 +546,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
             Assert.That(Vector2.Distance(PackageGraphLayout.GraphCenter, suiteRect.center), Is.LessThan(0.1f));
             Assert.IsEmpty(suiteLayout.RingGuides);
+            Assert.IsEmpty(suiteLayout.SectorLabels);
+            Assert.IsTrue(suiteLayout.HasUnrelatedSummary);
         }
 
         [Test]
@@ -762,6 +811,12 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         {
             return FindByClass(root, "dpi-graph-node")
                 .Single(node => string.Equals(node.name, packageId, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static bool HasGraphNode(VisualElement root, string packageId)
+        {
+            return FindByClass(root, "dpi-graph-node")
+                .Any(node => string.Equals(node.name, packageId, StringComparison.OrdinalIgnoreCase));
         }
 
         private static Button FindGraphNodeAction(VisualElement root, string packageId)

@@ -31,7 +31,9 @@ namespace Deucarian.PackageInstaller.Editor
             IReadOnlyDictionary<string, Rect> nodeRects,
             IReadOnlyDictionary<string, PackageGraphLayoutRing> nodeRings,
             IEnumerable<PackageGraphRingGuide> ringGuides,
-            IEnumerable<PackageGraphSectorLabel> sectorLabels = null)
+            IEnumerable<PackageGraphSectorLabel> sectorLabels = null,
+            int unrelatedPackageCount = 0,
+            Rect unrelatedSummaryRect = default(Rect))
         {
             Mode = mode;
             FocusPackageId = focusPackageId ?? string.Empty;
@@ -47,6 +49,8 @@ namespace Deucarian.PackageInstaller.Editor
             SectorLabels = sectorLabels == null
                 ? Array.Empty<PackageGraphSectorLabel>()
                 : sectorLabels.Where(label => label != null).ToArray();
+            UnrelatedPackageCount = Math.Max(0, unrelatedPackageCount);
+            UnrelatedSummaryRect = unrelatedSummaryRect;
         }
 
         public PackageGraphLayoutMode Mode { get; }
@@ -68,6 +72,12 @@ namespace Deucarian.PackageInstaller.Editor
         public IReadOnlyList<PackageGraphRingGuide> RingGuides { get; }
 
         public IReadOnlyList<PackageGraphSectorLabel> SectorLabels { get; }
+
+        public int UnrelatedPackageCount { get; }
+
+        public Rect UnrelatedSummaryRect { get; }
+
+        public bool HasUnrelatedSummary => UnrelatedPackageCount > 0 && UnrelatedSummaryRect.width > 0.01f;
     }
 
     internal sealed class PackageGraphRingGuide
@@ -117,8 +127,8 @@ namespace Deucarian.PackageInstaller.Editor
 
         private const float OverviewNodeWidth = 212f;
         private const float OverviewNodeHeight = 94f;
-        private const float StackNodeWidth = 198f;
-        private const float StackNodeHeight = 84f;
+        private const float UnrelatedSummaryWidth = 226f;
+        private const float UnrelatedSummaryHeight = 58f;
         private const float HubWidth = 250f;
         private const float HubHeight = 128f;
         private const float NodeGap = 18f;
@@ -170,7 +180,7 @@ namespace Deucarian.PackageInstaller.Editor
                     CreateOverviewSectorLabels(nodeRects, nodeRings));
             }
 
-            PlaceFocus(graph, nodes, focusNode, nodeRects, nodeRings);
+            int unrelatedPackageCount = PlaceFocus(graph, nodes, focusNode, nodeRects, nodeRings);
             ResolveOverlaps(nodeRects, nodeRings, focusNode.PackageId);
 
             Rect focusHubRect = CreateFocusHubRect();
@@ -187,7 +197,10 @@ namespace Deucarian.PackageInstaller.Editor
                 focusRect.center,
                 nodeRects,
                 nodeRings,
-                Array.Empty<PackageGraphRingGuide>());
+                Array.Empty<PackageGraphRingGuide>(),
+                null,
+                unrelatedPackageCount,
+                CreateUnrelatedSummaryRect(unrelatedPackageCount));
         }
 
         private static PackageGraphNode GetFocusNode(
@@ -244,7 +257,7 @@ namespace Deucarian.PackageInstaller.Editor
             }
         }
 
-        private static void PlaceFocus(
+        private static int PlaceFocus(
             PackageGraphModel graph,
             PackageGraphNode[] nodes,
             PackageGraphNode focusNode,
@@ -262,48 +275,32 @@ namespace Deucarian.PackageInstaller.Editor
             string focusPackageId = focusNode.PackageId;
             List<PackageGraphNode> providers = GetProviderNodes(graph, nodeById, focusPackageId, placed);
             List<PackageGraphNode> integrationNodes = GetIntegrationNodes(graph, nodeById, focusPackageId, placed);
-            List<PackageGraphNode> supportProviders = GetIntegrationSupportProviderNodes(
-                graph,
-                nodeById,
-                integrationNodes,
-                placed,
-                focusPackageId);
             List<PackageGraphNode> dependents = GetDependentNodes(graph, nodeById, focusPackageId, placed);
             List<PackageGraphNode> optionalCompanions = GetOptionalCompanionNodes(graph, nodeById, focusPackageId, placed);
             List<PackageGraphNode> suiteNodes = GetSuiteNodes(graph, nodeById, focusPackageId, placed);
 
-            PlaceCluster(
-                MergeGroups(providers, supportProviders),
-                new Vector2(620f, 800f),
-                1,
+            PlaceColumn(
+                providers,
+                new Vector2(600f, GraphCenter.y),
                 nodeRects,
                 placed);
-            PlaceCluster(
+            PlaceColumn(
                 dependents,
-                new Vector2(1435f, 800f),
-                2,
+                new Vector2(1500f, GraphCenter.y),
                 nodeRects,
                 placed);
-            PlaceCluster(
+            PlaceRow(
                 integrationNodes,
-                new Vector2(1050f, 1145f),
-                2,
+                new Vector2(GraphCenter.x, 1195f),
                 nodeRects,
                 placed);
-            PlaceCluster(
-                optionalCompanions,
-                new Vector2(650f, 475f),
-                1,
-                nodeRects,
-                placed);
-            PlaceCluster(
-                suiteNodes,
-                new Vector2(1440f, 475f),
-                1,
+            PlaceRow(
+                MergeGroups(optionalCompanions, suiteNodes),
+                new Vector2(GraphCenter.x, 465f),
                 nodeRects,
                 placed);
 
-            PlaceUnrelatedStack(nodes, nodeRects, nodeRings, placed);
+            return CountUnrelated(nodes, placed);
         }
 
         private static List<PackageGraphNode> GetProviderNodes(
@@ -361,36 +358,6 @@ namespace Deucarian.PackageInstaller.Editor
                 .ToList();
         }
 
-        private static List<PackageGraphNode> GetIntegrationSupportProviderNodes(
-            PackageGraphModel graph,
-            IReadOnlyDictionary<string, PackageGraphNode> nodeById,
-            IEnumerable<PackageGraphNode> integrationNodes,
-            ISet<string> placed,
-            string focusPackageId)
-        {
-            HashSet<string> integrationIds = new HashSet<string>(
-                (integrationNodes ?? Enumerable.Empty<PackageGraphNode>()).Select(node => node.PackageId),
-                StringComparer.OrdinalIgnoreCase);
-
-            if (integrationIds.Count == 0)
-            {
-                return new List<PackageGraphNode>();
-            }
-
-            return graph.Edges
-                .Where(edge => edge.Kind == PackageGraphEdgeKind.HardDependency &&
-                               integrationIds.Contains(edge.ToPackageId))
-                .Select(edge => GetNode(nodeById, edge.FromPackageId))
-                .Where(node => node != null &&
-                               !placed.Contains(node.PackageId) &&
-                               !integrationIds.Contains(node.PackageId) &&
-                               !string.Equals(node.PackageId, focusPackageId, StringComparison.OrdinalIgnoreCase))
-                .Distinct(PackageGraphNodePackageIdComparer.Instance)
-                .OrderBy(node => GetRelationshipSortIndex(node))
-                .ThenBy(node => node.DisplayName, StringComparer.OrdinalIgnoreCase)
-                .ToList();
-        }
-
         private static List<PackageGraphNode> GetOptionalCompanionNodes(
             PackageGraphModel graph,
             IReadOnlyDictionary<string, PackageGraphNode> nodeById,
@@ -414,7 +381,7 @@ namespace Deucarian.PackageInstaller.Editor
             string focusPackageId,
             ISet<string> placed)
         {
-            HashSet<string> suitePackageIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            HashSet<string> packageIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             foreach (PackageGraphSuiteRegion region in graph.SuiteRegions)
             {
@@ -424,11 +391,21 @@ namespace Deucarian.PackageInstaller.Editor
 
                 if (focusIsSuite || focusIsMember)
                 {
-                    suitePackageIds.Add(region.SuitePackageId);
+                    if (focusIsSuite)
+                    {
+                        foreach (string memberPackageId in region.MemberPackageIds)
+                        {
+                            packageIds.Add(memberPackageId);
+                        }
+                    }
+                    else
+                    {
+                        packageIds.Add(region.SuitePackageId);
+                    }
                 }
             }
 
-            return suitePackageIds
+            return packageIds
                 .Select(packageId => GetNode(nodeById, packageId))
                 .Where(node => node != null && !placed.Contains(node.PackageId))
                 .OrderBy(node => GetRelationshipSortIndex(node))
@@ -466,10 +443,9 @@ namespace Deucarian.PackageInstaller.Editor
             return edge == null ? null : GetNode(nodeById, edge.GetOtherPackageId(packageId));
         }
 
-        private static void PlaceCluster(
+        private static void PlaceColumn(
             IReadOnlyList<PackageGraphNode> nodes,
             Vector2 center,
-            int columns,
             IDictionary<string, Rect> nodeRects,
             ISet<string> placed)
         {
@@ -478,69 +454,56 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            int columnCount = Mathf.Clamp(columns, 1, Mathf.Max(1, nodes.Count));
-            int rowCount = Mathf.CeilToInt(nodes.Count / (float)columnCount);
-            float stepX = NodeWidth + FocusGridGapX;
-            float stepY = NodeHeight + FocusGridGapY;
-            float originX = center.x - ((columnCount - 1) * stepX) * 0.5f;
-            float originY = center.y - ((rowCount - 1) * stepY) * 0.5f;
+            float stepY = NodeHeight + Mathf.Max(FocusGridGapY, NodeGap * 2f + 4f);
+            float originY = center.y - ((nodes.Count - 1) * stepY) * 0.5f;
 
             for (int index = 0; index < nodes.Count; index++)
             {
                 PackageGraphNode node = nodes[index];
-                int column = index % columnCount;
-                int row = index / columnCount;
-                Vector2 nodeCenter = new Vector2(originX + column * stepX, originY + row * stepY);
+                Vector2 nodeCenter = new Vector2(center.x, originY + index * stepY);
                 nodeRects[node.PackageId] = ClampToCanvas(CenteredRect(nodeCenter));
                 placed.Add(node.PackageId);
             }
         }
 
-        private static void PlaceUnrelatedStack(
-            IEnumerable<PackageGraphNode> nodes,
+        private static void PlaceRow(
+            IReadOnlyList<PackageGraphNode> nodes,
+            Vector2 center,
             IDictionary<string, Rect> nodeRects,
-            IReadOnlyDictionary<string, PackageGraphLayoutRing> nodeRings,
             ISet<string> placed)
         {
-            PackageGraphNode[] remainingNodes = nodes
-                .Where(node => node != null && !placed.Contains(node.PackageId))
-                .OrderBy(node => nodeRings.TryGetValue(node.PackageId, out PackageGraphLayoutRing ring)
-                    ? GetRingPriority(ring)
-                    : 0)
-                .ThenBy(node => GetRingSortIndex(node, nodeRings.TryGetValue(node.PackageId, out PackageGraphLayoutRing ring)
-                    ? ring
-                    : PackageGraphLayoutRing.Foundation))
-                .ThenBy(node => node.DisplayName, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-
-            if (remainingNodes.Length == 0)
+            if (nodes == null || nodes.Count == 0)
             {
                 return;
             }
 
-            const int stackColumns = 2;
-            const float stackCenterX = 1850f;
-            const float stackTopY = 330f;
-            const float stackGapX = 16f;
-            const float stackGapY = 14f;
-            float stepX = StackNodeWidth + stackGapX;
-            float stepY = StackNodeHeight + stackGapY;
+            float stepX = NodeWidth + FocusGridGapX;
+            float originX = center.x - ((nodes.Count - 1) * stepX) * 0.5f;
 
-            for (int index = 0; index < remainingNodes.Length; index++)
+            for (int index = 0; index < nodes.Count; index++)
             {
-                PackageGraphNode node = remainingNodes[index];
-                int column = index % stackColumns;
-                int row = index / stackColumns;
-                float originX = stackCenterX - ((stackColumns - 1) * stepX) * 0.5f;
-                Vector2 nodeCenter = new Vector2(
-                    originX + column * stepX,
-                    stackTopY + row * stepY);
-                nodeRects[node.PackageId] = ClampToCanvas(CenteredRect(
-                    nodeCenter,
-                    StackNodeWidth,
-                    StackNodeHeight));
+                PackageGraphNode node = nodes[index];
+                Vector2 nodeCenter = new Vector2(originX + index * stepX, center.y);
+                nodeRects[node.PackageId] = ClampToCanvas(CenteredRect(nodeCenter));
                 placed.Add(node.PackageId);
             }
+        }
+
+        private static int CountUnrelated(IEnumerable<PackageGraphNode> nodes, ISet<string> placed)
+        {
+            return nodes == null
+                ? 0
+                : nodes.Count(node => node != null && !placed.Contains(node.PackageId));
+        }
+
+        private static Rect CreateUnrelatedSummaryRect(int unrelatedPackageCount)
+        {
+            return unrelatedPackageCount <= 0
+                ? default(Rect)
+                : ClampToCanvas(CenteredRect(
+                    new Vector2(1850f, 245f),
+                    UnrelatedSummaryWidth,
+                    UnrelatedSummaryHeight));
         }
 
         private static PackageGraphLayoutRing GetRing(PackageGraphNode node)

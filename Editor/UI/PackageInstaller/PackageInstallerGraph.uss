@@ -519,6 +519,40 @@
     opacity: 0.72;
 }
 
+.dpi-graph-unrelated-summary {
+    position: absolute;
+    -unity-text-align: middle-center;
+    color: rgba(162, 185, 200, 0.78);
+    font-size: 11px;
+    -unity-font-style: bold;
+    padding-left: 12px;
+    padding-right: 12px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+    border-top-left-radius: 999px;
+    border-top-right-radius: 999px;
+    border-bottom-right-radius: 999px;
+    border-bottom-left-radius: 999px;
+    border-left-width: 1px;
+    border-right-width: 1px;
+    border-top-width: 1px;
+    border-bottom-width: 1px;
+    border-left-color: rgba(90, 111, 160, 0.26);
+    border-right-color: rgba(90, 111, 160, 0.22);
+    border-top-color: rgba(90, 111, 160, 0.22);
+    border-bottom-color: rgba(90, 111, 160, 0.22);
+    background-color: rgba(17, 26, 36, 0.58);
+}
+
+.dpi-graph-unrelated-summary:hover {
+    color: rgba(197, 220, 228, 0.90);
+    border-left-color: rgba(59, 166, 154, 0.38);
+    border-right-color: rgba(59, 166, 154, 0.32);
+    border-top-color: rgba(59, 166, 154, 0.32);
+    border-bottom-color: rgba(59, 166, 154, 0.32);
+    background-color: rgba(23, 38, 48, 0.66);
+}
+
 .dpi-graph-node--installed {
     border-bottom-color: rgba(59, 166, 154, 0.58);
 }
