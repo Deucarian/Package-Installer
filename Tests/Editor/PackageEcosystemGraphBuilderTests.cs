@@ -304,14 +304,17 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual(PackageGraphLayoutMode.Overview, layout.Mode);
             Assert.AreEqual(graph.Nodes.Count, layout.NodeRects.Count);
             Assert.AreEqual(1, layout.RingGuides.Count);
-            Assert.AreEqual("Deucarian Ecosystem Orbit", layout.RingGuides[0].Label);
+            Assert.AreEqual("Semantic Ecosystem Wheel", layout.RingGuides[0].Label);
             Assert.AreEqual(4, layout.SectorLabels.Count);
-            Assert.IsTrue(layout.SectorLabels.Any(label => label.Label == "Core / Foundation"));
-            Assert.IsTrue(layout.SectorLabels.Any(label => label.Label == "UI / Runtime / Tooling"));
-            Assert.IsTrue(layout.SectorLabels.Any(label => label.Label == "Integrations"));
-            Assert.IsTrue(layout.SectorLabels.Any(label => label.Label == "Suites"));
+            Assert.IsTrue(layout.SectorLabels.Any(label => label.Label == "Foundation"));
+            Assert.IsTrue(layout.SectorLabels.Any(label => label.Label == "Services / Runtime"));
+            Assert.IsTrue(layout.SectorLabels.Any(label => label.Label == "Experience / UI / World"));
+            Assert.IsTrue(layout.SectorLabels.Any(label => label.Label == "Tools / Quality"));
             Assert.AreEqual(
                 PackageGraphLayoutRing.Foundation,
+                layout.NodeRings["com.deucarian.logging"]);
+            Assert.AreEqual(
+                PackageGraphLayoutRing.Runtime,
                 layout.NodeRings["com.deucarian.object-loading"]);
             Assert.AreEqual(
                 PackageGraphLayoutRing.Runtime,
@@ -319,12 +322,61 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual(
                 PackageGraphLayoutRing.Runtime,
                 layout.NodeRings["com.deucarian.package-installer"]);
-            foreach (Rect nodeRect in layout.NodeRects.Values)
+            foreach (string packageId in new[]
+                     {
+                         "com.deucarian.editor",
+                         "com.deucarian.logging",
+                         "com.deucarian.core-state",
+                         "com.deucarian.api",
+                         "com.deucarian.session",
+                         "com.deucarian.object-loading",
+                         "com.deucarian.ui-binding",
+                         "com.deucarian.object-selection",
+                         "com.deucarian.theming",
+                         "com.deucarian.diagnostics",
+                         "com.deucarian.package-installer"
+                     })
             {
                 Assert.That(
-                    Vector2.Distance(nodeRect.center, PackageGraphLayout.GraphCenter),
+                    Vector2.Distance(layout.NodeRects[packageId].center, PackageGraphLayout.GraphCenter),
                     Is.EqualTo(650f).Within(1.5f));
             }
+
+            Assert.Less(layout.NodeRects["com.deucarian.editor"].center.y, PackageGraphLayout.GraphCenter.y);
+            Assert.Less(layout.NodeRects["com.deucarian.logging"].center.y, PackageGraphLayout.GraphCenter.y);
+            Assert.Less(layout.NodeRects["com.deucarian.core-state"].center.y, PackageGraphLayout.GraphCenter.y);
+            Assert.Greater(layout.NodeRects["com.deucarian.api"].center.x, PackageGraphLayout.GraphCenter.x);
+            Assert.Greater(layout.NodeRects["com.deucarian.session"].center.x, PackageGraphLayout.GraphCenter.x);
+            Assert.Greater(layout.NodeRects["com.deucarian.object-loading"].center.x, PackageGraphLayout.GraphCenter.x);
+            Assert.Greater(layout.NodeRects["com.deucarian.ui-binding"].center.y, PackageGraphLayout.GraphCenter.y);
+            Assert.Greater(layout.NodeRects["com.deucarian.object-selection"].center.y, PackageGraphLayout.GraphCenter.y);
+            Assert.Greater(layout.NodeRects["com.deucarian.theming"].center.y, PackageGraphLayout.GraphCenter.y);
+            Assert.Less(layout.NodeRects["com.deucarian.diagnostics"].center.x, PackageGraphLayout.GraphCenter.x);
+            Assert.Less(layout.NodeRects["com.deucarian.package-installer"].center.x, PackageGraphLayout.GraphCenter.x);
+            Assert.That(
+                Vector2.Distance(
+                    layout.NodeRects["com.deucarian.session.api-integration"].center,
+                    PackageGraphLayout.GraphCenter),
+                Is.LessThan(650f));
+            Assert.That(
+                Vector2.Distance(
+                    layout.NodeRects["com.deucarian.selection-suite"].center,
+                    PackageGraphLayout.GraphCenter),
+                Is.GreaterThan(650f));
+            Assert.That(
+                DeltaAngle(
+                    GetAngle(layout.NodeRects["com.deucarian.session.api-integration"]),
+                    CircularMean(
+                        GetAngle(layout.NodeRects["com.deucarian.api"]),
+                        GetAngle(layout.NodeRects["com.deucarian.session"]))),
+                Is.LessThanOrEqualTo(12f));
+            Assert.That(
+                DeltaAngle(
+                    GetAngle(layout.NodeRects["com.deucarian.object-loading.api-integration"]),
+                    CircularMean(
+                        GetAngle(layout.NodeRects["com.deucarian.api"]),
+                        GetAngle(layout.NodeRects["com.deucarian.object-loading"]))),
+                Is.LessThanOrEqualTo(12f));
             AssertNoOverlaps(layout.NodeRects.Values.ToArray());
         }
 
@@ -785,6 +837,32 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
             Assert.IsTrue(focus.IsEdgeVisible(edge), edge.Key);
             Assert.IsTrue(focus.IsEdgeEmphasized(edge), edge.Key);
+        }
+
+        private static float GetAngle(Rect rect)
+        {
+            Vector2 direction = rect.center - PackageGraphLayout.GraphCenter;
+            return Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
+        }
+
+        private static float CircularMean(params float[] angles)
+        {
+            float x = 0f;
+            float y = 0f;
+
+            foreach (float angle in angles)
+            {
+                float radians = angle * Mathf.Deg2Rad;
+                x += Mathf.Cos(radians);
+                y += Mathf.Sin(radians);
+            }
+
+            return Mathf.Atan2(y, x) * Mathf.Rad2Deg;
+        }
+
+        private static float DeltaAngle(float first, float second)
+        {
+            return Mathf.Abs(Mathf.DeltaAngle(first, second));
         }
 
         private static void AssertNoOverlaps(IReadOnlyList<UnityEngine.Rect> rects)

@@ -781,7 +781,7 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 Label label = new Label(sectorLabel.Label);
                 label.AddToClassList("dpi-graph-sector-label");
-                label.AddToClassList("dpi-graph-sector-label--" + GetRingClass(sectorLabel.Ring));
+                label.AddToClassList("dpi-graph-sector-label--" + GetSectorClass(sectorLabel));
                 label.style.left = sectorLabel.Position.x - 92f;
                 label.style.top = sectorLabel.Position.y - 12f;
                 label.style.width = 184f;
@@ -1006,6 +1006,13 @@ namespace Deucarian.PackageInstaller.Editor
                 default:
                     return "foundation";
             }
+        }
+
+        private static string GetSectorClass(PackageGraphSectorLabel label)
+        {
+            return label != null && !string.IsNullOrWhiteSpace(label.ClassName)
+                ? label.ClassName
+                : GetRingClass(label != null ? label.Ring : PackageGraphLayoutRing.Foundation);
         }
     }
 

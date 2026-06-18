@@ -153,7 +153,9 @@ namespace Deucarian.PackageInstaller.Editor
                 optionalIntegrations: entry.optionalIntegrations,
                 integrationTargets: entry.integrationTargets,
                 suiteMembers: entry.suiteMembers,
-                recommendedWith: entry.recommendedWith);
+                recommendedWith: entry.recommendedWith,
+                ecosystemGroup: entry.ecosystemGroup,
+                overviewOrder: entry.overviewOrder);
         }
 
         private static IReadOnlyList<PackageDefinition> EnsureInstallerPackageDefinition(
@@ -183,7 +185,9 @@ namespace Deucarian.PackageInstaller.Editor
                 PackageType.Core,
                 "https://github.com/Deucarian/Package-Installer.git#develop",
                 category: "Tools",
-                metadataType: "Tool");
+                metadataType: "Tool",
+                ecosystemGroup: "ToolsQuality",
+                overviewOrder: 20);
         }
 
         private static PackageType ParsePackageType(string category)

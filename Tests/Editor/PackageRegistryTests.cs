@@ -103,6 +103,34 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void SemanticOverviewMetadataIsOptionalAndMapsToPackageDefinitions()
+        {
+            string json =
+                "{ \"schemaVersion\": 1, \"packages\": [" +
+                "{ \"id\": \"com.deucarian.session\", \"displayName\": \"Session\", \"category\": \"Core\", \"stableUrl\": \"https://example.com/session.git#main\", \"ecosystemGroup\": \"ServicesRuntime\", \"overviewOrder\": 20, \"dependencies\": [] }," +
+                "{ \"id\": \"com.deucarian.legacy\", \"displayName\": \"Legacy\", \"category\": \"Core\", \"stableUrl\": \"https://example.com/legacy.git#main\", \"dependencies\": [] }" +
+                "] }";
+
+            PackageRegistryLoadResult result = new PackageRegistryLoader()
+                .LoadFromJson(json, PackageRegistrySource.Bundled);
+            PackageDefinition[] packages = PackageRegistryProvider
+                .CreatePackageDefinitions(result.Registry)
+                .ToArray();
+            PackageDefinition session = packages
+                .Single(package => package.PackageId == "com.deucarian.session");
+            PackageDefinition legacy = packages
+                .Single(package => package.PackageId == "com.deucarian.legacy");
+
+            Assert.IsTrue(result.IsValid, result.ErrorMessage);
+            Assert.AreEqual("ServicesRuntime", session.EcosystemGroup);
+            Assert.AreEqual(20, session.OverviewOrder);
+            Assert.IsTrue(session.HasOverviewOrder);
+            Assert.IsEmpty(legacy.EcosystemGroup);
+            Assert.AreEqual(0, legacy.OverviewOrder);
+            Assert.IsFalse(legacy.HasOverviewOrder);
+        }
+
+        [Test]
         public void RemoteFailureKeepsBundledRegistry()
         {
             RunAsync(async () =>
@@ -384,6 +412,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
             Assert.AreEqual("Tools", packageInstaller.Category);
             StringAssert.Contains("Package-Installer.git#main", packageInstaller.StableUrl);
+            Assert.AreEqual("ToolsQuality", packageInstaller.EcosystemGroup);
+            Assert.AreEqual(20, packageInstaller.OverviewOrder);
         }
 
         [Test]

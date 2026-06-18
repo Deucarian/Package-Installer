@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.24 - 2026-06-18
+
+- Reworked the Ecosystem Graph overview into a deterministic semantic wheel with Foundation, Services / Runtime, Experience / UI / World, and Tools / Quality sectors.
+- Added optional `ecosystemGroup` and `overviewOrder` registry metadata with deterministic fallback grouping for older registries.
+- Positioned Integration and Suite nodes from target/member circular means while preserving the existing strict ego-focus layout.
+
 ## 1.1.23 - 2026-06-18
 
 - Tightened Ecosystem Graph focus mode into a strict selected-package ego layout with fixed dependency, dependent, integration, companion, and suite bands.

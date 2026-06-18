@@ -104,11 +104,16 @@ namespace Deucarian.PackageInstaller.Editor
 
     internal sealed class PackageGraphSectorLabel
     {
-        public PackageGraphSectorLabel(string label, PackageGraphLayoutRing ring, Vector2 position)
+        public PackageGraphSectorLabel(
+            string label,
+            PackageGraphLayoutRing ring,
+            Vector2 position,
+            string className = null)
         {
             Label = label ?? string.Empty;
             Ring = ring;
             Position = position;
+            ClassName = string.IsNullOrWhiteSpace(className) ? string.Empty : className.Trim();
         }
 
         public string Label { get; }
@@ -116,6 +121,8 @@ namespace Deucarian.PackageInstaller.Editor
         public PackageGraphLayoutRing Ring { get; }
 
         public Vector2 Position { get; }
+
+        public string ClassName { get; }
     }
 
     internal sealed class PackageGraphLayout
@@ -125,14 +132,11 @@ namespace Deucarian.PackageInstaller.Editor
         public const float NodeWidth = 238f;
         public const float NodeHeight = 136f;
 
-        private const float OverviewNodeWidth = 212f;
-        private const float OverviewNodeHeight = 94f;
         private const float UnrelatedSummaryWidth = 226f;
         private const float UnrelatedSummaryHeight = 58f;
         private const float HubWidth = 250f;
         private const float HubHeight = 128f;
         private const float NodeGap = 18f;
-        private const float OverviewOrbitRadius = 650f;
         private const float FocusGridGapX = 42f;
         private const float FocusGridGapY = 26f;
 
@@ -164,7 +168,8 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (focusNode == null)
             {
-                PlaceOverview(nodes, nodeRects, nodeRings);
+                PackageEcosystemSemanticWheelLayout.PlaceOverview(graph, nodes, nodeRects, nodeRings);
+                ResolveOverlaps(nodeRects, nodeRings, string.Empty);
 
                 Rect overviewHubRect = CreateOverviewHubRect();
                 return new PackageGraphLayoutResult(
@@ -176,8 +181,8 @@ namespace Deucarian.PackageInstaller.Editor
                     overviewHubRect.center,
                     nodeRects,
                     nodeRings,
-                    CreateOverviewRingGuides(),
-                    CreateOverviewSectorLabels(nodeRects, nodeRings));
+                    PackageEcosystemSemanticWheelLayout.CreateRingGuides(),
+                    PackageEcosystemSemanticWheelLayout.CreateSectorLabels());
             }
 
             int unrelatedPackageCount = PlaceFocus(graph, nodes, focusNode, nodeRects, nodeRings);
@@ -218,43 +223,6 @@ namespace Deucarian.PackageInstaller.Editor
             return graph.Nodes.FirstOrDefault(node =>
                 node != null &&
                 string.Equals(node.PackageId, focusPackageId.Trim(), StringComparison.OrdinalIgnoreCase));
-        }
-
-        private static void PlaceOverview(
-            PackageGraphNode[] nodes,
-            IDictionary<string, Rect> nodeRects,
-            IReadOnlyDictionary<string, PackageGraphLayoutRing> nodeRings)
-        {
-            PackageGraphNode[] orderedNodes = nodes
-                .Where(node => node != null)
-                .OrderBy(node => nodeRings.TryGetValue(node.PackageId, out PackageGraphLayoutRing ring)
-                    ? GetRingPriority(ring)
-                    : 0)
-                .ThenBy(node => GetRingSortIndex(node, nodeRings.TryGetValue(node.PackageId, out PackageGraphLayoutRing ring)
-                    ? ring
-                    : PackageGraphLayoutRing.Foundation))
-                .ThenBy(node => node.DisplayName, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-
-            if (orderedNodes.Length == 0)
-            {
-                return;
-            }
-
-            float[] angles = CreateEvenAngles(-132f, 228f, orderedNodes.Length, includeEnd: false);
-
-            for (int index = 0; index < orderedNodes.Length; index++)
-            {
-                PackageGraphNode node = orderedNodes[index];
-                float radians = angles[index] * Mathf.Deg2Rad;
-                Vector2 nodeCenter = new Vector2(
-                    GraphCenter.x + Mathf.Cos(radians) * OverviewOrbitRadius,
-                    GraphCenter.y + Mathf.Sin(radians) * OverviewOrbitRadius);
-                nodeRects[node.PackageId] = ClampToCanvas(CenteredRect(
-                    nodeCenter,
-                    OverviewNodeWidth,
-                    OverviewNodeHeight));
-            }
         }
 
         private static int PlaceFocus(
@@ -508,32 +476,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static PackageGraphLayoutRing GetRing(PackageGraphNode node)
         {
-            if (node == null)
-            {
-                return PackageGraphLayoutRing.Foundation;
-            }
-
-            if (node.NodeType == PackageGraphNodeType.Integration)
-            {
-                return PackageGraphLayoutRing.Integration;
-            }
-
-            if (node.NodeType == PackageGraphNodeType.Suite)
-            {
-                return PackageGraphLayoutRing.Suite;
-            }
-
-            if (node.NodeType == PackageGraphNodeType.Tool ||
-                node.NodeType == PackageGraphNodeType.Companion ||
-                string.Equals(node.Category, "UI", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(node.Category, "World", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(node.Category, "Tools", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(node.PackageId, "com.deucarian.diagnostics", StringComparison.OrdinalIgnoreCase))
-            {
-                return PackageGraphLayoutRing.Runtime;
-            }
-
-            return PackageGraphLayoutRing.Foundation;
+            return PackageEcosystemSemanticWheelLayout.ResolveRing(node);
         }
 
         private static float[] CreateEvenAngles(float startAngle, float endAngle, int count, bool includeEnd)
@@ -883,97 +826,6 @@ namespace Deucarian.PackageInstaller.Editor
                 rect.y - amount,
                 rect.width + amount * 2f,
                 rect.height + amount * 2f);
-        }
-
-        private static IEnumerable<PackageGraphRingGuide> CreateOverviewRingGuides()
-        {
-            yield return new PackageGraphRingGuide(
-                "Deucarian Ecosystem Orbit",
-                PackageGraphLayoutRing.Foundation,
-                GraphCenter,
-                OverviewOrbitRadius,
-                OverviewOrbitRadius);
-        }
-
-        private static IEnumerable<PackageGraphSectorLabel> CreateOverviewSectorLabels(
-            IReadOnlyDictionary<string, Rect> nodeRects,
-            IReadOnlyDictionary<string, PackageGraphLayoutRing> nodeRings)
-        {
-            foreach (PackageGraphLayoutRing ring in new[]
-                     {
-                         PackageGraphLayoutRing.Foundation,
-                         PackageGraphLayoutRing.Runtime,
-                         PackageGraphLayoutRing.Integration,
-                         PackageGraphLayoutRing.Suite
-                     })
-            {
-                Vector2 direction = Vector2.zero;
-                int count = 0;
-
-                foreach (KeyValuePair<string, Rect> nodeRect in nodeRects)
-                {
-                    if (!nodeRings.TryGetValue(nodeRect.Key, out PackageGraphLayoutRing nodeRing) ||
-                        nodeRing != ring)
-                    {
-                        continue;
-                    }
-
-                    Vector2 nodeDirection = nodeRect.Value.center - GraphCenter;
-
-                    if (nodeDirection.sqrMagnitude < 0.01f)
-                    {
-                        continue;
-                    }
-
-                    direction += nodeDirection.normalized;
-                    count++;
-                }
-
-                if (count == 0)
-                {
-                    continue;
-                }
-
-                if (direction.sqrMagnitude < 0.01f)
-                {
-                    direction = GetFallbackSectorDirection(ring);
-                }
-
-                yield return new PackageGraphSectorLabel(
-                    GetSectorLabel(ring),
-                    ring,
-                    GraphCenter + direction.normalized * (OverviewOrbitRadius + 82f));
-            }
-        }
-
-        private static Vector2 GetFallbackSectorDirection(PackageGraphLayoutRing ring)
-        {
-            switch (ring)
-            {
-                case PackageGraphLayoutRing.Runtime:
-                    return new Vector2(1f, -0.2f).normalized;
-                case PackageGraphLayoutRing.Integration:
-                    return new Vector2(0.45f, 1f).normalized;
-                case PackageGraphLayoutRing.Suite:
-                    return new Vector2(-0.9f, 0.4f).normalized;
-                default:
-                    return new Vector2(-0.75f, -0.55f).normalized;
-            }
-        }
-
-        private static string GetSectorLabel(PackageGraphLayoutRing ring)
-        {
-            switch (ring)
-            {
-                case PackageGraphLayoutRing.Runtime:
-                    return "UI / Runtime / Tooling";
-                case PackageGraphLayoutRing.Integration:
-                    return "Integrations";
-                case PackageGraphLayoutRing.Suite:
-                    return "Suites";
-                default:
-                    return "Core / Foundation";
-            }
         }
 
         private sealed class PackageGraphNodePackageIdComparer : IEqualityComparer<PackageGraphNode>

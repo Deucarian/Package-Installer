@@ -22,7 +22,9 @@ namespace Deucarian.PackageInstaller.Editor
             IEnumerable<string> optionalIntegrations = null,
             IEnumerable<string> integrationTargets = null,
             IEnumerable<string> suiteMembers = null,
-            IEnumerable<string> recommendedWith = null)
+            IEnumerable<string> recommendedWith = null,
+            string ecosystemGroup = null,
+            int overviewOrder = 0)
         {
             if (string.IsNullOrWhiteSpace(displayName))
             {
@@ -51,6 +53,10 @@ namespace Deucarian.PackageInstaller.Editor
             MetadataType = string.IsNullOrWhiteSpace(metadataType)
                 ? string.Empty
                 : metadataType.Trim();
+            EcosystemGroup = string.IsNullOrWhiteSpace(ecosystemGroup)
+                ? string.Empty
+                : ecosystemGroup.Trim();
+            OverviewOrder = Math.Max(0, overviewOrder);
             DisplayVersion = displayVersion ?? string.Empty;
             Extras = ToReadOnlyList(extras);
             OptionalCompanions = ToReadOnlyList(optionalCompanions);
@@ -89,6 +95,12 @@ namespace Deucarian.PackageInstaller.Editor
         public string Category { get; }
 
         public string MetadataType { get; }
+
+        public string EcosystemGroup { get; }
+
+        public int OverviewOrder { get; }
+
+        public bool HasOverviewOrder => OverviewOrder > 0;
 
         public bool IsIntegration =>
             string.Equals(Category, "Integration", StringComparison.OrdinalIgnoreCase) ||

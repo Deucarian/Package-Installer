@@ -307,6 +307,14 @@
     color: rgba(126, 199, 215, 0.58);
 }
 
+.dpi-graph-sector-label--experience {
+    color: rgba(137, 206, 190, 0.58);
+}
+
+.dpi-graph-sector-label--tools {
+    color: rgba(157, 174, 217, 0.58);
+}
+
 .dpi-graph-sector-label--integration {
     color: rgba(105, 218, 204, 0.60);
 }

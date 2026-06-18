@@ -12,6 +12,8 @@ namespace Deucarian.PackageInstaller.Editor
         public string description;
         public string stableUrl;
         public string developmentUrl;
+        public string ecosystemGroup;
+        public int overviewOrder;
         public string[] dependencies;
         public string[] optionalCompanions;
         public string[] optionalIntegrations;

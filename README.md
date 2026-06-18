@@ -128,6 +128,10 @@ The registry schema uses `schemaVersion` 1 and contains:
 - `developmentUrl`: optional development-channel Git URL or UPM identifier. If this is empty, the Development channel is disabled for that package.
 - `dependencies`: package IDs that should be installed before this package is installed, reinstalled, or updated. Integration packages are just packages in the `Integration` category with dependencies.
 - `optionalCompanions`: package IDs shown as optional integrations that should not be installed as required dependencies.
+- `ecosystemGroup`: optional overview-wheel sector override. Supported values include `Foundation`, `ServicesRuntime`, `ExperienceUiWorld`, and `ToolsQuality`.
+- `overviewOrder`: optional positive integer used to order packages within their semantic overview sector.
+- `integrationTargets`: optional package IDs used to place Integration nodes near the systems they connect.
+- `suiteMembers`: optional package IDs used to place Suite nodes near the packages they compose.
 
 Set `stableUrl` and, when available, `developmentUrl` to the UPM identifier or Git URL. Integration packages should also list their dependency package IDs in `dependencies`.
 
@@ -244,7 +248,7 @@ Keeping the installer editor-only ensures:
 
 ## Versioning
 
-Current package version: `1.1.23`.
+Current package version: `1.1.24`.
 
 Branch strategy:
 
