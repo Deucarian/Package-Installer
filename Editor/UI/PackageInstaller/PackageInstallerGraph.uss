@@ -227,7 +227,6 @@
 }
 
 .dpi-ecosystem-graph__guide-layer,
-.dpi-ecosystem-graph__suite-layer,
 .dpi-ecosystem-graph__edge-layer,
 .dpi-ecosystem-graph__node-layer {
     position: absolute;
@@ -378,41 +377,6 @@
     margin-top: 2px;
     color: rgba(125, 188, 216, 0.78);
     font-size: 11px;
-}
-
-.dpi-graph-suite-region {
-    position: absolute;
-    padding-left: 10px;
-    padding-right: 10px;
-    padding-top: 8px;
-    padding-bottom: 8px;
-    border-top-left-radius: 18px;
-    border-top-right-radius: 18px;
-    border-bottom-right-radius: 18px;
-    border-bottom-left-radius: 18px;
-    border-left-width: 1px;
-    border-right-width: 1px;
-    border-top-width: 1px;
-    border-bottom-width: 1px;
-    border-left-color: rgba(59, 166, 154, 0.24);
-    border-right-color: rgba(59, 166, 154, 0.24);
-    border-top-color: rgba(59, 166, 154, 0.24);
-    border-bottom-color: rgba(59, 166, 154, 0.24);
-    background-color: rgba(30, 58, 64, 0.11);
-}
-
-.dpi-graph-suite-region--expanded {
-    border-left-color: rgba(59, 166, 154, 0.36);
-    border-right-color: rgba(59, 166, 154, 0.36);
-    border-top-color: rgba(59, 166, 154, 0.36);
-    border-bottom-color: rgba(59, 166, 154, 0.36);
-    background-color: rgba(30, 58, 64, 0.16);
-}
-
-.dpi-graph-suite-region__label {
-    color: rgba(154, 194, 202, 0.66);
-    font-size: 11px;
-    -unity-font-style: bold;
 }
 
 .dpi-graph-node {
@@ -632,30 +596,6 @@
 .dpi-ecosystem-graph__content--low-zoom .dpi-graph-node__badges,
 .dpi-ecosystem-graph__content--low-zoom .dpi-graph-node__footer {
     display: none;
-}
-
-.dpi-graph-node__suite-toggle {
-    width: 22px;
-    height: 22px;
-    min-width: 22px;
-    margin-left: 6px;
-    padding-left: 0;
-    padding-right: 0;
-    border-top-left-radius: 5px;
-    border-top-right-radius: 5px;
-    border-bottom-right-radius: 5px;
-    border-bottom-left-radius: 5px;
-    background-color: rgba(34, 76, 82, 0.72);
-    border-left-width: 1px;
-    border-right-width: 1px;
-    border-top-width: 1px;
-    border-bottom-width: 1px;
-    border-left-color: rgba(59, 166, 154, 0.46);
-    border-right-color: rgba(59, 166, 154, 0.46);
-    border-top-color: rgba(59, 166, 154, 0.46);
-    border-bottom-color: rgba(59, 166, 154, 0.46);
-    color: var(--deucarian-text);
-    font-size: 13px;
 }
 
 .dpi-graph-node__badges {

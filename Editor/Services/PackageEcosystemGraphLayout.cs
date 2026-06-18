@@ -187,7 +187,7 @@ namespace Deucarian.PackageInstaller.Editor
                 focusRect.center,
                 nodeRects,
                 nodeRings,
-                CreateFocusGuides());
+                Array.Empty<PackageGraphRingGuide>());
         }
 
         private static PackageGraphNode GetFocusNode(
@@ -1011,40 +1011,6 @@ namespace Deucarian.PackageInstaller.Editor
                 default:
                     return "Core / Foundation";
             }
-        }
-
-        private static IEnumerable<PackageGraphRingGuide> CreateFocusGuides()
-        {
-            yield return new PackageGraphRingGuide(
-                "Required packages",
-                PackageGraphLayoutRing.Foundation,
-                new Vector2(620f, 800f),
-                182f,
-                190f);
-            yield return new PackageGraphRingGuide(
-                "Dependent packages",
-                PackageGraphLayoutRing.Runtime,
-                new Vector2(1435f, 800f),
-                328f,
-                292f);
-            yield return new PackageGraphRingGuide(
-                "Integrations",
-                PackageGraphLayoutRing.Integration,
-                new Vector2(1050f, 1145f),
-                316f,
-                178f);
-            yield return new PackageGraphRingGuide(
-                "Companions / Suites",
-                PackageGraphLayoutRing.Suite,
-                new Vector2(1045f, 475f),
-                548f,
-                170f);
-            yield return new PackageGraphRingGuide(
-                "Unrelated package stack",
-                PackageGraphLayoutRing.Runtime,
-                new Vector2(1850f, 660f),
-                255f,
-                420f);
         }
 
         private sealed class PackageGraphNodePackageIdComparer : IEqualityComparer<PackageGraphNode>

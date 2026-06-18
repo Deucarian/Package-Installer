@@ -349,8 +349,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.Greater(sessionIntegration.center.y, session.center.y);
             Assert.Greater(theming.center.x, session.center.x + 500f);
             Assert.AreEqual(layout.ActiveCenter, session.center);
-            Assert.IsTrue(layout.RingGuides.Any(guide => guide.Label == "Required packages"));
-            Assert.IsTrue(layout.RingGuides.Any(guide => guide.Label == "Unrelated package stack"));
+            Assert.IsEmpty(layout.RingGuides);
             AssertNoOverlaps(layout.NodeRects.Values.ToArray());
         }
 
@@ -377,8 +376,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
             PackageGraphFocus focus = PackageGraphFocus.Create(
                 graph,
-                "com.deucarian.object-loading",
-                Array.Empty<string>());
+                "com.deucarian.object-loading");
 
             Assert.IsTrue(focus.IsPackageRelated("com.deucarian.logging"));
             Assert.IsTrue(focus.IsPackageRelated("com.deucarian.object-loading.api-integration"));
@@ -437,8 +435,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
             PackageGraphFocus focus = PackageGraphFocus.Create(
                 graph,
-                "com.deucarian.object-loading.api-integration",
-                Array.Empty<string>());
+                "com.deucarian.object-loading.api-integration");
 
             AssertEdgeVisible(
                 graph,
@@ -470,7 +467,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
-        public void Focus_ExpandsSuiteMembershipOnlyWhenFocusedOrExpanded()
+        public void Focus_ShowsSuiteMembershipEdgesWithoutSuiteRegions()
         {
             PackageGraphModel graph = new PackageGraphBuilder(_ => false)
                 .Build(CreateDefaultGraphPackages());
@@ -481,27 +478,27 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 edge.FromPackageId == selectionSuite.SuitePackageId &&
                 edge.ToPackageId == "com.deucarian.ui-binding");
 
-            PackageGraphFocus overview = PackageGraphFocus.Create(graph, string.Empty, Array.Empty<string>());
+            PackageGraphFocus overview = PackageGraphFocus.Create(graph, string.Empty);
 
             Assert.IsFalse(overview.IsSuiteRegionVisible(selectionSuite));
             Assert.IsFalse(overview.IsEdgeVisible(suiteMembershipEdge));
 
-            PackageGraphFocus expandedOverview = PackageGraphFocus.Create(
-                graph,
-                string.Empty,
-                new[] { selectionSuite.SuitePackageId });
-
-            Assert.IsTrue(expandedOverview.IsSuiteRegionVisible(selectionSuite));
-            Assert.IsTrue(expandedOverview.IsEdgeVisible(suiteMembershipEdge));
-
             PackageGraphFocus focusedSuite = PackageGraphFocus.Create(
                 graph,
-                selectionSuite.SuitePackageId,
-                Array.Empty<string>());
+                selectionSuite.SuitePackageId);
 
-            Assert.IsTrue(focusedSuite.IsSuiteRegionVisible(selectionSuite));
+            Assert.IsFalse(focusedSuite.IsSuiteRegionVisible(selectionSuite));
             Assert.IsTrue(focusedSuite.IsEdgeVisible(suiteMembershipEdge));
             Assert.IsTrue(focusedSuite.IsPackageRelated("com.deucarian.object-selection.core-state-integration"));
+
+            PackageGraphLayoutResult suiteLayout = new PackageGraphLayout().Calculate(
+                graph,
+                PackageGraphLayoutMode.Focus,
+                selectionSuite.SuitePackageId);
+            Rect suiteRect = suiteLayout.NodeRects[selectionSuite.SuitePackageId];
+
+            Assert.That(Vector2.Distance(PackageGraphLayout.GraphCenter, suiteRect.center), Is.LessThan(0.1f));
+            Assert.IsEmpty(suiteLayout.RingGuides);
         }
 
         [Test]
@@ -515,7 +512,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 dependencies: new[] { editor.PackageId });
             PackageGraphModel graph = new PackageGraphBuilder(_ => true)
                 .Build(new[] { editor, logging });
-            PackageGraphFocus overview = PackageGraphFocus.Create(graph, string.Empty, Array.Empty<string>());
+            PackageGraphFocus overview = PackageGraphFocus.Create(graph, string.Empty);
             PackageGraphEdge dependencyEdge = graph.Edges.Single(edge =>
                 edge.Kind == PackageGraphEdgeKind.HardDependency &&
                 edge.FromPackageId == editor.PackageId &&
@@ -523,7 +520,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
             Assert.IsFalse(overview.IsEdgeVisible(dependencyEdge));
 
-            PackageGraphFocus focused = PackageGraphFocus.Create(graph, logging.PackageId, Array.Empty<string>());
+            PackageGraphFocus focused = PackageGraphFocus.Create(graph, logging.PackageId);
 
             Assert.IsTrue(focused.IsEdgeVisible(dependencyEdge));
             Assert.IsTrue(focused.IsEdgeEmphasized(dependencyEdge));

@@ -261,9 +261,6 @@ namespace Deucarian.PackageInstaller.Editor
             new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly HashSet<string> _emphasizedEdgeKeys =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        private readonly HashSet<string> _visibleSuiteRegionIds =
-            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
         private PackageGraphFocus(string focusPackageId, bool hasFocus)
         {
             FocusPackageId = focusPackageId ?? string.Empty;
@@ -282,8 +279,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         public static PackageGraphFocus Create(
             PackageGraphModel graph,
-            string focusPackageId,
-            IEnumerable<string> expandedSuiteIds)
+            string focusPackageId)
         {
             if (graph == null)
             {
@@ -297,11 +293,10 @@ namespace Deucarian.PackageInstaller.Editor
             bool hasFocus = !string.IsNullOrWhiteSpace(normalizedFocusPackageId) &&
                             graph.TryGetNode(normalizedFocusPackageId, out _);
             PackageGraphFocus focus = new PackageGraphFocus(normalizedFocusPackageId, hasFocus);
-            HashSet<string> expandedSuites = ToSet(expandedSuiteIds);
 
             if (!hasFocus)
             {
-                focus.AddOverviewEdges(graph, expandedSuites);
+                focus.AddOverviewEdges(graph);
                 return focus;
             }
 
@@ -332,26 +327,16 @@ namespace Deucarian.PackageInstaller.Editor
 
         public bool IsSuiteRegionVisible(PackageGraphSuiteRegion region)
         {
-            return region != null && _visibleSuiteRegionIds.Contains(region.SuitePackageId);
+            return false;
         }
 
-        private void AddOverviewEdges(PackageGraphModel graph, ISet<string> expandedSuites)
+        private void AddOverviewEdges(PackageGraphModel graph)
         {
             foreach (PackageGraphEdge edge in graph.Edges)
             {
-                if (edge.State == PackageGraphEdgeState.Warning ||
-                    (edge.Kind == PackageGraphEdgeKind.SuiteMembership &&
-                     expandedSuites.Contains(edge.FromPackageId)))
+                if (edge.State == PackageGraphEdgeState.Warning)
                 {
-                    AddVisibleEdge(edge, emphasized: edge.State == PackageGraphEdgeState.Warning);
-                }
-            }
-
-            foreach (PackageGraphSuiteRegion region in graph.SuiteRegions)
-            {
-                if (expandedSuites.Contains(region.SuitePackageId))
-                {
-                    _visibleSuiteRegionIds.Add(region.SuitePackageId);
+                    AddVisibleEdge(edge, emphasized: true);
                 }
             }
         }
@@ -408,19 +393,37 @@ namespace Deucarian.PackageInstaller.Editor
                     continue;
                 }
 
-                _visibleSuiteRegionIds.Add(region.SuitePackageId);
-                _relatedPackageIds.Add(region.SuitePackageId);
-
-                foreach (string memberPackageId in region.MemberPackageIds)
+                if (packageIsSuite)
                 {
-                    _relatedPackageIds.Add(memberPackageId);
+                    foreach (string memberPackageId in region.MemberPackageIds)
+                    {
+                        _relatedPackageIds.Add(memberPackageId);
+                    }
+
+                    foreach (PackageGraphEdge edge in graph.Edges.Where(edge =>
+                                 edge.Kind == PackageGraphEdgeKind.SuiteMembership &&
+                                 string.Equals(
+                                     edge.FromPackageId,
+                                     region.SuitePackageId,
+                                     StringComparison.OrdinalIgnoreCase)))
+                    {
+                        AddFocusEdge(edge);
+                    }
+
+                    continue;
                 }
+
+                _relatedPackageIds.Add(region.SuitePackageId);
 
                 foreach (PackageGraphEdge edge in graph.Edges.Where(edge =>
                              edge.Kind == PackageGraphEdgeKind.SuiteMembership &&
                              string.Equals(
                                  edge.FromPackageId,
                                  region.SuitePackageId,
+                                 StringComparison.OrdinalIgnoreCase) &&
+                             string.Equals(
+                                 edge.ToPackageId,
+                                 packageId,
                                  StringComparison.OrdinalIgnoreCase)))
                 {
                     AddFocusEdge(edge);
@@ -467,24 +470,5 @@ namespace Deucarian.PackageInstaller.Editor
             }
         }
 
-        private static HashSet<string> ToSet(IEnumerable<string> values)
-        {
-            HashSet<string> set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-            if (values == null)
-            {
-                return set;
-            }
-
-            foreach (string value in values)
-            {
-                if (!string.IsNullOrWhiteSpace(value))
-                {
-                    set.Add(value.Trim());
-                }
-            }
-
-            return set;
-        }
     }
 }

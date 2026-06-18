@@ -465,18 +465,13 @@ namespace Deucarian.PackageInstaller.Editor
         private readonly Action<PackageDefinition, PackageGraphNodeAction> _packageAction;
         private readonly Action _selectionCleared;
         private readonly PackageGraphLayout _layout = new PackageGraphLayout();
-        private readonly HashSet<string> _expandedSuiteIds =
-            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, Rect> _animatedNodeRects =
             new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, Rect> _transitionStartRects =
             new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, PackageGraphNodeElement> _nodeElements =
             new Dictionary<string, PackageGraphNodeElement>(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, VisualElement> _suiteRegionElements =
-            new Dictionary<string, VisualElement>(StringComparer.OrdinalIgnoreCase);
         private readonly VisualElement _guideLayer;
-        private readonly VisualElement _suiteLayer;
         private readonly PackageGraphEdgeLayer _edgeLayer;
         private readonly VisualElement _nodeLayer;
 
@@ -490,8 +485,8 @@ namespace Deucarian.PackageInstaller.Editor
         private string _focusedPackageId = string.Empty;
         private string _hoveredPackageId = string.Empty;
         private string _layoutFocusPackageId = string.Empty;
-        private PackageGraphFocus _currentFocus = PackageGraphFocus.Create(null, string.Empty, null);
-        private PackageGraphFocus _actionFocus = PackageGraphFocus.Create(null, string.Empty, null);
+        private PackageGraphFocus _currentFocus = PackageGraphFocus.Create(null, string.Empty);
+        private PackageGraphFocus _actionFocus = PackageGraphFocus.Create(null, string.Empty);
         private IVisualElementScheduledItem _layoutAnimationItem;
         private double _layoutAnimationStartedAt;
         private bool _layoutAnimationActive;
@@ -516,12 +511,6 @@ namespace Deucarian.PackageInstaller.Editor
             _guideLayer.pickingMode = PickingMode.Ignore;
             StretchToCanvas(_guideLayer);
             Add(_guideLayer);
-
-            _suiteLayer = new VisualElement { name = "ecosystem-graph-suite-layer" };
-            _suiteLayer.AddToClassList("dpi-ecosystem-graph__suite-layer");
-            _suiteLayer.pickingMode = PickingMode.Ignore;
-            StretchToCanvas(_suiteLayer);
-            Add(_suiteLayer);
 
             _edgeLayer = new PackageGraphEdgeLayer { name = "ecosystem-graph-edge-layer" };
             _edgeLayer.AddToClassList("dpi-ecosystem-graph__edge-layer");
@@ -608,10 +597,8 @@ namespace Deucarian.PackageInstaller.Editor
         {
             Dictionary<string, Rect> previousRects = CaptureCurrentNodeRects();
             _guideLayer.Clear();
-            _suiteLayer.Clear();
             _nodeLayer.Clear();
             _nodeElements.Clear();
-            _suiteRegionElements.Clear();
 
             _layoutFocusPackageId = GetLayoutFocusPackageId();
             PackageGraphLayoutMode layoutMode = string.IsNullOrWhiteSpace(_layoutFocusPackageId)
@@ -622,8 +609,6 @@ namespace Deucarian.PackageInstaller.Editor
             style.height = _layoutResult.CanvasHeight;
             _guideLayer.style.width = _layoutResult.CanvasWidth;
             _guideLayer.style.height = _layoutResult.CanvasHeight;
-            _suiteLayer.style.width = _layoutResult.CanvasWidth;
-            _suiteLayer.style.height = _layoutResult.CanvasHeight;
             _edgeLayer.style.width = _layoutResult.CanvasWidth;
             _edgeLayer.style.height = _layoutResult.CanvasHeight;
             _nodeLayer.style.width = _layoutResult.CanvasWidth;
@@ -631,16 +616,13 @@ namespace Deucarian.PackageInstaller.Editor
 
             _currentFocus = PackageGraphFocus.Create(
                 _graph,
-                GetActiveFocusPackageId(),
-                _expandedSuiteIds);
+                GetActiveFocusPackageId());
             _actionFocus = PackageGraphFocus.Create(
                 _graph,
-                _layoutFocusPackageId,
-                _expandedSuiteIds);
+                _layoutFocusPackageId);
 
             DrawGuides();
             StartLayoutTransition(previousRects);
-            DrawSuiteRegions(_currentFocus);
             DrawNodes(_currentFocus);
             ApplyAnimatedLayout();
             _edgeLayer.SetGraph(_graph, _animatedNodeRects, _layoutResult.CanvasHeight, _currentFocus);
@@ -778,7 +760,6 @@ namespace Deucarian.PackageInstaller.Editor
                 }
             }
 
-            UpdateSuiteRegionRects();
             _edgeLayer.UpdateNodeRects(_animatedNodeRects);
             _edgeLayer.MarkDirtyRepaint();
         }
@@ -839,123 +820,6 @@ namespace Deucarian.PackageInstaller.Editor
             _guideLayer.Add(hub);
         }
 
-        private void DrawSuiteRegions(PackageGraphFocus focus)
-        {
-            foreach (PackageGraphSuiteRegion region in _graph.SuiteRegions)
-            {
-                if (!focus.IsSuiteRegionVisible(region))
-                {
-                    continue;
-                }
-
-                List<Rect> memberRects = new List<Rect>();
-
-                foreach (string memberPackageId in region.MemberPackageIds)
-                {
-                    if (_animatedNodeRects.TryGetValue(memberPackageId, out Rect memberRect))
-                    {
-                        memberRects.Add(memberRect);
-                    }
-                }
-
-                if (_animatedNodeRects.TryGetValue(region.SuitePackageId, out Rect suiteRect))
-                {
-                    memberRects.Add(suiteRect);
-                }
-
-                if (memberRects.Count == 0)
-                {
-                    continue;
-                }
-
-                Rect bounds = memberRects[0];
-
-                for (int index = 1; index < memberRects.Count; index++)
-                {
-                    Rect rect = memberRects[index];
-                    bounds = Rect.MinMaxRect(
-                        Mathf.Min(bounds.xMin, rect.xMin),
-                        Mathf.Min(bounds.yMin, rect.yMin),
-                        Mathf.Max(bounds.xMax, rect.xMax),
-                        Mathf.Max(bounds.yMax, rect.yMax));
-                }
-
-                bounds.x -= 28f;
-                bounds.y -= 30f;
-                bounds.width += 56f;
-                bounds.height += 60f;
-
-                VisualElement suiteRegion = new VisualElement();
-                suiteRegion.AddToClassList("dpi-graph-suite-region");
-                suiteRegion.EnableInClassList(
-                    "dpi-graph-suite-region--expanded",
-                    _expandedSuiteIds.Contains(region.SuitePackageId));
-                suiteRegion.style.left = bounds.x;
-                suiteRegion.style.top = bounds.y;
-                suiteRegion.style.width = bounds.width;
-                suiteRegion.style.height = bounds.height;
-
-                Label label = new Label(GetSuiteRegionLabel(region.SuitePackageId));
-                label.AddToClassList("dpi-graph-suite-region__label");
-                suiteRegion.Add(label);
-                _suiteLayer.Add(suiteRegion);
-                _suiteRegionElements[region.SuitePackageId] = suiteRegion;
-            }
-        }
-
-        private void UpdateSuiteRegionRects()
-        {
-            foreach (PackageGraphSuiteRegion region in _graph.SuiteRegions)
-            {
-                if (!_suiteRegionElements.TryGetValue(region.SuitePackageId, out VisualElement suiteRegion))
-                {
-                    continue;
-                }
-
-                if (TryGetSuiteRegionBounds(region, out Rect bounds))
-                {
-                    SetElementRect(suiteRegion, bounds);
-                }
-            }
-        }
-
-        private bool TryGetSuiteRegionBounds(PackageGraphSuiteRegion region, out Rect bounds)
-        {
-            bounds = default(Rect);
-            List<Rect> memberRects = new List<Rect>();
-
-            foreach (string memberPackageId in region.MemberPackageIds)
-            {
-                if (_animatedNodeRects.TryGetValue(memberPackageId, out Rect memberRect))
-                {
-                    memberRects.Add(memberRect);
-                }
-            }
-
-            if (_animatedNodeRects.TryGetValue(region.SuitePackageId, out Rect suiteRect))
-            {
-                memberRects.Add(suiteRect);
-            }
-
-            if (memberRects.Count == 0)
-            {
-                return false;
-            }
-
-            bounds = memberRects[0];
-
-            for (int index = 1; index < memberRects.Count; index++)
-            {
-                bounds = Union(bounds, memberRects[index]);
-            }
-
-            bounds.x -= 28f;
-            bounds.y -= 30f;
-            bounds.width += 56f;
-            bounds.height += 60f;
-            return true;
-        }
-
         private void DrawNodes(PackageGraphFocus focus)
         {
             foreach (PackageGraphNode node in _graph.Nodes)
@@ -994,14 +858,12 @@ namespace Deucarian.PackageInstaller.Editor
                     related,
                     dimmed,
                     previewed,
-                    _expandedSuiteIds.Contains(node.PackageId),
                     showNodeAction,
                     nodeActionsEnabled,
                     !_interactionsLocked,
                     _packageSelected,
                     _packageAction,
                     _selectionCleared,
-                    ToggleSuiteExpanded,
                     SetPreviewPackage,
                     ClearPreviewPackage);
                 nodeElement.style.left = rect.x;
@@ -1032,28 +894,6 @@ namespace Deucarian.PackageInstaller.Editor
                    focus != null &&
                    focus.HasFocus &&
                    related;
-        }
-
-        private string GetSuiteRegionLabel(string suitePackageId)
-        {
-            PackageGraphNode suiteNode = _graph.Nodes.FirstOrDefault(node =>
-                string.Equals(node.PackageId, suitePackageId, StringComparison.OrdinalIgnoreCase));
-            return suiteNode != null ? suiteNode.DisplayName + " composition" : "Suite composition";
-        }
-
-        private void ToggleSuiteExpanded(string suitePackageId)
-        {
-            if (string.IsNullOrWhiteSpace(suitePackageId))
-            {
-                return;
-            }
-
-            if (!_expandedSuiteIds.Add(suitePackageId.Trim()))
-            {
-                _expandedSuiteIds.Remove(suitePackageId.Trim());
-            }
-
-            Rebuild();
         }
 
         private void SetPreviewPackage(string packageId)
@@ -1165,7 +1005,7 @@ namespace Deucarian.PackageInstaller.Editor
                 Array.Empty<PackageGraphNode>(),
                 Array.Empty<PackageGraphEdge>(),
                 Array.Empty<PackageGraphSuiteRegion>());
-        private PackageGraphFocus _focus = PackageGraphFocus.Create(null, string.Empty, null);
+        private PackageGraphFocus _focus = PackageGraphFocus.Create(null, string.Empty);
         private IVisualElementScheduledItem _animationItem;
         private float _animationPhase;
         private bool _animationEnabled;
@@ -1187,7 +1027,7 @@ namespace Deucarian.PackageInstaller.Editor
                 Array.Empty<PackageGraphNode>(),
                 Array.Empty<PackageGraphEdge>(),
                 Array.Empty<PackageGraphSuiteRegion>());
-            _focus = focus ?? PackageGraphFocus.Create(_graph, string.Empty, null);
+            _focus = focus ?? PackageGraphFocus.Create(_graph, string.Empty);
             CopyNodeRects(nodeRects);
             style.height = canvasHeight;
             _animationEnabled = HasAnimatedEdges();
@@ -1858,14 +1698,12 @@ namespace Deucarian.PackageInstaller.Editor
             bool related,
             bool dimmed,
             bool previewed,
-            bool suiteExpanded,
             bool showActions,
             bool actionsEnabled,
             bool interactionsEnabled,
             Action<PackageDefinition> packageSelected,
             Action<PackageDefinition, PackageGraphNodeAction> packageAction,
             Action selectionCleared,
-            Action<string> suiteToggled,
             Action<string> previewPackage,
             Action<string> clearPreviewPackage)
         {
@@ -1942,25 +1780,6 @@ namespace Deucarian.PackageInstaller.Editor
                 Label packageId = new Label(node.PackageId);
                 packageId.AddToClassList("dpi-graph-node__package-id");
                 titleBlock.Add(packageId);
-            }
-
-            if (fullCard && node.NodeType == PackageGraphNodeType.Suite)
-            {
-                Button expandButton = new Button(() =>
-                {
-                    if (interactionsEnabled)
-                    {
-                        suiteToggled?.Invoke(node.PackageId);
-                    }
-                })
-                {
-                    text = suiteExpanded ? "-" : "+",
-                    tooltip = suiteExpanded ? "Collapse suite composition" : "Expand suite composition"
-                };
-                expandButton.AddToClassList("dpi-graph-node__suite-toggle");
-                expandButton.SetEnabled(interactionsEnabled);
-                expandButton.RegisterCallback<ClickEvent>(evt => evt.StopPropagation());
-                header.Add(expandButton);
             }
 
             VisualElement badges = new VisualElement();

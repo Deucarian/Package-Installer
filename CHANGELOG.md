@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.22 - 2026-06-18
+
+- Simplified Ecosystem Graph focus mode by removing floating semantic zone labels and large suite composition regions.
+- Kept suites as normal graph nodes while showing suite membership through focused nodes and edges.
+- Reduced focused suite/member edge clutter so non-suite package focus stays cleaner.
+
 ## 1.1.21 - 2026-06-18
 
 - Allowed Ecosystem Graph shortcut actions for the selected package and directly related packages in stable focus mode.
