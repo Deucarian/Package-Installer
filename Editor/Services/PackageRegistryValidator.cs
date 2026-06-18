@@ -27,6 +27,24 @@ namespace Deucarian.PackageInstaller.Editor
                 return false;
             }
 
+            if (!PackageGraphHierarchyBuilder.ValidateGroups(registry.groups, out message))
+            {
+                return false;
+            }
+
+            HashSet<string> groupIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            if (registry.groups != null)
+            {
+                foreach (PackageRegistryGroupEntry group in registry.groups)
+                {
+                    if (group != null && !string.IsNullOrWhiteSpace(group.id))
+                    {
+                        groupIds.Add(PackageGraphHierarchyBuilder.NormalizeGroupId(group.id));
+                    }
+                }
+            }
+
             HashSet<string> packageIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             foreach (PackageRegistryEntry package in registry.packages)
@@ -64,6 +82,16 @@ namespace Deucarian.PackageInstaller.Editor
                 if (!packageIds.Add(package.id.Trim()))
                 {
                     message = "Duplicate package id in registry: " + package.id + ".";
+                    return false;
+                }
+
+                string packageGroupId = PackageGraphHierarchyBuilder.NormalizeGroupId(package.groupId);
+
+                if (!string.IsNullOrWhiteSpace(packageGroupId) &&
+                    groupIds.Count > 0 &&
+                    !groupIds.Contains(packageGroupId))
+                {
+                    message = "Package " + package.id + " references unknown groupId " + package.groupId + ".";
                     return false;
                 }
             }

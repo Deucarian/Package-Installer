@@ -14,6 +14,8 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static PackageRegistryLoadResult _currentLoadResult;
         private static IReadOnlyList<PackageDefinition> _allPackages = EmptyPackages;
+        private static IReadOnlyList<PackageGraphGroup> _ecosystemGroups =
+            PackageGraphHierarchyBuilder.CreateGroups((IEnumerable<PackageGraphGroup>)null);
         private static Task<PackageRegistryLoadResult> _remoteRefreshTask;
         private static bool _bundledLoaded;
         private static bool _remoteRefreshStarted;
@@ -34,6 +36,15 @@ namespace Deucarian.PackageInstaller.Editor
 
         public static IReadOnlyList<PackageDefinition> IntegrationPackages =>
             GetPackagesByCategory("Integration");
+
+        public static IReadOnlyList<PackageGraphGroup> EcosystemGroups
+        {
+            get
+            {
+                EnsureLoaded();
+                return _ecosystemGroups;
+            }
+        }
 
         public static IReadOnlyList<string> Categories =>
             All.Select(package => package.Category)
@@ -155,6 +166,7 @@ namespace Deucarian.PackageInstaller.Editor
                 suiteMembers: entry.suiteMembers,
                 recommendedWith: entry.recommendedWith,
                 ecosystemGroup: entry.ecosystemGroup,
+                groupId: entry.groupId,
                 overviewOrder: entry.overviewOrder);
         }
 
@@ -187,6 +199,7 @@ namespace Deucarian.PackageInstaller.Editor
                 category: "Tools",
                 metadataType: "Tool",
                 ecosystemGroup: "ToolsQuality",
+                groupId: PackageGraphHierarchyBuilder.ToolsQualityGroupId,
                 overviewOrder: 20);
         }
 
@@ -254,10 +267,12 @@ namespace Deucarian.PackageInstaller.Editor
             if (result.IsValid && result.Registry != null)
             {
                 _allPackages = CreatePackageDefinitions(result.Registry);
+                _ecosystemGroups = PackageGraphHierarchyBuilder.CreateGroups(result.Registry.groups);
             }
             else if (_allPackages == null)
             {
                 _allPackages = EmptyPackages;
+                _ecosystemGroups = PackageGraphHierarchyBuilder.CreateGroups((IEnumerable<PackageGraphGroup>)null);
             }
 
             if (!result.IsValid && logFailures)

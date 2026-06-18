@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.28 - 2026-06-18
+
+- Added structural Ecosystem Graph groups with recursive-ready group metadata and package `groupId` assignments.
+- Reworked the graph overview into a Deucarian root hub with top-level group orbits and local child package orbits.
+- Added group focus navigation, breadcrumbs, group detail panels, and collapsed group summaries for unrelated package ego context.
+
 ## 1.1.27 - 2026-06-18
 
 - Made Ecosystem Graph optional companion edges non-directional with static dotted styling.

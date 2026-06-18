@@ -11,6 +11,8 @@ namespace Deucarian.PackageInstaller.Editor
         private readonly Func<PackageDefinition, PackageUpdateStatus> _getUpdateStatus;
         private readonly Dictionary<string, PackageGraphNode> _nodes =
             new Dictionary<string, PackageGraphNode>(StringComparer.OrdinalIgnoreCase);
+        private IReadOnlyList<PackageGraphGroup> _groups =
+            PackageGraphHierarchyBuilder.CreateGroups((IEnumerable<PackageGraphGroup>)null);
 
         public PackageGraphBuilder(Func<string, bool> isInstalled)
             : this(isInstalled, _ => PackageChannel.Stable, null)
@@ -29,7 +31,18 @@ namespace Deucarian.PackageInstaller.Editor
 
         public PackageGraphModel Build(IEnumerable<PackageDefinition> packages)
         {
+            return Build(packages, null);
+        }
+
+        public PackageGraphModel Build(
+            IEnumerable<PackageDefinition> packages,
+            IEnumerable<PackageGraphGroup> groups)
+        {
             _nodes.Clear();
+
+            IReadOnlyList<PackageGraphGroup> graphGroups =
+                PackageGraphHierarchyBuilder.CreateGroups(groups);
+            _groups = graphGroups;
 
             PackageDefinition[] definitions = packages == null
                 ? Array.Empty<PackageDefinition>()
@@ -168,7 +181,8 @@ namespace Deucarian.PackageInstaller.Editor
                     .OrderBy(edge => GetEdgeSortIndex(edge.Kind))
                     .ThenBy(edge => edge.FromPackageId, StringComparer.OrdinalIgnoreCase)
                     .ThenBy(edge => edge.ToPackageId, StringComparer.OrdinalIgnoreCase),
-                suiteRegions);
+                suiteRegions,
+                graphGroups);
         }
 
         private void ApplyRequiredByInstalledPackageWarnings(IEnumerable<PackageGraphEdge> edges)
@@ -197,6 +211,7 @@ namespace Deucarian.PackageInstaller.Editor
                     requiredNode.Category,
                     requiredNode.Description,
                     requiredNode.NodeType,
+                    requiredNode.GroupId,
                     PackageGraphNodeStatus.Warning,
                     requiredNode.SelectedChannel,
                     requiredNode.IsInstalled,
@@ -249,6 +264,7 @@ namespace Deucarian.PackageInstaller.Editor
                     package.Category,
                     package.Description,
                     GetNodeType(package),
+                    PackageGraphHierarchyBuilder.ResolvePackageGroupId(package, _groups),
                     GetNodeStatus(installed, updateStatus),
                     selectedChannel,
                     installed,
@@ -266,6 +282,7 @@ namespace Deucarian.PackageInstaller.Editor
                     "Missing",
                     "Registry relationship target is not registered.",
                     PackageGraphNodeType.Companion,
+                    PackageGraphHierarchyBuilder.FoundationGroupId,
                     PackageGraphNodeStatus.Missing,
                     PackageChannel.Stable,
                     false,

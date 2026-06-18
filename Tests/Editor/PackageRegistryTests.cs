@@ -131,6 +131,80 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void StructuralGroupMetadataParsesAndMapsToPackageDefinitions()
+        {
+            string json =
+                "{ \"schemaVersion\": 1, \"groups\": [" +
+                "{ \"id\": \"foundation\", \"displayName\": \"Foundation\", \"sortOrder\": 10 }" +
+                "], \"packages\": [" +
+                "{ \"id\": \"com.deucarian.logging\", \"displayName\": \"Logging\", \"category\": \"Core\", \"stableUrl\": \"https://example.com/logging.git#main\", \"groupId\": \"foundation\", \"dependencies\": [] }" +
+                "] }";
+
+            PackageRegistryLoadResult result = new PackageRegistryLoader()
+                .LoadFromJson(json, PackageRegistrySource.Bundled);
+            PackageDefinition package = PackageRegistryProvider
+                .CreatePackageDefinitions(result.Registry)
+                .Single(definition => definition.PackageId == "com.deucarian.logging");
+
+            Assert.IsTrue(result.IsValid, result.ErrorMessage);
+            Assert.AreEqual("foundation", result.Registry.groups[0].id);
+            Assert.AreEqual("foundation", package.GroupId);
+        }
+
+        [Test]
+        public void DuplicateStructuralGroupIdsAreRejected()
+        {
+            string json =
+                "{ \"schemaVersion\": 1, \"groups\": [" +
+                "{ \"id\": \"foundation\", \"displayName\": \"Foundation\" }," +
+                "{ \"id\": \"Foundation\", \"displayName\": \"Duplicate Foundation\" }" +
+                "], \"packages\": [" +
+                "{ \"id\": \"com.deucarian.logging\", \"displayName\": \"Logging\", \"category\": \"Core\", \"stableUrl\": \"https://example.com/logging.git#main\", \"dependencies\": [] }" +
+                "] }";
+
+            PackageRegistryLoadResult result = new PackageRegistryLoader()
+                .LoadFromJson(json, PackageRegistrySource.Bundled);
+
+            Assert.IsFalse(result.IsValid);
+            StringAssert.Contains("Duplicate group id", result.ErrorMessage);
+        }
+
+        [Test]
+        public void StructuralGroupCyclesAreRejected()
+        {
+            string json =
+                "{ \"schemaVersion\": 1, \"groups\": [" +
+                "{ \"id\": \"one\", \"displayName\": \"One\", \"parentGroupId\": \"two\" }," +
+                "{ \"id\": \"two\", \"displayName\": \"Two\", \"parentGroupId\": \"one\" }" +
+                "], \"packages\": [" +
+                "{ \"id\": \"com.deucarian.logging\", \"displayName\": \"Logging\", \"category\": \"Core\", \"stableUrl\": \"https://example.com/logging.git#main\", \"dependencies\": [] }" +
+                "] }";
+
+            PackageRegistryLoadResult result = new PackageRegistryLoader()
+                .LoadFromJson(json, PackageRegistrySource.Bundled);
+
+            Assert.IsFalse(result.IsValid);
+            StringAssert.Contains("cycle", result.ErrorMessage);
+        }
+
+        [Test]
+        public void StructuralGroupMissingParentIsRejected()
+        {
+            string json =
+                "{ \"schemaVersion\": 1, \"groups\": [" +
+                "{ \"id\": \"child\", \"displayName\": \"Child\", \"parentGroupId\": \"missing\" }" +
+                "], \"packages\": [" +
+                "{ \"id\": \"com.deucarian.logging\", \"displayName\": \"Logging\", \"category\": \"Core\", \"stableUrl\": \"https://example.com/logging.git#main\", \"dependencies\": [] }" +
+                "] }";
+
+            PackageRegistryLoadResult result = new PackageRegistryLoader()
+                .LoadFromJson(json, PackageRegistrySource.Bundled);
+
+            Assert.IsFalse(result.IsValid);
+            StringAssert.Contains("unknown parentGroupId", result.ErrorMessage);
+        }
+
+        [Test]
         public void RemoteFailureKeepsBundledRegistry()
         {
             RunAsync(async () =>
@@ -413,6 +487,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual("Tools", packageInstaller.Category);
             StringAssert.Contains("Package-Installer.git#main", packageInstaller.StableUrl);
             Assert.AreEqual("ToolsQuality", packageInstaller.EcosystemGroup);
+            Assert.AreEqual("tools-quality", packageInstaller.GroupId);
             Assert.AreEqual(20, packageInstaller.OverviewOrder);
         }
 

@@ -24,6 +24,7 @@ namespace Deucarian.PackageInstaller.Editor
             IEnumerable<string> suiteMembers = null,
             IEnumerable<string> recommendedWith = null,
             string ecosystemGroup = null,
+            string groupId = null,
             int overviewOrder = 0)
         {
             if (string.IsNullOrWhiteSpace(displayName))
@@ -56,6 +57,9 @@ namespace Deucarian.PackageInstaller.Editor
             EcosystemGroup = string.IsNullOrWhiteSpace(ecosystemGroup)
                 ? string.Empty
                 : ecosystemGroup.Trim();
+            GroupId = string.IsNullOrWhiteSpace(groupId)
+                ? string.Empty
+                : groupId.Trim();
             OverviewOrder = Math.Max(0, overviewOrder);
             DisplayVersion = displayVersion ?? string.Empty;
             Extras = ToReadOnlyList(extras);
@@ -97,6 +101,8 @@ namespace Deucarian.PackageInstaller.Editor
         public string MetadataType { get; }
 
         public string EcosystemGroup { get; }
+
+        public string GroupId { get; }
 
         public int OverviewOrder { get; }
 

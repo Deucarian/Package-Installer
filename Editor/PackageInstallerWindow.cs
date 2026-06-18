@@ -12,7 +12,7 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed class PackageInstallerWindow : EditorWindow
     {
         private const string WindowTitle = "Package Installer";
-        private const string PackageVersion = "1.1.27";
+        private const string PackageVersion = "1.1.28";
         private const float MinWindowWidth = 850f;
         private const float MinWindowHeight = 650f;
         private const float SidebarWidth = 340f;
@@ -108,6 +108,8 @@ namespace Deucarian.PackageInstaller.Editor
         private SelectionKind _selectionKind = SelectionKind.Package;
         private string _selectedPackageId = string.Empty;
         private string _graphFocusedPackageId = string.Empty;
+        private string _graphFocusedGroupId = string.Empty;
+        private PackageGraphModel _lastPackageGraph;
         private readonly PackageVisibilityFilterState _visibilityFilterState =
             new PackageVisibilityFilterState();
         private bool _checkUpdatesAfterDetectionRefresh;
@@ -317,7 +319,9 @@ namespace Deucarian.PackageInstaller.Editor
             _graphView = new PackageGraphView(
                 HandleGraphPackageSelected,
                 HandleGraphPackageAction,
-                ClearGraphSelection,
+                HandleGraphBackNavigation,
+                HandleGraphRootFocused,
+                HandleGraphGroupFocused,
                 _visibilityFilterState,
                 HandleVisibilityFilterChanged);
             _graphContentRow.Add(_graphView);
@@ -495,7 +499,8 @@ namespace Deucarian.PackageInstaller.Editor
                     packageDefinition => _packageUpdateCheckService != null
                         ? _packageUpdateCheckService.GetStatus(packageDefinition, GetSelectedChannel(packageDefinition))
                         : null))
-                .Build(PackageRegistryProvider.All);
+                .Build(PackageRegistryProvider.All, PackageRegistryProvider.EcosystemGroups);
+            _lastPackageGraph = graph;
             HashSet<string> visiblePackageIds = PackageVisibilityFilter.CreateVisiblePackageIdSet(
                 graph,
                 _visibilityFilterState);
@@ -514,6 +519,7 @@ namespace Deucarian.PackageInstaller.Editor
                 graph,
                 _selectedPackageId,
                 _graphFocusedPackageId,
+                _graphFocusedGroupId,
                 !IsAnyOperationBusy(),
                 visiblePackageIds,
                 filterCounts,
@@ -547,6 +553,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             _selectedPackageId = string.Empty;
             _graphFocusedPackageId = string.Empty;
+            _graphFocusedGroupId = string.Empty;
             _detailsScrollPosition = Vector2.zero;
         }
 
@@ -569,22 +576,70 @@ namespace Deucarian.PackageInstaller.Editor
                 packageDefinition,
                 selectionKind);
             _graphFocusedPackageId = packageDefinition.PackageId;
+            _graphFocusedGroupId = GetGraphPackageGroupId(packageDefinition.PackageId);
             RefreshGraphView();
         }
 
         private void ClearGraphSelection()
         {
             if (string.IsNullOrWhiteSpace(_selectedPackageId) &&
-                string.IsNullOrWhiteSpace(_graphFocusedPackageId))
+                string.IsNullOrWhiteSpace(_graphFocusedPackageId) &&
+                string.IsNullOrWhiteSpace(_graphFocusedGroupId))
             {
                 return;
             }
 
             _selectedPackageId = string.Empty;
             _graphFocusedPackageId = string.Empty;
+            _graphFocusedGroupId = string.Empty;
             _detailsScrollPosition = Vector2.zero;
             RefreshGraphView();
             Repaint();
+        }
+
+        private void HandleGraphRootFocused()
+        {
+            ClearGraphSelection();
+        }
+
+        private void HandleGraphGroupFocused(PackageGraphGroup group)
+        {
+            if (group == null)
+            {
+                return;
+            }
+
+            _selectedPackageId = string.Empty;
+            _graphFocusedPackageId = string.Empty;
+            _graphFocusedGroupId = group.Id;
+            _detailsScrollPosition = Vector2.zero;
+            RefreshGraphView();
+            Repaint();
+        }
+
+        private void HandleGraphBackNavigation()
+        {
+            if (!string.IsNullOrWhiteSpace(_graphFocusedPackageId))
+            {
+                string parentGroupId = GetGraphPackageGroupId(_graphFocusedPackageId);
+                _selectedPackageId = string.Empty;
+                _graphFocusedPackageId = string.Empty;
+                _graphFocusedGroupId = parentGroupId;
+                _detailsScrollPosition = Vector2.zero;
+                RefreshGraphView();
+                Repaint();
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(_graphFocusedGroupId))
+            {
+                string parentGroupId = GetGraphParentGroupId(_graphFocusedGroupId);
+                _selectedPackageId = string.Empty;
+                _graphFocusedGroupId = parentGroupId;
+                _detailsScrollPosition = Vector2.zero;
+                RefreshGraphView();
+                Repaint();
+            }
         }
 
         private void HandleRootKeyDown(KeyDownEvent evt)
@@ -594,7 +649,7 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            ClearGraphSelection();
+            HandleGraphBackNavigation();
             evt.StopPropagation();
         }
 
@@ -609,6 +664,7 @@ namespace Deucarian.PackageInstaller.Editor
                 packageDefinition,
                 packageDefinition.IsIntegration ? SelectionKind.Integration : SelectionKind.Package);
             _graphFocusedPackageId = packageDefinition.PackageId;
+            _graphFocusedGroupId = GetGraphPackageGroupId(packageDefinition.PackageId);
 
             switch (action)
             {
@@ -1401,14 +1457,23 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (selectedDefinition == null)
             {
-                DrawPanel("Ecosystem Overview", () =>
+                PackageGraphGroup focusedGroup = GetFocusedGraphGroup();
+
+                if (focusedGroup != null)
                 {
-                    EditorGUILayout.LabelField("Select a graph node to inspect package details.", _mutedMiniLabelStyle);
-                    EditorGUILayout.Space(4f);
-                    EditorGUILayout.LabelField(
-                        "Use Fit, 100%, Center, pan, and zoom to explore package relationships.",
-                        _mutedMiniLabelStyle);
-                });
+                    DrawGraphGroupDetails(focusedGroup);
+                }
+                else
+                {
+                    DrawPanel("Ecosystem Overview", () =>
+                    {
+                        EditorGUILayout.LabelField("Select a package or group node to inspect details.", _mutedMiniLabelStyle);
+                        EditorGUILayout.Space(4f);
+                        EditorGUILayout.LabelField(
+                            "Use Fit, 100%, Center, pan, and zoom to explore package relationships.",
+                            _mutedMiniLabelStyle);
+                    });
+                }
             }
             else if (_selectionKind == SelectionKind.Integration)
             {
@@ -1432,6 +1497,56 @@ namespace Deucarian.PackageInstaller.Editor
             DrawOptionalCompanionsPanel(packageDefinition);
             DrawExtrasPanel(packageDefinition);
             DrawAdvancedPanel(packageDefinition);
+        }
+
+        private void DrawGraphGroupDetails(PackageGraphGroup group)
+        {
+            PackageGraphNode[] descendants = GetGraphGroupDescendantPackages(group.Id).ToArray();
+            PackageGraphGroup[] childGroups = GetGraphChildGroups(group.Id).ToArray();
+            PackageGraphNode[] directPackages = descendants
+                .Where(node => string.Equals(node.GroupId, group.Id, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(node => node.DisplayName, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            int installedCount = descendants.Count(node => node.IsInstalled);
+            int updateCount = descendants.Count(node => node.Status == PackageGraphNodeStatus.UpdateAvailable);
+            int missingCount = descendants.Count(node =>
+                node.Status == PackageGraphNodeStatus.NotInstalled ||
+                node.Status == PackageGraphNodeStatus.Missing ||
+                node.Status == PackageGraphNodeStatus.Warning);
+
+            DrawPanel("Group", () =>
+            {
+                EditorGUILayout.LabelField(group.DisplayName, _titleStyle);
+
+                if (!string.IsNullOrWhiteSpace(group.Description))
+                {
+                    EditorGUILayout.LabelField(group.Description, _subtitleStyle);
+                }
+
+                DrawKeyValueRow("Packages", descendants.Length.ToString());
+                DrawKeyValueRow("Installed", installedCount.ToString());
+                DrawKeyValueRow("Missing", missingCount.ToString());
+                DrawKeyValueRow("Updates", updateCount.ToString());
+            }, GUILayout.ExpandWidth(true));
+
+            DrawPanel("Direct Children", () =>
+            {
+                if (childGroups.Length == 0 && directPackages.Length == 0)
+                {
+                    EditorGUILayout.LabelField("No visible direct children.", _mutedMiniLabelStyle);
+                    return;
+                }
+
+                foreach (PackageGraphGroup childGroup in childGroups)
+                {
+                    EditorGUILayout.LabelField(childGroup.DisplayName + " group", _miniLabelStyle);
+                }
+
+                foreach (PackageGraphNode packageNode in directPackages)
+                {
+                    EditorGUILayout.LabelField(packageNode.DisplayName, _miniLabelStyle);
+                }
+            }, GUILayout.ExpandWidth(true));
         }
 
         private void DrawIntegrationDetails(PackageDefinition packageDefinition)
@@ -3368,6 +3483,72 @@ namespace Deucarian.PackageInstaller.Editor
 
             return PackageRegistryProvider.All.FirstOrDefault(packageDefinition =>
                 string.Equals(packageDefinition.PackageId, _selectedPackageId, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private PackageGraphGroup GetFocusedGraphGroup()
+        {
+            return _lastPackageGraph != null &&
+                   !string.IsNullOrWhiteSpace(_graphFocusedGroupId) &&
+                   _lastPackageGraph.TryGetGroup(_graphFocusedGroupId, out PackageGraphGroup group)
+                ? group
+                : null;
+        }
+
+        private string GetGraphPackageGroupId(string packageId)
+        {
+            return _lastPackageGraph != null &&
+                   !string.IsNullOrWhiteSpace(packageId) &&
+                   _lastPackageGraph.TryGetNode(packageId, out PackageGraphNode node)
+                ? node.GroupId
+                : string.Empty;
+        }
+
+        private string GetGraphParentGroupId(string groupId)
+        {
+            return _lastPackageGraph != null &&
+                   !string.IsNullOrWhiteSpace(groupId) &&
+                   _lastPackageGraph.TryGetGroup(groupId, out PackageGraphGroup group)
+                ? group.ParentGroupId
+                : string.Empty;
+        }
+
+        private IEnumerable<PackageGraphGroup> GetGraphChildGroups(string groupId)
+        {
+            return _lastPackageGraph == null
+                ? Enumerable.Empty<PackageGraphGroup>()
+                : _lastPackageGraph.Groups
+                    .Where(group => group != null &&
+                                    string.Equals(group.ParentGroupId, groupId, StringComparison.OrdinalIgnoreCase))
+                    .OrderBy(group => group.SortOrder)
+                    .ThenBy(group => group.DisplayName, StringComparer.OrdinalIgnoreCase);
+        }
+
+        private IEnumerable<PackageGraphNode> GetGraphGroupDescendantPackages(string groupId)
+        {
+            if (_lastPackageGraph == null || string.IsNullOrWhiteSpace(groupId))
+            {
+                return Enumerable.Empty<PackageGraphNode>();
+            }
+
+            HashSet<string> groupIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            CollectGraphDescendantGroupIds(groupId, groupIds);
+
+            return _lastPackageGraph.Nodes
+                .Where(node => node != null && groupIds.Contains(node.GroupId))
+                .OrderBy(node => node.DisplayName, StringComparer.OrdinalIgnoreCase);
+        }
+
+        private void CollectGraphDescendantGroupIds(string groupId, ISet<string> groupIds)
+        {
+            if (string.IsNullOrWhiteSpace(groupId) || !groupIds.Add(groupId))
+            {
+                return;
+            }
+
+            foreach (PackageGraphGroup childGroup in GetGraphChildGroups(groupId))
+            {
+                CollectGraphDescendantGroupIds(childGroup.Id, groupIds);
+            }
         }
 
         private PackageDefinition[] GetPackagesWithUpdates()

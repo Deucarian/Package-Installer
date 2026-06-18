@@ -7,6 +7,7 @@ namespace Deucarian.PackageInstaller.Editor
     {
         public int schemaVersion;
         public string updatedAt;
+        public PackageRegistryGroupEntry[] groups;
         public PackageRegistryEntry[] packages;
     }
 }

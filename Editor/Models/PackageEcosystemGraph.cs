@@ -13,6 +13,13 @@ namespace Deucarian.PackageInstaller.Editor
         Companion
     }
 
+    internal enum PackageGraphNodeKind
+    {
+        Root,
+        Group,
+        Package
+    }
+
     internal enum PackageGraphEdgeKind
     {
         HardDependency,
@@ -52,11 +59,13 @@ namespace Deucarian.PackageInstaller.Editor
         public PackageGraphModel(
             IEnumerable<PackageGraphNode> nodes,
             IEnumerable<PackageGraphEdge> edges,
-            IEnumerable<PackageGraphSuiteRegion> suiteRegions)
+            IEnumerable<PackageGraphSuiteRegion> suiteRegions,
+            IEnumerable<PackageGraphGroup> groups = null)
         {
             Nodes = ToReadOnlyList(nodes);
             Edges = ToReadOnlyList(edges);
             SuiteRegions = ToReadOnlyList(suiteRegions);
+            Groups = ToReadOnlyList(groups);
         }
 
         public IReadOnlyList<PackageGraphNode> Nodes { get; }
@@ -65,11 +74,20 @@ namespace Deucarian.PackageInstaller.Editor
 
         public IReadOnlyList<PackageGraphSuiteRegion> SuiteRegions { get; }
 
+        public IReadOnlyList<PackageGraphGroup> Groups { get; }
+
         public bool TryGetNode(string packageId, out PackageGraphNode node)
         {
             node = Nodes.FirstOrDefault(candidate =>
                 string.Equals(candidate.PackageId, packageId, StringComparison.OrdinalIgnoreCase));
             return node != null;
+        }
+
+        public bool TryGetGroup(string groupId, out PackageGraphGroup group)
+        {
+            group = Groups.FirstOrDefault(candidate =>
+                string.Equals(candidate.Id, groupId, StringComparison.OrdinalIgnoreCase));
+            return group != null;
         }
 
         private static IReadOnlyList<T> ToReadOnlyList<T>(IEnumerable<T> values)
@@ -86,6 +104,7 @@ namespace Deucarian.PackageInstaller.Editor
             string category,
             string description,
             PackageGraphNodeType nodeType,
+            string groupId,
             PackageGraphNodeStatus status,
             PackageChannel selectedChannel,
             bool isInstalled,
@@ -100,6 +119,7 @@ namespace Deucarian.PackageInstaller.Editor
             Category = category ?? string.Empty;
             Description = description ?? string.Empty;
             NodeType = nodeType;
+            GroupId = string.IsNullOrWhiteSpace(groupId) ? string.Empty : groupId.Trim();
             Status = status;
             SelectedChannel = selectedChannel;
             IsInstalled = isInstalled;
@@ -119,6 +139,10 @@ namespace Deucarian.PackageInstaller.Editor
         public string Description { get; }
 
         public PackageGraphNodeType NodeType { get; }
+
+        public PackageGraphNodeKind Kind => PackageGraphNodeKind.Package;
+
+        public string GroupId { get; }
 
         public PackageGraphNodeStatus Status { get; }
 
@@ -175,6 +199,43 @@ namespace Deucarian.PackageInstaller.Editor
         }
 
         public bool IsIntegration => NodeType == PackageGraphNodeType.Integration;
+    }
+
+    internal sealed class PackageGraphGroup
+    {
+        public PackageGraphGroup(
+            string id,
+            string displayName,
+            string parentGroupId,
+            string description,
+            int sortOrder,
+            string iconKey = null,
+            string styleKey = null)
+        {
+            Id = string.IsNullOrWhiteSpace(id) ? string.Empty : id.Trim();
+            DisplayName = string.IsNullOrWhiteSpace(displayName) ? Id : displayName.Trim();
+            ParentGroupId = string.IsNullOrWhiteSpace(parentGroupId) ? string.Empty : parentGroupId.Trim();
+            Description = description ?? string.Empty;
+            SortOrder = Math.Max(0, sortOrder);
+            IconKey = string.IsNullOrWhiteSpace(iconKey) ? "package" : iconKey.Trim();
+            StyleKey = string.IsNullOrWhiteSpace(styleKey) ? Id : styleKey.Trim();
+        }
+
+        public string Id { get; }
+
+        public string DisplayName { get; }
+
+        public string ParentGroupId { get; }
+
+        public string Description { get; }
+
+        public int SortOrder { get; }
+
+        public string IconKey { get; }
+
+        public string StyleKey { get; }
+
+        public PackageGraphNodeKind Kind => PackageGraphNodeKind.Group;
     }
 
     internal sealed class PackageGraphEdge
@@ -329,13 +390,6 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void AddOverviewEdges(PackageGraphModel graph)
         {
-            foreach (PackageGraphEdge edge in graph.Edges)
-            {
-                if (edge.State == PackageGraphEdgeState.Warning)
-                {
-                    AddVisibleEdge(edge, emphasized: true);
-                }
-            }
         }
 
         private void AddDirectEdges(PackageGraphModel graph, string packageId)

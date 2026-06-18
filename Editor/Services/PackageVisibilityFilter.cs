@@ -96,7 +96,8 @@ namespace Deucarian.PackageInstaller.Editor
                 return new PackageGraphModel(
                     Array.Empty<PackageGraphNode>(),
                     Array.Empty<PackageGraphEdge>(),
-                    Array.Empty<PackageGraphSuiteRegion>());
+                    Array.Empty<PackageGraphSuiteRegion>(),
+                    Array.Empty<PackageGraphGroup>());
             }
 
             ISet<string> visibleIds = visiblePackageIds ??
@@ -119,7 +120,7 @@ namespace Deucarian.PackageInstaller.Editor
                 .Where(region => region.MemberPackageIds.Count > 0)
                 .ToArray();
 
-            return new PackageGraphModel(visibleNodes, visibleEdges, visibleSuiteRegions);
+            return new PackageGraphModel(visibleNodes, visibleEdges, visibleSuiteRegions, graph.Groups);
         }
 
         public static int CountHiddenRelatedPackages(
