@@ -19,7 +19,8 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed class PackageInstallerWindow : EditorWindow
     {
         private const string WindowTitle = "Package Installer";
-        private const string PackageVersion = "1.1.37";
+        private const string PackageId = "com.deucarian.package-installer";
+        private const string PackageVersion = "1.1.38";
         private const float MinWindowWidth = 820f;
         private const float MinWindowHeight = 650f;
         private const float CompactLayoutWidth = 1180f;
@@ -33,9 +34,13 @@ namespace Deucarian.PackageInstaller.Editor
         private const float OperationDrawerExpandedBaseHeight = 54f;
         private const float OperationDrawerExpandedMaxHeight = 150f;
         private const float OperationFooterHeight = 34f;
-        private const float OperationFooterControlHeight = 24f;
-        private const float OperationFooterHorizontalPadding = 10f;
-        private const float OperationFooterGap = 8f;
+        internal const string OperationFooterRowName = "package-installer-operation-footer";
+        internal const string OperationFooterStatusGroupName = "package-installer-operation-footer-status";
+        internal const string OperationFooterStatusIconName = "package-installer-operation-footer-status-icon";
+        internal const string OperationFooterStatusLabelName = "package-installer-operation-footer-status-label";
+        internal const string OperationFooterSummaryName = "package-installer-operation-footer-summary";
+        internal const string OperationFooterDetailsButtonName = "package-installer-operation-footer-details-toggle";
+        internal const string OperationFooterVersionName = "package-installer-operation-footer-version";
         private const string ChannelPreferencePrefix = "Deucarian.PackageInstaller.SelectedChannel.";
         private const string AdvancedFoldoutPreferencePrefix = "Deucarian.PackageInstaller.AdvancedFoldout.";
         private const string CategoryFoldoutPreferencePrefix = "Deucarian.PackageInstaller.CategoryFoldout.";
@@ -145,7 +150,13 @@ namespace Deucarian.PackageInstaller.Editor
         private IMGUIContainer _listViewContainer;
         private IMGUIContainer _graphDetailsContainer;
         private IMGUIContainer _operationDrawerContainer;
-        private IMGUIContainer _operationFooterContainer;
+        private VisualElement _operationFooterContainer;
+        private VisualElement _operationFooterStatusGroup;
+        private Label _operationFooterStatusIcon;
+        private Label _operationFooterStatusLabel;
+        private Label _operationFooterSummaryLabel;
+        private Button _operationFooterDetailsButton;
+        private Label _operationFooterVersionLabel;
         private PackageGraphView _graphView;
         private PackageInstallerResponsiveMode _responsiveMode = PackageInstallerResponsiveMode.Wide;
 
@@ -175,11 +186,6 @@ namespace Deucarian.PackageInstaller.Editor
         private GUIStyle _sectionTitleStyle;
         private GUIStyle _miniLabelStyle;
         private GUIStyle _mutedMiniLabelStyle;
-        private GUIStyle _operationLineStyle;
-        private GUIStyle _footerStatusIconStyle;
-        private GUIStyle _footerStatusTextStyle;
-        private GUIStyle _footerVersionStyle;
-        private GUIStyle _footerButtonStyle;
         private GUIStyle _rowTitleStyle;
         private GUIStyle _rowSubLabelStyle;
         private GUIStyle _rowStatusStyle;
@@ -203,9 +209,37 @@ namespace Deucarian.PackageInstaller.Editor
 
         internal static Vector2 MinWindowSizeForTests => new Vector2(MinWindowWidth, MinWindowHeight);
 
+        internal static string PackageIdForTests => PackageId;
+
+        internal static string PackageVersionForTests => PackageVersion;
+
         internal static PackageInstallerResponsiveMode ResolveResponsiveModeForTests(float width)
         {
             return ResolveResponsiveMode(width);
+        }
+
+        internal static VisualElement CreateOperationFooterForTests(bool expanded = false)
+        {
+            VisualElement footer = CreateOperationFooterRow(null);
+            ApplyOperationFooterData(
+                footer,
+                VisualStatusKind.Installed,
+                "Complete",
+                "Last operation complete.",
+                expanded,
+                GetFooterVersionText());
+            return footer;
+        }
+
+        internal static void SetOperationFooterExpandedForTests(VisualElement footer, bool expanded)
+        {
+            ApplyOperationFooterData(
+                footer,
+                VisualStatusKind.Installed,
+                "Complete",
+                "Last operation complete.",
+                expanded,
+                GetFooterVersionText());
         }
 
         internal static bool ShouldClearGraphSelectionForFilters(
@@ -252,14 +286,18 @@ namespace Deucarian.PackageInstaller.Editor
             PackageRegistryProvider.RegistryChanged += HandleRegistryChanged;
             _packageInstallService.StateChanged += Repaint;
             _packageInstallService.StateChanged += RefreshGraphView;
+            _packageInstallService.StateChanged += UpdateOperationFooter;
             _packageInstallService.QueueCompleted += HandlePackageOperationCompleted;
             _packageDetectionService.StateChanged += Repaint;
             _packageDetectionService.StateChanged += RefreshGraphView;
+            _packageDetectionService.StateChanged += UpdateOperationFooter;
             _packageDetectionService.RefreshCompleted += HandlePackageDetectionRefreshCompleted;
             _packageUpdateCheckService.StateChanged += Repaint;
             _packageUpdateCheckService.StateChanged += RefreshGraphView;
+            _packageUpdateCheckService.StateChanged += UpdateOperationFooter;
             _packageSampleImportService.StateChanged += Repaint;
             _packageSampleImportService.StateChanged += RefreshGraphView;
+            _packageSampleImportService.StateChanged += UpdateOperationFooter;
 
             bool checkUpdatesAfterDetectionRefresh =
                 PackageUpdateCheckPreferences.ShouldCheckOnWindowOpen(DateTime.UtcNow);
@@ -281,6 +319,7 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 _packageInstallService.StateChanged -= Repaint;
                 _packageInstallService.StateChanged -= RefreshGraphView;
+                _packageInstallService.StateChanged -= UpdateOperationFooter;
                 _packageInstallService.QueueCompleted -= HandlePackageOperationCompleted;
                 _packageInstallService.Dispose();
             }
@@ -289,6 +328,7 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 _packageDetectionService.StateChanged -= Repaint;
                 _packageDetectionService.StateChanged -= RefreshGraphView;
+                _packageDetectionService.StateChanged -= UpdateOperationFooter;
                 _packageDetectionService.RefreshCompleted -= HandlePackageDetectionRefreshCompleted;
                 _packageDetectionService.Dispose();
             }
@@ -297,6 +337,7 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 _packageUpdateCheckService.StateChanged -= Repaint;
                 _packageUpdateCheckService.StateChanged -= RefreshGraphView;
+                _packageUpdateCheckService.StateChanged -= UpdateOperationFooter;
                 _packageUpdateCheckService.Dispose();
             }
 
@@ -304,6 +345,7 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 _packageSampleImportService.StateChanged -= Repaint;
                 _packageSampleImportService.StateChanged -= RefreshGraphView;
+                _packageSampleImportService.StateChanged -= UpdateOperationFooter;
             }
 
             PackageRegistryProvider.RegistryChanged -= HandleRegistryChanged;
@@ -367,12 +409,13 @@ namespace Deucarian.PackageInstaller.Editor
             _operationDrawerContainer.AddToClassList("dpi-operation-drawer");
             content.Add(_operationDrawerContainer);
 
-            _operationFooterContainer = new IMGUIContainer(DrawOperationFooterGui);
-            _operationFooterContainer.AddToClassList("dpi-operation-footer");
+            _operationFooterContainer = CreateOperationFooterRow(() => SetOperationDetailsExpanded(!_operationDetailsExpanded));
+            CacheOperationFooterElements(_operationFooterContainer);
             content.Add(_operationFooterContainer);
 
             SetViewMode(_viewMode);
             ApplyResponsiveLayout(position.width);
+            UpdateOperationFooter();
             RefreshGraphView();
         }
 
@@ -491,6 +534,227 @@ namespace Deucarian.PackageInstaller.Editor
             return button;
         }
 
+        private static VisualElement CreateOperationFooterRow(Action detailsToggleAction)
+        {
+            VisualElement footer = new VisualElement { name = OperationFooterRowName };
+            footer.AddToClassList("dpi-operation-footer");
+            footer.style.flexDirection = FlexDirection.Row;
+            footer.style.alignItems = Align.Center;
+            footer.style.flexShrink = 0f;
+            footer.style.height = OperationFooterHeight;
+            footer.style.minHeight = OperationFooterHeight;
+            footer.style.maxHeight = OperationFooterHeight;
+            footer.style.overflow = Overflow.Hidden;
+            footer.style.opacity = 1f;
+
+            VisualElement statusGroup = new VisualElement { name = OperationFooterStatusGroupName };
+            statusGroup.AddToClassList("dpi-operation-footer__status");
+            statusGroup.style.flexDirection = FlexDirection.Row;
+            statusGroup.style.alignItems = Align.Center;
+            statusGroup.style.flexShrink = 0f;
+            statusGroup.style.opacity = 1f;
+
+            Label statusIcon = new Label { name = OperationFooterStatusIconName };
+            statusIcon.AddToClassList("dpi-operation-footer__status-icon");
+            statusIcon.style.flexShrink = 0f;
+            statusIcon.style.opacity = 1f;
+            statusGroup.Add(statusIcon);
+
+            Label statusLabel = new Label { name = OperationFooterStatusLabelName };
+            statusLabel.AddToClassList("dpi-operation-footer__status-label");
+            statusLabel.style.flexShrink = 0f;
+            statusLabel.style.opacity = 1f;
+            statusGroup.Add(statusLabel);
+            footer.Add(statusGroup);
+
+            Label summaryLabel = new Label { name = OperationFooterSummaryName };
+            summaryLabel.AddToClassList("dpi-operation-footer__summary");
+            summaryLabel.style.flexGrow = 1f;
+            summaryLabel.style.flexShrink = 1f;
+            summaryLabel.style.minWidth = 0f;
+            summaryLabel.style.opacity = 1f;
+            footer.Add(summaryLabel);
+
+            VisualElement spacer = new VisualElement();
+            spacer.AddToClassList("dpi-operation-footer__spacer");
+            spacer.style.flexGrow = 0f;
+            spacer.style.flexShrink = 0f;
+            footer.Add(spacer);
+
+            Button detailsButton = new Button { name = OperationFooterDetailsButtonName };
+            if (detailsToggleAction != null)
+            {
+                detailsButton.clicked += detailsToggleAction;
+            }
+
+            detailsButton.AddToClassList("dpi-operation-footer__details-button");
+            detailsButton.style.flexShrink = 0f;
+            detailsButton.style.width = 96f;
+            detailsButton.style.height = 24f;
+            detailsButton.style.minHeight = 24f;
+            detailsButton.style.maxHeight = 24f;
+            detailsButton.style.opacity = 1f;
+            footer.Add(detailsButton);
+
+            Label versionLabel = new Label { name = OperationFooterVersionName };
+            versionLabel.AddToClassList("dpi-operation-footer__version");
+            versionLabel.style.flexShrink = 0f;
+            versionLabel.style.opacity = 1f;
+            footer.Add(versionLabel);
+
+            ApplyOperationFooterData(
+                footer,
+                VisualStatusKind.Info,
+                "Idle",
+                "No operation running.",
+                false,
+                GetFooterVersionText());
+
+            return footer;
+        }
+
+        private void CacheOperationFooterElements(VisualElement footer)
+        {
+            if (footer == null)
+            {
+                _operationFooterStatusGroup = null;
+                _operationFooterStatusIcon = null;
+                _operationFooterStatusLabel = null;
+                _operationFooterSummaryLabel = null;
+                _operationFooterDetailsButton = null;
+                _operationFooterVersionLabel = null;
+                return;
+            }
+
+            _operationFooterStatusGroup = footer.Q<VisualElement>(OperationFooterStatusGroupName);
+            _operationFooterStatusIcon = footer.Q<Label>(OperationFooterStatusIconName);
+            _operationFooterStatusLabel = footer.Q<Label>(OperationFooterStatusLabelName);
+            _operationFooterSummaryLabel = footer.Q<Label>(OperationFooterSummaryName);
+            _operationFooterDetailsButton = footer.Q<Button>(OperationFooterDetailsButtonName);
+            _operationFooterVersionLabel = footer.Q<Label>(OperationFooterVersionName);
+        }
+
+        private void UpdateOperationFooter()
+        {
+            if (_operationFooterContainer == null)
+            {
+                return;
+            }
+
+            OperationProgressView operation = GetCurrentOperationProgress();
+            ApplyOperationFooterData(
+                _operationFooterContainer,
+                GetGlobalOperationStatusKind(operation),
+                GetGlobalOperationStateLabel(operation),
+                GetOperationFooterSummaryLine(operation),
+                _operationDetailsExpanded,
+                GetFooterVersionText());
+
+            CacheOperationFooterElements(_operationFooterContainer);
+        }
+
+        private static void ApplyOperationFooterData(
+            VisualElement footer,
+            VisualStatusKind statusKind,
+            string statusText,
+            string summaryText,
+            bool detailsExpanded,
+            string packageVersionText)
+        {
+            if (footer == null)
+            {
+                return;
+            }
+
+            string safeStatusText = string.IsNullOrWhiteSpace(statusText) ? "Idle" : statusText.Trim();
+            string safeSummaryText = string.IsNullOrWhiteSpace(summaryText) ? "No operation running." : summaryText.Trim();
+            string safeVersionText = string.IsNullOrWhiteSpace(packageVersionText) ? PackageId : packageVersionText.Trim();
+            string statusMarker = GetStatusMarker(statusKind);
+            Color statusColor = GetStatusColor(statusKind);
+
+            footer.EnableInClassList("dpi-operation-footer--expanded", detailsExpanded);
+            footer.EnableInClassList("dpi-operation-footer--collapsed", !detailsExpanded);
+
+            Label statusIcon = footer.Q<Label>(OperationFooterStatusIconName);
+            Label statusLabel = footer.Q<Label>(OperationFooterStatusLabelName);
+            Label summaryLabel = footer.Q<Label>(OperationFooterSummaryName);
+            Button detailsButton = footer.Q<Button>(OperationFooterDetailsButtonName);
+            Label versionLabel = footer.Q<Label>(OperationFooterVersionName);
+
+            if (statusIcon != null)
+            {
+                statusIcon.text = string.IsNullOrWhiteSpace(statusMarker) ? "i" : statusMarker;
+                statusIcon.tooltip = safeStatusText;
+                statusIcon.style.color = statusColor;
+                SetFooterStatusClass(statusIcon, statusKind);
+            }
+
+            if (statusLabel != null)
+            {
+                statusLabel.text = safeStatusText;
+                statusLabel.tooltip = safeStatusText;
+            }
+
+            if (summaryLabel != null)
+            {
+                summaryLabel.text = safeSummaryText;
+                summaryLabel.tooltip = safeSummaryText;
+            }
+
+            if (detailsButton != null)
+            {
+                detailsButton.text = detailsExpanded ? "Hide Details" : "Show Details";
+                detailsButton.tooltip = detailsExpanded
+                    ? "Hide the last operation details."
+                    : "Show the last operation details.";
+            }
+
+            if (versionLabel != null)
+            {
+                versionLabel.text = safeVersionText;
+                versionLabel.tooltip = safeVersionText;
+            }
+        }
+
+        private static void SetFooterStatusClass(VisualElement element, VisualStatusKind statusKind)
+        {
+            if (element == null)
+            {
+                return;
+            }
+
+            element.RemoveFromClassList("dpi-operation-footer__status-icon--installed");
+            element.RemoveFromClassList("dpi-operation-footer__status-icon--not-installed");
+            element.RemoveFromClassList("dpi-operation-footer__status-icon--attention");
+            element.RemoveFromClassList("dpi-operation-footer__status-icon--failed");
+            element.RemoveFromClassList("dpi-operation-footer__status-icon--busy");
+            element.RemoveFromClassList("dpi-operation-footer__status-icon--info");
+
+            switch (statusKind)
+            {
+                case VisualStatusKind.Installed:
+                    element.AddToClassList("dpi-operation-footer__status-icon--installed");
+                    break;
+                case VisualStatusKind.NotInstalled:
+                    element.AddToClassList("dpi-operation-footer__status-icon--not-installed");
+                    break;
+                case VisualStatusKind.UpdateAvailable:
+                    element.AddToClassList("dpi-operation-footer__status-icon--attention");
+                    break;
+                case VisualStatusKind.Failed:
+                    element.AddToClassList("dpi-operation-footer__status-icon--failed");
+                    break;
+                case VisualStatusKind.Busy:
+                    element.AddToClassList("dpi-operation-footer__status-icon--busy");
+                    break;
+                case VisualStatusKind.Info:
+                case VisualStatusKind.Integration:
+                default:
+                    element.AddToClassList("dpi-operation-footer__status-icon--info");
+                    break;
+            }
+        }
+
         private void SetViewMode(InstallerViewMode viewMode)
         {
             _viewMode = viewMode;
@@ -536,6 +800,8 @@ namespace Deucarian.PackageInstaller.Editor
                 _operationFooterContainer.style.minHeight = OperationFooterHeight;
                 _operationFooterContainer.style.maxHeight = OperationFooterHeight;
             }
+
+            UpdateOperationFooter();
 
             if (_listViewButton != null)
             {
@@ -622,7 +888,7 @@ namespace Deucarian.PackageInstaller.Editor
                 hiddenRelatedCount);
             _graphDetailsContainer?.MarkDirtyRepaint();
             _operationDrawerContainer?.MarkDirtyRepaint();
-            _operationFooterContainer?.MarkDirtyRepaint();
+            UpdateOperationFooter();
             UpdateViewVisibility();
         }
 
@@ -796,12 +1062,6 @@ namespace Deucarian.PackageInstaller.Editor
             DrawOperationDetailsDrawer();
         }
 
-        private void DrawOperationFooterGui()
-        {
-            EnsureStyles();
-            DrawOperationFooter();
-        }
-
         private void DrawListViewGui()
         {
             EnsureStyles();
@@ -876,39 +1136,6 @@ namespace Deucarian.PackageInstaller.Editor
             _mutedMiniLabelStyle = new GUIStyle(DeucarianEditorStyles.MutedLabel);
             _mutedMiniLabelStyle.fontSize = EditorStyles.wordWrappedMiniLabel.fontSize;
 
-            _operationLineStyle = new GUIStyle(EditorStyles.miniLabel);
-            _operationLineStyle.normal.textColor = _mutedTextColor;
-            _operationLineStyle.alignment = TextAnchor.MiddleLeft;
-            _operationLineStyle.clipping = TextClipping.Clip;
-            _operationLineStyle.wordWrap = false;
-            _operationLineStyle.margin = new RectOffset(0, 0, 0, 0);
-            _operationLineStyle.padding = new RectOffset(0, 0, 0, 0);
-
-            _footerStatusIconStyle = new GUIStyle(EditorStyles.miniBoldLabel);
-            _footerStatusIconStyle.alignment = TextAnchor.MiddleCenter;
-            _footerStatusIconStyle.fontSize = 11;
-            _footerStatusIconStyle.normal.textColor = _textColor;
-            _footerStatusIconStyle.clipping = TextClipping.Clip;
-            _footerStatusIconStyle.wordWrap = false;
-            _footerStatusIconStyle.margin = new RectOffset(0, 0, 0, 0);
-            _footerStatusIconStyle.padding = new RectOffset(0, 0, 0, 0);
-
-            _footerStatusTextStyle = new GUIStyle(EditorStyles.miniLabel);
-            _footerStatusTextStyle.normal.textColor = _textColor;
-            _footerStatusTextStyle.alignment = TextAnchor.MiddleLeft;
-            _footerStatusTextStyle.clipping = TextClipping.Clip;
-            _footerStatusTextStyle.wordWrap = false;
-            _footerStatusTextStyle.margin = new RectOffset(0, 0, 0, 0);
-            _footerStatusTextStyle.padding = new RectOffset(0, 0, 0, 0);
-
-            _footerVersionStyle = new GUIStyle(DeucarianEditorStyles.FooterVersionText);
-            _footerVersionStyle.alignment = TextAnchor.MiddleRight;
-            _footerVersionStyle.margin = new RectOffset(0, 0, 0, 0);
-            _footerVersionStyle.padding = new RectOffset(0, 0, 0, 0);
-            _footerVersionStyle.wordWrap = false;
-            _footerVersionStyle.clipping = TextClipping.Clip;
-            _footerVersionStyle.normal.textColor = _textColor;
-
             _rowTitleStyle = new GUIStyle(EditorStyles.miniBoldLabel);
             _rowTitleStyle.normal.textColor = _textColor;
             _rowTitleStyle.wordWrap = true;
@@ -943,11 +1170,6 @@ namespace Deucarian.PackageInstaller.Editor
             _secondaryButtonStyle = new GUIStyle(DeucarianEditorStyles.ToolbarButton);
             _secondaryButtonStyle.fixedHeight = 24f;
 
-            _footerButtonStyle = new GUIStyle(DeucarianEditorStyles.ToolbarButton);
-            _footerButtonStyle.alignment = TextAnchor.MiddleCenter;
-            _footerButtonStyle.fixedHeight = 22f;
-            _footerButtonStyle.margin = new RectOffset(0, 0, 0, 0);
-            _footerButtonStyle.padding = new RectOffset(8, 8, 1, 2);
         }
 
         private void DrawWindowBackground()
@@ -2624,97 +2846,6 @@ namespace Deucarian.PackageInstaller.Editor
             EditorGUILayout.EndVertical();
         }
 
-        private void DrawOperationFooter()
-        {
-            OperationProgressView operation = GetCurrentOperationProgress();
-            Rect footerRect = GUILayoutUtility.GetRect(
-                1f,
-                OperationFooterHeight,
-                GUILayout.ExpandWidth(true),
-                GUILayout.Height(OperationFooterHeight));
-            DrawSurface(footerRect, _headerPanelBackgroundColor, _panelBorderColor);
-
-            string stateLabel = GetGlobalOperationStateLabel(operation);
-            VisualStatusKind stateKind = GetGlobalOperationStatusKind(operation);
-            string summaryLine = GetOperationFooterSummaryLine(operation);
-            string footerVersionText = GetFooterVersionText();
-            string detailsButtonText = _operationDetailsExpanded ? "Hide Details" : "Show Details";
-
-            Rect contentRect = new Rect(
-                footerRect.x + OperationFooterHorizontalPadding,
-                footerRect.y + Mathf.Floor((footerRect.height - OperationFooterControlHeight) * 0.5f),
-                Mathf.Max(0f, footerRect.width - OperationFooterHorizontalPadding * 2f),
-                OperationFooterControlHeight);
-
-            const float statusIconWidth = 16f;
-            const float statusIconLabelGap = 5f;
-            const float detailsButtonWidth = 96f;
-            const float detailsButtonHeight = 22f;
-
-            float statusLabelWidth = Mathf.Ceil(_footerStatusTextStyle.CalcSize(new GUIContent(stateLabel)).x);
-            float statusWidth = Mathf.Clamp(
-                statusIconWidth + statusIconLabelGap + statusLabelWidth,
-                72f,
-                128f);
-
-            float versionWidth = Mathf.Clamp(
-                Mathf.Ceil(_footerVersionStyle.CalcSize(new GUIContent(footerVersionText)).x) + 2f,
-                238f,
-                292f);
-
-            Rect versionRect = new Rect(
-                contentRect.xMax - versionWidth,
-                contentRect.y,
-                versionWidth,
-                contentRect.height);
-            Rect detailsButtonRect = new Rect(
-                versionRect.x - OperationFooterGap - detailsButtonWidth,
-                contentRect.y + Mathf.Floor((contentRect.height - detailsButtonHeight) * 0.5f),
-                detailsButtonWidth,
-                detailsButtonHeight);
-            Rect statusRect = new Rect(
-                contentRect.x,
-                contentRect.y,
-                statusWidth,
-                contentRect.height);
-            Rect summaryRect = new Rect(
-                statusRect.xMax + OperationFooterGap,
-                contentRect.y,
-                Mathf.Max(0f, detailsButtonRect.x - OperationFooterGap - (statusRect.xMax + OperationFooterGap)),
-                contentRect.height);
-
-            DrawFooterStatus(statusRect, stateLabel, stateKind);
-            DrawTruncatedRectLabel(summaryRect, summaryLine, _operationLineStyle, _mutedTextColor);
-
-            if (GUI.Button(detailsButtonRect, detailsButtonText, _footerButtonStyle))
-            {
-                SetOperationDetailsExpanded(!_operationDetailsExpanded);
-            }
-
-            DrawTruncatedRectLabel(versionRect, footerVersionText, _footerVersionStyle, _textColor);
-        }
-
-        private void DrawFooterStatus(Rect rect, string text, VisualStatusKind statusKind)
-        {
-            Rect iconRect = new Rect(
-                rect.x,
-                rect.y + Mathf.Floor((rect.height - 18f) * 0.5f),
-                16f,
-                18f);
-            Rect labelRect = new Rect(
-                iconRect.xMax + 5f,
-                rect.y,
-                Mathf.Max(0f, rect.width - 21f),
-                rect.height);
-
-            DrawColoredRectLabel(
-                iconRect,
-                new GUIContent(GetStatusMarker(statusKind), text),
-                _footerStatusIconStyle,
-                GetStatusColor(statusKind));
-            DrawTruncatedRectLabel(labelRect, text, _footerStatusTextStyle, _textColor);
-        }
-
         private string GetOperationFooterSummaryLine(OperationProgressView operation)
         {
             string title = GetOperationBarTitle(operation);
@@ -2767,7 +2898,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static string GetFooterVersionText()
         {
-            return "com.deucarian.package-installer " + PackageVersion;
+            return PackageId + " " + PackageVersion;
         }
 
         private int GetOperationDrawerContentLineCount()
@@ -3047,7 +3178,7 @@ namespace Deucarian.PackageInstaller.Editor
             EditorPrefs.SetBool(GetOperationDrawerPreferenceKey(), expanded);
             UpdateViewVisibility();
             _operationDrawerContainer?.MarkDirtyRepaint();
-            _operationFooterContainer?.MarkDirtyRepaint();
+            UpdateOperationFooter();
             Repaint();
         }
 
@@ -3492,7 +3623,7 @@ namespace Deucarian.PackageInstaller.Editor
             return new VisualStatus(NotInstalledStatusMarker, "Not Installed", VisualStatusKind.NotInstalled);
         }
 
-        private Color GetStatusColor(VisualStatusKind statusKind)
+        private static Color GetStatusColor(VisualStatusKind statusKind)
         {
             return DeucarianEditorStatusBadge.GetColor(ToEditorStatus(statusKind));
         }

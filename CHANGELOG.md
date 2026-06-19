@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.38 - 2026-06-19
+
+- Restored the Package Installer footer as a real UI Toolkit row with status, summary, details toggle, and version children.
+- Rebound footer status and operation summary updates so List View, Ecosystem Graph, and drawer toggles keep the row populated.
+- Added footer hierarchy regression coverage for content, version, responsive visibility, and Show/Hide Details state.
+
 ## 1.1.37 - 2026-06-19
 
 - Separated category hub anchors from captions so orbit centers, spokes, Fit, and Center target the circular hub.

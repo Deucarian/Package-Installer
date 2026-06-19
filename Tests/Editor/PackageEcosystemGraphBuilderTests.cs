@@ -49,6 +49,85 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void Window_OperationFooterBuildsStableVisibleHierarchy()
+        {
+            VisualElement footer = PackageInstallerWindow.CreateOperationFooterForTests();
+
+            Assert.AreEqual(PackageInstallerWindow.OperationFooterRowName, footer.name);
+            Assert.IsTrue(footer.ClassListContains("dpi-operation-footer"));
+            Assert.AreEqual(FlexDirection.Row, footer.style.flexDirection.value);
+            Assert.AreEqual(Align.Center, footer.style.alignItems.value);
+            Assert.AreEqual(0f, footer.style.flexShrink.value);
+            Assert.AreEqual(34f, footer.style.height.value.value);
+
+            VisualElement statusGroup = footer.Q<VisualElement>(PackageInstallerWindow.OperationFooterStatusGroupName);
+            Label statusIcon = footer.Q<Label>(PackageInstallerWindow.OperationFooterStatusIconName);
+            Label statusLabel = footer.Q<Label>(PackageInstallerWindow.OperationFooterStatusLabelName);
+            Label summaryLabel = footer.Q<Label>(PackageInstallerWindow.OperationFooterSummaryName);
+            Button detailsButton = footer.Q<Button>(PackageInstallerWindow.OperationFooterDetailsButtonName);
+            Label versionLabel = footer.Q<Label>(PackageInstallerWindow.OperationFooterVersionName);
+
+            AssertFooterElementVisible(statusGroup);
+            AssertFooterElementVisible(statusIcon);
+            AssertFooterElementVisible(statusLabel);
+            AssertFooterElementVisible(summaryLabel);
+            AssertFooterElementVisible(detailsButton);
+            AssertFooterElementVisible(versionLabel);
+
+            Assert.IsFalse(string.IsNullOrWhiteSpace(statusIcon.text));
+            Assert.IsFalse(string.IsNullOrWhiteSpace(statusLabel.text));
+            Assert.IsFalse(string.IsNullOrWhiteSpace(summaryLabel.text));
+            Assert.IsTrue(detailsButton.text == "Show Details" || detailsButton.text == "Hide Details");
+            Assert.IsFalse(string.IsNullOrWhiteSpace(versionLabel.text));
+            StringAssert.Contains(PackageInstallerWindow.PackageIdForTests, versionLabel.text);
+            StringAssert.Contains(PackageInstallerWindow.PackageVersionForTests, versionLabel.text);
+        }
+
+        [Test]
+        public void Window_OperationFooterDrawerToggleKeepsVersionVisible()
+        {
+            VisualElement footer = PackageInstallerWindow.CreateOperationFooterForTests();
+            Button detailsButton = footer.Q<Button>(PackageInstallerWindow.OperationFooterDetailsButtonName);
+            Label versionLabel = footer.Q<Label>(PackageInstallerWindow.OperationFooterVersionName);
+
+            Assert.AreEqual("Show Details", detailsButton.text);
+            StringAssert.Contains(PackageInstallerWindow.PackageIdForTests, versionLabel.text);
+
+            PackageInstallerWindow.SetOperationFooterExpandedForTests(footer, true);
+
+            Assert.AreEqual("Hide Details", detailsButton.text);
+            AssertFooterElementVisible(versionLabel);
+            StringAssert.Contains(PackageInstallerWindow.PackageIdForTests, versionLabel.text);
+            StringAssert.Contains(PackageInstallerWindow.PackageVersionForTests, versionLabel.text);
+        }
+
+        [Test]
+        public void Window_OperationFooterResponsiveClassesDoNotHideContent()
+        {
+            VisualElement root = new VisualElement();
+            VisualElement footer = PackageInstallerWindow.CreateOperationFooterForTests();
+            root.Add(footer);
+
+            foreach (string responsiveClass in new[]
+                     {
+                         "dpi-responsive--wide",
+                         "dpi-responsive--compact",
+                         "dpi-responsive--narrow"
+                     })
+            {
+                root.RemoveFromClassList("dpi-responsive--wide");
+                root.RemoveFromClassList("dpi-responsive--compact");
+                root.RemoveFromClassList("dpi-responsive--narrow");
+                root.AddToClassList(responsiveClass);
+
+                AssertFooterElementVisible(footer.Q<VisualElement>(PackageInstallerWindow.OperationFooterStatusGroupName));
+                AssertFooterElementVisible(footer.Q<Label>(PackageInstallerWindow.OperationFooterSummaryName));
+                AssertFooterElementVisible(footer.Q<Button>(PackageInstallerWindow.OperationFooterDetailsButtonName));
+                AssertFooterElementVisible(footer.Q<Label>(PackageInstallerWindow.OperationFooterVersionName));
+            }
+        }
+
+        [Test]
         public void Build_MapsRegistryMetadataToNodeTypesAndRelationships()
         {
             PackageDefinition core = CreatePackage("Core", "com.example.core", "Core");
@@ -2018,6 +2097,13 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             IEnumerable<string> visiblePackageIds)
         {
             return PackageGraphActiveLayoutBounds.Calculate(layout);
+        }
+
+        private static void AssertFooterElementVisible(VisualElement element)
+        {
+            Assert.NotNull(element);
+            Assert.AreNotEqual(DisplayStyle.None, element.style.display.value);
+            Assert.That(element.style.opacity.value, Is.GreaterThan(0.01f));
         }
 
         private static void AssertRectsEqual(Rect expected, Rect actual, float tolerance)
