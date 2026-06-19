@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.50 - 2026-06-20
+
+- Replaced package ego contextual category placement with deterministic owning/provider/dependent/integration/companion rails.
+- Routed focus-mode category membership through structural buses for multi-package category groups.
+- Integrated package and category back hints into shared caption/header styling and trimmed graph hover tooltips.
+
 ## 1.1.49 - 2026-06-19
 
 - Render category status rings with explicit full-circle geometry for empty and single-status categories so one-color rings are continuous.

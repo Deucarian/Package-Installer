@@ -1771,12 +1771,17 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.IsEmpty(FindByClass(inactiveOverviewGroup, "dpi-graph-group__back-hint"));
             Assert.IsTrue(activeTopLevelGroup.ClassListContains("dpi-graph-group--has-back"));
             Assert.AreEqual(1, FindByClass(activeTopLevelGroup, "dpi-graph-group__back-hint").Count);
+            Assert.AreEqual(1, FindByClass(activeTopLevelGroup, "dpi-graph-category-caption-row").Count);
+            Assert.AreEqual(1, FindByClass(activeTopLevelGroup, "dpi-graph-back-hint--category").Count);
             Assert.AreEqual("Back to Ecosystem Overview", activeTopLevelGroup.tooltip);
             Assert.IsTrue(activeNestedGroup.ClassListContains("dpi-graph-group--has-back"));
             Assert.AreEqual("Back to Experience & Interaction", activeNestedGroup.tooltip);
             Assert.IsTrue(selectedPackage.ClassListContains("dpi-graph-node--has-back"));
             Assert.AreEqual(PickingMode.Ignore, packageBack.pickingMode);
             Assert.AreEqual("Back to Runtime Services", packageBack.tooltip);
+            Assert.AreEqual(1, FindByClass(selectedPackage, "dpi-graph-back-hint--package").Count);
+            Assert.IsFalse((selectedPackage.tooltip ?? string.Empty).Contains("package."));
+            Assert.AreEqual("Infrastructure", inactiveOverviewGroup.tooltip);
             Assert.IsEmpty(FindByClass(relatedPackage, "dpi-graph-node__back-hint"));
             Assert.IsEmpty(FindByClass(selectedPackage, "dpi-graph-node__back"));
             Assert.IsEmpty(FindByClass(activeTopLevelGroup, "dpi-graph-group__back"));
@@ -2090,7 +2095,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                     .OfType<Label>()
                     .Any(label => label.text == "Suite membership"));
             Assert.AreEqual(2, FindByClass(view, "dpi-graph-node").Count);
-            Assert.AreEqual(1, FindByClass(view, "dpi-graph-group--collapsed").Count);
+            Assert.AreEqual(2, FindByClass(view, "dpi-graph-group--collapsed").Count);
             Assert.AreEqual(1, FindByClass(view, "dpi-graph-node--integration").Count);
             Assert.IsTrue(FindByClass(view, "dpi-graph-node__action").Count >= 1);
         }
@@ -2564,28 +2569,105 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Rect session = layout.NodeRects["com.deucarian.session"];
             Rect logging = layout.NodeRects["com.deucarian.logging"];
             Rect sessionIntegration = layout.NodeRects["com.deucarian.session.api-integration"];
+            PackageGraphGroupLayoutNode owningContext =
+                layout.GroupNodes.Single(groupNode => groupNode.GroupId == "runtime-services");
+            PackageGraphGroupLayoutNode providerContext =
+                layout.GroupNodes.Single(groupNode => groupNode.GroupId == "infrastructure");
+            PackageGraphGroupLayoutNode integrationContext =
+                layout.GroupNodes.Single(groupNode => groupNode.GroupId == "integrations");
 
             Assert.AreEqual(PackageGraphLayoutMode.Focus, layout.Mode);
             Assert.AreEqual("com.deucarian.session", layout.FocusPackageId);
             Assert.That(Vector2.Distance(PackageGraphLayout.GraphCenter, session.center), Is.LessThan(0.1f));
             Assert.Less(logging.center.x, session.center.x);
-            Assert.That(logging.center.x, Is.EqualTo(PackageGraphLayout.GraphCenter.x - 455f).Within(0.1f));
             Assert.That(logging.center.y, Is.EqualTo(PackageGraphLayout.GraphCenter.y).Within(0.1f));
             Assert.That(sessionIntegration.center.x, Is.EqualTo(PackageGraphLayout.GraphCenter.x).Within(0.1f));
-            Assert.That(sessionIntegration.center.y, Is.EqualTo(PackageGraphLayout.GraphCenter.y + 365f).Within(0.1f));
             Assert.Greater(sessionIntegration.center.y, session.center.y);
+            Assert.Less(owningContext.HubCenter.y, session.yMin);
+            Assert.That(owningContext.HubCenter.x, Is.EqualTo(session.center.x).Within(0.1f));
+            Assert.Less(providerContext.HubCenter.x, logging.xMin);
+            Assert.That(providerContext.HubCenter.y, Is.EqualTo(logging.center.y).Within(0.1f));
+            Assert.Greater(integrationContext.HubCenter.y, sessionIntegration.yMax);
+            Assert.That(integrationContext.HubCenter.x, Is.EqualTo(sessionIntegration.center.x).Within(0.1f));
             Assert.IsFalse(layout.NodeRects.ContainsKey("com.deucarian.api"));
             Assert.IsFalse(layout.NodeRects.ContainsKey("com.deucarian.theming"));
             Assert.IsFalse(layout.HasUnrelatedSummary);
             Assert.IsTrue(layout.GroupNodes.Any(groupNode => groupNode.Collapsed && groupNode.SummaryLabel.Contains("related package")));
-            PackageGraphGroupLayoutNode integrationContext =
-                layout.GroupNodes.Single(groupNode => groupNode.GroupId == "integrations");
             CollectionAssert.Contains(
                 integrationContext.RepresentedPackageIds.ToArray(),
                 "com.deucarian.session.api-integration");
+            CollectionAssert.Contains(
+                owningContext.RepresentedPackageIds.ToArray(),
+                "com.deucarian.session");
             Assert.AreEqual(layout.ActiveCenter, session.center);
             Assert.IsEmpty(layout.RingGuides);
             AssertNoOverlaps(layout.NodeRects.Values.Concat(layout.GroupNodes.Select(groupNode => groupNode.Rect)).ToArray());
+        }
+
+        [Test]
+        public void Layout_EgoFocusUsesFixedCategoryRailsForApi()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+
+            PackageGraphLayoutResult layout = new PackageGraphLayout().Calculate(
+                graph,
+                PackageGraphLayoutMode.Focus,
+                "com.deucarian.api");
+
+            Rect api = layout.NodeRects["com.deucarian.api"];
+            Rect logging = layout.NodeRects["com.deucarian.logging"];
+            Rect sessionIntegration = layout.NodeRects["com.deucarian.session.api-integration"];
+            Rect objectLoadingIntegration = layout.NodeRects["com.deucarian.object-loading.api-integration"];
+            PackageGraphGroupLayoutNode owningContext =
+                layout.GroupNodes.Single(groupNode => groupNode.GroupId == "runtime-services");
+            PackageGraphGroupLayoutNode providerContext =
+                layout.GroupNodes.Single(groupNode => groupNode.GroupId == "infrastructure");
+            PackageGraphGroupLayoutNode integrationContext =
+                layout.GroupNodes.Single(groupNode => groupNode.GroupId == "integrations");
+
+            Assert.That(Vector2.Distance(PackageGraphLayout.GraphCenter, api.center), Is.LessThan(0.1f));
+            Assert.Less(logging.center.x, api.center.x);
+            Assert.Less(providerContext.HubCenter.x, logging.xMin);
+            Assert.That(providerContext.HubCenter.y, Is.EqualTo(logging.center.y).Within(0.1f));
+            Assert.Less(owningContext.HubCenter.y, api.yMin);
+            Assert.That(owningContext.HubCenter.x, Is.EqualTo(api.center.x).Within(0.1f));
+            Assert.Greater(sessionIntegration.center.y, api.center.y);
+            Assert.That(sessionIntegration.center.y, Is.EqualTo(objectLoadingIntegration.center.y).Within(0.1f));
+            Assert.Greater(integrationContext.HubCenter.y, sessionIntegration.yMax);
+            Assert.That(
+                integrationContext.HubCenter.x,
+                Is.EqualTo((sessionIntegration.center.x + objectLoadingIntegration.center.x) * 0.5f).Within(0.1f));
+            CollectionAssert.AreEquivalent(
+                new[]
+                {
+                    "com.deucarian.session.api-integration",
+                    "com.deucarian.object-loading.api-integration"
+                },
+                integrationContext.RepresentedPackageIds.ToArray());
+        }
+
+        [Test]
+        public void GraphMembershipRoutes_UseBusForMultiPackageContextCategory()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+            PackageGraphCanvas canvas = new PackageGraphCanvas(_ => { }, (_, __) => { }, () => { });
+
+            canvas.SetGraph(graph, "com.deucarian.api", "com.deucarian.api", actionsEnabled: true);
+
+            PackageGraphStructuralMembershipRoute integrationRoute =
+                canvas.StructuralMembershipRoutesForTests.Single(route => route.GroupId == "integrations");
+            PackageGraphStructuralMembershipRoute owningRoute =
+                canvas.StructuralMembershipRoutesForTests.Single(route => route.GroupId == "runtime-services");
+
+            Assert.IsTrue(integrationRoute.UsesBus);
+            Assert.AreEqual(2, integrationRoute.PackageIds.Count);
+            Assert.GreaterOrEqual(integrationRoute.Segments.Count, 4);
+            Assert.IsTrue(integrationRoute.Segments.All(segment => segment.Length > 0.01f));
+            Assert.IsFalse(owningRoute.UsesBus);
+            Assert.AreEqual(1, owningRoute.PackageIds.Count);
+            Assert.AreEqual("com.deucarian.api", owningRoute.PackageIds.Single());
         }
 
         [Test]
@@ -2601,6 +2683,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
             Rect logging = layout.NodeRects["com.deucarian.logging"];
             Rect editor = layout.NodeRects["com.deucarian.editor"];
+            Rect api = layout.NodeRects["com.deucarian.api"];
 
             Assert.That(Vector2.Distance(PackageGraphLayout.GraphCenter, logging.center), Is.LessThan(0.1f));
             Assert.Less(editor.center.x, logging.center.x);
@@ -2617,13 +2700,18 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             {
                 Rect dependent = layout.NodeRects[packageId];
                 Assert.Greater(dependent.center.x, logging.center.x);
-                Assert.That(dependent.center.x, Is.EqualTo(PackageGraphLayout.GraphCenter.x + 455f).Within(0.1f));
+                Assert.That(dependent.center.x, Is.EqualTo(api.center.x).Within(0.1f));
             }
 
             Assert.IsFalse(layout.HasUnrelatedSummary);
             Assert.IsTrue(layout.GroupNodes.Any(groupNode => groupNode.Collapsed));
             PackageGraphGroupLayoutNode runtimeContext =
                 layout.GroupNodes.Single(groupNode => groupNode.GroupId == "runtime-services");
+            PackageGraphGroupLayoutNode owningContext =
+                layout.GroupNodes.Single(groupNode => groupNode.GroupId == "infrastructure");
+            Assert.Less(owningContext.HubCenter.y, logging.yMin);
+            Assert.That(owningContext.HubCenter.x, Is.EqualTo(logging.center.x).Within(0.1f));
+            Assert.Greater(runtimeContext.HubCenter.x, api.xMax);
             CollectionAssert.IsSubsetOf(
                 new[]
                 {

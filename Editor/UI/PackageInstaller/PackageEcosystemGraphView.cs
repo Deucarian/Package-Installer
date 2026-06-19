@@ -2935,6 +2935,9 @@ namespace Deucarian.PackageInstaller.Editor
         internal IReadOnlyList<CategoryStatusRingVisualState> StatusRingVisualStatesForTests =>
             _membershipLayer.BuildStatusRingVisualStatesForTests();
 
+        internal IReadOnlyList<PackageGraphStructuralMembershipRoute> StructuralMembershipRoutesForTests =>
+            _membershipLayer.FocusMembershipRoutesForTests();
+
         internal int CountNodeElementsForTests(string packageId)
         {
             return _nodeLayer.Children().Count(child =>
@@ -4640,6 +4643,51 @@ namespace Deucarian.PackageInstaller.Editor
         public bool Empty { get; }
     }
 
+    internal readonly struct PackageGraphStructuralMembershipSegment
+    {
+        public PackageGraphStructuralMembershipSegment(Vector2 from, Vector2 to)
+        {
+            From = from;
+            To = to;
+        }
+
+        public Vector2 From { get; }
+
+        public Vector2 To { get; }
+
+        public float Length => Vector2.Distance(From, To);
+    }
+
+    internal readonly struct PackageGraphStructuralMembershipRoute
+    {
+        public PackageGraphStructuralMembershipRoute(
+            string groupId,
+            IReadOnlyList<string> packageIds,
+            IReadOnlyList<PackageGraphStructuralMembershipSegment> segments,
+            bool usesBus)
+        {
+            GroupId = groupId ?? string.Empty;
+            PackageIds = packageIds == null
+                ? Array.Empty<string>()
+                : packageIds
+                    .Where(packageId => !string.IsNullOrWhiteSpace(packageId))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+            Segments = segments == null
+                ? Array.Empty<PackageGraphStructuralMembershipSegment>()
+                : segments.Where(segment => segment.Length > 0.01f).ToArray();
+            UsesBus = usesBus;
+        }
+
+        public string GroupId { get; }
+
+        public IReadOnlyList<string> PackageIds { get; }
+
+        public IReadOnlyList<PackageGraphStructuralMembershipSegment> Segments { get; }
+
+        public bool UsesBus { get; }
+    }
+
     internal sealed class PackageGraphMembershipLayer : VisualElement
     {
         private readonly Dictionary<string, Rect> _nodeRects =
@@ -4963,6 +5011,36 @@ namespace Deucarian.PackageInstaller.Editor
             Painter2D painter,
             IReadOnlyDictionary<string, PackageGraphGroupLayoutNode> groupNodeById)
         {
+            foreach (PackageGraphStructuralMembershipRoute route in BuildFocusMembershipRoutes(groupNodeById))
+            {
+                bool hoverActive = !_interactionsLocked && !string.IsNullOrWhiteSpace(_hoveredGroupId);
+                bool emphasized = hoverActive && IsGroupInHoverContext(route.GroupId, _hoveredGroupId, groupNodeById);
+                bool muted = hoverActive && !emphasized;
+                DrawStructuralMembershipRoute(painter, route, emphasized, muted);
+            }
+        }
+
+        internal IReadOnlyList<PackageGraphStructuralMembershipRoute> FocusMembershipRoutesForTests()
+        {
+            Dictionary<string, PackageGraphGroupLayoutNode> groupNodeById = _layout != null
+                ? _layout.GroupNodes
+                    .Where(groupNode => groupNode != null && groupNode.Group != null)
+                    .GroupBy(groupNode => groupNode.GroupId, StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase)
+                : new Dictionary<string, PackageGraphGroupLayoutNode>(StringComparer.OrdinalIgnoreCase);
+            return BuildFocusMembershipRoutes(groupNodeById);
+        }
+
+        private IReadOnlyList<PackageGraphStructuralMembershipRoute> BuildFocusMembershipRoutes(
+            IReadOnlyDictionary<string, PackageGraphGroupLayoutNode> groupNodeById)
+        {
+            List<PackageGraphStructuralMembershipRoute> routes = new List<PackageGraphStructuralMembershipRoute>();
+
+            if (_layout == null || _layout.Mode != PackageGraphLayoutMode.Focus)
+            {
+                return routes;
+            }
+
             foreach (PackageGraphGroupLayoutNode groupNode in _layout.GroupNodes)
             {
                 if (groupNode == null ||
@@ -4974,19 +5052,194 @@ namespace Deucarian.PackageInstaller.Editor
 
                 Rect groupRect = GetGroupRect(groupNode);
                 Rect groupHubRect = GetAnimatedGroupHubRect(groupNode, groupRect);
-                bool hoverActive = !_interactionsLocked && !string.IsNullOrWhiteSpace(_hoveredGroupId);
-                bool emphasized = hoverActive && IsGroupInHoverContext(groupNode.GroupId, _hoveredGroupId, groupNodeById);
-                bool muted = hoverActive && !emphasized;
+                List<KeyValuePair<string, Rect>> packageRects = groupNode.RepresentedPackageIds
+                    .Where(packageId => !string.IsNullOrWhiteSpace(packageId) &&
+                                        _nodeRects.ContainsKey(packageId))
+                    .Select(packageId => new KeyValuePair<string, Rect>(packageId, _nodeRects[packageId]))
+                    .ToList();
 
-                foreach (string packageId in groupNode.RepresentedPackageIds)
+                if (packageRects.Count == 0)
                 {
-                    if (!_nodeRects.TryGetValue(packageId, out Rect packageRect))
-                    {
-                        continue;
-                    }
-
-                    DrawSpoke(painter, groupHubRect, packageRect, emphasized, muted);
+                    continue;
                 }
+
+                routes.Add(CreateStructuralMembershipRoute(groupNode.GroupId, groupRect, groupHubRect, packageRects));
+            }
+
+            return routes;
+        }
+
+        private static PackageGraphStructuralMembershipRoute CreateStructuralMembershipRoute(
+            string groupId,
+            Rect groupRect,
+            Rect groupHubRect,
+            IReadOnlyList<KeyValuePair<string, Rect>> packageRects)
+        {
+            Vector2 packageAverage = CalculateAverageRectCenter(packageRects.Select(pair => pair.Value));
+            Vector2 direction = packageAverage - groupHubRect.center;
+            bool horizontalBus = Mathf.Abs(direction.y) >= Mathf.Abs(direction.x);
+            List<PackageGraphStructuralMembershipSegment> segments = new List<PackageGraphStructuralMembershipSegment>();
+            string[] packageIds = packageRects.Select(pair => pair.Key).ToArray();
+
+            if (packageRects.Count == 1)
+            {
+                AddDirectStructuralSegments(segments, groupRect, groupHubRect, packageRects[0].Value);
+                return new PackageGraphStructuralMembershipRoute(groupId, packageIds, segments, usesBus: false);
+            }
+
+            if (horizontalBus)
+            {
+                KeyValuePair<string, Rect>[] ordered = packageRects
+                    .OrderBy(pair => pair.Value.center.x)
+                    .ThenBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+                float busY = GetBusAxis(groupHubRect.center.y, packageAverage.y);
+                float busXMin = ordered.Min(pair => pair.Value.center.x);
+                float busXMax = ordered.Max(pair => pair.Value.center.x);
+                AddCategoryToHorizontalBusSegments(segments, groupRect, groupHubRect, busY);
+                segments.Add(new PackageGraphStructuralMembershipSegment(
+                    new Vector2(busXMin, busY),
+                    new Vector2(busXMax, busY)));
+
+                foreach (KeyValuePair<string, Rect> package in ordered)
+                {
+                    Vector2 branch = new Vector2(package.Value.center.x, busY);
+                    Vector2 endpoint = GetRectBorderPoint(package.Value, branch, 2f);
+                    segments.Add(new PackageGraphStructuralMembershipSegment(branch, endpoint));
+                }
+
+                return new PackageGraphStructuralMembershipRoute(groupId, packageIds, segments, usesBus: true);
+            }
+
+            KeyValuePair<string, Rect>[] verticalOrdered = packageRects
+                .OrderBy(pair => pair.Value.center.y)
+                .ThenBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            float busX = GetBusAxis(groupHubRect.center.x, packageAverage.x);
+            float busYMin = verticalOrdered.Min(pair => pair.Value.center.y);
+            float busYMax = verticalOrdered.Max(pair => pair.Value.center.y);
+            Vector2 hubStart = GetHubBorderPoint(groupHubRect, new Vector2(busX, groupHubRect.center.y), 2f);
+            Vector2 trunk = new Vector2(busX, groupHubRect.center.y);
+            segments.Add(new PackageGraphStructuralMembershipSegment(hubStart, trunk));
+            segments.Add(new PackageGraphStructuralMembershipSegment(
+                new Vector2(busX, busYMin),
+                new Vector2(busX, busYMax)));
+
+            foreach (KeyValuePair<string, Rect> package in verticalOrdered)
+            {
+                Vector2 branch = new Vector2(busX, package.Value.center.y);
+                Vector2 endpoint = GetRectBorderPoint(package.Value, branch, 2f);
+                segments.Add(new PackageGraphStructuralMembershipSegment(branch, endpoint));
+            }
+
+            return new PackageGraphStructuralMembershipRoute(groupId, packageIds, segments, usesBus: true);
+        }
+
+        private static void AddDirectStructuralSegments(
+            ICollection<PackageGraphStructuralMembershipSegment> segments,
+            Rect groupRect,
+            Rect groupHubRect,
+            Rect packageRect)
+        {
+            Vector2 direction = packageRect.center - groupHubRect.center;
+
+            if (Mathf.Abs(direction.y) > Mathf.Abs(direction.x) &&
+                direction.y > 0f)
+            {
+                float sideX = groupRect.xMax + 22f;
+                Vector2 start = GetHubBorderPoint(groupHubRect, new Vector2(sideX, groupHubRect.center.y), 2f);
+                Vector2 side = new Vector2(sideX, groupHubRect.center.y);
+                Vector2 turn = new Vector2(sideX, packageRect.center.y);
+                Vector2 end = GetRectBorderPoint(packageRect, turn, 2f);
+                segments.Add(new PackageGraphStructuralMembershipSegment(start, side));
+                segments.Add(new PackageGraphStructuralMembershipSegment(side, turn));
+                segments.Add(new PackageGraphStructuralMembershipSegment(turn, end));
+                return;
+            }
+
+            Vector2 from = GetHubBorderPoint(groupHubRect, packageRect.center, 2f);
+            Vector2 to = GetRectBorderPoint(packageRect, groupHubRect.center, 2f);
+            segments.Add(new PackageGraphStructuralMembershipSegment(from, to));
+        }
+
+        private static void AddCategoryToHorizontalBusSegments(
+            ICollection<PackageGraphStructuralMembershipSegment> segments,
+            Rect groupRect,
+            Rect groupHubRect,
+            float busY)
+        {
+            if (busY > groupHubRect.center.y)
+            {
+                float sideX = groupRect.xMax + 22f;
+                Vector2 start = GetHubBorderPoint(groupHubRect, new Vector2(sideX, groupHubRect.center.y), 2f);
+                Vector2 side = new Vector2(sideX, groupHubRect.center.y);
+                Vector2 down = new Vector2(sideX, busY);
+                Vector2 bus = new Vector2(groupHubRect.center.x, busY);
+                segments.Add(new PackageGraphStructuralMembershipSegment(start, side));
+                segments.Add(new PackageGraphStructuralMembershipSegment(side, down));
+                segments.Add(new PackageGraphStructuralMembershipSegment(down, bus));
+                return;
+            }
+
+            Vector2 startDirect = GetHubBorderPoint(groupHubRect, new Vector2(groupHubRect.center.x, busY), 2f);
+            segments.Add(new PackageGraphStructuralMembershipSegment(
+                startDirect,
+                new Vector2(groupHubRect.center.x, busY)));
+        }
+
+        private static float GetBusAxis(float categoryAxis, float packageAxis)
+        {
+            return Mathf.Lerp(categoryAxis, packageAxis, 0.52f);
+        }
+
+        private static Vector2 CalculateAverageRectCenter(IEnumerable<Rect> rects)
+        {
+            Vector2 total = Vector2.zero;
+            int count = 0;
+
+            foreach (Rect rect in rects ?? Array.Empty<Rect>())
+            {
+                total += rect.center;
+                count++;
+            }
+
+            return count == 0 ? Vector2.zero : total / count;
+        }
+
+        private static Vector2 GetHubBorderPoint(Rect hubRect, Vector2 externalPoint, float padding)
+        {
+            Vector2 center = hubRect.center;
+            Vector2 direction = externalPoint - center;
+
+            if (direction.sqrMagnitude <= 0.01f)
+            {
+                return center;
+            }
+
+            return center + direction.normalized *
+                   (Mathf.Min(hubRect.width, hubRect.height) * 0.5f + Mathf.Max(0f, padding));
+        }
+
+        private static void DrawStructuralMembershipRoute(
+            Painter2D painter,
+            PackageGraphStructuralMembershipRoute route,
+            bool emphasized,
+            bool muted)
+        {
+            Color color = emphasized
+                ? new Color(0.48f, 0.80f, 0.84f, 0.26f)
+                : muted
+                    ? new Color(0.38f, 0.55f, 0.64f, 0.024f)
+                    : new Color(0.38f, 0.62f, 0.70f, 0.078f);
+            painter.strokeColor = color;
+            painter.lineWidth = emphasized ? 1.15f : 0.72f;
+
+            foreach (PackageGraphStructuralMembershipSegment segment in route.Segments)
+            {
+                painter.BeginPath();
+                painter.MoveTo(segment.From);
+                painter.LineTo(segment.To);
+                painter.Stroke();
             }
         }
 
@@ -6921,7 +7174,7 @@ namespace Deucarian.PackageInstaller.Editor
             EnableInClassList("dpi-graph-group--hover-dimmed", hoverDimmed);
             bool hasBackAffordance = !string.IsNullOrWhiteSpace(backTooltip);
             EnableInClassList("dpi-graph-group--has-back", hasBackAffordance);
-            tooltip = hasBackAffordance ? backTooltip : GetTooltip(groupNode);
+            tooltip = hasBackAffordance ? backTooltip : groupNode.Group.DisplayName;
 
             if (interactionsEnabled)
             {
@@ -6955,15 +7208,6 @@ namespace Deucarian.PackageInstaller.Editor
             icon.AddToClassList("dpi-graph-group__icon");
             symbol.Add(icon);
 
-            if (hasBackAffordance)
-            {
-                Label back = new Label("\u2039");
-                back.AddToClassList("dpi-graph-group__back-hint");
-                back.pickingMode = PickingMode.Ignore;
-                back.tooltip = backTooltip;
-                symbol.Add(back);
-            }
-
             VisualElement caption = new VisualElement();
             caption.AddToClassList("dpi-graph-group__caption");
             caption.style.position = Position.Absolute;
@@ -6972,9 +7216,24 @@ namespace Deucarian.PackageInstaller.Editor
             caption.style.width = groupNode.Rect.width;
             Add(caption);
 
+            VisualElement titleRow = new VisualElement();
+            titleRow.AddToClassList("dpi-graph-category-caption-row");
+            caption.Add(titleRow);
+
+            if (hasBackAffordance)
+            {
+                Label back = new Label("\u2039");
+                back.AddToClassList("dpi-graph-back-hint");
+                back.AddToClassList("dpi-graph-back-hint--category");
+                back.AddToClassList("dpi-graph-group__back-hint");
+                back.pickingMode = PickingMode.Ignore;
+                back.tooltip = backTooltip;
+                titleRow.Add(back);
+            }
+
             Label title = new Label(GetTitle(groupNode));
             title.AddToClassList("dpi-graph-group__title");
-            caption.Add(title);
+            titleRow.Add(title);
 
             string subtitleText = groupNode.Collapsed && !string.IsNullOrWhiteSpace(groupNode.SummaryLabel)
                 ? groupNode.SummaryLabel
@@ -7023,18 +7282,6 @@ namespace Deucarian.PackageInstaller.Editor
                 default:
                     return "\u25CB";
             }
-        }
-
-        private static string GetTooltip(PackageGraphGroupLayoutNode groupNode)
-        {
-            string description = string.IsNullOrWhiteSpace(groupNode.Group.Description)
-                ? "Structural package group."
-                : groupNode.Group.Description;
-            return groupNode.Group.DisplayName + "\n" +
-                   description + "\n" +
-                   groupNode.PackageCount + " packages, " +
-                   groupNode.InstalledCount + " installed, " +
-                   groupNode.UpdateCount + " updates";
         }
 
         private static string GetRingClass(PackageGraphLayoutRing ring)
@@ -7100,7 +7347,7 @@ namespace Deucarian.PackageInstaller.Editor
             EnableInClassList("dpi-graph-node--missing", !node.IsRegistered);
             bool hasBackAffordance = selected && !string.IsNullOrWhiteSpace(backTooltip);
             EnableInClassList("dpi-graph-node--has-back", hasBackAffordance);
-            tooltip = GetTooltip(node);
+            tooltip = GetCompactTooltip(node);
 
             VisualElement statusRail = new VisualElement();
             statusRail.AddToClassList("dpi-graph-node__status-rail");
@@ -7146,6 +7393,8 @@ namespace Deucarian.PackageInstaller.Editor
                 {
                     tooltip = backTooltip
                 };
+                backHint.AddToClassList("dpi-graph-back-hint");
+                backHint.AddToClassList("dpi-graph-back-hint--package");
                 backHint.AddToClassList("dpi-graph-node__back-hint");
                 backHint.pickingMode = PickingMode.Ignore;
                 header.Add(backHint);
@@ -7403,18 +7652,13 @@ namespace Deucarian.PackageInstaller.Editor
             return "dpi-graph-node__badge--" + GetStatusClass(status);
         }
 
-        private static string GetTooltip(PackageGraphNode node)
+        private static string GetCompactTooltip(PackageGraphNode node)
         {
             string status = string.IsNullOrWhiteSpace(node.UpdateStatusLabel)
                 ? GetStatusLabel(node)
                 : node.UpdateStatusLabel;
-            string description = string.IsNullOrWhiteSpace(node.Description)
-                ? node.PackageId
-                : node.Description;
 
             return node.DisplayName + "\n" +
-                   description + "\n" +
-                   node.PackageId + "\n" +
                    "Status: " + status;
         }
     }
