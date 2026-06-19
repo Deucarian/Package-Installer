@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.33 - 2026-06-19
+
+- Made manual update checks refetch the remote registry before computing package update state.
+
 ## 1.1.32 - 2026-06-19
 
 - Synced the bundled fallback registry with the remote registry entry for Deucarian UI Flow.

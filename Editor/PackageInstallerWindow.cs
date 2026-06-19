@@ -988,6 +988,7 @@ namespace Deucarian.PackageInstaller.Editor
         private void CheckForUpdates()
         {
             _checkUpdatesAfterDetectionRefresh = true;
+            PackageRegistryProvider.RefreshRemote();
             _packageUpdateCheckService.InvalidateAll();
 
             if (!_packageDetectionService.IsRefreshing)
