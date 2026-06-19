@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.34 - 2026-06-19
+
+- Made opening the Package Installer window refetch the remote registry instead of only using the first registry refresh from the editor session.
+
 ## 1.1.33 - 2026-06-19
 
 - Made manual update checks refetch the remote registry before computing package update state.

@@ -73,7 +73,7 @@ The installer loads the bundled `PackageRegistry.json` first so it works offline
 
 If the remote registry succeeds and validates, the window uses it. If it fails, the bundled registry stays active and the header shows that the remote registry failed.
 
-The header `Refresh` and `Check Updates` buttons refetch the remote registry, so newly registered packages and package reference changes can appear without restarting Unity.
+Opening the Package Installer window and using the header `Refresh` or `Check Updates` buttons refetch the remote registry, so newly registered packages and package reference changes can appear without restarting Unity.
 
 Remote registry validation also checks each package entry against the target package's `package.json` name so installed-package detection uses Unity's exact package IDs. If a target manifest cannot be fetched, the validation message includes the exact `package.json` URL that failed.
 

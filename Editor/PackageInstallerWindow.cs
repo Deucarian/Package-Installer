@@ -221,7 +221,7 @@ namespace Deucarian.PackageInstaller.Editor
                 packageDefinition => _packageUpdateCheckService != null
                     ? _packageUpdateCheckService.GetStatus(packageDefinition, GetSelectedChannel(packageDefinition))
                     : null);
-            PackageRegistryProvider.EnsureLoaded();
+            PackageRegistryProvider.RefreshRemote();
             EnsureValidSelection();
             _operationDetailsExpanded = EditorPrefs.GetBool(GetOperationDrawerPreferenceKey(), false);
 
