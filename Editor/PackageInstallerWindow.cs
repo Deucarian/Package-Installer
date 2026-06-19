@@ -20,7 +20,7 @@ namespace Deucarian.PackageInstaller.Editor
     {
         private const string WindowTitle = "Package Installer";
         private const string PackageId = "com.deucarian.package-installer";
-        private const string PackageVersion = "1.1.38";
+        private const string PackageVersion = "1.1.39";
         private const float MinWindowWidth = 820f;
         private const float MinWindowHeight = 650f;
         private const float CompactLayoutWidth = 1180f;
@@ -913,6 +913,7 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
+            _selectionKind = SelectionKind.Package;
             _selectedPackageId = string.Empty;
             _graphFocusedPackageId = string.Empty;
             _graphFocusedGroupId = string.Empty;
@@ -930,7 +931,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (IsSelected(packageDefinition, selectionKind))
             {
-                ClearGraphSelection();
+                NavigateGraphToPackageOwner(packageDefinition.PackageId);
                 return;
             }
 
@@ -944,39 +945,30 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void ClearGraphSelection()
         {
-            if (string.IsNullOrWhiteSpace(_selectedPackageId) &&
-                string.IsNullOrWhiteSpace(_graphFocusedPackageId) &&
-                string.IsNullOrWhiteSpace(_graphFocusedGroupId))
-            {
-                return;
-            }
-
-            _selectedPackageId = string.Empty;
-            _graphFocusedPackageId = string.Empty;
-            _graphFocusedGroupId = string.Empty;
-            _detailsScrollPosition = Vector2.zero;
-            RefreshGraphView();
-            Repaint();
+            NavigateGraphToRoot();
         }
 
         private void HandleGraphRootFocused()
         {
-            ClearGraphSelection();
+            NavigateGraphToRoot();
         }
 
         private void HandleGraphGroupFocused(PackageGraphGroup group)
         {
             if (group == null)
             {
+                NavigateGraphToRoot();
                 return;
             }
 
-            _selectedPackageId = string.Empty;
-            _graphFocusedPackageId = string.Empty;
-            _graphFocusedGroupId = group.Id;
-            _detailsScrollPosition = Vector2.zero;
-            RefreshGraphView();
-            Repaint();
+            if (string.Equals(group.Id, _graphFocusedGroupId, StringComparison.OrdinalIgnoreCase) &&
+                string.IsNullOrWhiteSpace(_graphFocusedPackageId))
+            {
+                NavigateGraphToGroupOrRoot(GetGraphParentGroupId(group.Id));
+                return;
+            }
+
+            NavigateGraphToGroup(group.Id);
         }
 
         private void HandleGraphBackNavigation()
@@ -984,24 +976,62 @@ namespace Deucarian.PackageInstaller.Editor
             if (!string.IsNullOrWhiteSpace(_graphFocusedPackageId))
             {
                 string parentGroupId = GetGraphPackageGroupId(_graphFocusedPackageId);
-                _selectedPackageId = string.Empty;
-                _graphFocusedPackageId = string.Empty;
-                _graphFocusedGroupId = parentGroupId;
-                _detailsScrollPosition = Vector2.zero;
-                RefreshGraphView();
-                Repaint();
+                NavigateGraphToGroupOrRoot(parentGroupId);
                 return;
             }
 
             if (!string.IsNullOrWhiteSpace(_graphFocusedGroupId))
             {
                 string parentGroupId = GetGraphParentGroupId(_graphFocusedGroupId);
-                _selectedPackageId = string.Empty;
-                _graphFocusedGroupId = parentGroupId;
-                _detailsScrollPosition = Vector2.zero;
-                RefreshGraphView();
-                Repaint();
+                NavigateGraphToGroupOrRoot(parentGroupId);
+                return;
             }
+
+            NavigateGraphToRoot();
+        }
+
+        private void NavigateGraphToPackageOwner(string packageId)
+        {
+            NavigateGraphToGroupOrRoot(GetGraphPackageGroupId(packageId));
+        }
+
+        private void NavigateGraphToGroupOrRoot(string groupId)
+        {
+            if (string.IsNullOrWhiteSpace(groupId))
+            {
+                NavigateGraphToRoot();
+                return;
+            }
+
+            NavigateGraphToGroup(groupId);
+        }
+
+        private void NavigateGraphToGroup(string groupId)
+        {
+            if (string.IsNullOrWhiteSpace(groupId))
+            {
+                NavigateGraphToRoot();
+                return;
+            }
+
+            _selectionKind = SelectionKind.Package;
+            _selectedPackageId = string.Empty;
+            _graphFocusedPackageId = string.Empty;
+            _graphFocusedGroupId = groupId;
+            _detailsScrollPosition = Vector2.zero;
+            RefreshGraphView();
+            Repaint();
+        }
+
+        private void NavigateGraphToRoot()
+        {
+            _selectionKind = SelectionKind.Package;
+            _selectedPackageId = string.Empty;
+            _graphFocusedPackageId = string.Empty;
+            _graphFocusedGroupId = string.Empty;
+            _detailsScrollPosition = Vector2.zero;
+            RefreshGraphView();
+            Repaint();
         }
 
         private void HandleRootKeyDown(KeyDownEvent evt)

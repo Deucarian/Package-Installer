@@ -107,7 +107,14 @@ namespace Deucarian.PackageInstaller.Editor
             };
             _viewport = new PackageGraphViewport(selectionCleared);
             _viewport.ViewportSizeChanged += HandleViewportSizeChanged;
-            _viewport.ZoomChanged += zoom => _canvas.SetViewportZoom(zoom);
+            _viewport.ZoomChanged += zoom =>
+            {
+                if (!_viewport.IsCameraTransitionActive)
+                {
+                    _canvas.SetViewportZoom(zoom);
+                }
+            };
+            _viewport.CameraTransitionCompleted += zoom => _canvas.SetViewportZoom(zoom);
             _viewport.ContextMenuRequested += ShowContextMenu;
             _viewport.SetContent(_canvas);
 
@@ -299,11 +306,36 @@ namespace Deucarian.PackageInstaller.Editor
             string previousLayoutFocusPackageId = _canvas.LayoutFocusPackageId;
             string previousLayoutFocusGroupId = _canvas.LayoutFocusGroupId;
             bool shouldForceInitialFrame = !_hasAppliedGraphFrame && graph != null && graph.Nodes.Count > 0;
+            PackageGraphTransitionAnchor[] anchorCandidates = CreateTransitionAnchorCandidates(
+                graph,
+                selectedPackageId,
+                focusedPackageId,
+                focusedGroupId,
+                previousLayoutFocusPackageId,
+                previousLayoutFocusGroupId);
+            Dictionary<PackageGraphTransitionAnchor, Vector2> sourceAnchorCenters =
+                CaptureTransitionAnchorCenters(anchorCandidates);
+            Dictionary<PackageGraphTransitionAnchor, Vector2> sourceAnchorScreens =
+                sourceAnchorCenters.ToDictionary(
+                    pair => pair.Key,
+                    pair => _viewport.WorldToViewport(pair.Value));
             _currentGraph = graph;
             _canvas.SetGraph(graph, selectedPackageId, focusedPackageId, focusedGroupId, actionsEnabled, visiblePackageIds);
-            _viewport.SetLayoutMode(_canvas.LayoutMode);
-            _canvas.SetViewportZoom(_viewport.Zoom);
-            _viewport.SetContentSize(_canvas.ContentSize.x, _canvas.ContentSize.y);
+            bool layoutTargetChanged =
+                !string.Equals(
+                    previousLayoutFocusPackageId,
+                    _canvas.LayoutFocusPackageId,
+                    StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(
+                    previousLayoutFocusGroupId,
+                    _canvas.LayoutFocusGroupId,
+                    StringComparison.OrdinalIgnoreCase);
+            _viewport.SetLayoutMode(_canvas.LayoutMode, !layoutTargetChanged);
+            if (!layoutTargetChanged)
+            {
+                _canvas.SetViewportZoom(_viewport.Zoom);
+            }
+            _viewport.SetContentSize(_canvas.ContentSize.x, _canvas.ContentSize.y, !layoutTargetChanged);
             _viewport.SetActiveBounds(_canvas.GetContentBounds());
             _viewport.EnsureInitialFrame(_canvas.GetContentBounds(), shouldForceInitialFrame);
             UpdateLegend(_canvas.LayoutMode);
@@ -314,20 +346,151 @@ namespace Deucarian.PackageInstaller.Editor
             UpdateBreadcrumbs(graph, focusedGroupId, focusedPackageId);
             UpdateCategoryRail(graph, focusedGroupId, focusedPackageId);
 
-            bool layoutTargetChanged =
-                !string.Equals(
-                    previousLayoutFocusPackageId,
-                    _canvas.LayoutFocusPackageId,
-                    StringComparison.OrdinalIgnoreCase) ||
-                !string.Equals(
-                    previousLayoutFocusGroupId,
-                    _canvas.LayoutFocusGroupId,
-                    StringComparison.OrdinalIgnoreCase);
-
-            if (layoutTargetChanged)
+            if (layoutTargetChanged && !shouldForceInitialFrame)
             {
-                FitCurrentContext();
+                AnimateToCurrentContext(anchorCandidates, sourceAnchorCenters, sourceAnchorScreens);
             }
+        }
+
+        private PackageGraphTransitionAnchor[] CreateTransitionAnchorCandidates(
+            PackageGraphModel graph,
+            string selectedPackageId,
+            string focusedPackageId,
+            string focusedGroupId,
+            string previousFocusedPackageId,
+            string previousFocusedGroupId)
+        {
+            List<PackageGraphTransitionAnchor> anchors = new List<PackageGraphTransitionAnchor>();
+            AddPackageAnchor(anchors, focusedPackageId);
+            AddPackageAnchor(anchors, selectedPackageId);
+            AddPackageAnchor(anchors, previousFocusedPackageId);
+            AddGroupAnchor(anchors, focusedGroupId);
+            AddPackageGroupAnchors(graph, anchors, focusedPackageId);
+            AddPackageGroupAnchors(graph, anchors, selectedPackageId);
+            AddPackageGroupAnchors(graph, anchors, previousFocusedPackageId);
+            AddGroupAnchor(anchors, previousFocusedGroupId);
+            AddAncestorGroupAnchors(graph, anchors, focusedGroupId);
+            AddAncestorGroupAnchors(graph, anchors, previousFocusedGroupId);
+            AddAnchor(anchors, PackageGraphTransitionAnchor.Root);
+            return anchors.ToArray();
+        }
+
+        private static void AddPackageAnchor(
+            ICollection<PackageGraphTransitionAnchor> anchors,
+            string packageId)
+        {
+            if (!string.IsNullOrWhiteSpace(packageId))
+            {
+                AddAnchor(
+                    anchors,
+                    new PackageGraphTransitionAnchor(PackageGraphTransitionAnchorKind.Package, packageId.Trim()));
+            }
+        }
+
+        private static void AddGroupAnchor(
+            ICollection<PackageGraphTransitionAnchor> anchors,
+            string groupId)
+        {
+            if (!string.IsNullOrWhiteSpace(groupId))
+            {
+                AddAnchor(
+                    anchors,
+                    new PackageGraphTransitionAnchor(PackageGraphTransitionAnchorKind.Group, groupId.Trim()));
+            }
+        }
+
+        private static void AddAnchor(
+            ICollection<PackageGraphTransitionAnchor> anchors,
+            PackageGraphTransitionAnchor anchor)
+        {
+            if (!anchors.Contains(anchor))
+            {
+                anchors.Add(anchor);
+            }
+        }
+
+        private static void AddPackageGroupAnchors(
+            PackageGraphModel graph,
+            ICollection<PackageGraphTransitionAnchor> anchors,
+            string packageId)
+        {
+            if (graph == null ||
+                string.IsNullOrWhiteSpace(packageId) ||
+                !graph.TryGetNode(packageId, out PackageGraphNode node))
+            {
+                return;
+            }
+
+            AddGroupAnchor(anchors, node.GroupId);
+            AddAncestorGroupAnchors(graph, anchors, node.GroupId);
+        }
+
+        private static void AddAncestorGroupAnchors(
+            PackageGraphModel graph,
+            ICollection<PackageGraphTransitionAnchor> anchors,
+            string groupId)
+        {
+            if (graph == null || string.IsNullOrWhiteSpace(groupId))
+            {
+                return;
+            }
+
+            HashSet<string> visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            string currentGroupId = groupId;
+
+            while (!string.IsNullOrWhiteSpace(currentGroupId) &&
+                   visited.Add(currentGroupId) &&
+                   graph.TryGetGroup(currentGroupId, out PackageGraphGroup group))
+            {
+                AddGroupAnchor(anchors, group.Id);
+                currentGroupId = group.ParentGroupId;
+            }
+        }
+
+        private Dictionary<PackageGraphTransitionAnchor, Vector2> CaptureTransitionAnchorCenters(
+            IEnumerable<PackageGraphTransitionAnchor> anchors)
+        {
+            Dictionary<PackageGraphTransitionAnchor, Vector2> centers =
+                new Dictionary<PackageGraphTransitionAnchor, Vector2>();
+
+            foreach (PackageGraphTransitionAnchor anchor in anchors)
+            {
+                if (_canvas.TryGetTransitionAnchorCenter(anchor, out Vector2 center))
+                {
+                    centers[anchor] = center;
+                }
+            }
+
+            return centers;
+        }
+
+        private void AnimateToCurrentContext(
+            IEnumerable<PackageGraphTransitionAnchor> anchorCandidates,
+            IReadOnlyDictionary<PackageGraphTransitionAnchor, Vector2> sourceAnchorCenters,
+            IReadOnlyDictionary<PackageGraphTransitionAnchor, Vector2> sourceAnchorScreens)
+        {
+            Rect bounds = _canvas.GetContentBounds();
+            _viewport.SetActiveBounds(bounds);
+
+            foreach (PackageGraphTransitionAnchor anchor in anchorCandidates)
+            {
+                if (sourceAnchorCenters != null &&
+                    sourceAnchorScreens != null &&
+                    sourceAnchorCenters.TryGetValue(anchor, out Vector2 sourceWorld) &&
+                    sourceAnchorScreens.TryGetValue(anchor, out Vector2 sourceScreen) &&
+                    _canvas.TryGetTransitionAnchorCenter(anchor, out Vector2 targetWorld))
+                {
+                    _viewport.AnimateToContent(bounds, sourceWorld, targetWorld, sourceScreen);
+                    return;
+                }
+            }
+
+            Vector2 activeCenter = _canvas.GetActiveCenter();
+            _viewport.AnimateToContent(
+                bounds,
+                activeCenter,
+                activeCenter,
+                _viewport.WorldToViewport(activeCenter));
         }
 
         private void HandleViewportSizeChanged(Vector2 viewportSize)
@@ -337,14 +500,29 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            _viewport.SetLayoutMode(_canvas.LayoutMode);
-            _viewport.SetContentSize(_canvas.ContentSize.x, _canvas.ContentSize.y);
+            _viewport.SetLayoutMode(_canvas.LayoutMode, !_viewport.IsCameraTransitionActive);
+            _viewport.SetContentSize(
+                _canvas.ContentSize.x,
+                _canvas.ContentSize.y,
+                !_viewport.IsCameraTransitionActive);
             _viewport.SetActiveBounds(_canvas.GetContentBounds());
-            _viewport.EnsureInitialFrame(_canvas.GetContentBounds(), force: true);
+            _viewport.EnsureInitialFrame(_canvas.GetContentBounds(), force: !_hasAppliedGraphFrame);
         }
 
         private void FitCurrentContext()
         {
+            if (_viewport.IsCameraTransitionActive || _canvas.InteractionsLocked)
+            {
+                Rect animatedBounds = _canvas.GetContentBounds();
+                Vector2 activeCenter = _canvas.GetActiveCenter();
+                _viewport.AnimateToContent(
+                    animatedBounds,
+                    activeCenter,
+                    activeCenter,
+                    _viewport.WorldToViewport(activeCenter));
+                return;
+            }
+
             for (int iteration = 0; iteration < 4; iteration++)
             {
                 Rect beforeBounds = _canvas.GetContentBounds();
@@ -1243,12 +1421,21 @@ namespace Deucarian.PackageInstaller.Editor
         private Rect _activeBounds = default(Rect);
         private bool _initialized;
         private bool _hasInitialBounds;
+        private bool _cameraTransitionActive;
         private bool _panCandidate;
         private bool _panning;
         private bool _panMoved;
         private int _panButton = -1;
         private float _requiredFitZoom = 1f;
         private bool _suppressNextClick;
+        private double _cameraTransitionStartedAt;
+        private IVisualElementScheduledItem _cameraTransitionItem;
+        private PackageGraphCameraState _cameraTransitionSource;
+        private PackageGraphCameraState _cameraTransitionTarget;
+        private Vector2 _cameraTransitionSourceAnchorWorld;
+        private Vector2 _cameraTransitionTargetAnchorWorld;
+        private Vector2 _cameraTransitionSourceAnchorScreen;
+        private Vector2 _cameraTransitionTargetAnchorScreen;
 
         public PackageGraphViewport(Action selectionCleared)
         {
@@ -1296,22 +1483,26 @@ namespace Deucarian.PackageInstaller.Editor
 
         public event Action<float> ZoomChanged;
 
+        public event Action<float> CameraTransitionCompleted;
+
         public event Action<PackageGraphContextMenuRequest> ContextMenuRequested;
 
         public float Zoom => _zoom;
 
         public Vector2 Pan => _pan;
 
+        public bool IsCameraTransitionActive => _cameraTransitionActive;
+
         internal float EffectiveMinZoomForTests => GetMinZoom();
 
         internal float RequiredFitZoomForTests => _requiredFitZoom;
 
-        public void SetLayoutMode(PackageGraphLayoutMode layoutMode)
+        public void SetLayoutMode(PackageGraphLayoutMode layoutMode, bool clampZoom = true)
         {
             _layoutMode = layoutMode;
             UpdateRequiredFitZoom(_activeBounds);
 
-            if (_zoom < GetMinZoom())
+            if (clampZoom && _zoom < GetMinZoom())
             {
                 _zoom = GetMinZoom();
                 ClampAndApplyTransform();
@@ -1328,14 +1519,22 @@ namespace Deucarian.PackageInstaller.Editor
             }
         }
 
-        public void SetContentSize(float width, float height)
+        public void SetContentSize(float width, float height, bool clamp = true)
         {
             _contentWidth = Mathf.Max(1f, width);
             _contentHeight = Mathf.Max(1f, height);
             _contentRoot.style.width = _contentWidth;
             _contentRoot.style.height = _contentHeight;
             UpdateRequiredFitZoom(_activeBounds);
-            ClampAndApplyTransform();
+
+            if (clamp)
+            {
+                ClampAndApplyTransform();
+            }
+            else
+            {
+                ApplyTransform();
+            }
         }
 
         public void SetActiveBounds(Rect worldBounds)
@@ -1370,14 +1569,59 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
+            StopCameraTransition();
             Rect bounds = NormalizeBounds(worldBounds);
             SetActiveBounds(bounds);
-            float fitZoom = CalculateFitZoom(bounds);
-            _zoom = Mathf.Clamp(fitZoom, GetMinZoom(), MaxZoom);
-            _pan = GetViewportCenter() - bounds.center * _zoom;
+            PackageGraphCameraState camera = CalculateFitCamera(bounds);
+            _zoom = camera.Zoom;
+            _pan = camera.Pan;
             _initialized = true;
             ClampAndApplyTransform();
             ZoomChanged?.Invoke(_zoom);
+        }
+
+        public void AnimateToContent(
+            Rect worldBounds,
+            Vector2 sourceAnchorWorld,
+            Vector2 targetAnchorWorld,
+            Vector2 sourceAnchorScreen)
+        {
+            if (!HasViewportSize())
+            {
+                return;
+            }
+
+            Rect bounds = NormalizeBounds(worldBounds);
+            SetActiveBounds(bounds);
+            PackageGraphCameraState targetCamera = CalculateFitCamera(bounds);
+            PackageGraphCameraState sourceCamera = new PackageGraphCameraState(_pan, _zoom);
+            _cameraTransitionSource = sourceCamera;
+            _cameraTransitionTarget = targetCamera;
+            _cameraTransitionSourceAnchorWorld = sourceAnchorWorld;
+            _cameraTransitionTargetAnchorWorld = targetAnchorWorld;
+            _cameraTransitionSourceAnchorScreen = sourceAnchorScreen;
+            _cameraTransitionTargetAnchorScreen = targetCamera.WorldToViewport(targetAnchorWorld);
+            _cameraTransitionStartedAt = EditorApplication.timeSinceStartup;
+            _cameraTransitionActive = true;
+            _initialized = true;
+
+            if (_cameraTransitionItem == null)
+            {
+                _cameraTransitionItem = schedule.Execute(UpdateCameraTransition)
+                    .Every((long)(PackageGraphTransition.DefaultDurationSeconds * 1000f / 18f));
+            }
+
+            _cameraTransitionItem.Resume();
+            UpdateCameraTransition();
+        }
+
+        public PackageGraphCameraState CalculateFitCamera(Rect worldBounds)
+        {
+            Rect bounds = NormalizeBounds(worldBounds);
+            float fitZoom = CalculateFitZoom(bounds);
+            float zoom = Mathf.Clamp(fitZoom, GetMinZoom(), MaxZoom);
+            Vector2 pan = GetViewportCenter() - bounds.center * zoom;
+            return new PackageGraphCameraState(ClampPan(pan, zoom), zoom);
         }
 
         public void ResetZoom()
@@ -1392,6 +1636,7 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
+            StopCameraTransition();
             Vector2 viewportCenter = GetViewportCenter();
             _zoom = 1f;
             _pan = viewportCenter - worldCenter * _zoom;
@@ -1407,6 +1652,7 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
+            StopCameraTransition();
             _pan = GetViewportCenter() - worldPoint * _zoom;
             _initialized = true;
             ClampAndApplyTransform();
@@ -1552,11 +1798,58 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             Vector2 worldPoint = ViewportToWorld(viewportPoint);
+            StopCameraTransition();
             _zoom = nextZoom;
             _pan = viewportPoint - worldPoint * _zoom;
             _initialized = true;
             ClampAndApplyTransform();
             ZoomChanged?.Invoke(_zoom);
+        }
+
+        private void UpdateCameraTransition()
+        {
+            if (!_cameraTransitionActive)
+            {
+                return;
+            }
+
+            float elapsed = (float)(EditorApplication.timeSinceStartup - _cameraTransitionStartedAt);
+            float t = Mathf.Clamp01(elapsed / PackageGraphTransition.DefaultDurationSeconds);
+            PackageGraphCameraState camera = PackageGraphTransition.EvaluateAnchoredCamera(
+                _cameraTransitionSource,
+                _cameraTransitionTarget,
+                _cameraTransitionSourceAnchorWorld,
+                _cameraTransitionTargetAnchorWorld,
+                _cameraTransitionSourceAnchorScreen,
+                _cameraTransitionTargetAnchorScreen,
+                t);
+            _zoom = camera.Zoom;
+            _pan = ClampPan(camera.Pan, _zoom);
+            _initialized = true;
+            ApplyTransform();
+
+            if (t < 1f)
+            {
+                return;
+            }
+
+            _cameraTransitionActive = false;
+            _cameraTransitionItem?.Pause();
+            _zoom = _cameraTransitionTarget.Zoom;
+            _pan = _cameraTransitionTarget.Pan;
+            ClampAndApplyTransform();
+            CameraTransitionCompleted?.Invoke(_zoom);
+        }
+
+        private void StopCameraTransition()
+        {
+            if (!_cameraTransitionActive)
+            {
+                return;
+            }
+
+            _cameraTransitionActive = false;
+            _cameraTransitionItem?.Pause();
         }
 
         private void ClampAndApplyTransform()
@@ -1583,8 +1876,19 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            _pan.x = ClampAxis(_pan.x, _contentWidth * _zoom, contentRect.width);
-            _pan.y = ClampAxis(_pan.y, _contentHeight * _zoom, contentRect.height);
+            _pan = ClampPan(_pan, _zoom);
+        }
+
+        private Vector2 ClampPan(Vector2 pan, float zoom)
+        {
+            if (!HasViewportSize())
+            {
+                return pan;
+            }
+
+            pan.x = ClampAxis(pan.x, _contentWidth * zoom, contentRect.width);
+            pan.y = ClampAxis(pan.y, _contentHeight * zoom, contentRect.height);
+            return pan;
         }
 
         private static float ClampAxis(float pan, float scaledContentSize, float viewportSize)
@@ -2005,6 +2309,59 @@ namespace Deucarian.PackageInstaller.Editor
             ? _layoutResult.NodeRects
             : new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
 
+        public bool TryGetTransitionAnchorCenter(
+            PackageGraphTransitionAnchor anchor,
+            out Vector2 center)
+        {
+            switch (anchor.Kind)
+            {
+                case PackageGraphTransitionAnchorKind.Package:
+                    if (_animatedNodeRects.TryGetValue(anchor.Id, out Rect animatedNodeRect))
+                    {
+                        center = animatedNodeRect.center;
+                        return true;
+                    }
+
+                    if (_layoutResult != null &&
+                        _layoutResult.NodeRects.TryGetValue(anchor.Id, out Rect nodeRect))
+                    {
+                        center = nodeRect.center;
+                        return true;
+                    }
+
+                    break;
+                case PackageGraphTransitionAnchorKind.Group:
+                    if (_animatedGroupRects.TryGetValue(anchor.Id, out Rect animatedGroupRect))
+                    {
+                        center = animatedGroupRect.center;
+                        return true;
+                    }
+
+                    if (_layoutResult != null)
+                    {
+                        PackageGraphGroupLayoutNode groupNode = _layoutResult.GroupNodes.FirstOrDefault(candidate =>
+                            candidate != null &&
+                            string.Equals(candidate.GroupId, anchor.Id, StringComparison.OrdinalIgnoreCase));
+
+                        if (groupNode != null)
+                        {
+                            center = groupNode.Rect.center;
+                            return true;
+                        }
+                    }
+
+                    break;
+                default:
+                    center = _layoutResult != null
+                        ? _layoutResult.HubRect.center
+                        : PackageGraphLayout.GraphCenter;
+                    return true;
+            }
+
+            center = default(Vector2);
+            return false;
+        }
+
         public bool SetViewportSize(Vector2 viewportSize)
         {
             if (viewportSize.x <= 1f || viewportSize.y <= 1f)
@@ -2268,7 +2625,7 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 Rect start = previousRects != null && previousRects.TryGetValue(target.Key, out Rect previous)
                     ? previous
-                    : target.Value;
+                    : CreateEnteringNodeStartRect(target.Key, target.Value, previousGroupRects);
                 _transitionStartRects[target.Key] = start;
                 _animatedNodeRects[target.Key] = start;
 
@@ -2287,7 +2644,7 @@ namespace Deucarian.PackageInstaller.Editor
 
                 Rect start = previousGroupRects != null && previousGroupRects.TryGetValue(target.GroupId, out Rect previous)
                     ? previous
-                    : target.Rect;
+                    : CreateEnteringGroupStartRect(target, previousGroupRects);
                 _transitionStartGroupRects[target.GroupId] = start;
                 _animatedGroupRects[target.GroupId] = start;
 
@@ -2361,6 +2718,73 @@ namespace Deucarian.PackageInstaller.Editor
                 ApplyAnimatedLayout();
                 Rebuild();
             }
+        }
+
+        private Rect CreateEnteringNodeStartRect(
+            string packageId,
+            Rect targetRect,
+            IReadOnlyDictionary<string, Rect> previousGroupRects)
+        {
+            if (_visibleGraph != null &&
+                _visibleGraph.TryGetNode(packageId, out PackageGraphNode node) &&
+                TryGetPreviousGroupRect(node.GroupId, previousGroupRects, out Rect groupRect))
+            {
+                return CenterRectOn(targetRect, groupRect.center);
+            }
+
+            return CenterRectOn(targetRect, GetActiveCenter());
+        }
+
+        private Rect CreateEnteringGroupStartRect(
+            PackageGraphGroupLayoutNode target,
+            IReadOnlyDictionary<string, Rect> previousGroupRects)
+        {
+            if (target != null &&
+                target.Group != null &&
+                TryGetPreviousGroupRect(target.Group.ParentGroupId, previousGroupRects, out Rect parentRect))
+            {
+                return CenterRectOn(target.Rect, parentRect.center);
+            }
+
+            return CenterRectOn(target != null ? target.Rect : default(Rect), GetActiveCenter());
+        }
+
+        private bool TryGetPreviousGroupRect(
+            string groupId,
+            IReadOnlyDictionary<string, Rect> previousGroupRects,
+            out Rect groupRect)
+        {
+            HashSet<string> visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            string currentGroupId = groupId;
+
+            while (!string.IsNullOrWhiteSpace(currentGroupId) && visited.Add(currentGroupId))
+            {
+                if (previousGroupRects != null &&
+                    previousGroupRects.TryGetValue(currentGroupId, out groupRect))
+                {
+                    return true;
+                }
+
+                if (_visibleGraph == null ||
+                    !_visibleGraph.TryGetGroup(currentGroupId, out PackageGraphGroup group))
+                {
+                    break;
+                }
+
+                currentGroupId = group.ParentGroupId;
+            }
+
+            groupRect = default(Rect);
+            return false;
+        }
+
+        private static Rect CenterRectOn(Rect rect, Vector2 center)
+        {
+            return new Rect(
+                center.x - rect.width * 0.5f,
+                center.y - rect.height * 0.5f,
+                rect.width,
+                rect.height);
         }
 
         private void SetInteractionsLocked(bool locked)

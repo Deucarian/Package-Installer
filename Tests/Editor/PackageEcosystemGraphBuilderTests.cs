@@ -190,11 +190,19 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                     "state-data",
                     "runtime-services",
                     "experience-interaction",
+                    "ui-presentation",
+                    "world-interaction",
                     "tools-quality",
                     "integrations",
                     "suites"
                 },
                 graph.Groups.Select(group => group.Id).ToArray());
+            Assert.AreEqual(
+                "experience-interaction",
+                graph.Groups.Single(group => group.Id == "ui-presentation").ParentGroupId);
+            Assert.AreEqual(
+                "experience-interaction",
+                graph.Groups.Single(group => group.Id == "world-interaction").ParentGroupId);
             Assert.IsFalse(graph.Groups.Any(group => string.Equals(group.DisplayName, "Foundation", StringComparison.OrdinalIgnoreCase)));
             Assert.AreEqual("infrastructure", graph.Nodes.Single(node => node.PackageId == "com.deucarian.editor").GroupId);
             Assert.AreEqual("infrastructure", graph.Nodes.Single(node => node.PackageId == "com.deucarian.logging").GroupId);
@@ -202,9 +210,9 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual("runtime-services", graph.Nodes.Single(node => node.PackageId == "com.deucarian.api").GroupId);
             Assert.AreEqual("runtime-services", graph.Nodes.Single(node => node.PackageId == "com.deucarian.session").GroupId);
             Assert.AreEqual("runtime-services", graph.Nodes.Single(node => node.PackageId == "com.deucarian.object-loading").GroupId);
-            Assert.AreEqual("experience-interaction", graph.Nodes.Single(node => node.PackageId == "com.deucarian.ui-binding").GroupId);
-            Assert.AreEqual("experience-interaction", graph.Nodes.Single(node => node.PackageId == "com.deucarian.theming").GroupId);
-            Assert.AreEqual("experience-interaction", graph.Nodes.Single(node => node.PackageId == "com.deucarian.object-selection").GroupId);
+            Assert.AreEqual("ui-presentation", graph.Nodes.Single(node => node.PackageId == "com.deucarian.ui-binding").GroupId);
+            Assert.AreEqual("ui-presentation", graph.Nodes.Single(node => node.PackageId == "com.deucarian.theming").GroupId);
+            Assert.AreEqual("world-interaction", graph.Nodes.Single(node => node.PackageId == "com.deucarian.object-selection").GroupId);
             Assert.AreEqual("tools-quality", graph.Nodes.Single(node => node.PackageId == "com.deucarian.package-installer").GroupId);
             Assert.AreEqual("tools-quality", graph.Nodes.Single(node => node.PackageId == "com.deucarian.diagnostics").GroupId);
             Assert.AreEqual("integrations", graph.Nodes.Single(node => node.PackageId == "com.deucarian.session.api-integration").GroupId);
@@ -222,6 +230,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 new PackageGraphGroup("state-data", "State & Data", string.Empty, string.Empty, 20, string.Empty, string.Empty),
                 new PackageGraphGroup("runtime-services", "Runtime Services", string.Empty, string.Empty, 30, string.Empty, string.Empty),
                 new PackageGraphGroup("experience-interaction", "Experience & Interaction", string.Empty, string.Empty, 40, string.Empty, string.Empty),
+                new PackageGraphGroup("ui-presentation", "UI & Presentation", "experience-interaction", string.Empty, 41, string.Empty, string.Empty),
+                new PackageGraphGroup("world-interaction", "World Interaction", "experience-interaction", string.Empty, 42, string.Empty, string.Empty),
                 new PackageGraphGroup("tools-quality", "Tools & Quality", string.Empty, string.Empty, 50, string.Empty, string.Empty),
                 new PackageGraphGroup("integrations", "Integrations", string.Empty, string.Empty, 60, string.Empty, string.Empty),
                 new PackageGraphGroup("suites", "Suites", string.Empty, string.Empty, 70, string.Empty, string.Empty)
@@ -247,8 +257,36 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
             Assert.AreEqual("infrastructure", graph.Nodes.Single(node => node.PackageId == logging.PackageId).GroupId);
             Assert.AreEqual("runtime-services", graph.Nodes.Single(node => node.PackageId == session.PackageId).GroupId);
-            Assert.AreEqual("experience-interaction", graph.Nodes.Single(node => node.PackageId == ui.PackageId).GroupId);
+            Assert.AreEqual("ui-presentation", graph.Nodes.Single(node => node.PackageId == ui.PackageId).GroupId);
             Assert.IsFalse(graph.Groups.Any(group => string.Equals(group.DisplayName, "Foundation", StringComparison.OrdinalIgnoreCase)));
+        }
+
+        [Test]
+        public void Build_CreatesNestedExperienceInteractionCategories()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+
+            PackageGraphGroup experience = graph.Groups.Single(group => group.Id == "experience-interaction");
+            PackageGraphGroup uiPresentation = graph.Groups.Single(group => group.Id == "ui-presentation");
+            PackageGraphGroup worldInteraction = graph.Groups.Single(group => group.Id == "world-interaction");
+
+            Assert.IsTrue(string.IsNullOrWhiteSpace(experience.ParentGroupId));
+            Assert.AreEqual(experience.Id, uiPresentation.ParentGroupId);
+            Assert.AreEqual(experience.Id, worldInteraction.ParentGroupId);
+            Assert.IsFalse(graph.Nodes.Any(node => node.GroupId == experience.Id));
+            CollectionAssert.AreEquivalent(
+                new[] { "com.deucarian.ui-binding", "com.deucarian.theming" },
+                graph.Nodes
+                    .Where(node => node.GroupId == uiPresentation.Id)
+                    .Select(node => node.PackageId)
+                    .ToArray());
+            CollectionAssert.AreEquivalent(
+                new[] { "com.deucarian.object-selection" },
+                graph.Nodes
+                    .Where(node => node.GroupId == worldInteraction.Id)
+                    .Select(node => node.PackageId)
+                    .ToArray());
         }
 
         [Test]
@@ -901,6 +939,56 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void GraphTransition_AnchoredCameraUsesExactEndpointsAndContinuousPath()
+        {
+            PackageGraphCameraState source = new PackageGraphCameraState(new Vector2(40f, 24f), 0.72f);
+            PackageGraphCameraState target = new PackageGraphCameraState(new Vector2(-180f, 90f), 1.18f);
+            Vector2 sourceAnchorWorld = new Vector2(120f, 80f);
+            Vector2 targetAnchorWorld = new Vector2(360f, 220f);
+            Vector2 sourceAnchorScreen = source.WorldToViewport(sourceAnchorWorld);
+            Vector2 targetAnchorScreen = target.WorldToViewport(targetAnchorWorld);
+
+            PackageGraphCameraState frame0 = PackageGraphTransition.EvaluateAnchoredCamera(
+                source,
+                target,
+                sourceAnchorWorld,
+                targetAnchorWorld,
+                sourceAnchorScreen,
+                targetAnchorScreen,
+                0f);
+            PackageGraphCameraState middle = PackageGraphTransition.EvaluateAnchoredCamera(
+                source,
+                target,
+                sourceAnchorWorld,
+                targetAnchorWorld,
+                sourceAnchorScreen,
+                targetAnchorScreen,
+                0.5f);
+            PackageGraphCameraState frame1 = PackageGraphTransition.EvaluateAnchoredCamera(
+                source,
+                target,
+                sourceAnchorWorld,
+                targetAnchorWorld,
+                sourceAnchorScreen,
+                targetAnchorScreen,
+                1f);
+
+            AssertCameraClose(source, frame0);
+            AssertCameraClose(target, frame1);
+            Assert.That(middle.Zoom, Is.InRange(source.Zoom, target.Zoom));
+
+            Vector2 expectedMiddleAnchorScreen = Vector2.Lerp(
+                sourceAnchorScreen,
+                targetAnchorScreen,
+                PackageGraphTransition.SmoothStep(0.5f));
+            Vector2 middleAnchorWorld = Vector2.Lerp(
+                sourceAnchorWorld,
+                targetAnchorWorld,
+                PackageGraphTransition.SmoothStep(0.5f));
+            AssertVectorClose(expectedMiddleAnchorScreen, middle.WorldToViewport(middleAnchorWorld), 0.001f);
+        }
+
+        [Test]
         public void GraphView_DisablesSelectedNodeActionDuringLayoutTransition()
         {
             PackageDefinition package = CreatePackage("Installable", "com.example.installable", "Core");
@@ -939,7 +1027,10 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual(
                 "Install Integration",
                 FindGraphNodeAction(focused, "com.deucarian.session.api-integration").text);
-            Assert.AreEqual(graph.Nodes.Count, FindByClass(overview, "dpi-graph-node--overview").Count);
+            int rootVisiblePackageCount = graph.Nodes.Count(node =>
+                node.GroupId != "ui-presentation" &&
+                node.GroupId != "world-interaction");
+            Assert.AreEqual(rootVisiblePackageCount, FindByClass(overview, "dpi-graph-node--overview").Count);
             Assert.Less(FindByClass(focused, "dpi-graph-node").Count, graph.Nodes.Count);
             Assert.IsEmpty(FindByClass(overview, "dpi-graph-node__package-id"));
             Assert.IsEmpty(FindByClass(overview, "dpi-graph-unrelated-summary"));
@@ -1042,6 +1133,28 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 FindByClass(focused, "dpi-category-rail__item")
                     .Single(item => item.name == "category-rail-runtime-services")
                     .ClassListContains("dpi-category-rail__item--active"));
+
+            PackageGraphView nestedFocused = new PackageGraphView(_ => { }, (_, __) => { });
+            PackageGraphView nestedPackageFocused = new PackageGraphView(_ => { }, (_, __) => { });
+            nestedFocused.SetGraph(
+                graph,
+                string.Empty,
+                string.Empty,
+                "ui-presentation",
+                actionsEnabled: true,
+                visiblePackageIds: null,
+                filterCounts: null,
+                hiddenRelatedCount: 0);
+            nestedPackageFocused.SetGraph(graph, "com.deucarian.ui-binding", actionsEnabled: true);
+
+            Assert.IsTrue(
+                FindByClass(nestedFocused, "dpi-category-rail__item")
+                    .Single(item => item.name == "category-rail-experience-interaction")
+                    .ClassListContains("dpi-category-rail__item--active"));
+            Assert.IsTrue(
+                FindByClass(nestedPackageFocused, "dpi-category-rail__item")
+                    .Single(item => item.name == "category-rail-experience-interaction")
+                    .ClassListContains("dpi-category-rail__item--active"));
         }
 
         [Test]
@@ -1068,6 +1181,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 .Build(CreateDefaultGraphPackages());
             PackageGraphView groupFocused = new PackageGraphView(_ => { }, (_, __) => { });
             PackageGraphView packageFocused = new PackageGraphView(_ => { }, (_, __) => { });
+            PackageGraphView nestedPackageFocused = new PackageGraphView(_ => { }, (_, __) => { });
 
             groupFocused.SetGraph(
                 graph,
@@ -1079,6 +1193,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 filterCounts: null,
                 hiddenRelatedCount: 0);
             packageFocused.SetGraph(graph, "com.deucarian.session", actionsEnabled: true);
+            nestedPackageFocused.SetGraph(graph, "com.deucarian.ui-binding", actionsEnabled: true);
 
             Assert.IsTrue(
                 FindByClass(groupFocused, "dpi-ecosystem-graph__breadcrumb-current")
@@ -1100,6 +1215,52 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 FindByClass(packageFocused, "dpi-ecosystem-graph__breadcrumb-separator")
                     .OfType<Label>()
                     .All(label => label.text == ">"));
+            Assert.IsTrue(
+                FindByClass(nestedPackageFocused, "dpi-ecosystem-graph__breadcrumb")
+                    .OfType<Button>()
+                    .Any(button => button.text == "Experience & Interaction"));
+            Assert.IsTrue(
+                FindByClass(nestedPackageFocused, "dpi-ecosystem-graph__breadcrumb")
+                    .OfType<Button>()
+                    .Any(button => button.text == "UI & Presentation"));
+            Assert.IsTrue(
+                FindByClass(nestedPackageFocused, "dpi-ecosystem-graph__breadcrumb-current")
+                    .OfType<Label>()
+                    .Any(label => label.text == "Deucarian UI Binding"));
+        }
+
+        [Test]
+        public void GraphView_ReturningToRootClearsStaleCategoryState()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+            PackageGraphView view = new PackageGraphView(_ => { }, (_, __) => { });
+
+            view.SetGraph(
+                graph,
+                string.Empty,
+                string.Empty,
+                "experience-interaction",
+                actionsEnabled: true,
+                visiblePackageIds: null,
+                filterCounts: null,
+                hiddenRelatedCount: 0);
+            view.SetGraph(graph, string.Empty, actionsEnabled: true);
+
+            Assert.IsTrue(
+                FindByClass(view, "dpi-category-rail__item")
+                    .Single(item => item.name == "category-rail-overview")
+                    .ClassListContains("dpi-category-rail__item--active"));
+            Assert.IsFalse(
+                FindByClass(view, "dpi-category-rail__item")
+                    .Single(item => item.name == "category-rail-experience-interaction")
+                    .ClassListContains("dpi-category-rail__item--active"));
+            Assert.AreEqual(
+                "Deucarian",
+                FindByClass(view, "dpi-ecosystem-graph__breadcrumb-current")
+                    .OfType<Label>()
+                    .Single()
+                    .text);
         }
 
         [Test]
@@ -1115,6 +1276,14 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 FindByClass(FindGraphNode(view, "com.deucarian.session"), "dpi-graph-node__category-path")
                     .OfType<Label>()
                     .Any(label => label.text == "Runtime Services"));
+
+            PackageGraphView nestedView = new PackageGraphView(_ => { }, (_, __) => { });
+            nestedView.SetGraph(graph, "com.deucarian.ui-binding", actionsEnabled: true);
+
+            Assert.IsTrue(
+                FindByClass(FindGraphNode(nestedView, "com.deucarian.ui-binding"), "dpi-graph-node__category-path")
+                    .OfType<Label>()
+                    .Any(label => label.text == "Experience & Interaction / UI & Presentation"));
         }
 
         [Test]
@@ -1126,6 +1295,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             AssertCategoryAndKind(graph, "com.deucarian.api", "Runtime Services", "Library");
             AssertCategoryAndKind(graph, "com.deucarian.session", "Runtime Services", "Library");
             AssertCategoryAndKind(graph, "com.deucarian.core-state", "State & Data", "Library");
+            AssertCategoryAndKind(graph, "com.deucarian.ui-binding", "Experience & Interaction / UI & Presentation", "Library");
+            AssertCategoryAndKind(graph, "com.deucarian.object-selection", "Experience & Interaction / World Interaction", "Library");
             AssertCategoryAndKind(graph, "com.deucarian.package-installer", "Tools & Quality", "Tool");
             AssertCategoryAndKind(graph, "com.deucarian.session.api-integration", "Integrations", "Integration");
             AssertCategoryAndKind(graph, "com.deucarian.selection-suite", "Suites", "Suite");
@@ -1229,12 +1400,20 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             PackageGraphLayoutResult layout = new PackageGraphLayout().Calculate(graph);
             PackageGraphNodeMetrics microMetrics =
                 PackageGraphPresentationPolicy.GetMetrics(PackageGraphNodePresentationLevel.OverviewMicro);
+            int hiddenNestedPackageCount = graph.Nodes.Count(node =>
+                node.GroupId == "ui-presentation" ||
+                node.GroupId == "world-interaction");
 
             Assert.AreEqual(PackageGraphLayoutMode.Overview, layout.Mode);
-            Assert.AreEqual(graph.Nodes.Count, layout.NodeRects.Count);
+            Assert.AreEqual(graph.Nodes.Count - hiddenNestedPackageCount, layout.NodeRects.Count);
             Assert.AreEqual(1, layout.RingGuides.Count);
             Assert.IsEmpty(layout.SectorLabels);
             Assert.AreEqual(7, layout.GroupNodes.Count(groupNode => !groupNode.Collapsed));
+            Assert.IsTrue(layout.GroupNodes.Any(groupNode => groupNode.GroupId == "ui-presentation" && groupNode.Collapsed));
+            Assert.IsTrue(layout.GroupNodes.Any(groupNode => groupNode.GroupId == "world-interaction" && groupNode.Collapsed));
+            Assert.IsFalse(layout.NodeRects.ContainsKey("com.deucarian.ui-binding"));
+            Assert.IsFalse(layout.NodeRects.ContainsKey("com.deucarian.theming"));
+            Assert.IsFalse(layout.NodeRects.ContainsKey("com.deucarian.object-selection"));
             CollectionAssert.AreEquivalent(
                 new[]
                 {
@@ -1279,6 +1458,46 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 Is.EqualTo(Vector2.Distance(layout.NodeRects["com.deucarian.object-loading.api-integration"].center, integrations.HubCenter)).Within(1.5f));
             AssertNoOverlaps(layout.NodeRects.Values.Concat(layout.GroupNodes.Select(groupNode => groupNode.Rect)).ToArray());
             AssertGroupClustersSeparated(graph, layout, 40f);
+        }
+
+        [Test]
+        public void Layout_NestedCategoryFocusShowsImmediateChildrenOnly()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+            PackageGraphLayout layoutCalculator = new PackageGraphLayout();
+
+            PackageGraphLayoutResult experienceFocus = layoutCalculator.Calculate(
+                graph,
+                PackageGraphLayoutMode.GroupFocus,
+                string.Empty,
+                "experience-interaction",
+                Vector2.zero);
+            PackageGraphLayoutResult uiFocus = layoutCalculator.Calculate(
+                graph,
+                PackageGraphLayoutMode.GroupFocus,
+                string.Empty,
+                "ui-presentation",
+                Vector2.zero);
+            PackageGraphLayoutResult worldFocus = layoutCalculator.Calculate(
+                graph,
+                PackageGraphLayoutMode.GroupFocus,
+                string.Empty,
+                "world-interaction",
+                Vector2.zero);
+
+            Assert.AreEqual("experience-interaction", experienceFocus.FocusGroupId);
+            Assert.IsTrue(experienceFocus.GroupNodes.Any(groupNode => groupNode.GroupId == "ui-presentation"));
+            Assert.IsTrue(experienceFocus.GroupNodes.Any(groupNode => groupNode.GroupId == "world-interaction"));
+            Assert.IsFalse(experienceFocus.NodeRects.ContainsKey("com.deucarian.ui-binding"));
+            Assert.IsFalse(experienceFocus.NodeRects.ContainsKey("com.deucarian.object-selection"));
+
+            CollectionAssert.AreEquivalent(
+                new[] { "com.deucarian.ui-binding", "com.deucarian.theming" },
+                uiFocus.NodeRects.Keys.ToArray());
+            CollectionAssert.AreEquivalent(
+                new[] { "com.deucarian.object-selection" },
+                worldFocus.NodeRects.Keys.ToArray());
         }
 
         [Test]
@@ -1352,13 +1571,21 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             {
                 Assert.That(groupNode.HubRect.width, Is.EqualTo(groupNode.HubRect.height).Within(0.1f));
 
-                Rect[] directChildRects = graph.Nodes
+                Vector2[] directChildCenters = graph.Nodes
                     .Where(node => string.Equals(node.GroupId, groupNode.GroupId, StringComparison.OrdinalIgnoreCase))
                     .Where(node => layout.NodeRects.ContainsKey(node.PackageId))
-                    .Select(node => layout.NodeRects[node.PackageId])
+                    .Select(node => layout.NodeRects[node.PackageId].center)
+                    .Concat(layout.GroupNodes
+                        .Where(childGroupNode => childGroupNode.Collapsed &&
+                                                 graph.TryGetGroup(childGroupNode.GroupId, out PackageGraphGroup childGroup) &&
+                                                 string.Equals(
+                                                     childGroup.ParentGroupId,
+                                                     groupNode.GroupId,
+                                                     StringComparison.OrdinalIgnoreCase))
+                        .Select(childGroupNode => childGroupNode.HubCenter))
                     .ToArray();
 
-                if (directChildRects.Length == 0)
+                if (directChildCenters.Length == 0)
                 {
                     Assert.AreEqual(0f, groupNode.OrbitRadius);
                     continue;
@@ -1366,10 +1593,10 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
                 Assert.Greater(groupNode.OrbitRadius, 0f);
 
-                foreach (Rect childRect in directChildRects)
+                foreach (Vector2 childCenter in directChildCenters)
                 {
                     Assert.That(
-                        Vector2.Distance(childRect.center, groupNode.HubCenter),
+                        Vector2.Distance(childCenter, groupNode.HubCenter),
                         Is.EqualTo(groupNode.OrbitRadius).Within(0.1f));
                 }
             }
@@ -1404,9 +1631,12 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                     .OrderBy(groupNode => groupNode.Group.SortOrder)
                     .ToArray();
                 float rootRadius = Vector2.Distance(topGroups[0].HubCenter, PackageGraphLayout.GraphCenter);
+                int hiddenNestedPackageCount = graph.Nodes.Count(node =>
+                    node.GroupId == "ui-presentation" ||
+                    node.GroupId == "world-interaction");
 
                 rootRadii.Add(rootRadius);
-                Assert.AreEqual(graph.Nodes.Count, result.NodeRects.Count);
+                Assert.AreEqual(graph.Nodes.Count - hiddenNestedPackageCount, result.NodeRects.Count);
                 Assert.IsTrue(result.NodePresentationLevels.Values.All(activeLevel => activeLevel == level));
                 Assert.That(result.NodeRects["com.deucarian.session"].width, Is.EqualTo(metrics.Width).Within(0.1f));
                 Assert.That(result.NodeRects["com.deucarian.session"].height, Is.EqualTo(metrics.Height).Within(0.1f));
@@ -1981,6 +2211,23 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 expectedCategory,
                 PackageGraphHierarchyDisplay.GetPackageHierarchyPath(graph, node.PackageDefinition));
             Assert.AreEqual(expectedKind, PackageGraphHierarchyDisplay.GetPackageKind(node.PackageDefinition));
+        }
+
+        private static void AssertCameraClose(
+            PackageGraphCameraState expected,
+            PackageGraphCameraState actual)
+        {
+            AssertVectorClose(expected.Pan, actual.Pan, 0.001f);
+            Assert.That(actual.Zoom, Is.EqualTo(expected.Zoom).Within(0.001f));
+        }
+
+        private static void AssertVectorClose(
+            Vector2 expected,
+            Vector2 actual,
+            float tolerance)
+        {
+            Assert.That(actual.x, Is.EqualTo(expected.x).Within(tolerance));
+            Assert.That(actual.y, Is.EqualTo(expected.y).Within(tolerance));
         }
 
         private static float GetAngle(Rect rect)

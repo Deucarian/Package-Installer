@@ -505,6 +505,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 .Single(package => package.id == "com.deucarian.ui-flow");
 
             Assert.AreEqual("UI", uiFlow.category);
+            Assert.AreEqual("ui-presentation", uiFlow.groupId);
             StringAssert.Contains("UI-FLow.git#main", uiFlow.stableUrl);
             StringAssert.Contains("UI-FLow.git#develop", uiFlow.developmentUrl);
             CollectionAssert.IsEmpty(uiFlow.dependencies);

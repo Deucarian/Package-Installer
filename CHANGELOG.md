@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.39 - 2026-06-19
+
+- Coordinated Ecosystem Graph navigation so layout movement and camera pan/zoom use one anchored transition.
+- Added nested Experience & Interaction categories for UI & Presentation and World Interaction.
+- Fixed root overview navigation state so the rail, breadcrumb, details, and graph focus clear together.
+
 ## 1.1.38 - 2026-06-19
 
 - Restored the Package Installer footer as a real UI Toolkit row with status, summary, details toggle, and version children.

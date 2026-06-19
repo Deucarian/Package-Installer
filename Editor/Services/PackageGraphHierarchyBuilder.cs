@@ -10,6 +10,8 @@ namespace Deucarian.PackageInstaller.Editor
         public const string StateDataGroupId = "state-data";
         public const string RuntimeServicesGroupId = "runtime-services";
         public const string ExperienceInteractionGroupId = "experience-interaction";
+        public const string UiPresentationGroupId = "ui-presentation";
+        public const string WorldInteractionGroupId = "world-interaction";
         public const string ToolsQualityGroupId = "tools-quality";
         public const string IntegrationsGroupId = "integrations";
         public const string SuitesGroupId = "suites";
@@ -48,6 +50,22 @@ namespace Deucarian.PackageInstaller.Editor
                 40,
                 "generic-ui-items",
                 "experience-interaction"),
+            new PackageGraphGroup(
+                UiPresentationGroupId,
+                "UI & Presentation",
+                ExperienceInteractionGroupId,
+                "User interface binding, flow, and presentation systems.",
+                41,
+                "generic-ui-items",
+                "ui-presentation"),
+            new PackageGraphGroup(
+                WorldInteractionGroupId,
+                "World Interaction",
+                ExperienceInteractionGroupId,
+                "World-object interaction, selection, and input-facing systems.",
+                42,
+                "selection",
+                "world-interaction"),
             new PackageGraphGroup(
                 ToolsQualityGroupId,
                 "Tools & Quality",
@@ -280,10 +298,12 @@ namespace Deucarian.PackageInstaller.Editor
                 case "com.deucarian.session":
                 case "com.deucarian.object-loading":
                     return RuntimeServicesGroupId;
-                case "com.deucarian.ui-binding":
                 case "com.deucarian.theming":
+                case "com.deucarian.ui-binding":
+                case "com.deucarian.ui-flow":
+                    return UiPresentationGroupId;
                 case "com.deucarian.object-selection":
-                    return ExperienceInteractionGroupId;
+                    return WorldInteractionGroupId;
                 case "com.deucarian.package-installer":
                 case "com.deucarian.diagnostics":
                     return ToolsQualityGroupId;
@@ -308,11 +328,15 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (string.Equals(package.Category, "UI", StringComparison.OrdinalIgnoreCase))
             {
-                return ExperienceInteractionGroupId;
+                return UiPresentationGroupId;
             }
 
-            if (string.Equals(package.Category, "World", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(package.Category, "Runtime", StringComparison.OrdinalIgnoreCase) ||
+            if (string.Equals(package.Category, "World", StringComparison.OrdinalIgnoreCase))
+            {
+                return WorldInteractionGroupId;
+            }
+
+            if (string.Equals(package.Category, "Runtime", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(package.Category, "Services", StringComparison.OrdinalIgnoreCase))
             {
                 return RuntimeServicesGroupId;
@@ -342,15 +366,21 @@ namespace Deucarian.PackageInstaller.Editor
                 case "runtime":
                 case "runtimeworld":
                 case "runtimeservices":
-                case "world":
                     return RuntimeServicesGroupId;
                 case "experienceuiworld":
                 case "uiexperience":
                 case "experienceinteraction":
                 case "interaction":
                 case "experience":
-                case "ui":
                     return ExperienceInteractionGroupId;
+                case "uipresentation":
+                case "presentation":
+                case "ui":
+                    return UiPresentationGroupId;
+                case "worldinteraction":
+                case "world":
+                case "selection":
+                    return WorldInteractionGroupId;
                 case "toolsquality":
                 case "tools":
                 case "quality":
