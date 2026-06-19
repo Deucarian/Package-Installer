@@ -153,7 +153,8 @@
                                               "com.deucarian.logging"
                                           ],
                          "optionalCompanions":  [
-                                                    "com.deucarian.diagnostics"
+                                                    "com.deucarian.diagnostics",
+                                                    "com.deucarian.object-loading.api-integration"
                                                 ],
                          "optionalIntegrations":  [
                                                       "com.deucarian.object-loading.api-integration"
@@ -293,12 +294,12 @@
                          "type":  "Integration",
                          "groupId":  "integrations",
                          "overviewOrder":  20,
-                         "description":  "Optional integration package that lets Object Loading downloads go through API.",
+                         "description":  "Optional integration package that provides optimized API-backed UnityWebRequestAssetBundle transport for Object Loading.",
                          "stableUrl":  "https://github.com/Deucarian/Object-Loading-API-Bridge.git#main",
                          "developmentUrl":  "https://github.com/Deucarian/Object-Loading-API-Bridge.git#develop",
                          "dependencies":  [
-                                              "com.deucarian.object-loading",
-                                              "com.deucarian.api"
+                                              "com.deucarian.api",
+                                              "com.deucarian.object-loading"
                                           ],
                          "integrationTargets":  [
                                                     "com.deucarian.object-loading",

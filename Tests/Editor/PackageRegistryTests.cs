@@ -431,7 +431,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             CollectionAssert.AreEqual(
                 new[]
                 {
-                    "com.deucarian.diagnostics"
+                    "com.deucarian.diagnostics",
+                    "com.deucarian.object-loading.api-integration"
                 },
                 objectLoading.optionalCompanions);
 
@@ -442,8 +443,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             CollectionAssert.AreEqual(
                 new[]
                 {
-                    "com.deucarian.object-loading",
-                    "com.deucarian.api"
+                    "com.deucarian.api",
+                    "com.deucarian.object-loading"
                 },
                 integration.dependencies);
         }

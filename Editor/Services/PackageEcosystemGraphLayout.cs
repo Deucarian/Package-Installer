@@ -210,6 +210,8 @@ namespace Deucarian.PackageInstaller.Editor
         private const float FocusOrbitRadius = 335f;
         private const float FocusGridGapX = 48f;
         private const float FocusGridGapY = 28f;
+        private const float ContextGroupBaseOffset = 340f;
+        private const float ContextGroupCollisionPadding = 18f;
 
         public static readonly Vector2 GraphCenter = new Vector2(2000f, 1850f);
 
@@ -360,8 +362,6 @@ namespace Deucarian.PackageInstaller.Editor
                 nodeRings,
                 groupNodes);
 
-            PlaceSiblingGroupChips(graph, focusedGroup, groupNodes);
-
             return new PackageGraphLayoutResult(
                 PackageGraphLayoutMode.GroupFocus,
                 string.Empty,
@@ -419,7 +419,11 @@ namespace Deucarian.PackageInstaller.Editor
                 nodeRects,
                 placed);
 
-            List<PackageGraphGroupLayoutNode> collapsedGroups = CreateCollapsedUnrelatedGroups(graph, placed);
+            List<PackageGraphGroupLayoutNode> contextGroups = CreateContextRelatedGroups(
+                graph,
+                focusNode,
+                nodeRects,
+                placed);
 
             return new PackageGraphLayoutResult(
                 PackageGraphLayoutMode.Focus,
@@ -432,7 +436,7 @@ namespace Deucarian.PackageInstaller.Editor
                 nodeRings,
                 Array.Empty<PackageGraphRingGuide>(),
                 Array.Empty<PackageGraphSectorLabel>(),
-                groupNodes: collapsedGroups,
+                groupNodes: contextGroups,
                 focusGroupId: focusNode.GroupId);
         }
 
@@ -511,60 +515,46 @@ namespace Deucarian.PackageInstaller.Editor
             }
         }
 
-        private static void PlaceSiblingGroupChips(
+        private static List<PackageGraphGroupLayoutNode> CreateContextRelatedGroups(
             PackageGraphModel graph,
-            PackageGraphGroup focusedGroup,
-            ICollection<PackageGraphGroupLayoutNode> groupNodes)
-        {
-            PackageGraphGroup[] siblings = graph.Groups
-                .Where(group => group != null &&
-                                !string.Equals(group.Id, focusedGroup.Id, StringComparison.OrdinalIgnoreCase) &&
-                                string.Equals(
-                                    group.ParentGroupId,
-                                    focusedGroup.ParentGroupId,
-                                    StringComparison.OrdinalIgnoreCase) &&
-                                GetDescendantPackages(graph, group.Id).Count > 0)
-                .OrderBy(group => group.SortOrder)
-                .ThenBy(group => group.DisplayName, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-
-            PlaceGroupChipStack(
-                graph,
-                siblings,
-                GraphCenter.x + 720f,
-                GraphCenter.y,
-                groupNodes,
-                "sibling");
-        }
-
-        private static List<PackageGraphGroupLayoutNode> CreateCollapsedUnrelatedGroups(
-            PackageGraphModel graph,
+            PackageGraphNode focusNode,
+            IReadOnlyDictionary<string, Rect> nodeRects,
             ISet<string> placedPackageIds)
         {
             List<PackageGraphGroupLayoutNode> groupNodes = new List<PackageGraphGroupLayoutNode>();
-            Dictionary<string, List<PackageGraphNode>> unrelatedByTopGroup =
+            Dictionary<string, List<PackageGraphNode>> relatedByTopGroup =
                 new Dictionary<string, List<PackageGraphNode>>(StringComparer.OrdinalIgnoreCase);
+            PackageGraphGroup focusTopGroup = GetTopLevelGroupForPackage(graph, focusNode);
+            string focusTopGroupId = focusTopGroup != null ? focusTopGroup.Id : string.Empty;
 
             foreach (PackageGraphNode node in graph.Nodes)
             {
-                if (node == null || placedPackageIds.Contains(node.PackageId))
+                if (node == null ||
+                    focusNode == null ||
+                    string.Equals(node.PackageId, focusNode.PackageId, StringComparison.OrdinalIgnoreCase) ||
+                    !placedPackageIds.Contains(node.PackageId) ||
+                    !nodeRects.ContainsKey(node.PackageId))
                 {
                     continue;
                 }
 
                 PackageGraphGroup topGroup = GetTopLevelGroupForPackage(graph, node);
-                string groupId = topGroup != null ? topGroup.Id : PackageGraphHierarchyBuilder.InfrastructureGroupId;
+                if (topGroup == null ||
+                    string.Equals(topGroup.Id, focusTopGroupId, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
 
-                if (!unrelatedByTopGroup.TryGetValue(groupId, out List<PackageGraphNode> packageNodes))
+                if (!relatedByTopGroup.TryGetValue(topGroup.Id, out List<PackageGraphNode> packageNodes))
                 {
                     packageNodes = new List<PackageGraphNode>();
-                    unrelatedByTopGroup[groupId] = packageNodes;
+                    relatedByTopGroup[topGroup.Id] = packageNodes;
                 }
 
                 packageNodes.Add(node);
             }
 
-            PackageGraphGroup[] orderedGroups = unrelatedByTopGroup.Keys
+            PackageGraphGroup[] orderedGroups = relatedByTopGroup.Keys
                 .Select(groupId => graph.Groups.FirstOrDefault(group =>
                     string.Equals(group.Id, groupId, StringComparison.OrdinalIgnoreCase)))
                 .Where(group => group != null)
@@ -572,17 +562,25 @@ namespace Deucarian.PackageInstaller.Editor
                 .ThenBy(group => group.DisplayName, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 
-            float stepY = GroupChipHeight + 16f;
-            float originY = GraphCenter.y - ((orderedGroups.Length - 1) * stepY) * 0.5f;
-
-            for (int index = 0; index < orderedGroups.Length; index++)
+            foreach (PackageGraphGroup group in orderedGroups)
             {
-                PackageGraphGroup group = orderedGroups[index];
-                List<PackageGraphNode> packages = unrelatedByTopGroup[group.Id];
-                Rect rect = ClampToCanvas(CenteredRect(
-                    new Vector2(GraphCenter.x + 760f, originY + index * stepY),
-                    GroupChipWidth,
-                    GroupChipHeight));
+                List<PackageGraphNode> packages = relatedByTopGroup[group.Id]
+                    .OrderBy(GetRelationshipSortIndex)
+                    .ThenBy(node => node.DisplayName, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                Vector2 averageCenter = CalculateAverageCenter(packages, nodeRects);
+                Vector2 direction = averageCenter - GraphCenter;
+
+                if (direction.sqrMagnitude < 1f)
+                {
+                    direction = Vector2.right;
+                }
+
+                Rect rect = FindContextGroupRect(
+                    averageCenter,
+                    direction.normalized,
+                    nodeRects.Values,
+                    groupNodes.Select(groupNode => groupNode.Rect));
                 groupNodes.Add(CreateGroupLayoutNode(
                     graph,
                     group,
@@ -590,10 +588,83 @@ namespace Deucarian.PackageInstaller.Editor
                     focused: false,
                     collapsed: true,
                     packageScope: packages,
-                    summaryLabel: group.DisplayName + " - " + packages.Count + " unrelated"));
+                    summaryLabel: packages.Count == 1 ? "1 related package" : packages.Count + " related packages"));
             }
 
             return groupNodes;
+        }
+
+        private static Rect FindContextGroupRect(
+            Vector2 anchor,
+            Vector2 direction,
+            IEnumerable<Rect> nodeRects,
+            IEnumerable<Rect> groupRects)
+        {
+            Vector2 safeDirection = direction.sqrMagnitude < 0.01f ? Vector2.right : direction.normalized;
+            Vector2 perpendicular = new Vector2(-safeDirection.y, safeDirection.x);
+            List<Rect> occupiedRects = nodeRects
+                .Concat(groupRects)
+                .Select(rect => ExpandRect(rect, ContextGroupCollisionPadding))
+                .ToList();
+            float[] offsets =
+            {
+                ContextGroupBaseOffset,
+                ContextGroupBaseOffset + 120f,
+                ContextGroupBaseOffset + 240f
+            };
+            float[] perpendicularOffsets =
+            {
+                0f,
+                GroupChipHeight + 28f,
+                -(GroupChipHeight + 28f),
+                (GroupChipHeight + 28f) * 1.6f,
+                -(GroupChipHeight + 28f) * 1.6f
+            };
+
+            foreach (float offset in offsets)
+            {
+                foreach (float perpendicularOffset in perpendicularOffsets)
+                {
+                    Rect candidate = ClampToCanvas(CenteredRect(
+                        anchor + safeDirection * offset + perpendicular * perpendicularOffset,
+                        GroupChipWidth,
+                        GroupChipHeight));
+
+                    if (!occupiedRects.Any(rect => rect.Overlaps(candidate)))
+                    {
+                        return candidate;
+                    }
+                }
+            }
+
+            return ClampToCanvas(CenteredRect(
+                anchor + safeDirection * offsets[offsets.Length - 1],
+                GroupChipWidth,
+                GroupChipHeight));
+        }
+
+        private static Vector2 CalculateAverageCenter(
+            IReadOnlyList<PackageGraphNode> packages,
+            IReadOnlyDictionary<string, Rect> nodeRects)
+        {
+            if (packages == null || packages.Count == 0)
+            {
+                return GraphCenter;
+            }
+
+            Vector2 total = Vector2.zero;
+            int count = 0;
+
+            foreach (PackageGraphNode package in packages)
+            {
+                if (package != null && nodeRects.TryGetValue(package.PackageId, out Rect rect))
+                {
+                    total += rect.center;
+                    count++;
+                }
+            }
+
+            return count == 0 ? GraphCenter : total / count;
         }
 
         private static PackageGraphGroupLayoutNode CreateGroupLayoutNode(
@@ -628,41 +699,6 @@ namespace Deucarian.PackageInstaller.Editor
                 collapsed,
                 orbitRadius,
                 summaryLabel);
-        }
-
-        private static void PlaceGroupChipStack(
-            PackageGraphModel graph,
-            IReadOnlyList<PackageGraphGroup> groups,
-            float x,
-            float centerY,
-            ICollection<PackageGraphGroupLayoutNode> groupNodes,
-            string summarySuffix)
-        {
-            if (groups == null || groups.Count == 0)
-            {
-                return;
-            }
-
-            float stepY = GroupChipHeight + 14f;
-            float originY = centerY - ((groups.Count - 1) * stepY) * 0.5f;
-
-            for (int index = 0; index < groups.Count; index++)
-            {
-                PackageGraphGroup group = groups[index];
-                IReadOnlyList<PackageGraphNode> packages = GetDescendantPackages(graph, group.Id);
-                Rect rect = ClampToCanvas(CenteredRect(
-                    new Vector2(x, originY + index * stepY),
-                    GroupChipWidth,
-                    GroupChipHeight));
-                groupNodes.Add(CreateGroupLayoutNode(
-                    graph,
-                    group,
-                    rect,
-                    focused: false,
-                    collapsed: true,
-                    packageScope: packages,
-                    summaryLabel: group.DisplayName + " - " + packages.Count + " " + summarySuffix));
-            }
         }
 
         private static List<PackageGraphNode> GetProviderNodes(
@@ -1164,6 +1200,15 @@ namespace Deucarian.PackageInstaller.Editor
             float x = Mathf.Clamp(rect.x, 24f, CanvasWidth - rect.width - 24f);
             float y = Mathf.Clamp(rect.y, 24f, CanvasHeight - rect.height - 24f);
             return new Rect(x, y, rect.width, rect.height);
+        }
+
+        private static Rect ExpandRect(Rect rect, float padding)
+        {
+            return new Rect(
+                rect.x - padding,
+                rect.y - padding,
+                rect.width + padding * 2f,
+                rect.height + padding * 2f);
         }
 
         private readonly struct ChildPlacement

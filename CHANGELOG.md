@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.31 - 2026-06-19
+
+- Removed redundant graph-space sibling category lists now covered by the pinned category rail.
+- Added contextual category summaries for package ego mode and tightened empty-canvas navigation safety.
+- Reworked active graph bounds so Fit/Center target the current hierarchy context instead of stale or incomplete node bounds.
+- Kept the category rail pinned across overview, category focus, nested category focus, and package ego modes.
+- Synced the bundled fallback registry with the optimized Object Loading API integration metadata.
+- Added Object Loading API Integration as an optional Object Loading companion without making it a required dependency.
+
 ## 1.1.30 - 2026-06-19
 
 - Refined Ecosystem Graph hierarchy visuals so root/category systems use strict circular symbols and a single visible orbit boundary.

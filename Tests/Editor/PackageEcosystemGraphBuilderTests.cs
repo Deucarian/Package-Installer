@@ -752,7 +752,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.IsTrue(
                 FindByClass(focused, "dpi-graph-group__subtitle")
                     .OfType<Label>()
-                    .Any(label => label.text.Contains("unrelated")));
+                    .Any(label => label.text.Contains("related package")));
             Assert.IsTrue(FindGraphNode(focused, "com.deucarian.logging").ClassListContains("dpi-graph-node--focus"));
         }
 
@@ -811,18 +811,37 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
-        public void GraphView_CategoryRailAppearsInFocusAndHighlightsParentCategory()
+        public void GraphView_CategoryRailStaysVisibleAndHighlightsCurrentContext()
         {
             PackageGraphModel graph = new PackageGraphBuilder(_ => false)
                 .Build(CreateDefaultGraphPackages());
             PackageGraphView overview = new PackageGraphView(_ => { }, (_, __) => { });
+            PackageGraphView groupFocused = new PackageGraphView(_ => { }, (_, __) => { });
             PackageGraphView focused = new PackageGraphView(_ => { }, (_, __) => { });
 
             overview.SetGraph(graph, string.Empty, actionsEnabled: true);
+            groupFocused.SetGraph(
+                graph,
+                string.Empty,
+                string.Empty,
+                "infrastructure",
+                actionsEnabled: true,
+                visiblePackageIds: null,
+                filterCounts: null,
+                hiddenRelatedCount: 0);
             focused.SetGraph(graph, "com.deucarian.session", actionsEnabled: true);
 
-            Assert.AreEqual(0, FindByClass(overview, "dpi-category-rail__item").Count);
-            Assert.AreEqual(7, FindByClass(focused, "dpi-category-rail__item").Count);
+            Assert.AreEqual(8, FindByClass(overview, "dpi-category-rail__item").Count);
+            Assert.IsTrue(
+                FindByClass(overview, "dpi-category-rail__item")
+                    .Single(item => item.name == "category-rail-overview")
+                    .ClassListContains("dpi-category-rail__item--active"));
+            Assert.AreEqual(8, FindByClass(groupFocused, "dpi-category-rail__item").Count);
+            Assert.IsTrue(
+                FindByClass(groupFocused, "dpi-category-rail__item")
+                    .Single(item => item.name == "category-rail-infrastructure")
+                    .ClassListContains("dpi-category-rail__item--active"));
+            Assert.AreEqual(8, FindByClass(focused, "dpi-category-rail__item").Count);
             Assert.IsTrue(
                 FindByClass(focused, "dpi-category-rail__item")
                     .Single(item => item.name == "category-rail-runtime-services")
@@ -1091,7 +1110,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                     "com.deucarian.logging"
                 },
                 layout.NodeRects.Keys.ToArray());
-            Assert.IsTrue(layout.GroupNodes.Any(groupNode => groupNode.Collapsed && groupNode.GroupId == "runtime-services"));
+            Assert.IsFalse(layout.GroupNodes.Any(groupNode => groupNode.Collapsed && groupNode.GroupId == "runtime-services"));
             Assert.IsFalse(layout.NodeRects.ContainsKey("com.deucarian.session"));
             AssertNoOverlaps(layout.NodeRects.Values.Concat(layout.GroupNodes.Select(groupNode => groupNode.Rect)).ToArray());
         }
@@ -1123,7 +1142,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.IsFalse(layout.NodeRects.ContainsKey("com.deucarian.api"));
             Assert.IsFalse(layout.NodeRects.ContainsKey("com.deucarian.theming"));
             Assert.IsFalse(layout.HasUnrelatedSummary);
-            Assert.IsTrue(layout.GroupNodes.Any(groupNode => groupNode.Collapsed && groupNode.SummaryLabel.Contains("unrelated")));
+            Assert.IsTrue(layout.GroupNodes.Any(groupNode => groupNode.Collapsed && groupNode.SummaryLabel.Contains("related package")));
             Assert.AreEqual(layout.ActiveCenter, session.center);
             Assert.IsEmpty(layout.RingGuides);
             AssertNoOverlaps(layout.NodeRects.Values.Concat(layout.GroupNodes.Select(groupNode => groupNode.Rect)).ToArray());
@@ -1221,6 +1240,12 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 "com.deucarian.object-loading",
                 "com.deucarian.diagnostics",
                 PackageGraphEdgeKind.OptionalCompanion);
+            AssertEdgeVisible(
+                graph,
+                focus,
+                "com.deucarian.object-loading",
+                "com.deucarian.object-loading.api-integration",
+                PackageGraphEdgeKind.OptionalCompanion);
 
             PackageGraphEdge apiRequirementEdge = graph.Edges.Single(edge =>
                 edge.FromPackageId == "com.deucarian.api" &&
@@ -1274,9 +1299,12 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 "com.deucarian.object-loading.api-integration",
                 "com.deucarian.api",
                 PackageGraphEdgeKind.IntegrationConnection);
-            Assert.IsFalse(graph.Edges.Any(edge =>
-                edge.Kind == PackageGraphEdgeKind.OptionalCompanion &&
-                edge.ConnectsPackage("com.deucarian.object-loading.api-integration")));
+            AssertEdgeVisible(
+                graph,
+                focus,
+                "com.deucarian.object-loading",
+                "com.deucarian.object-loading.api-integration",
+                PackageGraphEdgeKind.OptionalCompanion);
         }
 
         [Test]
@@ -1406,7 +1434,11 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                     "Core",
                     dependencies: new[] { "com.deucarian.logging" },
                     optionalIntegrations: new[] { "com.deucarian.object-loading.api-integration" },
-                    optionalCompanions: new[] { "com.deucarian.diagnostics" }),
+                    optionalCompanions: new[]
+                    {
+                        "com.deucarian.diagnostics",
+                        "com.deucarian.object-loading.api-integration"
+                    }),
                 CreatePackage(
                     "Deucarian Session",
                     "com.deucarian.session",
@@ -1480,8 +1512,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                     "Integration",
                     dependencies: new[]
                     {
-                        "com.deucarian.object-loading",
-                        "com.deucarian.api"
+                        "com.deucarian.api",
+                        "com.deucarian.object-loading"
                     },
                     integrationTargets: new[]
                     {
@@ -1664,32 +1696,14 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
         private static Rect CreateExpectedFitBounds(PackageGraphLayoutResult layout)
         {
-            return CreateExpectedFitBounds(layout, layout.NodeRects.Keys);
+            return PackageGraphActiveLayoutBounds.Calculate(layout);
         }
 
         private static Rect CreateExpectedFitBounds(
             PackageGraphLayoutResult layout,
             IEnumerable<string> visiblePackageIds)
         {
-            Rect bounds = layout.HubRect;
-            HashSet<string> visibleIds = new HashSet<string>(
-                visiblePackageIds ?? Array.Empty<string>(),
-                StringComparer.OrdinalIgnoreCase);
-
-            foreach (KeyValuePair<string, Rect> nodeRect in layout.NodeRects)
-            {
-                if (visibleIds.Contains(nodeRect.Key))
-                {
-                    bounds = Union(bounds, nodeRect.Value);
-                }
-            }
-
-            foreach (PackageGraphGroupLayoutNode groupNode in layout.GroupNodes)
-            {
-                bounds = Union(bounds, groupNode.Rect);
-            }
-
-            return Expand(bounds, 16f);
+            return PackageGraphActiveLayoutBounds.Calculate(layout);
         }
 
         private static void AssertRectsEqual(Rect expected, Rect actual, float tolerance)
