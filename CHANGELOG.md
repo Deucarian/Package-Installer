@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.44 - 2026-06-19
+
+- Forced category orbit guides to use one scalar world-space radius and derive square render rects from it.
+- Animated category orbit radii alongside group centers during graph layout and hierarchy preview transitions.
+- Added regression coverage for scalar ring-guide bounds so visible orbits remain circular.
+
 ## 1.1.43 - 2026-06-19
 
 - Added deliberate wheel zoom-enter previews for structural category nodes using the shared anchored hierarchy transition path.

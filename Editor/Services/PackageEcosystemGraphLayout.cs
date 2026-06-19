@@ -282,13 +282,12 @@ namespace Deucarian.PackageInstaller.Editor
 
     internal sealed class PackageGraphRingGuide
     {
-        public PackageGraphRingGuide(string label, PackageGraphLayoutRing ring, Vector2 center, float radiusX, float radiusY)
+        public PackageGraphRingGuide(string label, PackageGraphLayoutRing ring, Vector2 center, float radius)
         {
             Label = label ?? string.Empty;
             Ring = ring;
             Center = center;
-            RadiusX = radiusX;
-            RadiusY = radiusY;
+            Radius = Mathf.Max(0f, radius);
         }
 
         public string Label { get; }
@@ -297,9 +296,14 @@ namespace Deucarian.PackageInstaller.Editor
 
         public Vector2 Center { get; }
 
-        public float RadiusX { get; }
+        public float Radius { get; }
 
-        public float RadiusY { get; }
+        public Rect CircleRect =>
+            new Rect(
+                Center.x - Radius,
+                Center.y - Radius,
+                Radius * 2f,
+                Radius * 2f);
     }
 
     internal sealed class PackageGraphSectorLabel
@@ -442,7 +446,6 @@ namespace Deucarian.PackageInstaller.Editor
                     string.Empty,
                     PackageGraphLayoutRing.Infrastructure,
                     GraphCenter,
-                    globalOrbitRadius,
                     globalOrbitRadius));
             }
 

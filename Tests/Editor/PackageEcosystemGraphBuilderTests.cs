@@ -1952,6 +1952,11 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             PackageGraphLayoutResult layout = new PackageGraphLayout().Calculate(graph);
 
             Assert.AreEqual(1, layout.RingGuides.Count);
+            PackageGraphRingGuide rootGuide = layout.RingGuides.Single();
+            Assert.That(rootGuide.Radius, Is.GreaterThan(0f));
+            Assert.That(rootGuide.CircleRect.width, Is.EqualTo(rootGuide.CircleRect.height).Within(0.01f));
+            Assert.That(rootGuide.CircleRect.width, Is.EqualTo(rootGuide.Radius * 2f).Within(0.01f));
+            AssertVectorClose(rootGuide.Center, rootGuide.CircleRect.center, 0.01f);
 
             foreach (PackageGraphGroupLayoutNode groupNode in layout.GroupNodes.Where(groupNode => !groupNode.Collapsed))
             {
