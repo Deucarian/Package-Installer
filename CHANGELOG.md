@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.40 - 2026-06-19
+
+- Added cancellable wheel zoom-through hierarchy exits for package, nested category, top-level category, and root graph modes.
+- Kept hierarchy exit previews anchored to the navigation target with coordinated node and camera interpolation.
+- Added regression coverage for exit-wheel thresholds, reverse-wheel cancellation, and one-level commit behavior.
+
 ## 1.1.39 - 2026-06-19
 
 - Coordinated Ecosystem Graph navigation so layout movement and camera pan/zoom use one anchored transition.

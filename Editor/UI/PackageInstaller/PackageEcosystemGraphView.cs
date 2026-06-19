@@ -34,11 +34,15 @@ namespace Deucarian.PackageInstaller.Editor
         private readonly VisualElement _emptyState;
         private readonly Label _emptyStateTitle;
         private readonly Button _emptyStateActionButton;
+        private readonly PackageGraphHierarchyExitController _hierarchyExitController =
+            new PackageGraphHierarchyExitController();
         private PackageVisibilityFilterCounts _filterCounts =
             new PackageVisibilityFilterCounts(0, 0, 0, 0);
         private PackageGraphModel _currentGraph;
+        private IReadOnlyCollection<string> _currentVisiblePackageIds = Array.Empty<string>();
         private string _activeTopLevelGroupId = string.Empty;
         private string _hoveredTopLevelGroupId = string.Empty;
+        private PackageGraphHierarchyExitPreview _hierarchyExitPreview;
         private int _hiddenRelatedCount;
         private bool _hasAppliedGraphFrame;
         private PackageInstallerResponsiveMode _responsiveMode = PackageInstallerResponsiveMode.Wide;
@@ -116,6 +120,7 @@ namespace Deucarian.PackageInstaller.Editor
             };
             _viewport.CameraTransitionCompleted += zoom => _canvas.SetViewportZoom(zoom);
             _viewport.ContextMenuRequested += ShowContextMenu;
+            _viewport.HierarchyExitWheel += HandleHierarchyExitWheel;
             _viewport.SetContent(_canvas);
 
             VisualElement header = new VisualElement();
@@ -141,6 +146,7 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 if (_filterState.SetSearchText(evt.newValue))
                 {
+                    ResetHierarchyExitPreview();
                     _filterChanged?.Invoke();
                     UpdateFilterControls();
                 }
@@ -153,6 +159,7 @@ namespace Deucarian.PackageInstaller.Editor
                 {
                     if (_filterState.SetShowInstalled(!_filterState.ShowInstalled))
                     {
+                        ResetHierarchyExitPreview();
                         _filterChanged?.Invoke();
                         UpdateFilterControls();
                     }
@@ -165,6 +172,7 @@ namespace Deucarian.PackageInstaller.Editor
                 {
                     if (_filterState.SetShowNotInstalled(!_filterState.ShowNotInstalled))
                     {
+                        ResetHierarchyExitPreview();
                         _filterChanged?.Invoke();
                         UpdateFilterControls();
                     }
@@ -195,8 +203,8 @@ namespace Deucarian.PackageInstaller.Editor
             VisualElement toolbar = new VisualElement();
             toolbar.AddToClassList("dpi-ecosystem-graph__toolbar");
             toolbar.Add(CreateToolbarButton("Fit", FitCurrentContext));
-            toolbar.Add(CreateToolbarButton("100%", () => _viewport.ResetZoom(_canvas.GetActiveCenter())));
-            toolbar.Add(CreateToolbarButton("Center", () => _viewport.CenterOn(_canvas.GetActiveCenter())));
+            toolbar.Add(CreateToolbarButton("100%", ResetCurrentContextZoom));
+            toolbar.Add(CreateToolbarButton("Center", CenterCurrentContext));
             filterRow.Add(toolbar);
 
             _legend = new VisualElement();
@@ -303,6 +311,7 @@ namespace Deucarian.PackageInstaller.Editor
             PackageVisibilityFilterCounts filterCounts,
             int hiddenRelatedCount)
         {
+            ResetHierarchyExitPreview();
             string previousLayoutFocusPackageId = _canvas.LayoutFocusPackageId;
             string previousLayoutFocusGroupId = _canvas.LayoutFocusGroupId;
             bool shouldForceInitialFrame = !_hasAppliedGraphFrame && graph != null && graph.Nodes.Count > 0;
@@ -320,6 +329,11 @@ namespace Deucarian.PackageInstaller.Editor
                     pair => pair.Key,
                     pair => _viewport.WorldToViewport(pair.Value));
             _currentGraph = graph;
+            _currentVisiblePackageIds = visiblePackageIds == null
+                ? (IReadOnlyCollection<string>)(graph != null
+                    ? graph.Nodes.Select(node => node.PackageId).ToArray()
+                    : Array.Empty<string>())
+                : visiblePackageIds.ToArray();
             _canvas.SetGraph(graph, selectedPackageId, focusedPackageId, focusedGroupId, actionsEnabled, visiblePackageIds);
             bool layoutTargetChanged =
                 !string.Equals(
@@ -511,6 +525,8 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void FitCurrentContext()
         {
+            ResetHierarchyExitPreview();
+
             if (_viewport.IsCameraTransitionActive || _canvas.InteractionsLocked)
             {
                 Rect animatedBounds = _canvas.GetContentBounds();
@@ -542,6 +558,403 @@ namespace Deucarian.PackageInstaller.Editor
             _viewport.FitToContent(_canvas.GetContentBounds());
         }
 
+        private void ResetCurrentContextZoom()
+        {
+            ResetHierarchyExitPreview();
+            _viewport.ResetZoom(_canvas.GetActiveCenter());
+        }
+
+        private void CenterCurrentContext()
+        {
+            ResetHierarchyExitPreview();
+            _viewport.CenterOn(_canvas.GetActiveCenter());
+        }
+
+        private void NavigateToRoot()
+        {
+            ResetHierarchyExitPreview();
+            _rootFocused?.Invoke();
+        }
+
+        private void NavigateToGroup(PackageGraphGroup group)
+        {
+            ResetHierarchyExitPreview();
+            _groupFocused?.Invoke(group);
+        }
+
+        private void NavigateBackOneLevel()
+        {
+            ResetHierarchyExitPreview();
+            _selectionCleared?.Invoke();
+        }
+
+        private void SelectPackage(PackageDefinition packageDefinition)
+        {
+            ResetHierarchyExitPreview();
+            _packageSelected?.Invoke(packageDefinition);
+        }
+
+        private bool HandleHierarchyExitWheel(PackageGraphHierarchyExitWheelEvent evt)
+        {
+            if (evt == null)
+            {
+                return false;
+            }
+
+            bool hadPreview = _hierarchyExitPreview != null;
+            bool canExit = hadPreview ||
+                           (!_viewport.IsCameraTransitionActive &&
+                            !_canvas.InteractionsLocked &&
+                            TryBeginHierarchyExitPreview());
+            PackageGraphHierarchyExitResult result = _hierarchyExitController.ApplyWheel(
+                evt.WheelDeltaY,
+                canExit,
+                evt.AtNormalMinimum,
+                EditorApplication.timeSinceStartup);
+
+            if (!result.Consumed)
+            {
+                if (!hadPreview && _hierarchyExitPreview != null)
+                {
+                    ResetHierarchyExitPreview();
+                }
+
+                return false;
+            }
+
+            if (result.Cancelled)
+            {
+                ResetHierarchyExitPreview();
+                return true;
+            }
+
+            if (result.Committed)
+            {
+                ApplyHierarchyExitPreview(1f);
+                CommitHierarchyExitPreview();
+                return true;
+            }
+
+            ApplyHierarchyExitPreview(result.Progress);
+            return true;
+        }
+
+        private bool TryBeginHierarchyExitPreview()
+        {
+            if (_hierarchyExitPreview != null)
+            {
+                return true;
+            }
+
+            if (!TryCreateHierarchyExitTarget(out PackageGraphHierarchyExitTarget target))
+            {
+                return false;
+            }
+
+            if (!_canvas.TryGetTransitionAnchorCenter(target.Anchor, out Vector2 sourceAnchorWorld))
+            {
+                sourceAnchorWorld = _canvas.GetActiveCenter();
+            }
+
+            if (!TryGetLayoutAnchorCenter(target.Layout, target.Anchor, out Vector2 targetAnchorWorld))
+            {
+                targetAnchorWorld = target.Layout != null
+                    ? target.Layout.ActiveCenter
+                    : _canvas.GetActiveCenter();
+            }
+
+            PackageGraphCameraState sourceCamera = _viewport.GetCameraState();
+            PackageGraphCameraState targetCamera = _viewport.CalculateFitCamera(target.Bounds, target.Mode);
+            _hierarchyExitPreview = new PackageGraphHierarchyExitPreview(
+                target,
+                sourceCamera,
+                targetCamera,
+                sourceAnchorWorld,
+                targetAnchorWorld,
+                sourceCamera.WorldToViewport(sourceAnchorWorld),
+                targetCamera.WorldToViewport(targetAnchorWorld));
+
+            if (!_canvas.BeginHierarchyExitPreview(target.Layout))
+            {
+                _hierarchyExitPreview = null;
+                return false;
+            }
+
+            _viewport.SetHierarchyExitPreviewActive(true);
+            return true;
+        }
+
+        private bool TryCreateHierarchyExitTarget(out PackageGraphHierarchyExitTarget target)
+        {
+            target = null;
+
+            if (_currentGraph == null ||
+                _canvas.LayoutMode == PackageGraphLayoutMode.Overview ||
+                _viewport.ViewportSize.x <= 1f ||
+                _viewport.ViewportSize.y <= 1f)
+            {
+                return false;
+            }
+
+            PackageGraphModel visibleGraph = CreateCurrentVisibleGraph();
+            PackageGraphLayoutMode targetMode;
+            string targetGroupId = string.Empty;
+            PackageGraphGroup targetGroup = null;
+            PackageGraphTransitionAnchor anchor;
+
+            if (_canvas.LayoutMode == PackageGraphLayoutMode.Focus)
+            {
+                string packageId = _canvas.LayoutFocusPackageId;
+
+                if (string.IsNullOrWhiteSpace(packageId) ||
+                    !visibleGraph.TryGetNode(packageId, out PackageGraphNode node) ||
+                    !visibleGraph.TryGetGroup(node.GroupId, out targetGroup))
+                {
+                    return false;
+                }
+
+                targetMode = PackageGraphLayoutMode.GroupFocus;
+                targetGroupId = targetGroup.Id;
+                anchor = new PackageGraphTransitionAnchor(PackageGraphTransitionAnchorKind.Package, packageId);
+            }
+            else
+            {
+                string groupId = _canvas.LayoutFocusGroupId;
+
+                if (string.IsNullOrWhiteSpace(groupId) ||
+                    !visibleGraph.TryGetGroup(groupId, out PackageGraphGroup group))
+                {
+                    return false;
+                }
+
+                anchor = new PackageGraphTransitionAnchor(PackageGraphTransitionAnchorKind.Group, groupId);
+
+                if (string.IsNullOrWhiteSpace(group.ParentGroupId))
+                {
+                    targetMode = PackageGraphLayoutMode.Overview;
+                }
+                else if (visibleGraph.TryGetGroup(group.ParentGroupId, out targetGroup))
+                {
+                    targetMode = PackageGraphLayoutMode.GroupFocus;
+                    targetGroupId = targetGroup.Id;
+                }
+                else
+                {
+                    targetMode = PackageGraphLayoutMode.Overview;
+                }
+            }
+
+            PackageGraphNodePresentationLevel presentation =
+                PackageGraphPresentationPolicy.ResolveForZoom(
+                    targetMode,
+                    _viewport.Zoom,
+                    PackageGraphPresentationPolicy.GetDefaultForMode(targetMode));
+            PackageGraphLayoutResult layout = new PackageGraphLayout().Calculate(
+                visibleGraph,
+                targetMode,
+                string.Empty,
+                targetGroupId,
+                _viewport.ViewportSize,
+                presentation);
+            Rect bounds = PackageGraphActiveLayoutBounds.Calculate(layout);
+            target = new PackageGraphHierarchyExitTarget(
+                targetMode,
+                targetGroupId,
+                targetGroup,
+                anchor,
+                layout,
+                bounds);
+            return true;
+        }
+
+        private PackageGraphModel CreateCurrentVisibleGraph()
+        {
+            if (_currentGraph == null)
+            {
+                return new PackageGraphModel(
+                    Array.Empty<PackageGraphNode>(),
+                    Array.Empty<PackageGraphEdge>(),
+                    Array.Empty<PackageGraphSuiteRegion>());
+            }
+
+            HashSet<string> visiblePackageIds = _currentVisiblePackageIds == null
+                ? new HashSet<string>(
+                    _currentGraph.Nodes.Select(node => node.PackageId),
+                    StringComparer.OrdinalIgnoreCase)
+                : new HashSet<string>(_currentVisiblePackageIds, StringComparer.OrdinalIgnoreCase);
+            return PackageVisibilityFilter.CreateVisibleGraph(_currentGraph, visiblePackageIds);
+        }
+
+        private static bool TryGetLayoutAnchorCenter(
+            PackageGraphLayoutResult layout,
+            PackageGraphTransitionAnchor anchor,
+            out Vector2 center)
+        {
+            center = default(Vector2);
+
+            if (layout == null)
+            {
+                return false;
+            }
+
+            switch (anchor.Kind)
+            {
+                case PackageGraphTransitionAnchorKind.Package:
+                    if (layout.NodeRects.TryGetValue(anchor.Id, out Rect nodeRect))
+                    {
+                        center = nodeRect.center;
+                        return true;
+                    }
+
+                    break;
+                case PackageGraphTransitionAnchorKind.Group:
+                    PackageGraphGroupLayoutNode groupNode = layout.GroupNodes.FirstOrDefault(candidate =>
+                        candidate != null &&
+                        string.Equals(candidate.GroupId, anchor.Id, StringComparison.OrdinalIgnoreCase));
+
+                    if (groupNode != null)
+                    {
+                        center = groupNode.Rect.center;
+                        return true;
+                    }
+
+                    break;
+                default:
+                    center = layout.HubRect.center;
+                    return true;
+            }
+
+            return false;
+        }
+
+        private void ApplyHierarchyExitPreview(float progress)
+        {
+            if (_hierarchyExitPreview == null)
+            {
+                return;
+            }
+
+            float clampedProgress = Mathf.Clamp01(progress);
+            PackageGraphCameraState camera = PackageGraphTransition.EvaluateAnchoredCamera(
+                _hierarchyExitPreview.SourceCamera,
+                _hierarchyExitPreview.TargetCamera,
+                _hierarchyExitPreview.SourceAnchorWorld,
+                _hierarchyExitPreview.TargetAnchorWorld,
+                _hierarchyExitPreview.SourceAnchorScreen,
+                _hierarchyExitPreview.TargetAnchorScreen,
+                clampedProgress);
+            _canvas.SetHierarchyExitPreview(clampedProgress);
+            _viewport.SetHierarchyExitPreviewActive(clampedProgress > 0.001f);
+            _viewport.ApplyPreviewCamera(camera);
+        }
+
+        private void CommitHierarchyExitPreview()
+        {
+            if (_hierarchyExitPreview == null)
+            {
+                return;
+            }
+
+            PackageGraphHierarchyExitTarget target = _hierarchyExitPreview.Target;
+            _hierarchyExitPreview = null;
+            _hierarchyExitController.Commit(EditorApplication.timeSinceStartup);
+            _canvas.EndHierarchyExitPreview(restoreSource: false);
+            _viewport.SetHierarchyExitPreviewActive(false);
+
+            if (target.Mode == PackageGraphLayoutMode.Overview)
+            {
+                _rootFocused?.Invoke();
+            }
+            else
+            {
+                _groupFocused?.Invoke(target.Group);
+            }
+        }
+
+        private void ResetHierarchyExitPreview(bool restoreCamera = true)
+        {
+            if (_hierarchyExitPreview != null)
+            {
+                PackageGraphCameraState sourceCamera = _hierarchyExitPreview.SourceCamera;
+                _canvas.EndHierarchyExitPreview(restoreCamera);
+
+                if (restoreCamera)
+                {
+                    _viewport.ApplyPreviewCamera(sourceCamera);
+                }
+            }
+
+            _hierarchyExitPreview = null;
+            _hierarchyExitController.Cancel();
+            _viewport.SetHierarchyExitPreviewActive(false);
+        }
+
+        private sealed class PackageGraphHierarchyExitTarget
+        {
+            public PackageGraphHierarchyExitTarget(
+                PackageGraphLayoutMode mode,
+                string groupId,
+                PackageGraphGroup group,
+                PackageGraphTransitionAnchor anchor,
+                PackageGraphLayoutResult layout,
+                Rect bounds)
+            {
+                Mode = mode;
+                GroupId = groupId ?? string.Empty;
+                Group = group;
+                Anchor = anchor;
+                Layout = layout;
+                Bounds = bounds;
+            }
+
+            public PackageGraphLayoutMode Mode { get; }
+
+            public string GroupId { get; }
+
+            public PackageGraphGroup Group { get; }
+
+            public PackageGraphTransitionAnchor Anchor { get; }
+
+            public PackageGraphLayoutResult Layout { get; }
+
+            public Rect Bounds { get; }
+        }
+
+        private sealed class PackageGraphHierarchyExitPreview
+        {
+            public PackageGraphHierarchyExitPreview(
+                PackageGraphHierarchyExitTarget target,
+                PackageGraphCameraState sourceCamera,
+                PackageGraphCameraState targetCamera,
+                Vector2 sourceAnchorWorld,
+                Vector2 targetAnchorWorld,
+                Vector2 sourceAnchorScreen,
+                Vector2 targetAnchorScreen)
+            {
+                Target = target;
+                SourceCamera = sourceCamera;
+                TargetCamera = targetCamera;
+                SourceAnchorWorld = sourceAnchorWorld;
+                TargetAnchorWorld = targetAnchorWorld;
+                SourceAnchorScreen = sourceAnchorScreen;
+                TargetAnchorScreen = targetAnchorScreen;
+            }
+
+            public PackageGraphHierarchyExitTarget Target { get; }
+
+            public PackageGraphCameraState SourceCamera { get; }
+
+            public PackageGraphCameraState TargetCamera { get; }
+
+            public Vector2 SourceAnchorWorld { get; }
+
+            public Vector2 TargetAnchorWorld { get; }
+
+            public Vector2 SourceAnchorScreen { get; }
+
+            public Vector2 TargetAnchorScreen { get; }
+        }
+
         private static bool AreBoundsClose(Rect first, Rect second)
         {
             return Mathf.Abs(first.x - second.x) < 0.5f &&
@@ -559,6 +972,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (_filterState.SetSearchText(string.Empty))
             {
+                ResetHierarchyExitPreview();
                 _searchField.SetValueWithoutNotify(string.Empty);
                 _filterChanged?.Invoke();
                 UpdateFilterControls();
@@ -571,6 +985,7 @@ namespace Deucarian.PackageInstaller.Editor
         {
             if (_filterState.Reset())
             {
+                ResetHierarchyExitPreview();
                 _searchField.SetValueWithoutNotify(string.Empty);
                 _filterChanged?.Invoke();
             }
@@ -603,7 +1018,7 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 _breadcrumbRow.Add(CreateBreadcrumbButton("Deucarian", () =>
                 {
-                    _rootFocused?.Invoke();
+                    NavigateToRoot();
                 }));
             }
 
@@ -621,7 +1036,7 @@ namespace Deucarian.PackageInstaller.Editor
 
                 _breadcrumbRow.Add(CreateBreadcrumbButton(group.DisplayName, () =>
                 {
-                    _groupFocused?.Invoke(group);
+                    NavigateToGroup(group);
                 }));
             }
 
@@ -735,7 +1150,7 @@ namespace Deucarian.PackageInstaller.Editor
                     return;
                 }
 
-                _rootFocused?.Invoke();
+                NavigateToRoot();
             })
             {
                 name = "category-rail-overview",
@@ -793,7 +1208,7 @@ namespace Deucarian.PackageInstaller.Editor
                     return;
                 }
 
-                _groupFocused?.Invoke(group);
+                NavigateToGroup(group);
             })
             {
                 name = "category-rail-" + group.Id,
@@ -981,6 +1396,7 @@ namespace Deucarian.PackageInstaller.Editor
         {
             if (_filterState.Set(string.Empty, showInstalled: true, showNotInstalled: true))
             {
+                ResetHierarchyExitPreview();
                 _searchField.SetValueWithoutNotify(string.Empty);
                 _filterChanged?.Invoke();
             }
@@ -1222,19 +1638,19 @@ namespace Deucarian.PackageInstaller.Editor
         private void PopulateCanvasContextMenu(GenericMenu menu)
         {
             menu.AddItem(new GUIContent("Fit current context"), false, FitCurrentContext);
-            menu.AddItem(new GUIContent("Center current focus"), false, () => _viewport.CenterOn(_canvas.GetActiveCenter()));
-            menu.AddItem(new GUIContent("100%"), false, () => _viewport.ResetZoom(_canvas.GetActiveCenter()));
+            menu.AddItem(new GUIContent("Center current focus"), false, CenterCurrentContext);
+            menu.AddItem(new GUIContent("100%"), false, ResetCurrentContextZoom);
 
             if (_canvas.LayoutMode != PackageGraphLayoutMode.Overview)
             {
-                menu.AddItem(new GUIContent("Back one hierarchy level"), false, () => _selectionCleared?.Invoke());
+                menu.AddItem(new GUIContent("Back one hierarchy level"), false, NavigateBackOneLevel);
             }
             else
             {
                 menu.AddDisabledItem(new GUIContent("Back one hierarchy level"));
             }
 
-            menu.AddItem(new GUIContent("Ecosystem Overview"), false, () => _rootFocused?.Invoke());
+            menu.AddItem(new GUIContent("Ecosystem Overview"), false, NavigateToRoot);
         }
 
         private void PopulatePackageContextMenu(GenericMenu menu, PackageGraphNode packageNode)
@@ -1246,8 +1662,8 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             PackageDefinition packageDefinition = packageNode.PackageDefinition;
-            menu.AddItem(new GUIContent("Focus / Select Package"), false, () => _packageSelected?.Invoke(packageDefinition));
-            menu.AddItem(new GUIContent("Show Package Details"), false, () => _packageSelected?.Invoke(packageDefinition));
+            menu.AddItem(new GUIContent("Focus / Select Package"), false, () => SelectPackage(packageDefinition));
+            menu.AddItem(new GUIContent("Show Package Details"), false, () => SelectPackage(packageDefinition));
             menu.AddItem(new GUIContent("Copy Package ID"), false, () => EditorGUIUtility.systemCopyBuffer = packageDefinition.PackageId);
 
             string repositoryUrl = GetRepositoryUrl(packageDefinition);
@@ -1270,12 +1686,12 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             bool active = string.Equals(group.Id, _canvas.LayoutFocusGroupId, StringComparison.OrdinalIgnoreCase);
-            menu.AddItem(new GUIContent("Focus Category"), false, () => _groupFocused?.Invoke(group));
+            menu.AddItem(new GUIContent("Focus Category"), false, () => NavigateToGroup(group));
             menu.AddItem(new GUIContent("Fit Category"), false, () =>
             {
                 if (!active)
                 {
-                    _groupFocused?.Invoke(group);
+                    NavigateToGroup(group);
                 }
 
                 schedule.Execute(FitCurrentContext).ExecuteLater(1);
@@ -1283,22 +1699,30 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (active)
             {
-                menu.AddItem(new GUIContent("Back to Parent"), false, () => _selectionCleared?.Invoke());
+                menu.AddItem(new GUIContent("Back to Parent"), false, NavigateBackOneLevel);
             }
             else
             {
                 menu.AddDisabledItem(new GUIContent("Back to Parent"));
             }
 
-            menu.AddItem(new GUIContent("Ecosystem Overview"), false, () => _rootFocused?.Invoke());
+            menu.AddItem(new GUIContent("Ecosystem Overview"), false, NavigateToRoot);
         }
 
         private void PopulateRootContextMenu(GenericMenu menu)
         {
-            menu.AddItem(new GUIContent("Ecosystem Overview"), false, () => _rootFocused?.Invoke());
+            menu.AddItem(new GUIContent("Ecosystem Overview"), false, NavigateToRoot);
             menu.AddItem(new GUIContent("Fit Overview"), false, FitCurrentContext);
-            menu.AddItem(new GUIContent("Center Root"), false, () => _viewport.CenterOn(PackageGraphLayout.GraphCenter));
-            menu.AddItem(new GUIContent("100%"), false, () => _viewport.ResetZoom(PackageGraphLayout.GraphCenter));
+            menu.AddItem(new GUIContent("Center Root"), false, () =>
+            {
+                ResetHierarchyExitPreview();
+                _viewport.CenterOn(PackageGraphLayout.GraphCenter);
+            });
+            menu.AddItem(new GUIContent("100%"), false, () =>
+            {
+                ResetHierarchyExitPreview();
+                _viewport.ResetZoom(PackageGraphLayout.GraphCenter);
+            });
         }
 
         private bool TryResolvePackageFromTarget(VisualElement target, out PackageGraphNode packageNode)
@@ -1422,6 +1846,7 @@ namespace Deucarian.PackageInstaller.Editor
         private bool _initialized;
         private bool _hasInitialBounds;
         private bool _cameraTransitionActive;
+        private bool _hierarchyExitPreviewActive;
         private bool _panCandidate;
         private bool _panning;
         private bool _panMoved;
@@ -1487,11 +1912,17 @@ namespace Deucarian.PackageInstaller.Editor
 
         public event Action<PackageGraphContextMenuRequest> ContextMenuRequested;
 
+        public event Func<PackageGraphHierarchyExitWheelEvent, bool> HierarchyExitWheel;
+
         public float Zoom => _zoom;
 
         public Vector2 Pan => _pan;
 
         public bool IsCameraTransitionActive => _cameraTransitionActive;
+
+        public Vector2 ViewportSize => HasViewportSize()
+            ? new Vector2(contentRect.width, contentRect.height)
+            : Vector2.zero;
 
         internal float EffectiveMinZoomForTests => GetMinZoom();
 
@@ -1541,6 +1972,11 @@ namespace Deucarian.PackageInstaller.Editor
         {
             _activeBounds = NormalizeBounds(worldBounds);
             UpdateRequiredFitZoom(_activeBounds);
+        }
+
+        public void SetHierarchyExitPreviewActive(bool active)
+        {
+            _hierarchyExitPreviewActive = active;
         }
 
         public void EnsureInitialFrame(Rect worldBounds, bool force = false)
@@ -1615,11 +2051,29 @@ namespace Deucarian.PackageInstaller.Editor
             UpdateCameraTransition();
         }
 
+        public PackageGraphCameraState GetCameraState()
+        {
+            return new PackageGraphCameraState(_pan, _zoom);
+        }
+
+        public void ApplyPreviewCamera(PackageGraphCameraState camera)
+        {
+            _zoom = Mathf.Clamp(camera.Zoom, AbsoluteMinZoom, MaxZoom);
+            _pan = ClampPan(camera.Pan, _zoom);
+            _initialized = true;
+            ApplyTransform();
+        }
+
         public PackageGraphCameraState CalculateFitCamera(Rect worldBounds)
+        {
+            return CalculateFitCamera(worldBounds, _layoutMode);
+        }
+
+        public PackageGraphCameraState CalculateFitCamera(Rect worldBounds, PackageGraphLayoutMode layoutMode)
         {
             Rect bounds = NormalizeBounds(worldBounds);
             float fitZoom = CalculateFitZoom(bounds);
-            float zoom = Mathf.Clamp(fitZoom, GetMinZoom(), MaxZoom);
+            float zoom = Mathf.Clamp(fitZoom, GetMinZoom(layoutMode), MaxZoom);
             Vector2 pan = GetViewportCenter() - bounds.center * zoom;
             return new PackageGraphCameraState(ClampPan(pan, zoom), zoom);
         }
@@ -1676,6 +2130,28 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             float zoomMultiplier = evt.delta.y > 0f ? 0.90f : 1.10f;
+            float normalMinimumZoom = GetMinZoom();
+            bool zoomingOut = evt.delta.y > 0f;
+            bool atNormalMinimum = _zoom <= normalMinimumZoom + 0.002f;
+
+            if (_hierarchyExitPreviewActive ||
+                (zoomingOut &&
+                 _layoutMode != PackageGraphLayoutMode.Overview &&
+                 atNormalMinimum))
+            {
+                PackageGraphHierarchyExitWheelEvent hierarchyExitEvent =
+                    new PackageGraphHierarchyExitWheelEvent(
+                        evt.delta.y,
+                        evt.localMousePosition,
+                        atNormalMinimum);
+
+                if (HierarchyExitWheel?.Invoke(hierarchyExitEvent) == true)
+                {
+                    evt.StopPropagation();
+                    return;
+                }
+            }
+
             ZoomAround(evt.localMousePosition, _zoom * zoomMultiplier);
             evt.StopPropagation();
         }
@@ -1915,7 +2391,12 @@ namespace Deucarian.PackageInstaller.Editor
 
         private float GetMinZoom()
         {
-            float configuredMinimum = _layoutMode == PackageGraphLayoutMode.Overview ? OverviewMinZoom : FocusMinZoom;
+            return GetMinZoom(_layoutMode);
+        }
+
+        private float GetMinZoom(PackageGraphLayoutMode layoutMode)
+        {
+            float configuredMinimum = layoutMode == PackageGraphLayoutMode.Overview ? OverviewMinZoom : FocusMinZoom;
             return CalculateEffectiveMinZoom(configuredMinimum, _requiredFitZoom);
         }
 
@@ -2221,6 +2702,16 @@ namespace Deucarian.PackageInstaller.Editor
         private bool _layoutAnimationActive;
         private bool _interactionsLocked;
         private bool _actionsEnabled;
+        private readonly Dictionary<string, Rect> _hierarchyExitStartNodeRects =
+            new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, Rect> _hierarchyExitTargetNodeRects =
+            new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, Rect> _hierarchyExitStartGroupRects =
+            new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, Rect> _hierarchyExitTargetGroupRects =
+            new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
+        private PackageGraphLayoutResult _hierarchyExitTargetLayout;
+        private float _hierarchyExitProgress;
 
         public PackageGraphCanvas(
             Action<PackageDefinition> packageSelected,
@@ -2301,6 +2792,8 @@ namespace Deucarian.PackageInstaller.Editor
 
         public bool InteractionsLocked => _interactionsLocked;
 
+        internal float HierarchyExitProgressForTests => _hierarchyExitProgress;
+
         public event Action<bool> InteractionsLockedChanged;
 
         public event Action<string> ActiveHoverGroupChanged;
@@ -2360,6 +2853,116 @@ namespace Deucarian.PackageInstaller.Editor
 
             center = default(Vector2);
             return false;
+        }
+
+        public bool BeginHierarchyExitPreview(PackageGraphLayoutResult targetLayout)
+        {
+            if (targetLayout == null || _layoutResult == null || _layoutAnimationActive)
+            {
+                return false;
+            }
+
+            _hierarchyExitTargetLayout = targetLayout;
+            _hierarchyExitStartNodeRects.Clear();
+            _hierarchyExitTargetNodeRects.Clear();
+            _hierarchyExitStartGroupRects.Clear();
+            _hierarchyExitTargetGroupRects.Clear();
+
+            Dictionary<string, Rect> currentNodeRects = CaptureCurrentNodeRects();
+            Dictionary<string, Rect> currentGroupRects = CaptureCurrentGroupRects();
+            Vector2 sourceCenter = _layoutResult.ActiveCenter;
+            Vector2 targetCenter = targetLayout.ActiveCenter;
+
+            foreach (KeyValuePair<string, Rect> current in currentNodeRects)
+            {
+                _hierarchyExitStartNodeRects[current.Key] = current.Value;
+                _hierarchyExitTargetNodeRects[current.Key] = targetLayout.NodeRects.TryGetValue(current.Key, out Rect targetRect)
+                    ? targetRect
+                    : CenterRectOn(current.Value, targetCenter);
+            }
+
+            foreach (KeyValuePair<string, Rect> target in targetLayout.NodeRects)
+            {
+                if (_hierarchyExitStartNodeRects.ContainsKey(target.Key))
+                {
+                    continue;
+                }
+
+                _hierarchyExitStartNodeRects[target.Key] = CenterRectOn(target.Value, sourceCenter);
+                _hierarchyExitTargetNodeRects[target.Key] = target.Value;
+            }
+
+            foreach (KeyValuePair<string, Rect> current in currentGroupRects)
+            {
+                _hierarchyExitStartGroupRects[current.Key] = current.Value;
+                _hierarchyExitTargetGroupRects[current.Key] = TryGetGroupRect(targetLayout, current.Key, out Rect targetRect)
+                    ? targetRect
+                    : CenterRectOn(current.Value, targetCenter);
+            }
+
+            foreach (PackageGraphGroupLayoutNode targetGroup in targetLayout.GroupNodes)
+            {
+                if (targetGroup == null ||
+                    _hierarchyExitStartGroupRects.ContainsKey(targetGroup.GroupId))
+                {
+                    continue;
+                }
+
+                _hierarchyExitStartGroupRects[targetGroup.GroupId] = CenterRectOn(targetGroup.Rect, sourceCenter);
+                _hierarchyExitTargetGroupRects[targetGroup.GroupId] = targetGroup.Rect;
+            }
+
+            _hierarchyExitProgress = 0f;
+            ApplyHierarchyExitVisuals();
+            return true;
+        }
+
+        public void SetHierarchyExitPreview(float progress)
+        {
+            if (_hierarchyExitTargetLayout == null)
+            {
+                return;
+            }
+
+            _hierarchyExitProgress = Mathf.Clamp01(progress);
+            ApplyHierarchyExitPreviewRects(PackageGraphTransition.SmoothStep(_hierarchyExitProgress));
+            SetInteractionsLocked(_layoutAnimationActive || _hierarchyExitProgress > 0.001f);
+            ApplyHierarchyExitVisuals();
+        }
+
+        public void EndHierarchyExitPreview(bool restoreSource)
+        {
+            if (_hierarchyExitTargetLayout == null)
+            {
+                _hierarchyExitProgress = 0f;
+                SetInteractionsLocked(_layoutAnimationActive);
+                ApplyHierarchyExitVisuals();
+                return;
+            }
+
+            if (restoreSource)
+            {
+                CopyPreviewRects(_hierarchyExitStartNodeRects, _animatedNodeRects);
+                CopyPreviewRects(_hierarchyExitStartGroupRects, _animatedGroupRects);
+            }
+            else
+            {
+                _layoutResult = _hierarchyExitTargetLayout;
+                _layoutFocusPackageId = _layoutResult.FocusPackageId;
+                _layoutFocusGroupId = _layoutResult.FocusGroupId;
+                CopyPreviewRects(_hierarchyExitTargetNodeRects, _animatedNodeRects);
+                CopyPreviewRects(_hierarchyExitTargetGroupRects, _animatedGroupRects);
+            }
+
+            _hierarchyExitTargetLayout = null;
+            _hierarchyExitStartNodeRects.Clear();
+            _hierarchyExitTargetNodeRects.Clear();
+            _hierarchyExitStartGroupRects.Clear();
+            _hierarchyExitTargetGroupRects.Clear();
+            _hierarchyExitProgress = 0f;
+            SetInteractionsLocked(_layoutAnimationActive);
+            ApplyAnimatedLayout();
+            ApplyHierarchyExitVisuals();
         }
 
         public bool SetViewportSize(Vector2 viewportSize)
@@ -2515,6 +3118,7 @@ namespace Deucarian.PackageInstaller.Editor
             DrawUnrelatedSummary();
             ApplyAnimatedLayout();
             _edgeLayer.SetGraph(_visibleGraph, _animatedNodeRects, _layoutResult.CanvasHeight, edgeFocus);
+            ApplyHierarchyExitVisuals();
         }
 
         private string GetLayoutFocusPackageId()
@@ -2657,7 +3261,7 @@ namespace Deucarian.PackageInstaller.Editor
             if (!shouldAnimate)
             {
                 _layoutAnimationActive = false;
-                SetInteractionsLocked(false);
+                SetInteractionsLocked(_hierarchyExitProgress > 0.001f);
                 _layoutAnimationItem?.Pause();
                 CopyTargetRectsToAnimatedRects();
                 return;
@@ -2712,7 +3316,7 @@ namespace Deucarian.PackageInstaller.Editor
             if (t >= 1f)
             {
                 _layoutAnimationActive = false;
-                SetInteractionsLocked(false);
+                SetInteractionsLocked(_hierarchyExitProgress > 0.001f);
                 _layoutAnimationItem?.Pause();
                 CopyTargetRectsToAnimatedRects();
                 ApplyAnimatedLayout();
@@ -2796,6 +3400,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             _interactionsLocked = locked;
             InteractionsLockedChanged?.Invoke(_interactionsLocked);
+            ApplyHierarchyExitVisuals();
         }
 
         private void CopyTargetRectsToAnimatedRects()
@@ -2820,6 +3425,104 @@ namespace Deucarian.PackageInstaller.Editor
                     _animatedGroupRects[target.GroupId] = target.Rect;
                 }
             }
+        }
+
+        private void ApplyHierarchyExitPreviewRects(float easedProgress)
+        {
+            foreach (KeyValuePair<string, Rect> start in _hierarchyExitStartNodeRects)
+            {
+                Rect target = _hierarchyExitTargetNodeRects.TryGetValue(start.Key, out Rect targetRect)
+                    ? targetRect
+                    : start.Value;
+                _animatedNodeRects[start.Key] = LerpRect(start.Value, target, easedProgress);
+            }
+
+            foreach (KeyValuePair<string, Rect> start in _hierarchyExitStartGroupRects)
+            {
+                Rect target = _hierarchyExitTargetGroupRects.TryGetValue(start.Key, out Rect targetRect)
+                    ? targetRect
+                    : start.Value;
+                _animatedGroupRects[start.Key] = LerpRect(start.Value, target, easedProgress);
+            }
+
+            ApplyAnimatedLayout();
+        }
+
+        private void ApplyHierarchyExitVisuals()
+        {
+            bool active = _hierarchyExitProgress > 0.001f;
+            bool interactionsBlocked = active || _interactionsLocked;
+            float eased = PackageGraphTransition.SmoothStep(_hierarchyExitProgress);
+            EnableInClassList("dpi-ecosystem-graph__canvas--hierarchy-exit-preview", active);
+            _guideLayer.style.opacity = Mathf.Lerp(1f, 0.72f, eased);
+            _membershipLayer.style.opacity = Mathf.Lerp(1f, 0.58f, eased);
+            _edgeLayer.style.opacity = Mathf.Lerp(1f, 0.42f, eased);
+
+            foreach (PackageGraphNodeElement nodeElement in _nodeElements.Values)
+            {
+                nodeElement.pickingMode = interactionsBlocked ? PickingMode.Ignore : PickingMode.Position;
+                SetGraphActionButtonsInteractive(nodeElement, !interactionsBlocked && _actionsEnabled);
+            }
+
+            foreach (PackageGraphGroupElement groupElement in _groupElements.Values)
+            {
+                groupElement.pickingMode = interactionsBlocked ? PickingMode.Ignore : PickingMode.Position;
+            }
+        }
+
+        private static void SetGraphActionButtonsInteractive(VisualElement root, bool interactive)
+        {
+            if (root == null)
+            {
+                return;
+            }
+
+            foreach (VisualElement child in root.Children())
+            {
+                if (child is Button button &&
+                    button.ClassListContains("dpi-graph-node__action"))
+                {
+                    button.SetEnabled(interactive);
+                    button.pickingMode = interactive ? PickingMode.Position : PickingMode.Ignore;
+                    button.style.opacity = interactive ? 1f : 0f;
+                }
+
+                SetGraphActionButtonsInteractive(child, interactive);
+            }
+        }
+
+        private static void CopyPreviewRects(
+            IReadOnlyDictionary<string, Rect> source,
+            IDictionary<string, Rect> target)
+        {
+            target.Clear();
+
+            foreach (KeyValuePair<string, Rect> rect in source)
+            {
+                target[rect.Key] = rect.Value;
+            }
+        }
+
+        private static bool TryGetGroupRect(
+            PackageGraphLayoutResult layout,
+            string groupId,
+            out Rect rect)
+        {
+            if (layout != null && !string.IsNullOrWhiteSpace(groupId))
+            {
+                PackageGraphGroupLayoutNode groupNode = layout.GroupNodes.FirstOrDefault(candidate =>
+                    candidate != null &&
+                    string.Equals(candidate.GroupId, groupId, StringComparison.OrdinalIgnoreCase));
+
+                if (groupNode != null)
+                {
+                    rect = groupNode.Rect;
+                    return true;
+                }
+            }
+
+            rect = default(Rect);
+            return false;
         }
 
         private void ApplyAnimatedLayout()

@@ -989,6 +989,81 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void GraphHierarchyExitController_AccumulatesOnlyAtMinimumAndCommitsOnce()
+        {
+            PackageGraphHierarchyExitController controller = new PackageGraphHierarchyExitController();
+
+            PackageGraphHierarchyExitResult beforeMinimum = controller.ApplyWheel(
+                3f,
+                canExit: true,
+                atNormalMinimum: false,
+                currentTime: 0d);
+
+            Assert.IsFalse(beforeMinimum.Consumed);
+            Assert.AreEqual(0f, beforeMinimum.Progress);
+
+            PackageGraphHierarchyExitResult result = default(PackageGraphHierarchyExitResult);
+
+            for (int index = 0; index < 5; index++)
+            {
+                result = controller.ApplyWheel(
+                    3f,
+                    canExit: true,
+                    atNormalMinimum: true,
+                    currentTime: 0.05d * index);
+            }
+
+            Assert.IsTrue(result.Consumed);
+            Assert.IsTrue(result.Committed);
+            Assert.AreEqual(1f, result.Progress);
+
+            controller.Commit(0.25d);
+            PackageGraphHierarchyExitResult cooldownResult = controller.ApplyWheel(
+                3f,
+                canExit: true,
+                atNormalMinimum: true,
+                currentTime: 0.30d);
+
+            Assert.IsFalse(cooldownResult.Consumed);
+            Assert.IsFalse(cooldownResult.Committed);
+            Assert.AreEqual(0f, cooldownResult.Progress);
+        }
+
+        [Test]
+        public void GraphHierarchyExitController_ReverseWheelCancelsBeforeCommit()
+        {
+            PackageGraphHierarchyExitController controller = new PackageGraphHierarchyExitController();
+
+            controller.ApplyWheel(3f, canExit: true, atNormalMinimum: true, currentTime: 0d);
+            PackageGraphHierarchyExitResult forward = controller.ApplyWheel(
+                3f,
+                canExit: true,
+                atNormalMinimum: true,
+                currentTime: 0.05d);
+
+            Assert.IsTrue(forward.Consumed);
+            Assert.Greater(forward.Progress, 0f);
+            Assert.IsFalse(forward.Committed);
+
+            PackageGraphHierarchyExitResult partialReverse = controller.ApplyWheel(
+                -3f,
+                canExit: true,
+                atNormalMinimum: true,
+                currentTime: 0.10d);
+            PackageGraphHierarchyExitResult cancelled = controller.ApplyWheel(
+                -3f,
+                canExit: true,
+                atNormalMinimum: true,
+                currentTime: 0.15d);
+
+            Assert.IsTrue(partialReverse.Consumed);
+            Assert.IsFalse(partialReverse.Cancelled);
+            Assert.IsTrue(cancelled.Consumed);
+            Assert.IsTrue(cancelled.Cancelled);
+            Assert.AreEqual(0f, cancelled.Progress);
+        }
+
+        [Test]
         public void GraphView_DisablesSelectedNodeActionDuringLayoutTransition()
         {
             PackageDefinition package = CreatePackage("Installable", "com.example.installable", "Core");
