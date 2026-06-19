@@ -76,16 +76,24 @@ namespace Deucarian.PackageInstaller.Editor
 
         public static void EnsureLoaded()
         {
-            if (!_bundledLoaded)
-            {
-                ApplyLoadResult(Loader.LoadBundled(), logFailures: true);
-                _bundledLoaded = true;
-            }
+            EnsureBundledLoaded();
 
             if (!_remoteRefreshStarted)
             {
                 StartRemoteRefresh();
             }
+        }
+
+        public static void RefreshRemote()
+        {
+            EnsureBundledLoaded();
+
+            if (_remoteRefreshTask != null)
+            {
+                return;
+            }
+
+            StartRemoteRefresh();
         }
 
         public static IReadOnlyList<PackageDefinition> GetPackagesByCategory(string category)
@@ -227,6 +235,17 @@ namespace Deucarian.PackageInstaller.Editor
 
             EditorApplication.update -= UpdateRemoteRefresh;
             EditorApplication.update += UpdateRemoteRefresh;
+        }
+
+        private static void EnsureBundledLoaded()
+        {
+            if (_bundledLoaded)
+            {
+                return;
+            }
+
+            ApplyLoadResult(Loader.LoadBundled(), logFailures: true);
+            _bundledLoaded = true;
         }
 
         private static void UpdateRemoteRefresh()

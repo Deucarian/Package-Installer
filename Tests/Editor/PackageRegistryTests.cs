@@ -493,6 +493,24 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void BundledRegistryIncludesUiFlow()
+        {
+            string registryJson = File.ReadAllText(GetBundledRegistryPath());
+            PackageRegistryLoadResult result = new PackageRegistryLoader()
+                .LoadFromJson(registryJson, PackageRegistrySource.Bundled);
+
+            Assert.IsTrue(result.IsValid, result.ErrorMessage);
+
+            PackageRegistryEntry uiFlow = result.Registry.packages
+                .Single(package => package.id == "com.deucarian.ui-flow");
+
+            Assert.AreEqual("UI", uiFlow.category);
+            StringAssert.Contains("UI-FLow.git#main", uiFlow.stableUrl);
+            StringAssert.Contains("UI-FLow.git#develop", uiFlow.developmentUrl);
+            CollectionAssert.IsEmpty(uiFlow.dependencies);
+        }
+
+        [Test]
         public void BundledRegistryIncludesEditorBackedTools()
         {
             string registryJson = File.ReadAllText(GetBundledRegistryPath());

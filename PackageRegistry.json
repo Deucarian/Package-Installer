@@ -200,6 +200,21 @@
                                              ]
                      },
                      {
+                         "id":  "com.deucarian.ui-flow",
+                         "displayName":  "Deucarian UI Flow",
+                         "category":  "UI",
+                         "type":  "OptionalIntegration",
+                         "ecosystemGroup":  "Experience \u0026 Interaction",
+                         "groupId":  "experience-interaction",
+                         "overviewOrder":  15,
+                         "description":  "Deterministic asynchronous UI navigation with route assets, channels, guards, transitions, Back handling, action assets, and typed modal presentations.",
+                         "stableUrl":  "https://github.com/Deucarian/UI-FLow.git#main",
+                         "developmentUrl":  "https://github.com/Deucarian/UI-FLow.git#develop",
+                         "dependencies":  [
+
+                                          ]
+                     },
+                     {
                          "id":  "com.deucarian.theming",
                          "displayName":  "Deucarian Theming",
                          "category":  "UI",

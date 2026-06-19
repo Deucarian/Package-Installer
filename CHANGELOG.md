@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.32 - 2026-06-19
+
+- Synced the bundled fallback registry with the remote registry entry for Deucarian UI Flow.
+- Made the Package Installer Refresh button refetch the remote registry instead of only refreshing installed-package detection.
+
 ## 1.1.31 - 2026-06-19
 
 - Removed redundant graph-space sibling category lists now covered by the pinned category rail.

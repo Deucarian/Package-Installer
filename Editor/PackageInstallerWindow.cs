@@ -980,6 +980,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void RefreshPackages()
         {
+            PackageRegistryProvider.RefreshRemote();
             _packageDetectionService.Refresh();
             _packageUpdateCheckService.InvalidateAll();
         }

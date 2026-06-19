@@ -73,6 +73,8 @@ The installer loads the bundled `PackageRegistry.json` first so it works offline
 
 If the remote registry succeeds and validates, the window uses it. If it fails, the bundled registry stays active and the header shows that the remote registry failed.
 
+The header `Refresh` button refreshes installed-package detection and refetches the remote registry, so newly registered packages can appear without restarting Unity.
+
 Remote registry validation also checks each package entry against the target package's `package.json` name so installed-package detection uses Unity's exact package IDs. If a target manifest cannot be fetched, the validation message includes the exact `package.json` URL that failed.
 
 The current bundled fallback registry includes these Ecosystem Graph groups:
@@ -80,7 +82,7 @@ The current bundled fallback registry includes these Ecosystem Graph groups:
 - Infrastructure: Editor, Logging
 - State & Data: Core State
 - Runtime Services: API, Session, Object Loading
-- Experience & Interaction: UI Binding, Theming, Object Selection
+- Experience & Interaction: UI Binding, UI Flow, Theming, Object Selection
 - Tools & Quality: Package Installer, Diagnostics
 - Integrations: UI Binding + Core State Integration, Object Loading API Integration, Object Selection + Core State Integration, Session + API Integration
 - Suites: Selection Suite
@@ -93,6 +95,7 @@ Registered packages are first-class UPM packages with their own package IDs:
 - `com.deucarian.object-loading`
 - `com.deucarian.session`
 - `com.deucarian.ui-binding`
+- `com.deucarian.ui-flow`
 - `com.deucarian.theming`
 - `com.deucarian.object-selection`
 - `com.deucarian.editor`
