@@ -528,6 +528,120 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void CategoryStatusSummary_ClassifiesPackagesIntoMutuallyExclusiveBuckets()
+        {
+            PackageDefinition installed = CreatePackage("Installed", "com.example.installed", "Core");
+            PackageDefinition update = CreatePackage("Update", "com.example.update", "Core");
+            PackageDefinition notInstalled = CreatePackage("Not Installed", "com.example.not-installed", "Core");
+            PackageDefinition dependency = CreatePackage("Dependency", "com.example.dependency", "Core");
+            PackageDefinition consumer = CreatePackage(
+                "Consumer",
+                "com.example.consumer",
+                "Core",
+                dependencies: new[] { dependency.PackageId });
+            PackageGraphModel graph = new PackageGraphBuilder(
+                    packageId => packageId == installed.PackageId ||
+                                 packageId == update.PackageId ||
+                                 packageId == consumer.PackageId,
+                    _ => PackageChannel.Stable,
+                    package => package.PackageId == update.PackageId
+                        ? PackageUpdateStatus.UpdateAvailable(
+                            package,
+                            PackageChannel.Stable,
+                            package.GetUrl(PackageChannel.Stable),
+                            "1111111",
+                            "2222222")
+                        : PackageUpdateStatus.UpToDate(
+                            package,
+                            PackageChannel.Stable,
+                            package.GetUrl(PackageChannel.Stable),
+                            "1111111",
+                            "1111111"))
+                .Build(new[] { installed, update, notInstalled, dependency, consumer });
+
+            PackageGraphCategoryStatusSummary summary =
+                PackageGraphCategoryStatusSummary.Create(graph.Nodes);
+
+            Assert.AreEqual(2, summary.InstalledCount);
+            Assert.AreEqual(1, summary.NotInstalledCount);
+            Assert.AreEqual(2, summary.AttentionCount);
+            Assert.AreEqual(0, summary.UnknownCount);
+            Assert.AreEqual(graph.Nodes.Count, summary.TotalCount);
+            Assert.AreEqual(
+                PackageGraphCategoryStatusKey.Attention,
+                PackageGraphCategoryStatusClassifier.Classify(
+                    graph.Nodes.Single(node => node.PackageId == update.PackageId)));
+            Assert.AreEqual(
+                PackageGraphCategoryStatusKey.Attention,
+                PackageGraphCategoryStatusClassifier.Classify(
+                    graph.Nodes.Single(node => node.PackageId == dependency.PackageId)));
+        }
+
+        [Test]
+        public void CategoryStatusSlices_AreOrderedAndProportionalToCounts()
+        {
+            IReadOnlyList<CategoryStatusSlice> mixedSlices =
+                PackageGraphCategoryStatusVisuals.CreateSlices(
+                    new PackageGraphCategoryStatusSummary(2, 1, 1, 0));
+            IReadOnlyList<CategoryStatusSlice> singleSlices =
+                PackageGraphCategoryStatusVisuals.CreateSlices(
+                    new PackageGraphCategoryStatusSummary(0, 4, 0, 0));
+            IReadOnlyList<CategoryStatusSlice> futureSlices =
+                PackageGraphCategoryStatusVisuals.CreateSlices(
+                    new PackageGraphCategoryStatusSummary(1, 1, 1, 1));
+            IReadOnlyList<CategoryStatusSlice> emptySlices =
+                PackageGraphCategoryStatusVisuals.CreateSlices(
+                    new PackageGraphCategoryStatusSummary(0, 0, 0, 0));
+
+            CollectionAssert.AreEqual(
+                new[]
+                {
+                    PackageGraphCategoryStatusKey.Installed,
+                    PackageGraphCategoryStatusKey.NotInstalled,
+                    PackageGraphCategoryStatusKey.Attention
+                },
+                mixedSlices.Select(slice => slice.StatusKey).ToArray());
+            CollectionAssert.AreEqual(new[] { 2, 1, 1 }, mixedSlices.Select(slice => slice.Count).ToArray());
+            Assert.AreEqual(4, mixedSlices.Sum(slice => slice.Count));
+            Assert.AreEqual(0.50f, mixedSlices[0].Count / 4f, 0.001f);
+            Assert.AreEqual(0.25f, mixedSlices[1].Count / 4f, 0.001f);
+            Assert.AreEqual(0.25f, mixedSlices[2].Count / 4f, 0.001f);
+            Assert.AreEqual(1, singleSlices.Count);
+            Assert.AreEqual(PackageGraphCategoryStatusKey.NotInstalled, singleSlices[0].StatusKey);
+            Assert.AreEqual(4, futureSlices.Count);
+            Assert.IsTrue(futureSlices.Any(slice => slice.StatusKey == PackageGraphCategoryStatusKey.Unknown));
+            Assert.IsEmpty(emptySlices);
+        }
+
+        [Test]
+        public void CategoryStatusRings_AggregateRootAndNestedCategoryPackages()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+            PackageGraphCanvas canvas = new PackageGraphCanvas(_ => { }, (_, __) => { }, () => { });
+
+            canvas.SetGraph(graph, string.Empty, string.Empty, true);
+
+            IReadOnlyList<CategoryStatusRingVisualState> rings = canvas.StatusRingVisualStatesForTests;
+            CategoryStatusRingVisualState rootRing =
+                rings.Single(ring => ring.RingId == "root:status");
+            CategoryStatusRingVisualState experienceRing =
+                rings.Single(ring => ring.RingId == "group:experience-interaction:status");
+
+            Assert.AreEqual(graph.Nodes.Count, rootRing.TotalCount);
+            Assert.AreEqual(3, experienceRing.TotalCount);
+            Assert.AreEqual(
+                3,
+                experienceRing.Slices.Single(slice => slice.StatusKey == PackageGraphCategoryStatusKey.NotInstalled).Count);
+            Assert.That(experienceRing.Radius, Is.GreaterThan(experienceRing.Thickness));
+            Assert.That(
+                Vector2.Distance(
+                    canvas.AnimatedGroupCentersForTests["experience-interaction"],
+                    experienceRing.Center),
+                Is.LessThan(0.1f));
+        }
+
+        [Test]
         public void Layout_PlacesTopLevelGroupsOnOneGlobalOrbit()
         {
             PackageGraphModel graph = new PackageGraphBuilder(_ => false)
@@ -1326,138 +1440,25 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
-        public void GraphViewport_HierarchyExitIntentStartsAboveHardMinimum()
+        public void GraphViewport_RemovesWheelDrivenHierarchyNavigationArchitecture()
         {
-            const float normalMinimum = 0.42f;
+            System.Reflection.BindingFlags flags =
+                System.Reflection.BindingFlags.Instance |
+                System.Reflection.BindingFlags.Public |
+                System.Reflection.BindingFlags.NonPublic |
+                System.Reflection.BindingFlags.Static;
+            System.Reflection.Assembly graphAssembly = typeof(PackageGraphViewport).Assembly;
 
-            Assert.That(
-                PackageGraphViewport.GetHierarchyExitIntentZoomForTests(normalMinimum),
-                Is.GreaterThan(normalMinimum));
-            Assert.That(
-                PackageGraphViewport.GetHierarchyExitIntentZoomForTests(normalMinimum),
-                Is.LessThan(0.50f));
+            Assert.IsNull(typeof(PackageGraphViewport).GetEvent("HierarchyExitWheel", flags));
+            Assert.IsNull(typeof(PackageGraphViewport).GetEvent("HierarchyEnterWheel", flags));
+            Assert.IsNull(typeof(PackageGraphViewport).GetMethod("GetHierarchyExitIntentZoomForTests", flags));
+            Assert.IsNull(graphAssembly.GetType("Deucarian.PackageInstaller.Editor.PackageGraphHierarchyExitController"));
+            Assert.IsNull(graphAssembly.GetType("Deucarian.PackageInstaller.Editor.PackageGraphHierarchyExitWheelEvent"));
+            Assert.IsNull(graphAssembly.GetType("Deucarian.PackageInstaller.Editor.PackageGraphHierarchyEnterWheelEvent"));
         }
 
         [Test]
-        public void GraphHierarchyExitController_AccumulatesOnlyAtMinimumAndCommitsOnce()
-        {
-            PackageGraphHierarchyExitController controller = new PackageGraphHierarchyExitController();
-
-            PackageGraphHierarchyExitResult beforeMinimum = controller.ApplyWheel(
-                3f,
-                canExit: true,
-                atNormalMinimum: false,
-                currentTime: 0d);
-
-            Assert.IsFalse(beforeMinimum.Consumed);
-            Assert.AreEqual(0f, beforeMinimum.Progress);
-
-            PackageGraphHierarchyExitResult result = default(PackageGraphHierarchyExitResult);
-
-            for (int index = 0; index < 5; index++)
-            {
-                result = controller.ApplyWheel(
-                    3f,
-                    canExit: true,
-                    atNormalMinimum: true,
-                    currentTime: 0.05d * index);
-            }
-
-            Assert.IsTrue(result.Consumed);
-            Assert.IsTrue(result.Committed);
-            Assert.AreEqual(1f, result.Progress);
-
-            controller.Commit(0.25d);
-            PackageGraphHierarchyExitResult cooldownResult = controller.ApplyWheel(
-                3f,
-                canExit: true,
-                atNormalMinimum: true,
-                currentTime: 0.30d);
-
-            Assert.IsFalse(cooldownResult.Consumed);
-            Assert.IsFalse(cooldownResult.Committed);
-            Assert.AreEqual(0f, cooldownResult.Progress);
-        }
-
-        [Test]
-        public void GraphHierarchyExitController_ReverseWheelCancelsBeforeCommit()
-        {
-            PackageGraphHierarchyExitController controller = new PackageGraphHierarchyExitController();
-
-            controller.ApplyWheel(3f, canExit: true, atNormalMinimum: true, currentTime: 0d);
-            PackageGraphHierarchyExitResult forward = controller.ApplyWheel(
-                3f,
-                canExit: true,
-                atNormalMinimum: true,
-                currentTime: 0.05d);
-
-            Assert.IsTrue(forward.Consumed);
-            Assert.Greater(forward.Progress, 0f);
-            Assert.IsFalse(forward.Committed);
-
-            PackageGraphHierarchyExitResult partialReverse = controller.ApplyWheel(
-                -3f,
-                canExit: true,
-                atNormalMinimum: true,
-                currentTime: 0.10d);
-            PackageGraphHierarchyExitResult cancelled = controller.ApplyWheel(
-                -3f,
-                canExit: true,
-                atNormalMinimum: true,
-                currentTime: 0.15d);
-
-            Assert.IsTrue(partialReverse.Consumed);
-            Assert.IsFalse(partialReverse.Cancelled);
-            Assert.IsTrue(cancelled.Consumed);
-            Assert.IsTrue(cancelled.Cancelled);
-            Assert.AreEqual(0f, cancelled.Progress);
-        }
-
-        [Test]
-        public void GraphHierarchyEnterEligibility_OnlyAllowsDirectStructuralChildren()
-        {
-            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
-                .Build(CreateDefaultGraphPackages());
-
-            Assert.IsTrue(PackageGraphView.CanEnterHierarchyForTests(
-                graph,
-                "infrastructure",
-                PackageGraphLayoutMode.Overview,
-                string.Empty));
-            Assert.IsFalse(PackageGraphView.CanEnterHierarchyForTests(
-                graph,
-                "ui-presentation",
-                PackageGraphLayoutMode.Overview,
-                string.Empty));
-            Assert.IsTrue(PackageGraphView.CanEnterHierarchyForTests(
-                graph,
-                "ui-presentation",
-                PackageGraphLayoutMode.GroupFocus,
-                "experience-interaction"));
-            Assert.IsFalse(PackageGraphView.CanEnterHierarchyForTests(
-                graph,
-                "ui-presentation",
-                PackageGraphLayoutMode.GroupFocus,
-                "ui-presentation"));
-            Assert.IsFalse(PackageGraphView.CanEnterHierarchyForTests(
-                graph,
-                "ui-presentation",
-                PackageGraphLayoutMode.GroupFocus,
-                "infrastructure"));
-            Assert.IsFalse(PackageGraphView.CanEnterHierarchyForTests(
-                graph,
-                "experience-interaction",
-                PackageGraphLayoutMode.Focus,
-                "experience-interaction"));
-            Assert.IsFalse(PackageGraphView.CanEnterHierarchyForTests(
-                graph,
-                "com.deucarian.ui-binding",
-                PackageGraphLayoutMode.GroupFocus,
-                "ui-presentation"));
-        }
-
-        [Test]
-        public void GraphHierarchyEnterHover_UsesDirectGroupHoverNotPackageParent()
+        public void GraphCategoryHover_UsesDirectGroupHoverNotPackageParent()
         {
             PackageGraphModel graph = new PackageGraphBuilder(_ => false)
                 .Build(CreateDefaultGraphPackages());
@@ -1577,11 +1578,81 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 symbol.style.width.value.value,
                 Is.EqualTo(symbol.style.height.value.value).Within(0.1f));
             Assert.IsEmpty(FindByClass(symbol, "dpi-graph-group__title"));
+            Assert.IsEmpty(FindByClass(symbol, "dpi-graph-group__count"));
+            Assert.IsEmpty(FindByClass(symbol, "dpi-graph-group__attention"));
             Assert.IsTrue(
                 FindByClass(runtimeGroup, "dpi-graph-group__title")
                     .OfType<Label>()
                     .Any(label => label.text == "Runtime Services"));
+            Assert.IsTrue(
+                FindByClass(runtimeGroup, "dpi-graph-group__subtitle")
+                    .OfType<Label>()
+                    .Any(label => label.text.Contains("package")));
+            Assert.IsTrue(
+                FindByClass(runtimeGroup, "dpi-graph-group__stat--installed")
+                    .OfType<Label>()
+                    .Any(label => label.text.Contains("installed")));
+            Assert.IsTrue(
+                FindByClass(runtimeGroup, "dpi-graph-group__stat--available")
+                    .OfType<Label>()
+                    .Any(label => label.text.Contains("not installed")));
+            Assert.IsTrue(
+                FindByClass(runtimeGroup, "dpi-graph-group__stat--attention")
+                    .OfType<Label>()
+                    .Any(label => label.text.Contains("attention")));
             Assert.IsEmpty(FindByClass(runtimeGroup, "dpi-graph-node__action"));
+        }
+
+        [Test]
+        public void GraphView_ActiveCategoryAndPackageExposeBackAffordance()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+            PackageGraphView overview = new PackageGraphView(_ => { }, (_, __) => { });
+            PackageGraphView groupFocused = new PackageGraphView(_ => { }, (_, __) => { });
+            PackageGraphView nestedGroupFocused = new PackageGraphView(_ => { }, (_, __) => { });
+            PackageGraphView packageFocused = new PackageGraphView(_ => { }, (_, __) => { });
+
+            overview.SetGraph(graph, string.Empty, actionsEnabled: true);
+            groupFocused.SetGraph(
+                graph,
+                string.Empty,
+                string.Empty,
+                "infrastructure",
+                actionsEnabled: true,
+                visiblePackageIds: null,
+                filterCounts: null,
+                hiddenRelatedCount: 0);
+            nestedGroupFocused.SetGraph(
+                graph,
+                string.Empty,
+                string.Empty,
+                "ui-presentation",
+                actionsEnabled: true,
+                visiblePackageIds: null,
+                filterCounts: null,
+                hiddenRelatedCount: 0);
+            packageFocused.SetGraph(graph, "com.deucarian.session", actionsEnabled: true);
+
+            VisualElement inactiveOverviewGroup = FindGraphGroup(overview, "infrastructure");
+            VisualElement activeTopLevelGroup = FindGraphGroup(groupFocused, "infrastructure");
+            VisualElement activeNestedGroup = FindGraphGroup(nestedGroupFocused, "ui-presentation");
+            VisualElement selectedPackage = FindGraphNode(packageFocused, "com.deucarian.session");
+            VisualElement relatedPackage = FindGraphNode(packageFocused, "com.deucarian.logging");
+            Button packageBack = FindByClass(selectedPackage, "dpi-graph-node__back")
+                .OfType<Button>()
+                .Single();
+
+            Assert.IsFalse(inactiveOverviewGroup.ClassListContains("dpi-graph-group--has-back"));
+            Assert.IsEmpty(FindByClass(inactiveOverviewGroup, "dpi-graph-group__back"));
+            Assert.IsTrue(activeTopLevelGroup.ClassListContains("dpi-graph-group--has-back"));
+            Assert.AreEqual(1, FindByClass(activeTopLevelGroup, "dpi-graph-group__back").Count);
+            Assert.AreEqual("Back to Ecosystem Overview", activeTopLevelGroup.tooltip);
+            Assert.IsTrue(activeNestedGroup.ClassListContains("dpi-graph-group--has-back"));
+            Assert.AreEqual("Back to Experience & Interaction", activeNestedGroup.tooltip);
+            Assert.IsTrue(selectedPackage.ClassListContains("dpi-graph-node--has-back"));
+            Assert.AreEqual("Back to Runtime Services", packageBack.tooltip);
+            Assert.IsEmpty(FindByClass(relatedPackage, "dpi-graph-node__back"));
         }
 
         [Test]

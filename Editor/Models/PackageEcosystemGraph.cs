@@ -46,6 +46,110 @@ namespace Deucarian.PackageInstaller.Editor
         Warning
     }
 
+    internal enum PackageGraphCategoryStatusKey
+    {
+        Installed,
+        NotInstalled,
+        Attention,
+        Unknown
+    }
+
+    internal readonly struct PackageGraphCategoryStatusSummary
+    {
+        public PackageGraphCategoryStatusSummary(
+            int installedCount,
+            int notInstalledCount,
+            int attentionCount,
+            int unknownCount)
+        {
+            InstalledCount = Math.Max(0, installedCount);
+            NotInstalledCount = Math.Max(0, notInstalledCount);
+            AttentionCount = Math.Max(0, attentionCount);
+            UnknownCount = Math.Max(0, unknownCount);
+        }
+
+        public int InstalledCount { get; }
+
+        public int NotInstalledCount { get; }
+
+        public int AttentionCount { get; }
+
+        public int UnknownCount { get; }
+
+        public int TotalCount => InstalledCount + NotInstalledCount + AttentionCount + UnknownCount;
+
+        public int GetCount(PackageGraphCategoryStatusKey statusKey)
+        {
+            switch (statusKey)
+            {
+                case PackageGraphCategoryStatusKey.Installed:
+                    return InstalledCount;
+                case PackageGraphCategoryStatusKey.NotInstalled:
+                    return NotInstalledCount;
+                case PackageGraphCategoryStatusKey.Attention:
+                    return AttentionCount;
+                default:
+                    return UnknownCount;
+            }
+        }
+
+        public static PackageGraphCategoryStatusSummary Create(IEnumerable<PackageGraphNode> packages)
+        {
+            int installed = 0;
+            int notInstalled = 0;
+            int attention = 0;
+            int unknown = 0;
+
+            foreach (PackageGraphNode package in packages ?? Enumerable.Empty<PackageGraphNode>())
+            {
+                switch (PackageGraphCategoryStatusClassifier.Classify(package))
+                {
+                    case PackageGraphCategoryStatusKey.Attention:
+                        attention++;
+                        break;
+                    case PackageGraphCategoryStatusKey.Installed:
+                        installed++;
+                        break;
+                    case PackageGraphCategoryStatusKey.NotInstalled:
+                        notInstalled++;
+                        break;
+                    default:
+                        unknown++;
+                        break;
+                }
+            }
+
+            return new PackageGraphCategoryStatusSummary(installed, notInstalled, attention, unknown);
+        }
+    }
+
+    internal static class PackageGraphCategoryStatusClassifier
+    {
+        public static PackageGraphCategoryStatusKey Classify(PackageGraphNode package)
+        {
+            if (package == null)
+            {
+                return PackageGraphCategoryStatusKey.Unknown;
+            }
+
+            switch (package.Status)
+            {
+                case PackageGraphNodeStatus.UpdateAvailable:
+                case PackageGraphNodeStatus.Missing:
+                case PackageGraphNodeStatus.Warning:
+                    return PackageGraphCategoryStatusKey.Attention;
+                case PackageGraphNodeStatus.Installed:
+                    return PackageGraphCategoryStatusKey.Installed;
+                case PackageGraphNodeStatus.NotInstalled:
+                    return PackageGraphCategoryStatusKey.NotInstalled;
+                default:
+                    return package.IsInstalled
+                        ? PackageGraphCategoryStatusKey.Unknown
+                        : PackageGraphCategoryStatusKey.NotInstalled;
+            }
+        }
+    }
+
     internal enum PackageGraphNodeAction
     {
         None,

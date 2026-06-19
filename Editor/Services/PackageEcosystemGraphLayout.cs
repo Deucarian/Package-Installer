@@ -219,7 +219,9 @@ namespace Deucarian.PackageInstaller.Editor
             PackageGraphLayoutRing ring,
             int packageCount,
             int installedCount,
-            int missingCount,
+            int notInstalledCount,
+            int attentionCount,
+            int unknownCount,
             int updateCount,
             bool focused,
             bool collapsed,
@@ -233,7 +235,10 @@ namespace Deucarian.PackageInstaller.Editor
             Ring = ring;
             PackageCount = Math.Max(0, packageCount);
             InstalledCount = Math.Max(0, installedCount);
-            MissingCount = Math.Max(0, missingCount);
+            NotInstalledCount = Math.Max(0, notInstalledCount);
+            AttentionCount = Math.Max(0, attentionCount);
+            UnknownCount = Math.Max(0, unknownCount);
+            MissingCount = AttentionCount;
             UpdateCount = Math.Max(0, updateCount);
             Focused = focused;
             Collapsed = collapsed;
@@ -264,6 +269,19 @@ namespace Deucarian.PackageInstaller.Editor
         public int PackageCount { get; }
 
         public int InstalledCount { get; }
+
+        public int NotInstalledCount { get; }
+
+        public int AttentionCount { get; }
+
+        public int UnknownCount { get; }
+
+        public PackageGraphCategoryStatusSummary StatusSummary =>
+            new PackageGraphCategoryStatusSummary(
+                InstalledCount,
+                NotInstalledCount,
+                AttentionCount,
+                UnknownCount);
 
         public int MissingCount { get; }
 
@@ -899,11 +917,8 @@ namespace Deucarian.PackageInstaller.Editor
             PackageGraphNode[] packages = packageScope == null
                 ? GetDescendantPackages(graph, group.Id).ToArray()
                 : packageScope.Where(node => node != null).ToArray();
-            int installedCount = packages.Count(node => node.IsInstalled);
-            int missingCount = packages.Count(node =>
-                node.Status == PackageGraphNodeStatus.NotInstalled ||
-                node.Status == PackageGraphNodeStatus.Missing ||
-                node.Status == PackageGraphNodeStatus.Warning);
+            PackageGraphCategoryStatusSummary statusSummary =
+                PackageGraphCategoryStatusSummary.Create(packages);
             int updateCount = packages.Count(node => node.Status == PackageGraphNodeStatus.UpdateAvailable);
             Rect clampedRect = ClampToCanvas(rect);
             Vector2 hubOffset = hubRect.position - rect.position;
@@ -919,8 +934,10 @@ namespace Deucarian.PackageInstaller.Editor
                 clampedHubRect,
                 ResolveRing(group.Id),
                 packages.Length,
-                installedCount,
-                missingCount,
+                statusSummary.InstalledCount,
+                statusSummary.NotInstalledCount,
+                statusSummary.AttentionCount,
+                statusSummary.UnknownCount,
                 updateCount,
                 focused,
                 collapsed,

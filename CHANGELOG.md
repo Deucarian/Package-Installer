@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.47 - 2026-06-19
+
+- Removed wheel-driven hierarchy enter/exit navigation so mouse wheel input only performs cursor-centered graph camera zoom.
+- Added active category/package back affordances for the click-again-to-go-back hierarchy flow.
+- Replaced noisy category hub counters/badges with external status summaries and proportional installed/not-installed/attention status rings.
+
 ## 1.1.46 - 2026-06-19
 
 - Removed the duplicate CSS ring-guide orbit renderer so root and category orbits are drawn only by the graph Painter2D orbit layer.
