@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.46 - 2026-06-19
+
+- Removed the duplicate CSS ring-guide orbit renderer so root and category orbits are drawn only by the graph Painter2D orbit layer.
+- Added node visual-state driven transition frames with opacity and scale so entering category children fan outward instead of spawning as full-size center stacks.
+- Started hierarchy-exit wheel intent slightly above the hard minimum zoom while preserving multi-notch commit behavior.
+
 ## 1.1.45 - 2026-06-19
 
 - Reworked hierarchy preview frames to derive category hub anchors, rendered orbits, child nodes, and spokes from one animated group center/radius state.

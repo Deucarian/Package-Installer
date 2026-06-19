@@ -2297,6 +2297,7 @@ namespace Deucarian.PackageInstaller.Editor
         private const float FocusMinZoom = 0.42f;
         private const float AbsoluteMinZoom = 0.10f;
         private const float MaxZoom = 1.75f;
+        private const float HierarchyExitIntentZoomMultiplier = 1.16f;
         private const float FitMarginRatio = 0.10f;
         private const float MinFitPadding = 28f;
         private const float MaxFitPadding = 88f;
@@ -2625,19 +2626,19 @@ namespace Deucarian.PackageInstaller.Editor
             float normalMinimumZoom = GetMinZoom();
             bool zoomingOut = evt.delta.y > 0f;
             bool zoomingIn = evt.delta.y < 0f;
-            bool atNormalMinimum = _zoom <= normalMinimumZoom + 0.002f;
+            bool atHierarchyExitIntentZoom = _zoom <= GetHierarchyExitIntentZoom(normalMinimumZoom);
             bool atNormalMaximum = _zoom >= MaxZoom - 0.002f;
 
             if (_hierarchyExitPreviewActive ||
                 (zoomingOut &&
                  _layoutMode != PackageGraphLayoutMode.Overview &&
-                 atNormalMinimum))
+                 atHierarchyExitIntentZoom))
             {
                 PackageGraphHierarchyExitWheelEvent hierarchyExitEvent =
                     new PackageGraphHierarchyExitWheelEvent(
                         evt.delta.y,
                         evt.localMousePosition,
-                        atNormalMinimum);
+                        atHierarchyExitIntentZoom);
 
                 if (HierarchyExitWheel?.Invoke(hierarchyExitEvent) == true)
                 {
@@ -3009,9 +3010,22 @@ namespace Deucarian.PackageInstaller.Editor
             return CalculateEffectiveMinZoom(configuredMinimum, requiredFitZoom);
         }
 
+        internal static float GetHierarchyExitIntentZoomForTests(float normalMinimumZoom)
+        {
+            return GetHierarchyExitIntentZoom(normalMinimumZoom);
+        }
+
         private static float CalculateEffectiveMinZoom(float configuredMinimum, float requiredFitZoom)
         {
             return Mathf.Max(AbsoluteMinZoom, Mathf.Min(configuredMinimum, requiredFitZoom));
+        }
+
+        private static float GetHierarchyExitIntentZoom(float normalMinimumZoom)
+        {
+            return Mathf.Clamp(
+                normalMinimumZoom * HierarchyExitIntentZoomMultiplier,
+                AbsoluteMinZoom,
+                MaxZoom);
         }
 
         private static bool IsLeftPanTarget(VisualElement target)
@@ -3157,6 +3171,60 @@ namespace Deucarian.PackageInstaller.Editor
         }
     }
 
+    internal readonly struct PackageGraphNodeVisualState
+    {
+        public PackageGraphNodeVisualState(
+            Rect rect,
+            float opacity,
+            float scale,
+            PackageGraphNodePresentationLevel presentationLevel,
+            bool visible,
+            bool entering,
+            bool leaving)
+        {
+            Rect = rect;
+            Opacity = Mathf.Clamp01(opacity);
+            Scale = Mathf.Max(0.01f, scale);
+            PresentationLevel = presentationLevel;
+            Visible = visible;
+            Entering = entering;
+            Leaving = leaving;
+        }
+
+        public Rect Rect { get; }
+
+        public float Opacity { get; }
+
+        public float Scale { get; }
+
+        public PackageGraphNodePresentationLevel PresentationLevel { get; }
+
+        public bool Visible { get; }
+
+        public bool Entering { get; }
+
+        public bool Leaving { get; }
+
+        public static PackageGraphNodeVisualState Stable(
+            Rect rect,
+            PackageGraphNodePresentationLevel presentationLevel)
+        {
+            return new PackageGraphNodeVisualState(rect, 1f, 1f, presentationLevel, true, false, false);
+        }
+
+        public PackageGraphNodeVisualState WithRect(Rect rect)
+        {
+            return new PackageGraphNodeVisualState(
+                rect,
+                Opacity,
+                Scale,
+                PresentationLevel,
+                Visible,
+                Entering,
+                Leaving);
+        }
+    }
+
     internal sealed class PackageGraphCanvas : VisualElement
     {
         private const float LayoutTransitionSeconds = 0.24f;
@@ -3170,6 +3238,8 @@ namespace Deucarian.PackageInstaller.Editor
         private readonly PackageGraphLayout _layout = new PackageGraphLayout();
         private readonly Dictionary<string, Rect> _animatedNodeRects =
             new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, PackageGraphNodeVisualState> _nodeVisualStates =
+            new Dictionary<string, PackageGraphNodeVisualState>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, Rect> _animatedGroupRects =
             new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, Vector2> _animatedGroupCenters =
@@ -3178,6 +3248,10 @@ namespace Deucarian.PackageInstaller.Editor
             new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, Rect> _transitionStartRects =
             new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, PackageGraphNodeVisualState> _transitionStartNodeVisualStates =
+            new Dictionary<string, PackageGraphNodeVisualState>(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _transitionEnteringNodeIds =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, Rect> _transitionStartGroupRects =
             new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, Vector2> _transitionStartGroupCenters =
@@ -3229,6 +3303,10 @@ namespace Deucarian.PackageInstaller.Editor
             new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, Rect> _hierarchyExitTargetNodeRects =
             new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _hierarchyExitEnteringNodeIds =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _hierarchyExitLeavingNodeIds =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, Rect> _hierarchyExitStartGroupRects =
             new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, Rect> _hierarchyExitTargetGroupRects =
@@ -3340,6 +3418,18 @@ namespace Deucarian.PackageInstaller.Editor
         internal IReadOnlyDictionary<string, float> AnimatedGroupOrbitRadiiForTests => _animatedGroupOrbitRadii;
 
         internal IReadOnlyDictionary<string, Vector2> AnimatedGroupCentersForTests => _animatedGroupCenters;
+
+        internal IReadOnlyDictionary<string, PackageGraphNodeVisualState> NodeVisualStatesForTests => _nodeVisualStates;
+
+        internal IReadOnlyList<PackageGraphOrbitVisualState> OrbitVisualStatesForTests =>
+            _membershipLayer.BuildOrbitVisualStatesForTests();
+
+        internal int CountNodeElementsForTests(string packageId)
+        {
+            return _nodeLayer.Children().Count(child =>
+                child is PackageGraphNodeElement &&
+                string.Equals(child.name, packageId, StringComparison.OrdinalIgnoreCase));
+        }
 
         public bool TryGetTransitionAnchorCenter(
             PackageGraphTransitionAnchor anchor,
@@ -3455,6 +3545,8 @@ namespace Deucarian.PackageInstaller.Editor
             _hierarchyExitTargetLayout = targetLayout;
             _hierarchyExitStartNodeRects.Clear();
             _hierarchyExitTargetNodeRects.Clear();
+            _hierarchyExitEnteringNodeIds.Clear();
+            _hierarchyExitLeavingNodeIds.Clear();
             _hierarchyExitStartGroupRects.Clear();
             _hierarchyExitTargetGroupRects.Clear();
             _hierarchyExitStartGroupCenters.Clear();
@@ -3472,9 +3564,15 @@ namespace Deucarian.PackageInstaller.Editor
             foreach (KeyValuePair<string, Rect> current in currentNodeRects)
             {
                 _hierarchyExitStartNodeRects[current.Key] = current.Value;
-                _hierarchyExitTargetNodeRects[current.Key] = targetLayout.NodeRects.TryGetValue(current.Key, out Rect targetRect)
-                    ? targetRect
-                    : CenterRectOn(current.Value, targetCenter);
+                bool leaving = !targetLayout.NodeRects.TryGetValue(current.Key, out Rect targetRect);
+                _hierarchyExitTargetNodeRects[current.Key] = leaving
+                    ? CenterRectOn(current.Value, targetCenter)
+                    : targetRect;
+
+                if (leaving)
+                {
+                    _hierarchyExitLeavingNodeIds.Add(current.Key);
+                }
             }
 
             foreach (KeyValuePair<string, Rect> target in targetLayout.NodeRects)
@@ -3484,8 +3582,13 @@ namespace Deucarian.PackageInstaller.Editor
                     continue;
                 }
 
-                _hierarchyExitStartNodeRects[target.Key] = CenterRectOn(target.Value, sourceCenter);
+                _hierarchyExitStartNodeRects[target.Key] = CreateEnteringNodePreviewStartRect(
+                    target.Key,
+                    target.Value,
+                    targetLayout,
+                    sourceCenter);
                 _hierarchyExitTargetNodeRects[target.Key] = target.Value;
+                _hierarchyExitEnteringNodeIds.Add(target.Key);
             }
 
             foreach (KeyValuePair<string, Rect> current in currentGroupRects)
@@ -3535,6 +3638,7 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             _hierarchyExitProgress = 0f;
+            EnsurePreviewNodeElements(targetLayout);
             ApplyHierarchyExitVisuals();
             return true;
         }
@@ -3565,6 +3669,8 @@ namespace Deucarian.PackageInstaller.Editor
             if (restoreSource)
             {
                 CopyPreviewRects(_hierarchyExitStartNodeRects, _animatedNodeRects);
+                RemoveNodeVisuals(_hierarchyExitEnteringNodeIds);
+                RebuildStableNodeVisualStates(_animatedNodeRects);
                 CopyPreviewRects(_hierarchyExitStartGroupRects, _animatedGroupRects);
                 CopyPreviewCenters(_hierarchyExitStartGroupCenters, _animatedGroupCenters);
                 CopyPreviewOrbitRadii(_hierarchyExitStartGroupOrbitRadii, _animatedGroupOrbitRadii);
@@ -3575,6 +3681,8 @@ namespace Deucarian.PackageInstaller.Editor
                 _layoutFocusPackageId = _layoutResult.FocusPackageId;
                 _layoutFocusGroupId = _layoutResult.FocusGroupId;
                 CopyPreviewRects(_hierarchyExitTargetNodeRects, _animatedNodeRects);
+                RemoveNodeVisuals(_hierarchyExitLeavingNodeIds);
+                RebuildStableNodeVisualStates(_animatedNodeRects);
                 CopyPreviewRects(_hierarchyExitTargetGroupRects, _animatedGroupRects);
                 CopyPreviewCenters(_hierarchyExitTargetGroupCenters, _animatedGroupCenters);
                 CopyPreviewOrbitRadii(_hierarchyExitTargetGroupOrbitRadii, _animatedGroupOrbitRadii);
@@ -3583,6 +3691,8 @@ namespace Deucarian.PackageInstaller.Editor
             _hierarchyExitTargetLayout = null;
             _hierarchyExitStartNodeRects.Clear();
             _hierarchyExitTargetNodeRects.Clear();
+            _hierarchyExitEnteringNodeIds.Clear();
+            _hierarchyExitLeavingNodeIds.Clear();
             _hierarchyExitStartGroupRects.Clear();
             _hierarchyExitTargetGroupRects.Clear();
             _hierarchyExitStartGroupCenters.Clear();
@@ -3700,6 +3810,7 @@ namespace Deucarian.PackageInstaller.Editor
         private void Rebuild()
         {
             Dictionary<string, Rect> previousRects = CaptureCurrentNodeRects();
+            Dictionary<string, PackageGraphNodeVisualState> previousNodeVisualStates = CaptureCurrentNodeVisualStates();
             Dictionary<string, Rect> previousGroupRects = CaptureCurrentGroupRects();
             Dictionary<string, Vector2> previousGroupCenters = CaptureCurrentGroupCenters();
             Dictionary<string, float> previousGroupOrbitRadii = CaptureCurrentGroupOrbitRadii();
@@ -3759,7 +3870,12 @@ namespace Deucarian.PackageInstaller.Editor
                 _animatedGroupOrbitRadii,
                 GetActiveHoverGroupId(),
                 _interactionsLocked);
-            StartLayoutTransition(previousRects, previousGroupRects, previousGroupCenters, previousGroupOrbitRadii);
+            StartLayoutTransition(
+                previousRects,
+                previousNodeVisualStates,
+                previousGroupRects,
+                previousGroupCenters,
+                previousGroupOrbitRadii);
             DrawGroups();
             DrawNodes(_currentFocus);
             DrawUnrelatedSummary();
@@ -3847,6 +3963,33 @@ namespace Deucarian.PackageInstaller.Editor
                 : new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
         }
 
+        private Dictionary<string, PackageGraphNodeVisualState> CaptureCurrentNodeVisualStates()
+        {
+            if (_nodeVisualStates.Count > 0)
+            {
+                return new Dictionary<string, PackageGraphNodeVisualState>(
+                    _nodeVisualStates,
+                    StringComparer.OrdinalIgnoreCase);
+            }
+
+            Dictionary<string, PackageGraphNodeVisualState> states =
+                new Dictionary<string, PackageGraphNodeVisualState>(StringComparer.OrdinalIgnoreCase);
+
+            if (_layoutResult == null)
+            {
+                return states;
+            }
+
+            foreach (KeyValuePair<string, Rect> nodeRect in _layoutResult.NodeRects)
+            {
+                states[nodeRect.Key] = PackageGraphNodeVisualState.Stable(
+                    nodeRect.Value,
+                    GetPresentationLevel(nodeRect.Key));
+            }
+
+            return states;
+        }
+
         private Dictionary<string, Rect> CaptureCurrentGroupRects()
         {
             if (_animatedGroupRects.Count > 0)
@@ -3900,29 +4043,58 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void StartLayoutTransition(
             IReadOnlyDictionary<string, Rect> previousRects,
+            IReadOnlyDictionary<string, PackageGraphNodeVisualState> previousNodeVisualStates,
             IReadOnlyDictionary<string, Rect> previousGroupRects,
             IReadOnlyDictionary<string, Vector2> previousGroupCenters,
             IReadOnlyDictionary<string, float> previousGroupOrbitRadii)
         {
             _animatedNodeRects.Clear();
+            _nodeVisualStates.Clear();
             _animatedGroupRects.Clear();
             _animatedGroupCenters.Clear();
             _animatedGroupOrbitRadii.Clear();
             _transitionStartRects.Clear();
+            _transitionStartNodeVisualStates.Clear();
+            _transitionEnteringNodeIds.Clear();
             _transitionStartGroupRects.Clear();
             _transitionStartGroupCenters.Clear();
             _transitionStartGroupOrbitRadii.Clear();
             bool shouldAnimate = false;
+            bool hasPreviousNodeFrame = previousRects != null && previousRects.Count > 0;
+            bool hasPreviousGroupFrame = previousGroupRects != null && previousGroupRects.Count > 0;
 
             foreach (KeyValuePair<string, Rect> target in _layoutResult.NodeRects)
             {
-                Rect start = previousRects != null && previousRects.TryGetValue(target.Key, out Rect previous)
-                    ? previous
+                Rect previous = default(Rect);
+                bool entering = hasPreviousNodeFrame && !previousRects.TryGetValue(target.Key, out previous);
+                Rect start = !entering
+                    ? hasPreviousNodeFrame ? previous : target.Value
                     : CreateEnteringNodeStartRect(target.Key, target.Value, previousGroupRects);
+                PackageGraphNodePresentationLevel presentationLevel = GetPresentationLevel(target.Key);
+                PackageGraphNodeVisualState startState =
+                    !entering &&
+                    previousNodeVisualStates != null &&
+                    previousNodeVisualStates.TryGetValue(target.Key, out PackageGraphNodeVisualState previousVisualState)
+                        ? previousVisualState.WithRect(start)
+                        : new PackageGraphNodeVisualState(
+                            start,
+                            entering ? 0f : 1f,
+                            entering ? 0.24f : 1f,
+                            presentationLevel,
+                            true,
+                            entering,
+                            false);
                 _transitionStartRects[target.Key] = start;
                 _animatedNodeRects[target.Key] = start;
+                _transitionStartNodeVisualStates[target.Key] = startState;
+                _nodeVisualStates[target.Key] = startState;
 
-                if (!AreRectsClose(start, target.Value))
+                if (entering)
+                {
+                    _transitionEnteringNodeIds.Add(target.Key);
+                }
+
+                if (!AreRectsClose(start, target.Value) || entering)
                 {
                     shouldAnimate = true;
                 }
@@ -3935,17 +4107,29 @@ namespace Deucarian.PackageInstaller.Editor
                     continue;
                 }
 
-                Rect start = previousGroupRects != null && previousGroupRects.TryGetValue(target.GroupId, out Rect previous)
+                Rect previous = default(Rect);
+                bool hasPreviousGroupRect = hasPreviousGroupFrame &&
+                                            previousGroupRects != null &&
+                                            previousGroupRects.TryGetValue(target.GroupId, out previous);
+                Rect start = hasPreviousGroupRect
                     ? previous
-                    : CreateEnteringGroupStartRect(target, previousGroupRects);
+                    : hasPreviousGroupFrame
+                        ? CreateEnteringGroupStartRect(target, previousGroupRects)
+                        : target.Rect;
                 Vector2 startCenter = previousGroupCenters != null &&
                                       previousGroupCenters.TryGetValue(target.GroupId, out Vector2 previousCenter)
                     ? previousCenter
                     : GetGroupHubRect(target, start).center;
-                float startRadius = previousGroupOrbitRadii != null &&
-                                    previousGroupOrbitRadii.TryGetValue(target.GroupId, out float previousRadius)
-                    ? previousRadius
-                    : 0f;
+                float previousRadius = 0f;
+                bool hasPreviousRadius = hasPreviousGroupFrame &&
+                                         previousGroupOrbitRadii != null &&
+                                         previousGroupOrbitRadii.TryGetValue(target.GroupId, out previousRadius);
+                bool enteringGroup = hasPreviousGroupFrame && !hasPreviousRadius;
+                float startRadius = !hasPreviousGroupFrame
+                    ? target.OrbitRadius
+                    : enteringGroup
+                        ? target.OrbitRadius * 0.24f
+                        : previousRadius;
                 _transitionStartGroupRects[target.GroupId] = start;
                 _animatedGroupRects[target.GroupId] = start;
                 _transitionStartGroupCenters[target.GroupId] = startCenter;
@@ -3999,6 +4183,18 @@ namespace Deucarian.PackageInstaller.Editor
                     ? startRect
                     : target.Value;
                 _animatedNodeRects[target.Key] = LerpRect(start, target.Value, eased);
+                PackageGraphNodePresentationLevel presentationLevel = GetPresentationLevel(target.Key);
+                bool entering = _transitionEnteringNodeIds.Contains(target.Key);
+                float opacity = entering ? EvaluateEnteringOpacity(eased) : 1f;
+                float scale = entering ? EvaluateEnteringScale(eased) : 1f;
+                _nodeVisualStates[target.Key] = new PackageGraphNodeVisualState(
+                    _animatedNodeRects[target.Key],
+                    opacity,
+                    scale,
+                    presentationLevel,
+                    true,
+                    entering,
+                    false);
             }
 
             foreach (PackageGraphGroupLayoutNode target in _layoutResult.GroupNodes)
@@ -4047,13 +4243,49 @@ namespace Deucarian.PackageInstaller.Editor
             IReadOnlyDictionary<string, Rect> previousGroupRects)
         {
             if (_visibleGraph != null &&
-                _visibleGraph.TryGetNode(packageId, out PackageGraphNode node) &&
-                TryGetPreviousGroupRect(node.GroupId, previousGroupRects, out Rect groupRect))
+                _visibleGraph.TryGetNode(packageId, out PackageGraphNode node))
             {
-                return CenterRectOn(targetRect, groupRect.center);
+                PackageGraphGroupLayoutNode targetGroup = FindGroupLayoutNode(_layoutResult, node.GroupId);
+
+                if (targetGroup != null &&
+                    targetGroup.OrbitRadius > 0.01f &&
+                    TryGetTargetDirection(targetGroup.HubCenter, targetRect.center, out Vector2 direction))
+                {
+                    float initialRadius = Mathf.Max(32f, targetGroup.OrbitRadius * 0.24f);
+                    return CenterRectOn(targetRect, targetGroup.HubCenter + direction * initialRadius);
+                }
+
+                if (TryGetPreviousGroupRect(node.GroupId, previousGroupRects, out Rect groupRect))
+                {
+                    return CenterRectOn(targetRect, groupRect.center);
+                }
             }
 
             return CenterRectOn(targetRect, GetActiveCenter());
+        }
+
+        private Rect CreateEnteringNodePreviewStartRect(
+            string packageId,
+            Rect targetRect,
+            PackageGraphLayoutResult targetLayout,
+            Vector2 fallbackCenter)
+        {
+            if (_visibleGraph != null &&
+                targetLayout != null &&
+                _visibleGraph.TryGetNode(packageId, out PackageGraphNode node))
+            {
+                PackageGraphGroupLayoutNode targetGroup = FindGroupLayoutNode(targetLayout, node.GroupId);
+
+                if (targetGroup != null &&
+                    targetGroup.OrbitRadius > 0.01f &&
+                    TryGetTargetDirection(targetGroup.HubCenter, targetRect.center, out Vector2 direction))
+                {
+                    float initialRadius = Mathf.Max(32f, targetGroup.OrbitRadius * 0.24f);
+                    return CenterRectOn(targetRect, targetGroup.HubCenter + direction * initialRadius);
+                }
+            }
+
+            return CenterRectOn(targetRect, fallbackCenter);
         }
 
         private Rect CreateEnteringGroupStartRect(
@@ -4123,6 +4355,7 @@ namespace Deucarian.PackageInstaller.Editor
         private void CopyTargetRectsToAnimatedRects()
         {
             _animatedNodeRects.Clear();
+            _nodeVisualStates.Clear();
             _animatedGroupRects.Clear();
             _animatedGroupCenters.Clear();
             _animatedGroupOrbitRadii.Clear();
@@ -4135,6 +4368,9 @@ namespace Deucarian.PackageInstaller.Editor
             foreach (KeyValuePair<string, Rect> target in _layoutResult.NodeRects)
             {
                 _animatedNodeRects[target.Key] = target.Value;
+                _nodeVisualStates[target.Key] = PackageGraphNodeVisualState.Stable(
+                    target.Value,
+                    GetPresentationLevel(target.Key));
             }
 
             foreach (PackageGraphGroupLayoutNode target in _layoutResult.GroupNodes)
@@ -4156,6 +4392,26 @@ namespace Deucarian.PackageInstaller.Editor
                     ? targetRect
                     : start.Value;
                 _animatedNodeRects[start.Key] = LerpRect(start.Value, target, easedProgress);
+                bool entering = _hierarchyExitEnteringNodeIds.Contains(start.Key);
+                bool leaving = _hierarchyExitLeavingNodeIds.Contains(start.Key);
+                float opacity = entering
+                    ? EvaluateEnteringOpacity(easedProgress)
+                    : leaving
+                        ? 1f - easedProgress
+                        : 1f;
+                float scale = entering
+                    ? EvaluateEnteringScale(easedProgress)
+                    : leaving
+                        ? Mathf.Lerp(1f, 0.24f, easedProgress)
+                        : 1f;
+                _nodeVisualStates[start.Key] = new PackageGraphNodeVisualState(
+                    _animatedNodeRects[start.Key],
+                    opacity,
+                    scale,
+                    GetPresentationLevel(start.Key),
+                    opacity > 0.001f,
+                    entering,
+                    leaving);
             }
 
             foreach (KeyValuePair<string, Rect> start in _hierarchyExitStartGroupRects)
@@ -4471,6 +4727,109 @@ namespace Deucarian.PackageInstaller.Editor
             return true;
         }
 
+        private void SyncNodeVisualStateRects()
+        {
+            foreach (KeyValuePair<string, Rect> rect in _animatedNodeRects)
+            {
+                if (_nodeVisualStates.TryGetValue(rect.Key, out PackageGraphNodeVisualState state))
+                {
+                    _nodeVisualStates[rect.Key] = state.WithRect(rect.Value);
+                    continue;
+                }
+
+                _nodeVisualStates[rect.Key] = PackageGraphNodeVisualState.Stable(
+                    rect.Value,
+                    GetPresentationLevel(rect.Key));
+            }
+        }
+
+        private void RebuildStableNodeVisualStates(IReadOnlyDictionary<string, Rect> rects)
+        {
+            _nodeVisualStates.Clear();
+
+            if (rects == null)
+            {
+                return;
+            }
+
+            foreach (KeyValuePair<string, Rect> rect in rects)
+            {
+                _nodeVisualStates[rect.Key] = PackageGraphNodeVisualState.Stable(
+                    rect.Value,
+                    GetPresentationLevel(rect.Key));
+            }
+        }
+
+        private void RemoveNodeVisuals(IEnumerable<string> packageIds)
+        {
+            if (packageIds == null)
+            {
+                return;
+            }
+
+            foreach (string packageId in packageIds.ToArray())
+            {
+                if (string.IsNullOrWhiteSpace(packageId))
+                {
+                    continue;
+                }
+
+                _animatedNodeRects.Remove(packageId);
+                _nodeVisualStates.Remove(packageId);
+
+                if (_nodeElements.TryGetValue(packageId, out PackageGraphNodeElement element))
+                {
+                    element.RemoveFromHierarchy();
+                    _nodeElements.Remove(packageId);
+                }
+            }
+        }
+
+        private PackageGraphNodePresentationLevel GetPresentationLevel(string packageId)
+        {
+            return _layoutResult != null &&
+                   !string.IsNullOrWhiteSpace(packageId) &&
+                   _layoutResult.NodePresentationLevels.TryGetValue(
+                       packageId,
+                       out PackageGraphNodePresentationLevel presentationLevel)
+                ? presentationLevel
+                : PackageGraphNodePresentationLevel.Standard;
+        }
+
+        private static float EvaluateEnteringOpacity(float progress)
+        {
+            float t = Mathf.Clamp01(progress);
+
+            if (t <= 0.20f)
+            {
+                return 0f;
+            }
+
+            if (t <= 0.65f)
+            {
+                return Mathf.Lerp(0f, 0.75f, (t - 0.20f) / 0.45f);
+            }
+
+            return Mathf.Lerp(0.75f, 1f, (t - 0.65f) / 0.35f);
+        }
+
+        private static float EvaluateEnteringScale(float progress)
+        {
+            float t = Mathf.Clamp01(progress);
+
+            if (t <= 0.20f)
+            {
+                return 0.24f;
+            }
+
+            if (t <= 0.65f)
+            {
+                return Mathf.Lerp(0.24f, 0.85f, (t - 0.20f) / 0.45f);
+            }
+
+            return Mathf.Lerp(0.85f, 1f, (t - 0.65f) / 0.35f);
+        }
+
         private void ApplyAnimatedLayout()
         {
             PackageGraphLayoutResult projectionLayout = _hierarchyExitTargetLayout ?? _layoutResult;
@@ -4481,12 +4840,25 @@ namespace Deucarian.PackageInstaller.Editor
                 _animatedGroupRects,
                 _animatedGroupCenters,
                 _animatedGroupOrbitRadii);
+            SyncNodeVisualStateRects();
 
             foreach (KeyValuePair<string, PackageGraphNodeElement> nodeElement in _nodeElements)
             {
-                if (_animatedNodeRects.TryGetValue(nodeElement.Key, out Rect rect))
+                if (_nodeVisualStates.TryGetValue(nodeElement.Key, out PackageGraphNodeVisualState state))
                 {
-                    SetElementRect(nodeElement.Value, rect);
+                    SetElementVisualState(nodeElement.Value, state);
+                    nodeElement.Value.pickingMode = _interactionsLocked
+                        ? PickingMode.Ignore
+                        : nodeElement.Value.pickingMode;
+                }
+                else if (_animatedNodeRects.TryGetValue(nodeElement.Key, out Rect rect))
+                {
+                    SetElementVisualState(
+                        nodeElement.Value,
+                        PackageGraphNodeVisualState.Stable(rect, GetPresentationLevel(nodeElement.Key)));
+                    nodeElement.Value.pickingMode = _interactionsLocked
+                        ? PickingMode.Ignore
+                        : nodeElement.Value.pickingMode;
                 }
             }
 
@@ -4510,28 +4882,6 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void DrawGuides()
         {
-            foreach (PackageGraphRingGuide guide in _layoutResult.RingGuides)
-            {
-                VisualElement ringGuide = new VisualElement();
-                ringGuide.AddToClassList("dpi-graph-ring-guide");
-                ringGuide.AddToClassList("dpi-graph-ring-guide--" + GetRingClass(guide.Ring));
-                ringGuide.pickingMode = PickingMode.Ignore;
-                Rect circleRect = guide.CircleRect;
-                ringGuide.style.left = circleRect.x;
-                ringGuide.style.top = circleRect.y;
-                ringGuide.style.width = circleRect.width;
-                ringGuide.style.height = circleRect.height;
-
-                if (!string.IsNullOrWhiteSpace(guide.Label))
-                {
-                    Label label = new Label(guide.Label);
-                    label.AddToClassList("dpi-graph-ring-guide__label");
-                    ringGuide.Add(label);
-                }
-
-                _guideLayer.Add(ringGuide);
-            }
-
             foreach (PackageGraphSectorLabel sectorLabel in _layoutResult.SectorLabels)
             {
                 Label label = new Label(sectorLabel.Label);
@@ -4617,9 +4967,6 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void DrawNodes(PackageGraphFocus focus)
         {
-            string activeHoverGroupId = GetActiveHoverGroupId();
-            bool hoverActive = !string.IsNullOrWhiteSpace(activeHoverGroupId);
-
             foreach (PackageGraphNode node in _graph.Nodes)
             {
                 if (!_animatedNodeRects.TryGetValue(node.PackageId, out Rect rect))
@@ -4627,68 +4974,125 @@ namespace Deucarian.PackageInstaller.Editor
                     continue;
                 }
 
-                PackageGraphLayoutRing ring = _layoutResult.NodeRings.TryGetValue(
-                    node.PackageId,
-                    out PackageGraphLayoutRing nodeRing)
-                    ? nodeRing
-                    : PackageGraphLayoutRing.Infrastructure;
-                bool selected = string.Equals(
-                    node.PackageId,
-                    _selectedPackageId,
-                    StringComparison.OrdinalIgnoreCase);
-                bool previewed = string.Equals(
-                    node.PackageId,
-                    _hoveredPackageId,
-                    StringComparison.OrdinalIgnoreCase);
-                bool related = focus.IsPackageRelated(node.PackageId);
-                bool dimmed = focus.HasFocus && !related;
-                bool hoverContext = hoverActive && IsPackageInHoverContext(node, activeHoverGroupId);
-                bool hoverDimmed = hoverActive && !hoverContext;
-                PackageGraphNodeVisualMode visualMode = GetNodeVisualMode(dimmed);
-                PackageGraphNodePresentationLevel presentationLevel =
-                    _layoutResult.NodePresentationLevels.TryGetValue(
-                        node.PackageId,
-                        out PackageGraphNodePresentationLevel resolvedPresentation)
-                        ? resolvedPresentation
-                        : PackageGraphPresentationPolicy.GetFocusPresentation(selected);
-                string categoryPathLabel = GetGroupPathLabel(node.GroupId);
-                bool showNodeAction = ShouldShowNodeAction(
-                    node,
-                    _actionFocus,
-                    _actionFocus.IsPackageRelated(node.PackageId),
-                    _layoutResult.Mode);
-                bool nodeActionsEnabled = showNodeAction && _actionsEnabled && !_interactionsLocked;
-                PackageGraphNodeElement nodeElement = new PackageGraphNodeElement(
-                    node,
-                    ring,
-                    visualMode,
-                    presentationLevel,
-                    selected,
-                    related,
-                    dimmed,
-                    hoverContext,
-                    hoverDimmed,
-                    previewed,
-                    showNodeAction,
-                    nodeActionsEnabled,
-                    !_interactionsLocked,
-                    categoryPathLabel,
-                    _packageSelected,
-                    _packageAction,
-                    _selectionCleared,
-                    SetPreviewPackage,
-                    ClearPreviewPackage);
-                ApplySearchClasses(
-                    nodeElement,
-                    _searchState.IsDirectPackageMatch(node.PackageId),
-                    _searchState.IsPackageContext(node.PackageId),
-                    _searchState.HasQuery);
-                nodeElement.style.left = rect.x;
-                nodeElement.style.top = rect.y;
-                nodeElement.style.width = rect.width;
-                nodeElement.style.height = rect.height;
+                PackageGraphNodeElement nodeElement = CreateNodeElement(node, focus, _layoutResult);
+                if (_nodeVisualStates.TryGetValue(node.PackageId, out PackageGraphNodeVisualState visualState))
+                {
+                    SetElementVisualState(nodeElement, visualState);
+                }
+                else
+                {
+                    SetElementRect(nodeElement, rect);
+                }
+
                 _nodeLayer.Add(nodeElement);
                 _nodeElements[node.PackageId] = nodeElement;
+            }
+        }
+
+        private PackageGraphNodeElement CreateNodeElement(
+            PackageGraphNode node,
+            PackageGraphFocus focus,
+            PackageGraphLayoutResult layout)
+        {
+            string activeHoverGroupId = GetActiveHoverGroupId();
+            bool hoverActive = !string.IsNullOrWhiteSpace(activeHoverGroupId);
+            PackageGraphLayoutRing ring = layout != null &&
+                                          layout.NodeRings.TryGetValue(
+                                              node.PackageId,
+                                              out PackageGraphLayoutRing nodeRing)
+                ? nodeRing
+                : PackageGraphLayoutRing.Infrastructure;
+            bool selected = string.Equals(
+                node.PackageId,
+                _selectedPackageId,
+                StringComparison.OrdinalIgnoreCase);
+            bool previewed = string.Equals(
+                node.PackageId,
+                _hoveredPackageId,
+                StringComparison.OrdinalIgnoreCase);
+            bool related = focus != null && focus.IsPackageRelated(node.PackageId);
+            bool dimmed = focus != null && focus.HasFocus && !related;
+            bool hoverContext = hoverActive && IsPackageInHoverContext(node, activeHoverGroupId);
+            bool hoverDimmed = hoverActive && !hoverContext;
+            PackageGraphNodeVisualMode visualMode = GetNodeVisualMode(dimmed);
+            PackageGraphNodePresentationLevel presentationLevel =
+                layout != null &&
+                layout.NodePresentationLevels.TryGetValue(
+                    node.PackageId,
+                    out PackageGraphNodePresentationLevel resolvedPresentation)
+                    ? resolvedPresentation
+                    : PackageGraphPresentationPolicy.GetFocusPresentation(selected);
+            string categoryPathLabel = GetGroupPathLabel(node.GroupId);
+            bool showNodeAction = ShouldShowNodeAction(
+                node,
+                _actionFocus,
+                _actionFocus.IsPackageRelated(node.PackageId),
+                layout != null ? layout.Mode : PackageGraphLayoutMode.Overview);
+            bool nodeActionsEnabled = showNodeAction && _actionsEnabled && !_interactionsLocked;
+            PackageGraphNodeElement nodeElement = new PackageGraphNodeElement(
+                node,
+                ring,
+                visualMode,
+                presentationLevel,
+                selected,
+                related,
+                dimmed,
+                hoverContext,
+                hoverDimmed,
+                previewed,
+                showNodeAction,
+                nodeActionsEnabled,
+                !_interactionsLocked,
+                categoryPathLabel,
+                _packageSelected,
+                _packageAction,
+                _selectionCleared,
+                SetPreviewPackage,
+                ClearPreviewPackage);
+            ApplySearchClasses(
+                nodeElement,
+                _searchState.IsDirectPackageMatch(node.PackageId),
+                _searchState.IsPackageContext(node.PackageId),
+                _searchState.HasQuery);
+            return nodeElement;
+        }
+
+        private void EnsurePreviewNodeElements(PackageGraphLayoutResult targetLayout)
+        {
+            if (targetLayout == null || _visibleGraph == null)
+            {
+                return;
+            }
+
+            PackageGraphFocus targetFocus = PackageGraphFocus.Create(_visibleGraph, targetLayout.FocusPackageId);
+
+            foreach (KeyValuePair<string, Rect> targetNode in targetLayout.NodeRects)
+            {
+                if (_nodeElements.ContainsKey(targetNode.Key) ||
+                    !_visibleGraph.TryGetNode(targetNode.Key, out PackageGraphNode node))
+                {
+                    continue;
+                }
+
+                PackageGraphNodeElement nodeElement = CreateNodeElement(node, targetFocus, targetLayout);
+                SetElementVisualState(
+                    nodeElement,
+                    new PackageGraphNodeVisualState(
+                        _hierarchyExitStartNodeRects.TryGetValue(targetNode.Key, out Rect startRect)
+                            ? startRect
+                            : targetNode.Value,
+                        0f,
+                        0.24f,
+                        targetLayout.NodePresentationLevels.TryGetValue(
+                            targetNode.Key,
+                            out PackageGraphNodePresentationLevel presentationLevel)
+                            ? presentationLevel
+                            : PackageGraphNodePresentationLevel.Standard,
+                        true,
+                        true,
+                        false));
+                _nodeLayer.Add(nodeElement);
+                _nodeElements[targetNode.Key] = nodeElement;
             }
         }
 
@@ -4964,6 +5368,27 @@ namespace Deucarian.PackageInstaller.Editor
             element.style.height = rect.height;
         }
 
+        private static void SetElementVisualState(
+            VisualElement element,
+            PackageGraphNodeVisualState state)
+        {
+            if (element == null)
+            {
+                return;
+            }
+
+            SetElementRect(element, state.Rect);
+            element.style.opacity = state.Opacity;
+            element.style.scale = new Scale(new Vector3(state.Scale, state.Scale, 1f));
+            element.style.transformOrigin = new TransformOrigin(
+                new Length(50f, LengthUnit.Percent),
+                new Length(50f, LengthUnit.Percent),
+                0f);
+            element.pickingMode = state.Visible && state.Opacity > 0.75f
+                ? PickingMode.Position
+                : PickingMode.Ignore;
+        }
+
         private static Rect LerpRect(Rect start, Rect end, float t)
         {
             return new Rect(
@@ -5016,6 +5441,49 @@ namespace Deucarian.PackageInstaller.Editor
                 ? label.ClassName
                 : GetRingClass(label != null ? label.Ring : PackageGraphLayoutRing.Infrastructure);
         }
+    }
+
+    internal readonly struct PackageGraphOrbitVisualState
+    {
+        public PackageGraphOrbitVisualState(
+            string orbitId,
+            Vector2 center,
+            float radius,
+            float fillOpacity,
+            float strokeOpacity,
+            bool emphasized,
+            bool muted,
+            bool visible,
+            bool empty)
+        {
+            OrbitId = orbitId ?? string.Empty;
+            Center = center;
+            Radius = Mathf.Max(0f, radius);
+            FillOpacity = Mathf.Clamp01(fillOpacity);
+            StrokeOpacity = Mathf.Clamp01(strokeOpacity);
+            Emphasized = emphasized;
+            Muted = muted;
+            Visible = visible;
+            Empty = empty;
+        }
+
+        public string OrbitId { get; }
+
+        public Vector2 Center { get; }
+
+        public float Radius { get; }
+
+        public float FillOpacity { get; }
+
+        public float StrokeOpacity { get; }
+
+        public bool Emphasized { get; }
+
+        public bool Muted { get; }
+
+        public bool Visible { get; }
+
+        public bool Empty { get; }
     }
 
     internal sealed class PackageGraphMembershipLayer : VisualElement
@@ -5154,6 +5622,11 @@ namespace Deucarian.PackageInstaller.Editor
                 .GroupBy(groupNode => groupNode.GroupId, StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
 
+            foreach (PackageGraphOrbitVisualState orbit in BuildOrbitVisualStates(groupNodeById))
+            {
+                DrawOrbitCircle(painter, orbit);
+            }
+
             if (_layout.Mode == PackageGraphLayoutMode.Focus)
             {
                 DrawFocusMembershipGuides(painter, groupNodeById);
@@ -5177,23 +5650,98 @@ namespace Deucarian.PackageInstaller.Editor
 
                 Rect groupRect = GetGroupRect(groupNode);
                 Rect groupHubRect = GetAnimatedGroupHubRect(groupNode, groupRect);
-                bool hoverActive = !_interactionsLocked && !string.IsNullOrWhiteSpace(_hoveredGroupId);
-                bool emphasized = hoverActive && IsGroupInHoverContext(groupNode.GroupId, _hoveredGroupId, groupNodeById);
-                bool muted = hoverActive && !emphasized;
-
-                DrawOrbitCircle(
-                    painter,
-                    groupHubRect.center,
-                    orbitRadius,
-                    emphasized,
-                    muted,
-                    groupNode.PackageCount == 0);
-
                 foreach (Rect childRect in childRects)
                 {
+                    bool hoverActive = !_interactionsLocked && !string.IsNullOrWhiteSpace(_hoveredGroupId);
+                    bool emphasized = hoverActive &&
+                                      IsGroupInHoverContext(groupNode.GroupId, _hoveredGroupId, groupNodeById);
+                    bool muted = hoverActive && !emphasized;
                     DrawSpoke(painter, groupHubRect, childRect, emphasized, muted);
                 }
             }
+        }
+
+        internal IReadOnlyList<PackageGraphOrbitVisualState> BuildOrbitVisualStatesForTests()
+        {
+            Dictionary<string, PackageGraphGroupLayoutNode> groupNodeById = _layout != null
+                ? _layout.GroupNodes
+                    .Where(groupNode => groupNode != null && groupNode.Group != null)
+                    .GroupBy(groupNode => groupNode.GroupId, StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase)
+                : new Dictionary<string, PackageGraphGroupLayoutNode>(StringComparer.OrdinalIgnoreCase);
+            return BuildOrbitVisualStates(groupNodeById);
+        }
+
+        private IReadOnlyList<PackageGraphOrbitVisualState> BuildOrbitVisualStates(
+            IReadOnlyDictionary<string, PackageGraphGroupLayoutNode> groupNodeById)
+        {
+            List<PackageGraphOrbitVisualState> states = new List<PackageGraphOrbitVisualState>();
+
+            if (_layout == null)
+            {
+                return states;
+            }
+
+            for (int index = 0; index < _layout.RingGuides.Count; index++)
+            {
+                PackageGraphRingGuide guide = _layout.RingGuides[index];
+
+                if (guide == null || guide.Radius <= 0.01f)
+                {
+                    continue;
+                }
+
+                states.Add(new PackageGraphOrbitVisualState(
+                    "root:" + index + ":" + guide.Ring,
+                    guide.Center,
+                    guide.Radius,
+                    0.018f,
+                    0.075f,
+                    false,
+                    false,
+                    true,
+                    false));
+            }
+
+            if (_layout.Mode == PackageGraphLayoutMode.Focus)
+            {
+                return states;
+            }
+
+            foreach (PackageGraphGroupLayoutNode groupNode in _layout.GroupNodes)
+            {
+                if (groupNode == null || groupNode.Group == null || groupNode.Collapsed)
+                {
+                    continue;
+                }
+
+                float orbitRadius = GetGroupOrbitRadius(groupNode);
+
+                if (orbitRadius <= 0.01f)
+                {
+                    continue;
+                }
+
+                Rect groupRect = GetGroupRect(groupNode);
+                Rect groupHubRect = GetAnimatedGroupHubRect(groupNode, groupRect);
+                bool hoverActive = !_interactionsLocked && !string.IsNullOrWhiteSpace(_hoveredGroupId);
+                bool emphasized = hoverActive &&
+                                  IsGroupInHoverContext(groupNode.GroupId, _hoveredGroupId, groupNodeById);
+                bool muted = hoverActive && !emphasized;
+                bool empty = groupNode.PackageCount == 0;
+                states.Add(new PackageGraphOrbitVisualState(
+                    "group:" + groupNode.GroupId,
+                    groupHubRect.center,
+                    orbitRadius,
+                    empty ? 0.018f : emphasized ? 0.065f : muted ? 0.015f : 0.038f,
+                    empty ? 0.045f : emphasized ? 0.18f : muted ? 0.035f : 0.085f,
+                    emphasized,
+                    muted,
+                    true,
+                    empty));
+            }
+
+            return states;
         }
 
         private void DrawFocusMembershipGuides(
@@ -5312,20 +5860,17 @@ namespace Deucarian.PackageInstaller.Editor
                     : 0f;
         }
 
-        private static void DrawOrbitCircle(
-            Painter2D painter,
-            Vector2 center,
-            float radius,
-            bool emphasized,
-            bool muted,
-            bool empty)
+        private static void DrawOrbitCircle(Painter2D painter, PackageGraphOrbitVisualState orbit)
         {
-            float alpha = empty ? 0.018f : emphasized ? 0.065f : muted ? 0.015f : 0.038f;
-            float borderAlpha = empty ? 0.045f : emphasized ? 0.18f : muted ? 0.035f : 0.085f;
-            painter.fillColor = new Color(0.20f, 0.54f, 0.62f, alpha);
-            painter.strokeColor = new Color(0.42f, 0.70f, 0.78f, borderAlpha);
-            painter.lineWidth = emphasized ? 1.25f : 0.85f;
-            DrawCircle(painter, center, radius);
+            if (!orbit.Visible || orbit.Radius <= 0.01f)
+            {
+                return;
+            }
+
+            painter.fillColor = new Color(0.20f, 0.54f, 0.62f, orbit.FillOpacity);
+            painter.strokeColor = new Color(0.42f, 0.70f, 0.78f, orbit.StrokeOpacity);
+            painter.lineWidth = orbit.Emphasized ? 1.25f : 0.85f;
+            DrawCircle(painter, orbit.Center, orbit.Radius);
         }
 
         private static void DrawSpoke(Painter2D painter, Rect fromHubRect, Rect toRect, bool emphasized, bool muted)

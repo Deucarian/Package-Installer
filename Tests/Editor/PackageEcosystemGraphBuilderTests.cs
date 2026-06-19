@@ -1273,6 +1273,72 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void GraphCanvas_UsesPainterOrbitStatesWithoutCssRingGuideElements()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+            PackageGraphCanvas canvas = new PackageGraphCanvas(_ => { }, (_, __) => { }, () => { });
+
+            canvas.SetGraph(graph, string.Empty, string.Empty, actionsEnabled: true);
+
+            Assert.IsEmpty(FindByClass(canvas, "dpi-graph-ring-guide"));
+            IReadOnlyList<PackageGraphOrbitVisualState> orbitStates = canvas.OrbitVisualStatesForTests;
+            Assert.That(orbitStates.Count, Is.GreaterThan(0));
+            Assert.AreEqual(
+                orbitStates.Count,
+                orbitStates.Select(orbit => orbit.OrbitId).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+            Assert.AreEqual(1, orbitStates.Count(orbit => orbit.OrbitId.StartsWith("root:", StringComparison.OrdinalIgnoreCase)));
+            Assert.IsTrue(orbitStates.Any(orbit => orbit.OrbitId == "group:integrations"));
+        }
+
+        [Test]
+        public void GraphTransition_TargetOnlyCategoryChildrenStartSmallTransparentAndSeparated()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+            PackageGraphCanvas canvas = new PackageGraphCanvas(_ => { }, (_, __) => { }, () => { });
+
+            canvas.SetGraph(
+                graph,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                actionsEnabled: true,
+                visiblePackageIds: null);
+            canvas.SetGraph(
+                graph,
+                string.Empty,
+                string.Empty,
+                "ui-presentation",
+                actionsEnabled: true,
+                visiblePackageIds: null);
+
+            PackageGraphNodeVisualState uiBinding = canvas.NodeVisualStatesForTests["com.deucarian.ui-binding"];
+            PackageGraphNodeVisualState theming = canvas.NodeVisualStatesForTests["com.deucarian.theming"];
+
+            Assert.AreEqual(0f, uiBinding.Opacity);
+            Assert.AreEqual(0f, theming.Opacity);
+            Assert.That(uiBinding.Scale, Is.LessThan(0.30f));
+            Assert.That(theming.Scale, Is.LessThan(0.30f));
+            Assert.That(Vector2.Distance(uiBinding.Rect.center, theming.Rect.center), Is.GreaterThan(1f));
+            Assert.AreEqual(1, canvas.CountNodeElementsForTests("com.deucarian.ui-binding"));
+            Assert.AreEqual(1, canvas.CountNodeElementsForTests("com.deucarian.theming"));
+        }
+
+        [Test]
+        public void GraphViewport_HierarchyExitIntentStartsAboveHardMinimum()
+        {
+            const float normalMinimum = 0.42f;
+
+            Assert.That(
+                PackageGraphViewport.GetHierarchyExitIntentZoomForTests(normalMinimum),
+                Is.GreaterThan(normalMinimum));
+            Assert.That(
+                PackageGraphViewport.GetHierarchyExitIntentZoomForTests(normalMinimum),
+                Is.LessThan(0.50f));
+        }
+
+        [Test]
         public void GraphHierarchyExitController_AccumulatesOnlyAtMinimumAndCommitsOnce()
         {
             PackageGraphHierarchyExitController controller = new PackageGraphHierarchyExitController();

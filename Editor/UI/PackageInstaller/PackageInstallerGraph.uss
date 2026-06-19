@@ -757,58 +757,6 @@
     top: 0;
 }
 
-.dpi-graph-ring-guide {
-    position: absolute;
-    border-top-left-radius: 999px;
-    border-top-right-radius: 999px;
-    border-bottom-right-radius: 999px;
-    border-bottom-left-radius: 999px;
-    border-left-width: 1px;
-    border-right-width: 1px;
-    border-top-width: 1px;
-    border-bottom-width: 1px;
-    border-left-color: rgba(90, 111, 160, 0.11);
-    border-right-color: rgba(90, 111, 160, 0.11);
-    border-top-color: rgba(90, 111, 160, 0.11);
-    border-bottom-color: rgba(90, 111, 160, 0.11);
-}
-
-.dpi-graph-ring-guide--infrastructure {
-    border-left-color: rgba(100, 137, 205, 0.17);
-    border-right-color: rgba(100, 137, 205, 0.17);
-    border-top-color: rgba(100, 137, 205, 0.17);
-    border-bottom-color: rgba(100, 137, 205, 0.17);
-}
-
-.dpi-graph-ring-guide--runtime {
-    border-left-color: rgba(64, 157, 187, 0.13);
-    border-right-color: rgba(64, 157, 187, 0.13);
-    border-top-color: rgba(64, 157, 187, 0.13);
-    border-bottom-color: rgba(64, 157, 187, 0.13);
-}
-
-.dpi-graph-ring-guide--integration {
-    border-left-color: rgba(59, 166, 154, 0.14);
-    border-right-color: rgba(59, 166, 154, 0.14);
-    border-top-color: rgba(59, 166, 154, 0.14);
-    border-bottom-color: rgba(59, 166, 154, 0.14);
-}
-
-.dpi-graph-ring-guide--suite {
-    border-left-color: rgba(118, 103, 184, 0.13);
-    border-right-color: rgba(118, 103, 184, 0.13);
-    border-top-color: rgba(118, 103, 184, 0.13);
-    border-bottom-color: rgba(118, 103, 184, 0.13);
-}
-
-.dpi-graph-ring-guide__label {
-    margin-left: 18px;
-    margin-top: 10px;
-    color: rgba(154, 194, 202, 0.42);
-    font-size: 11px;
-    -unity-font-style: bold;
-}
-
 .dpi-graph-sector-label {
     position: absolute;
     color: rgba(184, 218, 226, 0.72);
