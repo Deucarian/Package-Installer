@@ -85,6 +85,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual(Align.Center, footer.style.alignItems.value);
             Assert.AreEqual(0f, footer.style.flexShrink.value);
             Assert.AreEqual(34f, footer.style.height.value.value);
+            Assert.AreEqual(PackageInstallerWindow.OperationGridOuterPaddingForTests, footer.style.paddingLeft.value.value);
+            Assert.AreEqual(PackageInstallerWindow.OperationGridOuterPaddingForTests, footer.style.paddingRight.value.value);
 
             VisualElement statusGroup = footer.Q<VisualElement>(PackageInstallerWindow.OperationFooterStatusGroupName);
             Label statusIcon = footer.Q<Label>(PackageInstallerWindow.OperationFooterStatusIconName);
@@ -103,6 +105,9 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.IsFalse(string.IsNullOrWhiteSpace(statusIcon.text));
             Assert.IsFalse(string.IsNullOrWhiteSpace(statusLabel.text));
             Assert.IsFalse(string.IsNullOrWhiteSpace(summaryLabel.text));
+            Assert.AreEqual(PackageInstallerWindow.OperationGridColumnGapForTests, statusGroup.style.marginRight.value.value);
+            Assert.AreEqual(PackageInstallerWindow.OperationGridColumnGapForTests, summaryLabel.style.marginRight.value.value);
+            Assert.AreEqual(PackageInstallerWindow.OperationGridColumnGapForTests, detailsButton.style.marginRight.value.value);
             Assert.IsTrue(detailsButton.text == "Show Details" || detailsButton.text == "Hide Details");
             Assert.IsFalse(string.IsNullOrWhiteSpace(versionLabel.text));
             StringAssert.Contains(PackageInstallerWindow.PackageIdForTests, versionLabel.text);
@@ -170,7 +175,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.That(smallHeight, Is.GreaterThan(PackageInstallerWindow.OperationFooterHeightForTests));
             Assert.That(smallHeight, Is.LessThan(100f));
             Assert.That(largeHeight, Is.GreaterThan(smallHeight));
-            Assert.That(largeHeight, Is.LessThanOrEqualTo(148f));
+            Assert.That(largeHeight, Is.LessThanOrEqualTo(132f));
         }
 
         [Test]
@@ -1639,20 +1644,23 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             VisualElement activeNestedGroup = FindGraphGroup(nestedGroupFocused, "ui-presentation");
             VisualElement selectedPackage = FindGraphNode(packageFocused, "com.deucarian.session");
             VisualElement relatedPackage = FindGraphNode(packageFocused, "com.deucarian.logging");
-            Button packageBack = FindByClass(selectedPackage, "dpi-graph-node__back")
-                .OfType<Button>()
+            Label packageBack = FindByClass(selectedPackage, "dpi-graph-node__back-hint")
+                .OfType<Label>()
                 .Single();
 
             Assert.IsFalse(inactiveOverviewGroup.ClassListContains("dpi-graph-group--has-back"));
-            Assert.IsEmpty(FindByClass(inactiveOverviewGroup, "dpi-graph-group__back"));
+            Assert.IsEmpty(FindByClass(inactiveOverviewGroup, "dpi-graph-group__back-hint"));
             Assert.IsTrue(activeTopLevelGroup.ClassListContains("dpi-graph-group--has-back"));
-            Assert.AreEqual(1, FindByClass(activeTopLevelGroup, "dpi-graph-group__back").Count);
+            Assert.AreEqual(1, FindByClass(activeTopLevelGroup, "dpi-graph-group__back-hint").Count);
             Assert.AreEqual("Back to Ecosystem Overview", activeTopLevelGroup.tooltip);
             Assert.IsTrue(activeNestedGroup.ClassListContains("dpi-graph-group--has-back"));
             Assert.AreEqual("Back to Experience & Interaction", activeNestedGroup.tooltip);
             Assert.IsTrue(selectedPackage.ClassListContains("dpi-graph-node--has-back"));
+            Assert.AreEqual(PickingMode.Ignore, packageBack.pickingMode);
             Assert.AreEqual("Back to Runtime Services", packageBack.tooltip);
-            Assert.IsEmpty(FindByClass(relatedPackage, "dpi-graph-node__back"));
+            Assert.IsEmpty(FindByClass(relatedPackage, "dpi-graph-node__back-hint"));
+            Assert.IsEmpty(FindByClass(selectedPackage, "dpi-graph-node__back"));
+            Assert.IsEmpty(FindByClass(activeTopLevelGroup, "dpi-graph-group__back"));
         }
 
         [Test]
@@ -1985,6 +1993,87 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.IsTrue(PackageGraphEdgeLayer.UsesDirectionalFlowMarkersForTests(PackageGraphEdgeKind.HardDependency));
             Assert.IsTrue(PackageGraphEdgeLayer.AnimatesEdgeForTests(PackageGraphEdgeKind.IntegrationConnection));
             Assert.IsTrue(PackageGraphEdgeLayer.UsesDirectionalFlowMarkersForTests(PackageGraphEdgeKind.IntegrationConnection));
+        }
+
+        [Test]
+        public void GraphEdgeRoutes_FanOutMultipleIntegrationTargetsThroughSharedTrunk()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+            PackageGraphLayoutResult layout = new PackageGraphLayout().Calculate(
+                graph,
+                PackageGraphLayoutMode.Focus,
+                "com.deucarian.api");
+            PackageGraphFocus focus = PackageGraphFocus.Create(graph, "com.deucarian.api");
+
+            PackageGraphEdgeRoute[] integrationRoutes =
+                PackageGraphEdgeLayer.BuildRoutesForTests(graph, layout.NodeRects, focus)
+                    .Where(route => route.Edge.Kind == PackageGraphEdgeKind.IntegrationConnection &&
+                                    route.Edge.ConnectsPackage("com.deucarian.api"))
+                    .OrderBy(route => route.BranchIndex)
+                    .ToArray();
+
+            Assert.AreEqual(2, integrationRoutes.Length);
+            Assert.IsTrue(integrationRoutes.All(route => route.UsesSharedTrunk));
+            Assert.AreEqual(1, integrationRoutes.Select(route => route.SharedTrunkId).Distinct().Count());
+            Assert.IsTrue(integrationRoutes.All(route => route.Zone == PackageGraphEdgeRouteZone.Integrations));
+            Assert.IsTrue(integrationRoutes.All(route => route.BranchCount == 2));
+            Assert.IsTrue(integrationRoutes.All(route => route.Points.Count == 4));
+            Assert.That(
+                Vector2.Distance(
+                    integrationRoutes[0].Points[2],
+                    integrationRoutes[1].Points[2]),
+                Is.LessThan(0.1f));
+            Assert.IsTrue(integrationRoutes.All(route =>
+                !PackageGraphEdgeLayer.RouteCrossesNodeInteriorForTests(route, layout.NodeRects)));
+        }
+
+        [Test]
+        public void GraphEdgeRoutes_UseDirectBorderRouteForSingleTarget()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+            PackageGraphLayoutResult layout = new PackageGraphLayout().Calculate(
+                graph,
+                PackageGraphLayoutMode.Focus,
+                "com.deucarian.session");
+            PackageGraphFocus focus = PackageGraphFocus.Create(graph, "com.deucarian.session");
+
+            PackageGraphEdgeRoute dependencyRoute =
+                PackageGraphEdgeLayer.BuildRoutesForTests(graph, layout.NodeRects, focus)
+                    .Single(route => route.Edge.Kind == PackageGraphEdgeKind.HardDependency &&
+                                     route.Edge.FromPackageId == "com.deucarian.logging" &&
+                                     route.Edge.ToPackageId == "com.deucarian.session");
+
+            Assert.IsFalse(dependencyRoute.UsesSharedTrunk);
+            Assert.AreEqual(2, dependencyRoute.Points.Count);
+            Assert.AreEqual(PackageGraphEdgeRouteZone.Providers, dependencyRoute.Zone);
+            Assert.AreEqual(PackageGraphEdgeRoutePort.Right, dependencyRoute.SourcePort);
+            Assert.AreEqual(PackageGraphEdgeRoutePort.Left, dependencyRoute.TargetPort);
+            Assert.IsFalse(PackageGraphEdgeLayer.RouteCrossesNodeInteriorForTests(dependencyRoute, layout.NodeRects));
+        }
+
+        [Test]
+        public void GraphEdgeRoutes_DoNotBundleStructuralMembershipWithRelationshipRoutes()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+            PackageGraphLayoutResult layout = new PackageGraphLayout().Calculate(
+                graph,
+                PackageGraphLayoutMode.Focus,
+                "com.deucarian.core-state");
+            PackageGraphFocus focus = PackageGraphFocus.Create(graph, "com.deucarian.core-state");
+
+            PackageGraphEdgeRoute[] routes =
+                PackageGraphEdgeLayer.BuildRoutesForTests(graph, layout.NodeRects, focus)
+                    .ToArray();
+
+            Assert.IsTrue(routes.All(route => route.Edge != null));
+            Assert.IsFalse(routes.Any(route => route.SharedTrunkId.IndexOf("membership", StringComparison.OrdinalIgnoreCase) >= 0));
+            Assert.IsTrue(routes.Any(route => route.Edge.Kind == PackageGraphEdgeKind.IntegrationConnection));
+            Assert.IsFalse(routes.Any(route => route.Zone == PackageGraphEdgeRouteZone.Direct &&
+                                               route.Edge.Kind == PackageGraphEdgeKind.IntegrationConnection &&
+                                               route.Edge.ConnectsPackage("com.deucarian.core-state")));
         }
 
         [Test]

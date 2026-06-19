@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.48 - 2026-06-19
+
+- Routed focused relationship edges through deterministic ports with shared fan-out trunks for multi-target integration/dependency zones.
+- Replaced boxed active-node back buttons with non-interactive chevron hints while keeping the active node body as the back target.
+- Aligned the operation drawer and footer on a shared compact spacing grid and kept operation status authoritative in the footer.
+
 ## 1.1.47 - 2026-06-19
 
 - Removed wheel-driven hierarchy enter/exit navigation so mouse wheel input only performs cursor-centered graph camera zoom.

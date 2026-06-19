@@ -5195,9 +5195,67 @@ namespace Deucarian.PackageInstaller.Editor
         }
     }
 
+    internal enum PackageGraphEdgeRoutePort
+    {
+        Auto,
+        Left,
+        Right,
+        Top,
+        Bottom
+    }
+
+    internal enum PackageGraphEdgeRouteZone
+    {
+        Direct,
+        Providers,
+        Dependents,
+        Integrations,
+        CompanionsAndSuites
+    }
+
+    internal readonly struct PackageGraphEdgeRoute
+    {
+        public PackageGraphEdgeRoute(
+            PackageGraphEdge edge,
+            PackageGraphEdgeRoutePort sourcePort,
+            PackageGraphEdgeRoutePort targetPort,
+            PackageGraphEdgeRouteZone zone,
+            string sharedTrunkId,
+            int branchIndex,
+            int branchCount,
+            IReadOnlyList<Vector2> points)
+        {
+            Edge = edge;
+            SourcePort = sourcePort;
+            TargetPort = targetPort;
+            Zone = zone;
+            SharedTrunkId = sharedTrunkId ?? string.Empty;
+            BranchIndex = Mathf.Max(0, branchIndex);
+            BranchCount = Mathf.Max(1, branchCount);
+            Points = points ?? Array.Empty<Vector2>();
+        }
+
+        public PackageGraphEdge Edge { get; }
+
+        public PackageGraphEdgeRoutePort SourcePort { get; }
+
+        public PackageGraphEdgeRoutePort TargetPort { get; }
+
+        public PackageGraphEdgeRouteZone Zone { get; }
+
+        public string SharedTrunkId { get; }
+
+        public int BranchIndex { get; }
+
+        public int BranchCount { get; }
+
+        public IReadOnlyList<Vector2> Points { get; }
+
+        public bool UsesSharedTrunk => BranchCount > 1 && !string.IsNullOrWhiteSpace(SharedTrunkId);
+    }
+
     internal sealed class PackageGraphEdgeLayer : VisualElement
     {
-        private const int CurveSamples = 32;
         private const float AnimationFrameMs = 40f;
         private const float AnimatedDashLength = 12f;
         private const float AnimatedDashGap = 12f;
@@ -5342,59 +5400,133 @@ namespace Deucarian.PackageInstaller.Editor
 
             Painter2D painter = context.painter2D;
 
-            foreach (PackageGraphEdge edge in _graph.Edges)
+            foreach (PackageGraphEdgeRoute route in BuildRoutes())
             {
-                if (!_focus.IsEdgeVisible(edge) ||
-                    !_nodeRects.TryGetValue(edge.FromPackageId, out Rect fromRect) ||
-                    !_nodeRects.TryGetValue(edge.ToPackageId, out Rect toRect))
-                {
-                    continue;
-                }
-
                 DrawEdge(
                     painter,
-                    edge,
-                    fromRect,
-                    toRect,
-                    _focus.IsEdgeEmphasized(edge),
+                    route,
+                    _focus.IsEdgeEmphasized(route.Edge),
                     _focus.HasFocus,
                     _animationPhase);
             }
         }
 
+        private IReadOnlyList<PackageGraphEdgeRoute> BuildRoutes()
+        {
+            return BuildRoutes(_graph, _nodeRects, _focus);
+        }
+
+        internal static IReadOnlyList<PackageGraphEdgeRoute> BuildRoutesForTests(
+            PackageGraphModel graph,
+            IReadOnlyDictionary<string, Rect> nodeRects,
+            PackageGraphFocus focus)
+        {
+            return BuildRoutes(graph, nodeRects, focus);
+        }
+
+        private static IReadOnlyList<PackageGraphEdgeRoute> BuildRoutes(
+            PackageGraphModel graph,
+            IReadOnlyDictionary<string, Rect> nodeRects,
+            PackageGraphFocus focus)
+        {
+            if (graph == null || nodeRects == null || graph.Edges.Count == 0)
+            {
+                return Array.Empty<PackageGraphEdgeRoute>();
+            }
+
+            PackageGraphFocus safeFocus = focus ?? PackageGraphFocus.Create(graph, string.Empty);
+            List<PackageGraphEdgeRouteContext> visibleEdges = graph.Edges
+                .Where(edge => edge != null &&
+                               safeFocus.IsEdgeVisible(edge) &&
+                               nodeRects.ContainsKey(edge.FromPackageId) &&
+                               nodeRects.ContainsKey(edge.ToPackageId))
+                .Select(edge => new PackageGraphEdgeRouteContext(
+                    edge,
+                    nodeRects[edge.FromPackageId],
+                    nodeRects[edge.ToPackageId],
+                    safeFocus.HasFocus && edge.ConnectsPackage(safeFocus.FocusPackageId)
+                        ? GetFocusRouteZone(edge, safeFocus.FocusPackageId)
+                        : PackageGraphEdgeRouteZone.Direct))
+                .ToList();
+
+            if (visibleEdges.Count == 0)
+            {
+                return Array.Empty<PackageGraphEdgeRoute>();
+            }
+
+            List<PackageGraphEdgeRoute> routes = new List<PackageGraphEdgeRoute>(visibleEdges.Count);
+            HashSet<string> routedEdgeKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            if (safeFocus.HasFocus &&
+                !string.IsNullOrWhiteSpace(safeFocus.FocusPackageId) &&
+                nodeRects.TryGetValue(safeFocus.FocusPackageId, out Rect focusRect))
+            {
+                foreach (IGrouping<string, PackageGraphEdgeRouteContext> group in visibleEdges
+                             .Where(context => context.Zone != PackageGraphEdgeRouteZone.Direct)
+                             .GroupBy(
+                                 context => GetRouteGroupKey(context.Edge, context.Zone, safeFocus.FocusPackageId),
+                                 StringComparer.OrdinalIgnoreCase))
+                {
+                    PackageGraphEdgeRouteContext[] contexts = group
+                        .OrderBy(context => GetRouteSortValue(context, safeFocus.FocusPackageId))
+                        .ThenBy(context => GetOtherNodeDisplayName(graph, context.Edge, safeFocus.FocusPackageId), StringComparer.OrdinalIgnoreCase)
+                        .ThenBy(context => context.Edge.Key, StringComparer.OrdinalIgnoreCase)
+                        .ToArray();
+
+                    if (contexts.Length > 1)
+                    {
+                        for (int index = 0; index < contexts.Length; index++)
+                        {
+                            routes.Add(CreateFanOutRoute(
+                                contexts[index],
+                                focusRect,
+                                safeFocus.FocusPackageId,
+                                group.Key,
+                                index,
+                                contexts.Length));
+                            routedEdgeKeys.Add(contexts[index].Edge.Key);
+                        }
+                    }
+                }
+            }
+
+            foreach (PackageGraphEdgeRouteContext context in visibleEdges)
+            {
+                if (routedEdgeKeys.Contains(context.Edge.Key))
+                {
+                    continue;
+                }
+
+                routes.Add(CreateDirectRoute(context, safeFocus.FocusPackageId));
+            }
+
+            return routes;
+        }
+
         private static void DrawEdge(
             Painter2D painter,
-            PackageGraphEdge edge,
-            Rect fromRect,
-            Rect toRect,
+            PackageGraphEdgeRoute route,
             bool emphasized,
             bool focusMode,
             float animationPhase)
         {
-            Vector2 start = GetPort(fromRect, toRect, EdgeEndpointPadding);
-            Vector2 end = GetPort(toRect, fromRect, EdgeEndpointPadding);
-            Vector2 control = GetArcControlPoint(start, end, edge, emphasized);
-            Vector2 controlA = Vector2.Lerp(start, control, 0.72f);
-            Vector2 controlB = Vector2.Lerp(end, control, 0.72f);
+            PackageGraphEdge edge = route.Edge;
             Color color = GetEdgeColor(edge, emphasized, focusMode);
             float width = GetEdgeWidth(edge, emphasized, focusMode);
             bool animate = emphasized &&
                            focusMode &&
                            ShouldAnimate(edge.Kind);
 
-            if (color.a <= 0.01f || width <= 0.01f)
+            if (color.a <= 0.01f || width <= 0.01f || route.Points.Count < 2)
             {
                 return;
             }
 
             if (edge.Kind == PackageGraphEdgeKind.IntegrationConnection)
             {
-                DrawIntegrationCableBezier(
+                DrawIntegrationCableRoute(
                     painter,
-                    start,
-                    controlA,
-                    controlB,
-                    end,
+                    route.Points,
                     color,
                     width,
                     emphasized);
@@ -5403,12 +5535,9 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 painter.strokeColor = color;
                 painter.lineWidth = width;
-                DrawDashedBezier(
+                DrawDashedPolyline(
                     painter,
-                    start,
-                    controlA,
-                    controlB,
-                    end,
+                    route.Points,
                     2.5f,
                     7.5f,
                     animate ? (1f - animationPhase) * 10f : 0f);
@@ -5417,12 +5546,9 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 painter.strokeColor = color;
                 painter.lineWidth = width;
-                DrawDashedBezier(
+                DrawDashedPolyline(
                     painter,
-                    start,
-                    controlA,
-                    controlB,
-                    end,
+                    route.Points,
                     AnimatedDashLength,
                     AnimatedDashGap,
                     animate ? (1f - animationPhase) * (AnimatedDashLength + AnimatedDashGap) : 0f);
@@ -5431,10 +5557,7 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 painter.strokeColor = color;
                 painter.lineWidth = width;
-                painter.BeginPath();
-                painter.MoveTo(start);
-                painter.BezierCurveTo(controlA, controlB, end);
-                painter.Stroke();
+                DrawPolylineStroke(painter, route.Points);
             }
 
             if (animate)
@@ -5444,11 +5567,8 @@ namespace Deucarian.PackageInstaller.Editor
                     Color pulseColor = new Color(color.r, color.g, color.b, Mathf.Min(0.64f, color.a + 0.06f));
                     DrawFlowMarkers(
                         painter,
+                        route,
                         edge.Kind,
-                        start,
-                        controlA,
-                        controlB,
-                        end,
                         pulseColor,
                         animationPhase);
                 }
@@ -5456,11 +5576,303 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (edge.State == PackageGraphEdgeState.Warning)
             {
-                DrawWarningMarker(painter, GetBezierPoint(start, controlA, controlB, end, 0.5f));
+                DrawWarningMarker(painter, GetPointOnRoute(route.Points, 0.5f, out _));
             }
         }
 
-        private static Vector2 GetPort(Rect fromRect, Rect toRect, float padding)
+        private readonly struct PackageGraphEdgeRouteContext
+        {
+            public PackageGraphEdgeRouteContext(
+                PackageGraphEdge edge,
+                Rect fromRect,
+                Rect toRect,
+                PackageGraphEdgeRouteZone zone)
+            {
+                Edge = edge;
+                FromRect = fromRect;
+                ToRect = toRect;
+                Zone = zone;
+            }
+
+            public PackageGraphEdge Edge { get; }
+
+            public Rect FromRect { get; }
+
+            public Rect ToRect { get; }
+
+            public PackageGraphEdgeRouteZone Zone { get; }
+        }
+
+        private static PackageGraphEdgeRoute CreateFanOutRoute(
+            PackageGraphEdgeRouteContext context,
+            Rect focusRect,
+            string focusPackageId,
+            string sharedTrunkId,
+            int branchIndex,
+            int branchCount)
+        {
+            bool focusIsSource = string.Equals(
+                context.Edge.FromPackageId,
+                focusPackageId,
+                StringComparison.OrdinalIgnoreCase);
+            Rect otherRect = focusIsSource ? context.ToRect : context.FromRect;
+            PackageGraphEdgeRoutePort focusPort = GetFocusPort(context.Zone);
+            PackageGraphEdgeRoutePort otherPort = GetRelatedPort(context.Zone);
+            Vector2 focusPoint = GetPort(focusRect, focusPort, EdgeEndpointPadding);
+            Vector2 otherPoint = GetPort(otherRect, otherPort, EdgeEndpointPadding);
+            Vector2 trunkPoint = GetTrunkPoint(focusPoint, otherPoint, context.Zone);
+            Vector2 branchPoint = GetBranchPoint(trunkPoint, otherPoint, context.Zone);
+            Vector2[] selectedToOther =
+            {
+                focusPoint,
+                trunkPoint,
+                branchPoint,
+                otherPoint
+            };
+            Vector2[] routePoints = focusIsSource
+                ? selectedToOther
+                : selectedToOther.Reverse().ToArray();
+
+            return new PackageGraphEdgeRoute(
+                context.Edge,
+                focusIsSource ? focusPort : otherPort,
+                focusIsSource ? otherPort : focusPort,
+                context.Zone,
+                sharedTrunkId,
+                branchIndex,
+                branchCount,
+                routePoints);
+        }
+
+        private static PackageGraphEdgeRoute CreateDirectRoute(
+            PackageGraphEdgeRouteContext context,
+            string focusPackageId)
+        {
+            PackageGraphEdgeRouteZone zone = context.Zone;
+            bool focusIsSource = !string.IsNullOrWhiteSpace(focusPackageId) &&
+                                 string.Equals(
+                                     context.Edge.FromPackageId,
+                                     focusPackageId,
+                                     StringComparison.OrdinalIgnoreCase);
+            bool focusIsTarget = !string.IsNullOrWhiteSpace(focusPackageId) &&
+                                 string.Equals(
+                                     context.Edge.ToPackageId,
+                                     focusPackageId,
+                                     StringComparison.OrdinalIgnoreCase);
+            PackageGraphEdgeRoutePort fromPort = PackageGraphEdgeRoutePort.Auto;
+            PackageGraphEdgeRoutePort toPort = PackageGraphEdgeRoutePort.Auto;
+
+            if (zone != PackageGraphEdgeRouteZone.Direct && (focusIsSource || focusIsTarget))
+            {
+                PackageGraphEdgeRoutePort focusPort = GetFocusPort(zone);
+                PackageGraphEdgeRoutePort otherPort = GetRelatedPort(zone);
+                fromPort = focusIsSource ? focusPort : otherPort;
+                toPort = focusIsSource ? otherPort : focusPort;
+            }
+
+            Vector2 from = GetPort(context.FromRect, fromPort, context.ToRect, EdgeEndpointPadding);
+            Vector2 to = GetPort(context.ToRect, toPort, context.FromRect, EdgeEndpointPadding);
+
+            return new PackageGraphEdgeRoute(
+                context.Edge,
+                fromPort,
+                toPort,
+                zone,
+                string.Empty,
+                0,
+                1,
+                new[] { from, to });
+        }
+
+        private static PackageGraphEdgeRouteZone GetFocusRouteZone(
+            PackageGraphEdge edge,
+            string focusPackageId)
+        {
+            if (edge == null || string.IsNullOrWhiteSpace(focusPackageId))
+            {
+                return PackageGraphEdgeRouteZone.Direct;
+            }
+
+            switch (edge.Kind)
+            {
+                case PackageGraphEdgeKind.HardDependency:
+                    if (string.Equals(edge.ToPackageId, focusPackageId, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return PackageGraphEdgeRouteZone.Providers;
+                    }
+
+                    if (string.Equals(edge.FromPackageId, focusPackageId, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return PackageGraphEdgeRouteZone.Dependents;
+                    }
+
+                    break;
+                case PackageGraphEdgeKind.IntegrationConnection:
+                    return PackageGraphEdgeRouteZone.Integrations;
+                case PackageGraphEdgeKind.OptionalCompanion:
+                case PackageGraphEdgeKind.Recommended:
+                case PackageGraphEdgeKind.SuiteMembership:
+                    return PackageGraphEdgeRouteZone.CompanionsAndSuites;
+            }
+
+            return PackageGraphEdgeRouteZone.Direct;
+        }
+
+        private static string GetRouteGroupKey(
+            PackageGraphEdge edge,
+            PackageGraphEdgeRouteZone zone,
+            string focusPackageId)
+        {
+            return edge.Kind + ":" + zone + ":" + (focusPackageId ?? string.Empty);
+        }
+
+        private static float GetRouteSortValue(
+            PackageGraphEdgeRouteContext context,
+            string focusPackageId)
+        {
+            bool focusIsSource = string.Equals(
+                context.Edge.FromPackageId,
+                focusPackageId,
+                StringComparison.OrdinalIgnoreCase);
+            Rect otherRect = focusIsSource ? context.ToRect : context.FromRect;
+
+            switch (context.Zone)
+            {
+                case PackageGraphEdgeRouteZone.Providers:
+                case PackageGraphEdgeRouteZone.Dependents:
+                    return otherRect.center.y;
+                case PackageGraphEdgeRouteZone.Integrations:
+                case PackageGraphEdgeRouteZone.CompanionsAndSuites:
+                    return otherRect.center.x;
+                default:
+                    return otherRect.center.x + otherRect.center.y;
+            }
+        }
+
+        private static string GetOtherNodeDisplayName(
+            PackageGraphModel graph,
+            PackageGraphEdge edge,
+            string focusPackageId)
+        {
+            string otherPackageId = edge.GetOtherPackageId(focusPackageId);
+            return graph != null &&
+                   !string.IsNullOrWhiteSpace(otherPackageId) &&
+                   graph.TryGetNode(otherPackageId, out PackageGraphNode node)
+                ? node.DisplayName
+                : otherPackageId ?? string.Empty;
+        }
+
+        private static PackageGraphEdgeRoutePort GetFocusPort(PackageGraphEdgeRouteZone zone)
+        {
+            switch (zone)
+            {
+                case PackageGraphEdgeRouteZone.Providers:
+                    return PackageGraphEdgeRoutePort.Left;
+                case PackageGraphEdgeRouteZone.Dependents:
+                    return PackageGraphEdgeRoutePort.Right;
+                case PackageGraphEdgeRouteZone.Integrations:
+                    return PackageGraphEdgeRoutePort.Bottom;
+                case PackageGraphEdgeRouteZone.CompanionsAndSuites:
+                    return PackageGraphEdgeRoutePort.Top;
+                default:
+                    return PackageGraphEdgeRoutePort.Auto;
+            }
+        }
+
+        private static PackageGraphEdgeRoutePort GetRelatedPort(PackageGraphEdgeRouteZone zone)
+        {
+            switch (zone)
+            {
+                case PackageGraphEdgeRouteZone.Providers:
+                    return PackageGraphEdgeRoutePort.Right;
+                case PackageGraphEdgeRouteZone.Dependents:
+                    return PackageGraphEdgeRoutePort.Left;
+                case PackageGraphEdgeRouteZone.Integrations:
+                    return PackageGraphEdgeRoutePort.Top;
+                case PackageGraphEdgeRouteZone.CompanionsAndSuites:
+                    return PackageGraphEdgeRoutePort.Bottom;
+                default:
+                    return PackageGraphEdgeRoutePort.Auto;
+            }
+        }
+
+        private static Vector2 GetTrunkPoint(
+            Vector2 focusPoint,
+            Vector2 otherPoint,
+            PackageGraphEdgeRouteZone zone)
+        {
+            const float PreferredTrunkLength = 94f;
+            float distance;
+
+            switch (zone)
+            {
+                case PackageGraphEdgeRouteZone.Providers:
+                    distance = Mathf.Max(48f, Mathf.Min(PreferredTrunkLength, Mathf.Abs(focusPoint.x - otherPoint.x) * 0.42f));
+                    return new Vector2(focusPoint.x - distance, focusPoint.y);
+                case PackageGraphEdgeRouteZone.Dependents:
+                    distance = Mathf.Max(48f, Mathf.Min(PreferredTrunkLength, Mathf.Abs(otherPoint.x - focusPoint.x) * 0.42f));
+                    return new Vector2(focusPoint.x + distance, focusPoint.y);
+                case PackageGraphEdgeRouteZone.Integrations:
+                    distance = Mathf.Max(54f, Mathf.Min(PreferredTrunkLength, Mathf.Abs(otherPoint.y - focusPoint.y) * 0.42f));
+                    return new Vector2(focusPoint.x, focusPoint.y + distance);
+                case PackageGraphEdgeRouteZone.CompanionsAndSuites:
+                    distance = Mathf.Max(54f, Mathf.Min(PreferredTrunkLength, Mathf.Abs(focusPoint.y - otherPoint.y) * 0.42f));
+                    return new Vector2(focusPoint.x, focusPoint.y - distance);
+                default:
+                    return (focusPoint + otherPoint) * 0.5f;
+            }
+        }
+
+        private static Vector2 GetBranchPoint(
+            Vector2 trunkPoint,
+            Vector2 otherPoint,
+            PackageGraphEdgeRouteZone zone)
+        {
+            switch (zone)
+            {
+                case PackageGraphEdgeRouteZone.Providers:
+                case PackageGraphEdgeRouteZone.Dependents:
+                    return new Vector2(trunkPoint.x, otherPoint.y);
+                case PackageGraphEdgeRouteZone.Integrations:
+                case PackageGraphEdgeRouteZone.CompanionsAndSuites:
+                    return new Vector2(otherPoint.x, trunkPoint.y);
+                default:
+                    return (trunkPoint + otherPoint) * 0.5f;
+            }
+        }
+
+        private static Vector2 GetPort(
+            Rect rect,
+            PackageGraphEdgeRoutePort port,
+            Rect otherRect,
+            float padding)
+        {
+            return port == PackageGraphEdgeRoutePort.Auto
+                ? GetAutoPort(rect, otherRect, padding)
+                : GetPort(rect, port, padding);
+        }
+
+        private static Vector2 GetPort(
+            Rect rect,
+            PackageGraphEdgeRoutePort port,
+            float padding)
+        {
+            switch (port)
+            {
+                case PackageGraphEdgeRoutePort.Left:
+                    return new Vector2(rect.xMin - padding, rect.center.y);
+                case PackageGraphEdgeRoutePort.Right:
+                    return new Vector2(rect.xMax + padding, rect.center.y);
+                case PackageGraphEdgeRoutePort.Top:
+                    return new Vector2(rect.center.x, rect.yMin - padding);
+                case PackageGraphEdgeRoutePort.Bottom:
+                    return new Vector2(rect.center.x, rect.yMax + padding);
+                default:
+                    return rect.center;
+            }
+        }
+
+        private static Vector2 GetAutoPort(Rect fromRect, Rect toRect, float padding)
         {
             Vector2 delta = toRect.center - fromRect.center;
 
@@ -5478,44 +5890,6 @@ namespace Deucarian.PackageInstaller.Editor
             float scale = Mathf.Min(scaleX, scaleY);
             return fromRect.center +
                    delta.normalized * ((delta.magnitude * Mathf.Clamp01(scale)) + Mathf.Max(0f, padding));
-        }
-
-        private static Vector2 GetArcControlPoint(
-            Vector2 start,
-            Vector2 end,
-            PackageGraphEdge edge,
-            bool emphasized)
-        {
-            Vector2 midpoint = (start + end) * 0.5f;
-            Vector2 outward = midpoint - PackageGraphLayout.GraphCenter;
-
-            if (outward.sqrMagnitude < 1f)
-            {
-                Vector2 delta = end - start;
-                outward = new Vector2(-delta.y, delta.x);
-            }
-
-            if (outward.sqrMagnitude < 1f)
-            {
-                outward = Vector2.up;
-            }
-
-            float distance = Mathf.Max(46f, Vector2.Distance(start, end) * 0.10f);
-
-            if (edge.Kind == PackageGraphEdgeKind.IntegrationConnection)
-            {
-                distance += 10f;
-            }
-            else if (edge.Kind == PackageGraphEdgeKind.SuiteMembership)
-            {
-                distance += 18f;
-            }
-            else if (!emphasized)
-            {
-                distance *= 0.72f;
-            }
-
-            return midpoint + outward.normalized * distance;
         }
 
         private static bool IsDashed(PackageGraphEdgeKind kind)
@@ -5634,70 +6008,79 @@ namespace Deucarian.PackageInstaller.Editor
             }
         }
 
-        private static void DrawIntegrationCableBezier(
+        private static void DrawPolylineStroke(
             Painter2D painter,
-            Vector2 start,
-            Vector2 controlA,
-            Vector2 controlB,
-            Vector2 end,
+            IReadOnlyList<Vector2> points)
+        {
+            if (points == null || points.Count < 2)
+            {
+                return;
+            }
+
+            painter.BeginPath();
+            painter.MoveTo(points[0]);
+
+            for (int index = 1; index < points.Count; index++)
+            {
+                painter.LineTo(points[index]);
+            }
+
+            painter.Stroke();
+        }
+
+        private static void DrawIntegrationCableRoute(
+            Painter2D painter,
+            IReadOnlyList<Vector2> points,
             Color color,
             float width,
             bool emphasized)
         {
-            Vector2 tangent = GetBezierTangent(start, controlA, controlB, end, 0.5f);
-
-            if (tangent.sqrMagnitude < 0.01f)
+            if (points == null || points.Count < 2)
             {
-                tangent = end - start;
+                return;
             }
 
-            Vector2 side = tangent.sqrMagnitude < 0.01f
-                ? Vector2.up
-                : new Vector2(-tangent.y, tangent.x).normalized;
-            float offset = emphasized ? 3.0f : 2.2f;
+            float offset = emphasized ? 1.8f : 1.35f;
             Color underlay = new Color(0.04f, 0.12f, 0.14f, Mathf.Min(0.34f, color.a * 0.50f));
 
             painter.strokeColor = underlay;
-            painter.lineWidth = Mathf.Max(1.4f, width + 1.1f);
-            DrawBezierStroke(painter, start, controlA, controlB, end);
+            painter.lineWidth = Mathf.Max(1.2f, width + 0.85f);
+            DrawPolylineStroke(painter, points);
 
             painter.strokeColor = color;
-            painter.lineWidth = Mathf.Max(0.85f, width * 0.54f);
-            DrawBezierStroke(
-                painter,
-                start + side * offset,
-                controlA + side * offset,
-                controlB + side * offset,
-                end + side * offset);
-            DrawBezierStroke(
-                painter,
-                start - side * offset,
-                controlA - side * offset,
-                controlB - side * offset,
-                end - side * offset);
-
+            painter.lineWidth = Mathf.Max(0.65f, width * 0.42f);
+            DrawOffsetPolyline(painter, points, offset);
+            DrawOffsetPolyline(painter, points, -offset);
         }
 
-        private static void DrawBezierStroke(
+        private static void DrawOffsetPolyline(
             Painter2D painter,
-            Vector2 start,
-            Vector2 controlA,
-            Vector2 controlB,
-            Vector2 end)
+            IReadOnlyList<Vector2> points,
+            float offset)
         {
-            painter.BeginPath();
-            painter.MoveTo(start);
-            painter.BezierCurveTo(controlA, controlB, end);
-            painter.Stroke();
+            for (int index = 0; index < points.Count - 1; index++)
+            {
+                Vector2 start = points[index];
+                Vector2 end = points[index + 1];
+                Vector2 delta = end - start;
+
+                if (delta.sqrMagnitude <= 0.01f)
+                {
+                    continue;
+                }
+
+                Vector2 side = new Vector2(-delta.y, delta.x).normalized * offset;
+                painter.BeginPath();
+                painter.MoveTo(start + side);
+                painter.LineTo(end + side);
+                painter.Stroke();
+            }
         }
 
         private static void DrawFlowMarkers(
             Painter2D painter,
+            PackageGraphEdgeRoute route,
             PackageGraphEdgeKind kind,
-            Vector2 start,
-            Vector2 controlA,
-            Vector2 controlB,
-            Vector2 end,
             Color color,
             float animationPhase)
         {
@@ -5709,12 +6092,16 @@ namespace Deucarian.PackageInstaller.Editor
 
             for (int index = 0; index < markerCount; index++)
             {
-                float phase = Mathf.Repeat(animationPhase + (index / (float)markerCount), 1f);
+                float branchOffset = route.UsesSharedTrunk
+                    ? route.BranchIndex * 0.11f
+                    : 0f;
+                float phase = Mathf.Repeat(animationPhase + branchOffset + (index / (float)markerCount), 1f);
                 float markerT = Mathf.Lerp(MarkerTravelStart, MarkerTravelEnd, phase);
+                Vector2 point = GetPointOnRoute(route.Points, markerT, out Vector2 tangent);
                 DrawFlowChevron(
                     painter,
-                    GetBezierPoint(start, controlA, controlB, end, markerT),
-                    GetBezierTangent(start, controlA, controlB, end, markerT),
+                    point,
+                    tangent,
                     markerColor,
                     markerSize,
                     markerWidth);
@@ -5792,33 +6179,33 @@ namespace Deucarian.PackageInstaller.Editor
             }
         }
 
-        private static void DrawDashedBezier(
+        private static void DrawDashedPolyline(
             Painter2D painter,
-            Vector2 start,
-            Vector2 controlA,
-            Vector2 controlB,
-            Vector2 end,
+            IReadOnlyList<Vector2> points,
             float dashLength,
             float gapLength,
             float dashOffset)
         {
+            if (points == null || points.Count < 2)
+            {
+                return;
+            }
+
             float patternLength = dashLength + gapLength;
             float normalizedOffset = Mathf.Repeat(dashOffset, patternLength);
 
             bool draw = normalizedOffset < dashLength;
             float segmentCursor = draw ? normalizedOffset : normalizedOffset - dashLength;
-            Vector2 previous = start;
 
-            for (int index = 1; index <= CurveSamples; index++)
+            for (int index = 0; index < points.Count - 1; index++)
             {
-                float t = index / (float)CurveSamples;
-                Vector2 current = GetBezierPoint(start, controlA, controlB, end, t);
+                Vector2 previous = points[index];
+                Vector2 current = points[index + 1];
                 Vector2 delta = current - previous;
                 float length = delta.magnitude;
 
                 if (length <= 0.1f)
                 {
-                    previous = current;
                     continue;
                 }
 
@@ -5849,36 +6236,143 @@ namespace Deucarian.PackageInstaller.Editor
                         draw = !draw;
                     }
                 }
-
-                previous = current;
             }
         }
 
-        private static Vector2 GetBezierPoint(
-            Vector2 start,
-            Vector2 controlA,
-            Vector2 controlB,
-            Vector2 end,
-            float t)
+        private static Vector2 GetPointOnRoute(
+            IReadOnlyList<Vector2> points,
+            float normalizedDistance,
+            out Vector2 tangent)
         {
-            float inverse = 1f - t;
-            return inverse * inverse * inverse * start +
-                   3f * inverse * inverse * t * controlA +
-                   3f * inverse * t * t * controlB +
-                   t * t * t * end;
+            tangent = Vector2.right;
+
+            if (points == null || points.Count == 0)
+            {
+                return default(Vector2);
+            }
+
+            if (points.Count == 1)
+            {
+                return points[0];
+            }
+
+            float totalLength = GetRouteLength(points);
+
+            if (totalLength <= 0.01f)
+            {
+                tangent = points[points.Count - 1] - points[0];
+                return points[0];
+            }
+
+            float targetDistance = Mathf.Clamp01(normalizedDistance) * totalLength;
+            float consumed = 0f;
+
+            for (int index = 0; index < points.Count - 1; index++)
+            {
+                Vector2 start = points[index];
+                Vector2 end = points[index + 1];
+                Vector2 segment = end - start;
+                float length = segment.magnitude;
+
+                if (length <= 0.01f)
+                {
+                    continue;
+                }
+
+                if (consumed + length >= targetDistance)
+                {
+                    tangent = segment;
+                    return Vector2.Lerp(start, end, (targetDistance - consumed) / length);
+                }
+
+                consumed += length;
+            }
+
+            tangent = points[points.Count - 1] - points[points.Count - 2];
+            return points[points.Count - 1];
         }
 
-        private static Vector2 GetBezierTangent(
-            Vector2 start,
-            Vector2 controlA,
-            Vector2 controlB,
-            Vector2 end,
-            float t)
+        private static float GetRouteLength(IReadOnlyList<Vector2> points)
         {
-            float inverse = 1f - t;
-            return 3f * inverse * inverse * (controlA - start) +
-                   6f * inverse * t * (controlB - controlA) +
-                   3f * t * t * (end - controlB);
+            if (points == null || points.Count < 2)
+            {
+                return 0f;
+            }
+
+            float length = 0f;
+
+            for (int index = 0; index < points.Count - 1; index++)
+            {
+                length += Vector2.Distance(points[index], points[index + 1]);
+            }
+
+            return length;
+        }
+
+        internal static bool RouteCrossesNodeInteriorForTests(
+            PackageGraphEdgeRoute route,
+            IReadOnlyDictionary<string, Rect> nodeRects)
+        {
+            if (route.Points == null || route.Points.Count < 2 || nodeRects == null || route.Edge == null)
+            {
+                return false;
+            }
+
+            foreach (KeyValuePair<string, Rect> nodeRect in nodeRects)
+            {
+                if (string.Equals(nodeRect.Key, route.Edge.FromPackageId, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(nodeRect.Key, route.Edge.ToPackageId, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                Rect interior = ShrinkRect(nodeRect.Value, 2f);
+
+                for (int index = 0; index < route.Points.Count - 1; index++)
+                {
+                    if (LineIntersectsRectInterior(route.Points[index], route.Points[index + 1], interior))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        private static Rect ShrinkRect(Rect rect, float amount)
+        {
+            float inset = Mathf.Max(0f, amount);
+            return new Rect(
+                rect.xMin + inset,
+                rect.yMin + inset,
+                Mathf.Max(0f, rect.width - inset * 2f),
+                Mathf.Max(0f, rect.height - inset * 2f));
+        }
+
+        private static bool LineIntersectsRectInterior(
+            Vector2 start,
+            Vector2 end,
+            Rect rect)
+        {
+            if (rect.width <= 0f || rect.height <= 0f)
+            {
+                return false;
+            }
+
+            const int Samples = 24;
+
+            for (int index = 1; index < Samples; index++)
+            {
+                Vector2 point = Vector2.Lerp(start, end, index / (float)Samples);
+
+                if (rect.Contains(point))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static void DrawWarningMarker(Painter2D painter, Vector2 center)
@@ -5972,7 +6466,8 @@ namespace Deucarian.PackageInstaller.Editor
             if (hasBackAffordance)
             {
                 Label back = new Label("\u2039");
-                back.AddToClassList("dpi-graph-group__back");
+                back.AddToClassList("dpi-graph-group__back-hint");
+                back.pickingMode = PickingMode.Ignore;
                 back.tooltip = backTooltip;
                 symbol.Add(back);
             }
@@ -6009,12 +6504,6 @@ namespace Deucarian.PackageInstaller.Editor
 
             caption.Add(stats);
 
-            if (hasBackAffordance)
-            {
-                Label backHint = new Label(backTooltip);
-                backHint.AddToClassList("dpi-graph-group__back-hint");
-                caption.Add(backHint);
-            }
         }
 
         private static string GetTitle(PackageGraphGroupLayoutNode groupNode)
@@ -6161,20 +6650,13 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (hasBackAffordance)
             {
-                Button backButton = new Button(() =>
+                Label backHint = new Label("\u2039")
                 {
-                    if (interactionsEnabled)
-                    {
-                        selectionCleared?.Invoke();
-                    }
-                })
-                {
-                    text = "\u2039",
                     tooltip = backTooltip
                 };
-                backButton.AddToClassList("dpi-graph-node__back");
-                backButton.RegisterCallback<ClickEvent>(evt => evt.StopPropagation());
-                header.Add(backButton);
+                backHint.AddToClassList("dpi-graph-node__back-hint");
+                backHint.pickingMode = PickingMode.Ignore;
+                header.Add(backHint);
             }
 
             Image icon = new Image
