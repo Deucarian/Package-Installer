@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.30 - 2026-06-19
+
+- Refined Ecosystem Graph hierarchy visuals so root/category systems use strict circular symbols and a single visible orbit boundary.
+- Added a pinned category rail for group/package focus and clearer breadcrumb/current-segment behavior.
+- Added plain package hierarchy context to graph cards and package details while removing remaining capsule-like graph controls.
+
 ## 1.1.29 - 2026-06-19
 
 - Reclassified the Ecosystem Graph into Infrastructure, State & Data, Runtime Services, Experience & Interaction, Tools & Quality, Integrations, and Suites.

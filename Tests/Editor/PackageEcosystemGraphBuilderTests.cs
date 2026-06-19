@@ -670,7 +670,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 .ToArray();
 
             CollectionAssert.AreEquivalent(
-                new[] { "Root", "Group", "Package", "Installed", "Not installed", "Attention" },
+                new[] { "Deucarian root", "Category", "Package", "Installed", "Not installed", "Attention" },
                 labels);
             CollectionAssert.DoesNotContain(labels, "Dependency flow");
             CollectionAssert.DoesNotContain(labels, "Integration connection");
@@ -779,11 +779,110 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.IsTrue(
                 FindByClass(groupFocused, "dpi-graph-legend__label")
                     .OfType<Label>()
-                    .Any(label => label.text == "Membership"));
+                    .Any(label => label.text == "Structural membership"));
             Assert.IsFalse(
                 FindByClass(groupFocused, "dpi-graph-legend__label")
                     .OfType<Label>()
                     .Any(label => label.text == "Dependency flow"));
+        }
+
+        [Test]
+        public void GraphView_GroupHubsUseCircularSymbolsWithExternalLabels()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+            PackageGraphView view = new PackageGraphView(_ => { }, (_, __) => { });
+
+            view.SetGraph(graph, string.Empty, actionsEnabled: true);
+
+            VisualElement runtimeGroup = FindByClass(view, "dpi-graph-group")
+                .Single(element => element.name == "group-runtime-services");
+            VisualElement symbol = FindByClass(runtimeGroup, "dpi-graph-group__symbol").Single();
+
+            Assert.That(
+                symbol.style.width.value.value,
+                Is.EqualTo(symbol.style.height.value.value).Within(0.1f));
+            Assert.IsEmpty(FindByClass(symbol, "dpi-graph-group__title"));
+            Assert.IsTrue(
+                FindByClass(runtimeGroup, "dpi-graph-group__title")
+                    .OfType<Label>()
+                    .Any(label => label.text == "Runtime Services"));
+            Assert.IsEmpty(FindByClass(runtimeGroup, "dpi-graph-node__action"));
+        }
+
+        [Test]
+        public void GraphView_CategoryRailAppearsInFocusAndHighlightsParentCategory()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+            PackageGraphView overview = new PackageGraphView(_ => { }, (_, __) => { });
+            PackageGraphView focused = new PackageGraphView(_ => { }, (_, __) => { });
+
+            overview.SetGraph(graph, string.Empty, actionsEnabled: true);
+            focused.SetGraph(graph, "com.deucarian.session", actionsEnabled: true);
+
+            Assert.AreEqual(0, FindByClass(overview, "dpi-category-rail__item").Count);
+            Assert.AreEqual(7, FindByClass(focused, "dpi-category-rail__item").Count);
+            Assert.IsTrue(
+                FindByClass(focused, "dpi-category-rail__item")
+                    .Single(item => item.name == "category-rail-runtime-services")
+                    .ClassListContains("dpi-category-rail__item--active"));
+        }
+
+        [Test]
+        public void GraphView_BreadcrumbShowsCurrentSegmentWithoutClickablePill()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+            PackageGraphView groupFocused = new PackageGraphView(_ => { }, (_, __) => { });
+            PackageGraphView packageFocused = new PackageGraphView(_ => { }, (_, __) => { });
+
+            groupFocused.SetGraph(
+                graph,
+                string.Empty,
+                string.Empty,
+                "runtime-services",
+                actionsEnabled: true,
+                visiblePackageIds: null,
+                filterCounts: null,
+                hiddenRelatedCount: 0);
+            packageFocused.SetGraph(graph, "com.deucarian.session", actionsEnabled: true);
+
+            Assert.IsTrue(
+                FindByClass(groupFocused, "dpi-ecosystem-graph__breadcrumb-current")
+                    .OfType<Label>()
+                    .Any(label => label.text == "Runtime Services"));
+            Assert.IsFalse(
+                FindByClass(groupFocused, "dpi-ecosystem-graph__breadcrumb")
+                    .OfType<Button>()
+                    .Any(button => button.text == "Runtime Services"));
+            Assert.IsTrue(
+                FindByClass(packageFocused, "dpi-ecosystem-graph__breadcrumb-current")
+                    .OfType<Label>()
+                    .Any(label => label.text == "Deucarian Session"));
+            Assert.IsTrue(
+                FindByClass(packageFocused, "dpi-ecosystem-graph__breadcrumb")
+                    .OfType<Button>()
+                    .Any(button => button.text == "Runtime Services"));
+            Assert.IsTrue(
+                FindByClass(packageFocused, "dpi-ecosystem-graph__breadcrumb-separator")
+                    .OfType<Label>()
+                    .All(label => label.text == ">"));
+        }
+
+        [Test]
+        public void GraphView_PackageFocusShowsPlainCategoryPath()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+            PackageGraphView view = new PackageGraphView(_ => { }, (_, __) => { });
+
+            view.SetGraph(graph, "com.deucarian.session", actionsEnabled: true);
+
+            Assert.IsTrue(
+                FindByClass(FindGraphNode(view, "com.deucarian.session"), "dpi-graph-node__category-path")
+                    .OfType<Label>()
+                    .Any(label => label.text == "Runtime Services"));
         }
 
         [Test]
@@ -885,7 +984,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
             Assert.AreEqual(PackageGraphLayoutMode.Overview, layout.Mode);
             Assert.AreEqual(graph.Nodes.Count, layout.NodeRects.Count);
-            Assert.AreEqual(8, layout.RingGuides.Count);
+            Assert.AreEqual(1, layout.RingGuides.Count);
             Assert.IsEmpty(layout.SectorLabels);
             Assert.AreEqual(7, layout.GroupNodes.Count(groupNode => !groupNode.Collapsed));
             CollectionAssert.AreEquivalent(
@@ -928,6 +1027,43 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 Is.EqualTo(Vector2.Distance(layout.NodeRects["com.deucarian.object-loading.api-integration"].center, integrations.Rect.center)).Within(1.5f));
             AssertNoOverlaps(layout.NodeRects.Values.Concat(layout.GroupNodes.Select(groupNode => groupNode.Rect)).ToArray());
             AssertGroupClustersSeparated(graph, layout, 40f);
+        }
+
+        [Test]
+        public void Layout_StoresPerfectVisibleOrbitRadiusSeparateFromRootGuide()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+
+            PackageGraphLayoutResult layout = new PackageGraphLayout().Calculate(graph);
+
+            Assert.AreEqual(1, layout.RingGuides.Count);
+
+            foreach (PackageGraphGroupLayoutNode groupNode in layout.GroupNodes.Where(groupNode => !groupNode.Collapsed))
+            {
+                Assert.That(groupNode.Rect.width, Is.EqualTo(groupNode.Rect.height).Within(0.1f));
+
+                Rect[] directChildRects = graph.Nodes
+                    .Where(node => string.Equals(node.GroupId, groupNode.GroupId, StringComparison.OrdinalIgnoreCase))
+                    .Where(node => layout.NodeRects.ContainsKey(node.PackageId))
+                    .Select(node => layout.NodeRects[node.PackageId])
+                    .ToArray();
+
+                if (directChildRects.Length == 0)
+                {
+                    Assert.AreEqual(0f, groupNode.OrbitRadius);
+                    continue;
+                }
+
+                Assert.Greater(groupNode.OrbitRadius, 0f);
+
+                foreach (Rect childRect in directChildRects)
+                {
+                    Assert.That(
+                        Vector2.Distance(childRect.center, groupNode.Rect.center),
+                        Is.EqualTo(groupNode.OrbitRadius).Within(0.1f));
+                }
+            }
         }
 
         [Test]

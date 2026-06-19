@@ -12,7 +12,7 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed class PackageInstallerWindow : EditorWindow
     {
         private const string WindowTitle = "Package Installer";
-        private const string PackageVersion = "1.1.29";
+        private const string PackageVersion = "1.1.30";
         private const float MinWindowWidth = 850f;
         private const float MinWindowHeight = 650f;
         private const float SidebarWidth = 340f;
@@ -1802,7 +1802,9 @@ namespace Deucarian.PackageInstaller.Editor
 
             DrawStatusBadge(status.Label, status.Kind, GUILayout.Width(150f));
             GUILayout.Space(6f);
-            DrawKeyValueRow("Type", packageDefinition.Category);
+            DrawKeyValueRow("Category", packageDefinition.Category);
+            DrawKeyValueRow("Package type", GetPackageTypeDisplayName(packageDefinition));
+            DrawKeyValueRow("Parent hierarchy path", GetPackageHierarchyPath(packageDefinition));
 
             if (_packageDetectionService.TryGetInstalledPackage(
                     packageDefinition.PackageId,
@@ -2414,7 +2416,9 @@ namespace Deucarian.PackageInstaller.Editor
             PackageUpdateStatus updateStatus = _packageUpdateCheckService.GetStatus(packageDefinition, selectedChannel);
 
             DrawSelectableValue("Package ID", packageDefinition.PackageId);
-            DrawSelectableValue("Type", packageDefinition.Category);
+            DrawSelectableValue("Category", packageDefinition.Category);
+            DrawSelectableValue("Package type", GetPackageTypeDisplayName(packageDefinition));
+            DrawSelectableValue("Parent hierarchy path", GetPackageHierarchyPath(packageDefinition));
             DrawSelectableValue("Selected URL", packageDefinition.GetUrl(selectedChannel));
             DrawSelectableValue("Stable URL", packageDefinition.StableUrl);
             DrawSelectableValue("Development URL", packageDefinition.DevelopmentUrl);
@@ -3672,6 +3676,66 @@ namespace Deucarian.PackageInstaller.Editor
                    _lastPackageGraph.TryGetNode(packageId, out PackageGraphNode node)
                 ? node.GroupId
                 : string.Empty;
+        }
+
+        private string GetPackageHierarchyPath(PackageDefinition packageDefinition)
+        {
+            if (packageDefinition == null)
+            {
+                return "-";
+            }
+
+            string groupId = GetGraphPackageGroupId(packageDefinition.PackageId);
+
+            if (string.IsNullOrWhiteSpace(groupId))
+            {
+                return string.IsNullOrWhiteSpace(packageDefinition.Category)
+                    ? "-"
+                    : packageDefinition.Category;
+            }
+
+            List<string> path = new List<string>();
+            HashSet<string> visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            string currentGroupId = groupId;
+
+            while (!string.IsNullOrWhiteSpace(currentGroupId) &&
+                   visited.Add(currentGroupId) &&
+                   _lastPackageGraph != null &&
+                   _lastPackageGraph.TryGetGroup(currentGroupId, out PackageGraphGroup group))
+            {
+                path.Add(group.DisplayName);
+                currentGroupId = group.ParentGroupId;
+            }
+
+            path.Reverse();
+            return path.Count == 0
+                ? packageDefinition.Category
+                : string.Join(" / ", path.ToArray());
+        }
+
+        private static string GetPackageTypeDisplayName(PackageDefinition packageDefinition)
+        {
+            if (packageDefinition == null)
+            {
+                return "-";
+            }
+
+            if (packageDefinition.IsIntegration)
+            {
+                return "Integration";
+            }
+
+            if (packageDefinition.IsSuite)
+            {
+                return "Suite";
+            }
+
+            if (!string.IsNullOrWhiteSpace(packageDefinition.MetadataType))
+            {
+                return packageDefinition.MetadataType;
+            }
+
+            return packageDefinition.PackageType.ToString();
         }
 
         private string GetGraphParentGroupId(string groupId)

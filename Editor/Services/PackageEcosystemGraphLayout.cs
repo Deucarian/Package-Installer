@@ -103,6 +103,7 @@ namespace Deucarian.PackageInstaller.Editor
             int updateCount,
             bool focused,
             bool collapsed,
+            float orbitRadius = 0f,
             string summaryLabel = null)
         {
             Group = group;
@@ -114,6 +115,7 @@ namespace Deucarian.PackageInstaller.Editor
             UpdateCount = Math.Max(0, updateCount);
             Focused = focused;
             Collapsed = collapsed;
+            OrbitRadius = Mathf.Max(0f, orbitRadius);
             SummaryLabel = summaryLabel ?? string.Empty;
         }
 
@@ -136,6 +138,8 @@ namespace Deucarian.PackageInstaller.Editor
         public bool Focused { get; }
 
         public bool Collapsed { get; }
+
+        public float OrbitRadius { get; }
 
         public string SummaryLabel { get; }
     }
@@ -192,12 +196,14 @@ namespace Deucarian.PackageInstaller.Editor
         public const float NodeWidth = 238f;
         public const float NodeHeight = 136f;
 
-        private const float HubWidth = 310f;
-        private const float HubHeight = 154f;
-        private const float GroupWidth = 226f;
-        private const float GroupHeight = 112f;
-        private const float GroupChipWidth = 226f;
-        private const float GroupChipHeight = 72f;
+        private const float HubWidth = 188f;
+        private const float HubHeight = 188f;
+        private const float GroupWidth = 168f;
+        private const float GroupHeight = 168f;
+        private const float FocusGroupWidth = 188f;
+        private const float FocusGroupHeight = 188f;
+        private const float GroupChipWidth = 150f;
+        private const float GroupChipHeight = 150f;
         private const float NodeGap = 22f;
         private const float MinimumGlobalGroupOrbitRadius = 960f;
         private const float MinimumClusterGap = 56f;
@@ -293,17 +299,8 @@ namespace Deucarian.PackageInstaller.Editor
                     group,
                     groupRect,
                     focused: false,
-                    collapsed: false));
-
-                if (childCount > 0)
-                {
-                    ringGuides.Add(new PackageGraphRingGuide(
-                        string.Empty,
-                        ResolveRing(group.Id),
-                        groupCenter,
-                        localRadius,
-                        localRadius));
-                }
+                    collapsed: false,
+                    orbitRadius: localRadius));
 
                 PlaceDirectChildren(
                     graph,
@@ -339,28 +336,18 @@ namespace Deucarian.PackageInstaller.Editor
             List<PackageGraphGroupLayoutNode> groupNodes = new List<PackageGraphGroupLayoutNode>();
             List<PackageGraphRingGuide> ringGuides = new List<PackageGraphRingGuide>();
 
-            Rect focusedGroupRect = CenteredRect(GraphCenter, GroupWidth + 24f, GroupHeight + 12f);
+            IReadOnlyList<PackageGraphNode> directPackages = GetDirectPackages(graph, focusedGroup.Id);
+            IReadOnlyList<PackageGraphGroup> directGroups = GetChildGroups(graph, focusedGroup.Id);
+            int childCount = directPackages.Count + directGroups.Count;
+            float localRadius = Mathf.Max(FocusOrbitRadius, CalculateLocalOrbitRadius(childCount, NodeWidth, NodeHeight, GroupChipWidth, GroupChipHeight));
+            Rect focusedGroupRect = CenteredRect(GraphCenter, FocusGroupWidth, FocusGroupHeight);
             groupNodes.Add(CreateGroupLayoutNode(
                 graph,
                 focusedGroup,
                 focusedGroupRect,
                 focused: true,
-                collapsed: false));
-
-            IReadOnlyList<PackageGraphNode> directPackages = GetDirectPackages(graph, focusedGroup.Id);
-            IReadOnlyList<PackageGraphGroup> directGroups = GetChildGroups(graph, focusedGroup.Id);
-            int childCount = directPackages.Count + directGroups.Count;
-            float localRadius = Mathf.Max(FocusOrbitRadius, CalculateLocalOrbitRadius(childCount, NodeWidth, NodeHeight, GroupChipWidth, GroupChipHeight));
-
-            if (childCount > 0)
-            {
-                ringGuides.Add(new PackageGraphRingGuide(
-                    string.Empty,
-                    ResolveRing(focusedGroup.Id),
-                    GraphCenter,
-                    localRadius,
-                    localRadius));
-            }
+                collapsed: false,
+                orbitRadius: childCount > 0 ? localRadius : 0f));
 
             PlaceDirectChildren(
                 graph,
@@ -602,8 +589,8 @@ namespace Deucarian.PackageInstaller.Editor
                     rect,
                     focused: false,
                     collapsed: true,
-                    packages,
-                    group.DisplayName + " - " + packages.Count + " unrelated"));
+                    packageScope: packages,
+                    summaryLabel: group.DisplayName + " - " + packages.Count + " unrelated"));
             }
 
             return groupNodes;
@@ -616,6 +603,7 @@ namespace Deucarian.PackageInstaller.Editor
             bool focused,
             bool collapsed,
             IEnumerable<PackageGraphNode> packageScope = null,
+            float orbitRadius = 0f,
             string summaryLabel = null)
         {
             PackageGraphNode[] packages = packageScope == null
@@ -638,6 +626,7 @@ namespace Deucarian.PackageInstaller.Editor
                 updateCount,
                 focused,
                 collapsed,
+                orbitRadius,
                 summaryLabel);
         }
 
@@ -671,8 +660,8 @@ namespace Deucarian.PackageInstaller.Editor
                     rect,
                     focused: false,
                     collapsed: true,
-                    packages,
-                    group.DisplayName + " - " + packages.Count + " " + summarySuffix));
+                    packageScope: packages,
+                    summaryLabel: group.DisplayName + " - " + packages.Count + " " + summarySuffix));
             }
         }
 

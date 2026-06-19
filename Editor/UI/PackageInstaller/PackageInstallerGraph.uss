@@ -317,10 +317,10 @@
     padding-left: 8px;
     padding-right: 8px;
     height: 18px;
-    border-top-left-radius: 999px;
-    border-top-right-radius: 999px;
-    border-bottom-right-radius: 999px;
-    border-bottom-left-radius: 999px;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+    border-bottom-right-radius: 4px;
+    border-bottom-left-radius: 4px;
     -unity-text-align: middle-center;
     color: rgba(255, 224, 176, 0.88);
     background-color: rgba(108, 72, 28, 0.42);
@@ -582,10 +582,156 @@
     -unity-font-style: bold;
     -unity-text-align: middle-center;
     background-color: rgba(8, 15, 24, 0.36);
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+    border-bottom-right-radius: 4px;
+    border-bottom-left-radius: 4px;
+}
+
+.dpi-ecosystem-graph__body {
+    flex-grow: 1;
+    flex-shrink: 1;
+    flex-direction: row;
+    align-items: stretch;
+    min-height: 0;
+}
+
+.dpi-category-rail {
+    width: 166px;
+    min-width: 166px;
+    max-width: 166px;
+    flex-grow: 0;
+    flex-shrink: 0;
+    padding-left: 8px;
+    padding-right: 8px;
+    padding-top: 9px;
+    padding-bottom: 9px;
+    border-right-width: 1px;
+    border-right-color: rgba(90, 111, 160, 0.22);
+    background-color: rgba(12, 20, 28, 0.46);
+}
+
+.dpi-category-rail--hidden {
+    display: none;
+}
+
+.dpi-category-rail--locked {
+    opacity: 0.68;
+}
+
+.dpi-category-rail__item {
+    min-height: 46px;
+    margin-bottom: 7px;
+    padding-left: 6px;
+    padding-right: 7px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    flex-direction: row;
+    align-items: center;
+    border-top-left-radius: 5px;
+    border-top-right-radius: 5px;
+    border-bottom-right-radius: 5px;
+    border-bottom-left-radius: 5px;
+    border-left-width: 1px;
+    border-right-width: 1px;
+    border-top-width: 1px;
+    border-bottom-width: 1px;
+    border-left-color: rgba(90, 111, 160, 0.20);
+    border-right-color: rgba(90, 111, 160, 0.16);
+    border-top-color: rgba(90, 111, 160, 0.16);
+    border-bottom-color: rgba(90, 111, 160, 0.16);
+    background-color: rgba(17, 28, 38, 0.28);
+}
+
+.dpi-category-rail__item:hover {
+    border-left-color: rgba(59, 166, 154, 0.44);
+    border-right-color: rgba(59, 166, 154, 0.34);
+    border-top-color: rgba(59, 166, 154, 0.34);
+    border-bottom-color: rgba(59, 166, 154, 0.34);
+    background-color: rgba(23, 41, 49, 0.44);
+}
+
+.dpi-category-rail__item--active {
+    border-left-color: rgba(59, 209, 191, 0.70);
+    border-right-color: rgba(59, 209, 191, 0.48);
+    border-top-color: rgba(59, 209, 191, 0.48);
+    border-bottom-color: rgba(59, 209, 191, 0.48);
+    background-color: rgba(27, 55, 58, 0.54);
+}
+
+.dpi-category-rail__item--hover-context {
+    border-left-color: rgba(59, 209, 191, 0.62);
+    border-right-color: rgba(59, 209, 191, 0.42);
+    border-top-color: rgba(59, 209, 191, 0.42);
+    border-bottom-color: rgba(59, 209, 191, 0.42);
+}
+
+.dpi-category-rail__symbol {
+    min-width: 30px;
+    min-height: 30px;
+    max-width: 30px;
+    max-height: 30px;
+    margin-right: 8px;
+    align-items: center;
+    justify-content: center;
     border-top-left-radius: 999px;
     border-top-right-radius: 999px;
     border-bottom-right-radius: 999px;
     border-bottom-left-radius: 999px;
+    border-left-width: 1px;
+    border-right-width: 1px;
+    border-top-width: 1px;
+    border-bottom-width: 1px;
+    border-left-color: rgba(126, 172, 202, 0.42);
+    border-right-color: rgba(126, 172, 202, 0.30);
+    border-top-color: rgba(126, 172, 202, 0.30);
+    border-bottom-color: rgba(126, 172, 202, 0.30);
+    background-color: rgba(18, 35, 45, 0.62);
+}
+
+.dpi-category-rail__item--active .dpi-category-rail__symbol {
+    border-left-color: rgba(59, 209, 191, 0.78);
+    border-right-color: rgba(59, 209, 191, 0.58);
+    border-top-color: rgba(59, 209, 191, 0.58);
+    border-bottom-color: rgba(59, 209, 191, 0.58);
+    background-color: rgba(29, 68, 70, 0.72);
+}
+
+.dpi-category-rail__icon {
+    width: 17px;
+    height: 17px;
+    opacity: 0.82;
+}
+
+.dpi-category-rail__attention {
+    position: absolute;
+    right: -2px;
+    bottom: -2px;
+    width: 12px;
+    height: 12px;
+    -unity-text-align: middle-center;
+    color: rgba(255, 238, 190, 0.98);
+    font-size: 8px;
+    -unity-font-style: bold;
+}
+
+.dpi-category-rail__text {
+    flex-grow: 1;
+    min-width: 0;
+}
+
+.dpi-category-rail__label {
+    color: rgba(218, 234, 239, 0.88);
+    font-size: 10px;
+    -unity-font-style: bold;
+    white-space: normal;
+    max-height: 28px;
+}
+
+.dpi-category-rail__count {
+    margin-top: 1px;
+    color: rgba(139, 166, 180, 0.78);
+    font-size: 8px;
 }
 
 .dpi-graph-sector-label--infrastructure {
@@ -620,10 +766,10 @@
     padding-right: 16px;
     padding-top: 13px;
     padding-bottom: 13px;
-    border-top-left-radius: 8px;
-    border-top-right-radius: 8px;
-    border-bottom-right-radius: 8px;
-    border-bottom-left-radius: 8px;
+    border-top-left-radius: 999px;
+    border-top-right-radius: 999px;
+    border-bottom-right-radius: 999px;
+    border-bottom-left-radius: 999px;
     border-left-width: 1px;
     border-right-width: 1px;
     border-top-width: 1px;
@@ -667,13 +813,15 @@
 .dpi-graph-hub__title {
     color: rgba(234, 244, 247, 0.90);
     -unity-font-style: bold;
-    font-size: 20px;
+    font-size: 18px;
+    -unity-text-align: middle-center;
 }
 
 .dpi-graph-hub__subtitle {
     margin-top: 2px;
     color: rgba(125, 188, 216, 0.78);
-    font-size: 12px;
+    font-size: 10px;
+    -unity-text-align: middle-center;
 }
 
 .dpi-graph-node {
@@ -870,10 +1018,10 @@
     padding-right: 12px;
     padding-top: 10px;
     padding-bottom: 10px;
-    border-top-left-radius: 999px;
-    border-top-right-radius: 999px;
-    border-bottom-right-radius: 999px;
-    border-bottom-left-radius: 999px;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    border-bottom-right-radius: 6px;
+    border-bottom-left-radius: 6px;
     border-left-width: 1px;
     border-right-width: 1px;
     border-top-width: 1px;
@@ -896,11 +1044,23 @@
 
 .dpi-graph-group {
     position: absolute;
-    overflow: hidden;
-    padding-left: 11px;
-    padding-right: 11px;
-    padding-top: 9px;
-    padding-bottom: 8px;
+    overflow: visible;
+    align-items: center;
+    justify-content: center;
+    padding-left: 4px;
+    padding-right: 4px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.dpi-graph-group__symbol {
+    min-width: 54px;
+    min-height: 54px;
+    max-width: 88px;
+    max-height: 88px;
+    align-items: center;
+    justify-content: center;
     border-top-left-radius: 999px;
     border-top-right-radius: 999px;
     border-bottom-right-radius: 999px;
@@ -909,14 +1069,14 @@
     border-right-width: 1px;
     border-top-width: 1px;
     border-bottom-width: 1px;
-    border-left-color: rgba(92, 127, 172, 0.44);
-    border-right-color: rgba(92, 127, 172, 0.34);
-    border-top-color: rgba(92, 127, 172, 0.34);
-    border-bottom-color: rgba(92, 127, 172, 0.34);
+    border-left-color: rgba(92, 127, 172, 0.54);
+    border-right-color: rgba(92, 127, 172, 0.38);
+    border-top-color: rgba(92, 127, 172, 0.38);
+    border-bottom-color: rgba(92, 127, 172, 0.38);
     background-color: rgba(17, 29, 39, 0.86);
 }
 
-.dpi-graph-group:hover {
+.dpi-graph-group:hover .dpi-graph-group__symbol {
     border-left-color: rgba(59, 166, 154, 0.66);
     border-right-color: rgba(59, 166, 154, 0.52);
     border-top-color: rgba(59, 166, 154, 0.52);
@@ -924,7 +1084,7 @@
     background-color: rgba(22, 42, 51, 0.90);
 }
 
-.dpi-graph-group--focused {
+.dpi-graph-group--focused .dpi-graph-group__symbol {
     border-left-width: 2px;
     border-right-width: 2px;
     border-top-width: 2px;
@@ -936,9 +1096,7 @@
     background-color: rgba(25, 54, 60, 0.90);
 }
 
-.dpi-graph-group--collapsed {
-    padding-top: 7px;
-    padding-bottom: 6px;
+.dpi-graph-group--collapsed .dpi-graph-group__symbol {
     background-color: rgba(16, 25, 34, 0.72);
 }
 
@@ -950,7 +1108,7 @@
     opacity: 0.42;
 }
 
-.dpi-graph-group--hover-context {
+.dpi-graph-group--hover-context .dpi-graph-group__symbol {
     border-left-color: rgba(59, 209, 191, 0.72);
     border-right-color: rgba(59, 209, 191, 0.54);
     border-top-color: rgba(59, 209, 191, 0.54);
@@ -962,58 +1120,70 @@
     opacity: 0.34;
 }
 
-.dpi-graph-group--attention {
+.dpi-graph-group--attention .dpi-graph-group__symbol {
     border-bottom-width: 2px;
     border-bottom-color: rgba(224, 178, 72, 0.74);
 }
 
-.dpi-graph-group--integration {
+.dpi-graph-group--integration .dpi-graph-group__symbol {
     border-left-color: rgba(59, 209, 191, 0.54);
 }
 
-.dpi-graph-group--suite {
+.dpi-graph-group--suite .dpi-graph-group__symbol {
     border-left-color: rgba(141, 123, 204, 0.52);
-}
-
-.dpi-graph-group__header {
-    flex-direction: row;
-    align-items: center;
-    min-height: 36px;
 }
 
 .dpi-graph-group__icon {
     width: 28px;
     height: 28px;
-    min-width: 28px;
-    margin-right: 8px;
     opacity: 0.86;
 }
 
-.dpi-graph-group__title-block {
-    flex-grow: 1;
-    min-width: 0;
+.dpi-graph-group__count {
+    position: absolute;
+    right: 10px;
+    bottom: 9px;
+    color: rgba(206, 226, 233, 0.86);
+    font-size: 9px;
+    -unity-font-style: bold;
+}
+
+.dpi-graph-group__attention {
+    position: absolute;
+    right: 5px;
+    top: 4px;
+    width: 14px;
+    height: 14px;
+    -unity-text-align: middle-center;
+    color: rgba(255, 238, 190, 0.98);
+    font-size: 9px;
+    -unity-font-style: bold;
 }
 
 .dpi-graph-group__title {
+    margin-top: 7px;
     color: rgba(234, 244, 247, 0.92);
     -unity-font-style: bold;
     font-size: 12px;
     white-space: normal;
-    max-height: 30px;
+    max-height: 32px;
+    -unity-text-align: middle-center;
 }
 
 .dpi-graph-group__subtitle {
-    margin-top: 1px;
+    margin-top: 2px;
     color: rgba(151, 184, 195, 0.78);
     font-size: 9px;
     white-space: normal;
-    max-height: 16px;
+    max-height: 24px;
+    -unity-text-align: middle-center;
 }
 
 .dpi-graph-group__stats {
     flex-direction: row;
     flex-wrap: wrap;
-    margin-top: 7px;
+    justify-content: center;
+    margin-top: 5px;
 }
 
 .dpi-graph-group__stat {
@@ -1196,7 +1366,16 @@
     max-height: 18px;
 }
 
+.dpi-graph-node__category-path {
+    margin-top: 2px;
+    color: rgba(139, 184, 196, 0.76);
+    font-size: 9px;
+    white-space: normal;
+    max-height: 18px;
+}
+
 .dpi-ecosystem-graph__content--low-zoom .dpi-graph-node__package-id,
+.dpi-ecosystem-graph__content--low-zoom .dpi-graph-node__category-path,
 .dpi-ecosystem-graph__content--low-zoom .dpi-graph-node__badges,
 .dpi-ecosystem-graph__content--low-zoom .dpi-graph-node__footer,
 .dpi-ecosystem-graph__content--low-zoom .dpi-graph-node--stack .dpi-graph-node__badges,
