@@ -2549,6 +2549,41 @@ namespace Deucarian.PackageInstaller.Editor
         public string TooltipLabel { get; }
     }
 
+    internal readonly struct CategoryStatusRingSegment
+    {
+        public CategoryStatusRingSegment(
+            PackageGraphCategoryStatusKey statusKey,
+            int count,
+            Color color,
+            float startDegrees,
+            float sweepDegrees,
+            float separatorAfterDegrees,
+            bool fullRing)
+        {
+            StatusKey = statusKey;
+            Count = Math.Max(0, count);
+            Color = color;
+            StartDegrees = startDegrees;
+            SweepDegrees = Mathf.Clamp(sweepDegrees, 0f, 360f);
+            SeparatorAfterDegrees = Mathf.Max(0f, separatorAfterDegrees);
+            FullRing = fullRing;
+        }
+
+        public PackageGraphCategoryStatusKey StatusKey { get; }
+
+        public int Count { get; }
+
+        public Color Color { get; }
+
+        public float StartDegrees { get; }
+
+        public float SweepDegrees { get; }
+
+        public float SeparatorAfterDegrees { get; }
+
+        public bool FullRing { get; }
+    }
+
     internal readonly struct CategoryStatusRingVisualState
     {
         public CategoryStatusRingVisualState(
@@ -2589,10 +2624,13 @@ namespace Deucarian.PackageInstaller.Editor
 
     internal static class PackageGraphCategoryStatusVisuals
     {
+        internal const float StatusRingSeparatorDegrees = 1.4f;
+
         private static readonly Color InstalledColor = new Color(0.34f, 0.82f, 0.74f, 0.88f);
         private static readonly Color NotInstalledColor = new Color(0.50f, 0.46f, 0.82f, 0.82f);
         private static readonly Color AttentionColor = new Color(0.92f, 0.68f, 0.28f, 0.92f);
         private static readonly Color UnknownColor = new Color(0.50f, 0.60f, 0.66f, 0.72f);
+        private static readonly Color EmptyNeutralColor = new Color(0.34f, 0.44f, 0.52f, 0.36f);
 
         public static IReadOnlyList<CategoryStatusSlice> CreateSlices(
             PackageGraphCategoryStatusSummary summary)
@@ -2608,6 +2646,85 @@ namespace Deucarian.PackageInstaller.Editor
                 .Where(slice => slice.Count > 0)
                 .OrderBy(slice => slice.SortOrder)
                 .ToArray();
+        }
+
+        public static IReadOnlyList<CategoryStatusRingSegment> CreateRingSegments(
+            PackageGraphCategoryStatusSummary summary)
+        {
+            return CreateRingSegments(CreateSlices(summary), summary.TotalCount, StatusRingSeparatorDegrees);
+        }
+
+        public static IReadOnlyList<CategoryStatusRingSegment> CreateRingSegments(
+            IReadOnlyList<CategoryStatusSlice> slices,
+            int totalCount,
+            float separatorDegrees = StatusRingSeparatorDegrees)
+        {
+            CategoryStatusSlice[] nonZeroSlices = (slices ?? Array.Empty<CategoryStatusSlice>())
+                .Where(slice => slice.Count > 0)
+                .OrderBy(slice => slice.SortOrder)
+                .ToArray();
+
+            if (nonZeroSlices.Length == 0 || totalCount <= 0)
+            {
+                return new[]
+                {
+                    new CategoryStatusRingSegment(
+                        PackageGraphCategoryStatusKey.Unknown,
+                        0,
+                        EmptyNeutralColor,
+                        -90f,
+                        360f,
+                        0f,
+                        true)
+                };
+            }
+
+            if (nonZeroSlices.Length == 1)
+            {
+                CategoryStatusSlice slice = nonZeroSlices[0];
+                return new[]
+                {
+                    new CategoryStatusRingSegment(
+                        slice.StatusKey,
+                        slice.Count,
+                        slice.Color,
+                        -90f,
+                        360f,
+                        0f,
+                        true)
+                };
+            }
+
+            int safeTotalCount = Math.Max(1, nonZeroSlices.Sum(slice => slice.Count));
+            float safeGap = Mathf.Clamp(separatorDegrees, 0f, 24f);
+            float totalGap = safeGap * nonZeroSlices.Length;
+            float usableAngle = Mathf.Max(0f, 360f - totalGap);
+            float cursor = -90f;
+            float remainingUsableAngle = usableAngle;
+            List<CategoryStatusRingSegment> segments = new List<CategoryStatusRingSegment>(nonZeroSlices.Length);
+
+            for (int index = 0; index < nonZeroSlices.Length; index++)
+            {
+                CategoryStatusSlice slice = nonZeroSlices[index];
+                bool last = index == nonZeroSlices.Length - 1;
+                float sweep = last
+                    ? remainingUsableAngle
+                    : usableAngle * (slice.Count / (float)safeTotalCount);
+                sweep = Mathf.Max(0f, sweep);
+                remainingUsableAngle = Mathf.Max(0f, remainingUsableAngle - sweep);
+
+                segments.Add(new CategoryStatusRingSegment(
+                    slice.StatusKey,
+                    slice.Count,
+                    slice.Color,
+                    cursor,
+                    sweep,
+                    safeGap,
+                    false));
+                cursor += sweep + safeGap;
+            }
+
+            return segments;
         }
 
         public static CategoryStatusSlice CreateSlice(
@@ -4978,43 +5095,43 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            if (ring.Slices.Count == 0 || ring.TotalCount <= 0)
+            foreach (CategoryStatusRingSegment segment in PackageGraphCategoryStatusVisuals.CreateRingSegments(
+                         ring.Slices,
+                         ring.TotalCount))
             {
-                DrawRingSegment(
-                    painter,
-                    ring.Center,
-                    ring.Radius,
-                    ring.Thickness,
-                    -90f,
-                    270f,
-                    new Color(0.34f, 0.44f, 0.52f, ring.HoverActive ? 0.56f : 0.36f));
-                return;
-            }
-
-            const float GapDegrees = 1.4f;
-            float cursor = -90f;
-            float total = Mathf.Max(1f, ring.TotalCount);
-            int segmentCount = ring.Slices.Count;
-            float gap = segmentCount > 1 ? GapDegrees : 0f;
-
-            foreach (CategoryStatusSlice slice in ring.Slices)
-            {
-                float sweep = Mathf.Max(
-                    0f,
-                    360f * (slice.Count / total) - gap);
-                Color color = slice.Color;
+                Color color = segment.Color;
                 color.a = Mathf.Clamp01(color.a + (ring.HoverActive ? 0.12f : 0f));
 
-                DrawRingSegment(
-                    painter,
-                    ring.Center,
-                    ring.Radius,
-                    ring.Thickness,
-                    cursor + gap * 0.5f,
-                    cursor + gap * 0.5f + sweep,
-                    color);
-                cursor += 360f * (slice.Count / total);
+                if (segment.FullRing)
+                {
+                    DrawFullStatusRing(painter, ring.Center, ring.Radius, ring.Thickness, color);
+                }
+                else
+                {
+                    DrawRingSegment(
+                        painter,
+                        ring.Center,
+                        ring.Radius,
+                        ring.Thickness,
+                        segment.StartDegrees,
+                        segment.StartDegrees + segment.SweepDegrees,
+                        color);
+                }
             }
+        }
+
+        private static void DrawFullStatusRing(
+            Painter2D painter,
+            Vector2 center,
+            float radius,
+            float thickness,
+            Color color)
+        {
+            float strokeRadius = Mathf.Max(0.01f, radius - thickness * 0.5f);
+            painter.fillColor = new Color(0f, 0f, 0f, 0f);
+            painter.strokeColor = color;
+            painter.lineWidth = Mathf.Max(0.01f, thickness);
+            DrawCircleStroke(painter, center, strokeRadius);
         }
 
         private static void DrawRingSegment(
@@ -5033,15 +5150,16 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            float innerRadius = Mathf.Max(0.01f, radius - thickness);
+            float strokeRadius = Mathf.Max(0.01f, radius - thickness * 0.5f);
             int steps = Mathf.Clamp(Mathf.CeilToInt(sweep / 8f), 4, 48);
-            painter.fillColor = color;
+            painter.strokeColor = color;
+            painter.lineWidth = Mathf.Max(0.01f, thickness);
             painter.BeginPath();
 
             for (int index = 0; index <= steps; index++)
             {
                 float angle = Mathf.Deg2Rad * Mathf.Lerp(startDegrees, endDegrees, index / (float)steps);
-                Vector2 point = center + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius;
+                Vector2 point = center + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * strokeRadius;
 
                 if (index == 0)
                 {
@@ -5053,15 +5171,7 @@ namespace Deucarian.PackageInstaller.Editor
                 }
             }
 
-            for (int index = steps; index >= 0; index--)
-            {
-                float angle = Mathf.Deg2Rad * Mathf.Lerp(startDegrees, endDegrees, index / (float)steps);
-                Vector2 point = center + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * innerRadius;
-                painter.LineTo(point);
-            }
-
-            painter.ClosePath();
-            painter.Fill();
+            painter.Stroke();
         }
 
         private static void DrawSpoke(Painter2D painter, Rect fromHubRect, Rect toRect, bool emphasized, bool muted)
@@ -5111,6 +5221,19 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static void DrawCircle(Painter2D painter, Vector2 center, float radius)
         {
+            DrawCirclePath(painter, center, radius);
+            painter.Fill();
+            painter.Stroke();
+        }
+
+        private static void DrawCircleStroke(Painter2D painter, Vector2 center, float radius)
+        {
+            DrawCirclePath(painter, center, radius);
+            painter.Stroke();
+        }
+
+        private static void DrawCirclePath(Painter2D painter, Vector2 center, float radius)
+        {
             const float Kappa = 0.55228475f;
             float safeRadius = Mathf.Max(0f, radius);
             float offset = safeRadius * Kappa;
@@ -5138,8 +5261,6 @@ namespace Deucarian.PackageInstaller.Editor
                 new Vector2(center.x - offset, top),
                 new Vector2(center.x, top));
             painter.ClosePath();
-            painter.Fill();
-            painter.Stroke();
         }
 
         private static bool IsGroupInHoverContext(
@@ -5213,6 +5334,147 @@ namespace Deucarian.PackageInstaller.Editor
         CompanionsAndSuites
     }
 
+    [Flags]
+    internal enum PackageGraphConnectionSemantics
+    {
+        None = 0,
+        Dependency = 1 << 0,
+        Integration = 1 << 1,
+        OptionalCompanion = 1 << 2,
+        SuiteMembership = 1 << 3,
+        Recommended = 1 << 4
+    }
+
+    internal readonly struct PackageGraphConnectionBundle
+    {
+        public PackageGraphConnectionBundle(
+            string sourcePackageId,
+            string targetPackageId,
+            IReadOnlyList<PackageGraphEdge> edges)
+        {
+            SourcePackageId = sourcePackageId ?? string.Empty;
+            TargetPackageId = targetPackageId ?? string.Empty;
+            Edges = edges == null
+                ? Array.Empty<PackageGraphEdge>()
+                : edges
+                    .Where(edge => edge != null)
+                    .OrderBy(edge => GetSemanticPriority(edge.Kind))
+                    .ThenBy(edge => edge.Key, StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+            PrimaryEdge = Edges.Count > 0
+                ? Edges[0]
+                : new PackageGraphEdge(SourcePackageId, TargetPackageId, PackageGraphEdgeKind.HardDependency, PackageGraphEdgeState.Active, string.Empty);
+            Semantics = BuildSemantics(Edges);
+            Key = SourcePackageId + ">" + TargetPackageId + ":" + Semantics;
+        }
+
+        public string SourcePackageId { get; }
+
+        public string TargetPackageId { get; }
+
+        public IReadOnlyList<PackageGraphEdge> Edges { get; }
+
+        public PackageGraphEdge PrimaryEdge { get; }
+
+        public PackageGraphConnectionSemantics Semantics { get; }
+
+        public string Key { get; }
+
+        public bool HasDependency => HasSemantic(PackageGraphConnectionSemantics.Dependency);
+
+        public bool HasIntegration => HasSemantic(PackageGraphConnectionSemantics.Integration);
+
+        public bool HasOptionalCompanion => HasSemantic(PackageGraphConnectionSemantics.OptionalCompanion);
+
+        public bool HasSuiteMembership => HasSemantic(PackageGraphConnectionSemantics.SuiteMembership);
+
+        public bool HasRecommended => HasSemantic(PackageGraphConnectionSemantics.Recommended);
+
+        public bool IsCompositeDependencyIntegration => HasDependency && HasIntegration;
+
+        public bool ConnectsPackage(string packageId)
+        {
+            return !string.IsNullOrWhiteSpace(packageId) &&
+                   (string.Equals(SourcePackageId, packageId, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(TargetPackageId, packageId, StringComparison.OrdinalIgnoreCase));
+        }
+
+        public string GetOtherPackageId(string packageId)
+        {
+            if (string.Equals(SourcePackageId, packageId, StringComparison.OrdinalIgnoreCase))
+            {
+                return TargetPackageId;
+            }
+
+            return string.Equals(TargetPackageId, packageId, StringComparison.OrdinalIgnoreCase)
+                ? SourcePackageId
+                : string.Empty;
+        }
+
+        public bool HasKind(PackageGraphEdgeKind kind)
+        {
+            return Edges.Any(edge => edge.Kind == kind);
+        }
+
+        public PackageGraphEdge GetEdge(PackageGraphEdgeKind kind)
+        {
+            return Edges.FirstOrDefault(edge => edge.Kind == kind);
+        }
+
+        public bool HasSemantic(PackageGraphConnectionSemantics semantic)
+        {
+            return (Semantics & semantic) == semantic;
+        }
+
+        private static PackageGraphConnectionSemantics BuildSemantics(IEnumerable<PackageGraphEdge> edges)
+        {
+            PackageGraphConnectionSemantics semantics = PackageGraphConnectionSemantics.None;
+
+            foreach (PackageGraphEdge edge in edges ?? Array.Empty<PackageGraphEdge>())
+            {
+                switch (edge.Kind)
+                {
+                    case PackageGraphEdgeKind.HardDependency:
+                        semantics |= PackageGraphConnectionSemantics.Dependency;
+                        break;
+                    case PackageGraphEdgeKind.IntegrationConnection:
+                        semantics |= PackageGraphConnectionSemantics.Integration;
+                        break;
+                    case PackageGraphEdgeKind.OptionalCompanion:
+                        semantics |= PackageGraphConnectionSemantics.OptionalCompanion;
+                        break;
+                    case PackageGraphEdgeKind.SuiteMembership:
+                        semantics |= PackageGraphConnectionSemantics.SuiteMembership;
+                        break;
+                    case PackageGraphEdgeKind.Recommended:
+                        semantics |= PackageGraphConnectionSemantics.Recommended;
+                        break;
+                }
+            }
+
+            return semantics;
+        }
+
+        internal static int GetSemanticPriority(PackageGraphEdgeKind kind)
+        {
+            switch (kind)
+            {
+                case PackageGraphEdgeKind.HardDependency:
+                    return 0;
+                case PackageGraphEdgeKind.IntegrationConnection:
+                    return 1;
+                case PackageGraphEdgeKind.OptionalCompanion:
+                    return 2;
+                case PackageGraphEdgeKind.SuiteMembership:
+                    return 3;
+                case PackageGraphEdgeKind.Recommended:
+                    return 4;
+                default:
+                    return 10;
+            }
+        }
+    }
+
     internal readonly struct PackageGraphEdgeRoute
     {
         public PackageGraphEdgeRoute(
@@ -5224,8 +5486,33 @@ namespace Deucarian.PackageInstaller.Editor
             int branchIndex,
             int branchCount,
             IReadOnlyList<Vector2> points)
+            : this(
+                new PackageGraphConnectionBundle(
+                    edge != null ? edge.FromPackageId : string.Empty,
+                    edge != null ? edge.ToPackageId : string.Empty,
+                    edge != null ? new[] { edge } : Array.Empty<PackageGraphEdge>()),
+                sourcePort,
+                targetPort,
+                zone,
+                sharedTrunkId,
+                branchIndex,
+                branchCount,
+                points)
         {
-            Edge = edge;
+        }
+
+        public PackageGraphEdgeRoute(
+            PackageGraphConnectionBundle bundle,
+            PackageGraphEdgeRoutePort sourcePort,
+            PackageGraphEdgeRoutePort targetPort,
+            PackageGraphEdgeRouteZone zone,
+            string sharedTrunkId,
+            int branchIndex,
+            int branchCount,
+            IReadOnlyList<Vector2> points)
+        {
+            Bundle = bundle;
+            Edge = bundle.PrimaryEdge;
             SourcePort = sourcePort;
             TargetPort = targetPort;
             Zone = zone;
@@ -5236,6 +5523,8 @@ namespace Deucarian.PackageInstaller.Editor
         }
 
         public PackageGraphEdge Edge { get; }
+
+        public PackageGraphConnectionBundle Bundle { get; }
 
         public PackageGraphEdgeRoutePort SourcePort { get; }
 
@@ -5252,6 +5541,16 @@ namespace Deucarian.PackageInstaller.Editor
         public IReadOnlyList<Vector2> Points { get; }
 
         public bool UsesSharedTrunk => BranchCount > 1 && !string.IsNullOrWhiteSpace(SharedTrunkId);
+
+        public bool HasSemantic(PackageGraphConnectionSemantics semantic)
+        {
+            return Bundle.HasSemantic(semantic);
+        }
+
+        public bool HasKind(PackageGraphEdgeKind kind)
+        {
+            return Bundle.HasKind(kind);
+        }
     }
 
     internal sealed class PackageGraphEdgeLayer : VisualElement
@@ -5405,7 +5704,7 @@ namespace Deucarian.PackageInstaller.Editor
                 DrawEdge(
                     painter,
                     route,
-                    _focus.IsEdgeEmphasized(route.Edge),
+                    route.Bundle.Edges.Any(edge => _focus.IsEdgeEmphasized(edge)),
                     _focus.HasFocus,
                     _animationPhase);
             }
@@ -5435,18 +5734,11 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             PackageGraphFocus safeFocus = focus ?? PackageGraphFocus.Create(graph, string.Empty);
-            List<PackageGraphEdgeRouteContext> visibleEdges = graph.Edges
+            List<PackageGraphEdge> visibleEdges = graph.Edges
                 .Where(edge => edge != null &&
                                safeFocus.IsEdgeVisible(edge) &&
                                nodeRects.ContainsKey(edge.FromPackageId) &&
                                nodeRects.ContainsKey(edge.ToPackageId))
-                .Select(edge => new PackageGraphEdgeRouteContext(
-                    edge,
-                    nodeRects[edge.FromPackageId],
-                    nodeRects[edge.ToPackageId],
-                    safeFocus.HasFocus && edge.ConnectsPackage(safeFocus.FocusPackageId)
-                        ? GetFocusRouteZone(edge, safeFocus.FocusPackageId)
-                        : PackageGraphEdgeRouteZone.Direct))
                 .ToList();
 
             if (visibleEdges.Count == 0)
@@ -5454,23 +5746,28 @@ namespace Deucarian.PackageInstaller.Editor
                 return Array.Empty<PackageGraphEdgeRoute>();
             }
 
-            List<PackageGraphEdgeRoute> routes = new List<PackageGraphEdgeRoute>(visibleEdges.Count);
+            List<PackageGraphEdgeRouteContext> visibleBundles = BuildConnectionBundleContexts(
+                graph,
+                visibleEdges,
+                nodeRects,
+                safeFocus);
+            List<PackageGraphEdgeRoute> routes = new List<PackageGraphEdgeRoute>(visibleBundles.Count);
             HashSet<string> routedEdgeKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             if (safeFocus.HasFocus &&
                 !string.IsNullOrWhiteSpace(safeFocus.FocusPackageId) &&
                 nodeRects.TryGetValue(safeFocus.FocusPackageId, out Rect focusRect))
             {
-                foreach (IGrouping<string, PackageGraphEdgeRouteContext> group in visibleEdges
+                foreach (IGrouping<string, PackageGraphEdgeRouteContext> group in visibleBundles
                              .Where(context => context.Zone != PackageGraphEdgeRouteZone.Direct)
                              .GroupBy(
-                                 context => GetRouteGroupKey(context.Edge, context.Zone, safeFocus.FocusPackageId),
+                                 context => GetRouteGroupKey(context.Bundle, context.Zone, safeFocus.FocusPackageId),
                                  StringComparer.OrdinalIgnoreCase))
                 {
                     PackageGraphEdgeRouteContext[] contexts = group
                         .OrderBy(context => GetRouteSortValue(context, safeFocus.FocusPackageId))
-                        .ThenBy(context => GetOtherNodeDisplayName(graph, context.Edge, safeFocus.FocusPackageId), StringComparer.OrdinalIgnoreCase)
-                        .ThenBy(context => context.Edge.Key, StringComparer.OrdinalIgnoreCase)
+                        .ThenBy(context => GetOtherNodeDisplayName(graph, context.Bundle, safeFocus.FocusPackageId), StringComparer.OrdinalIgnoreCase)
+                        .ThenBy(context => context.Bundle.Key, StringComparer.OrdinalIgnoreCase)
                         .ToArray();
 
                     if (contexts.Length > 1)
@@ -5484,15 +5781,15 @@ namespace Deucarian.PackageInstaller.Editor
                                 group.Key,
                                 index,
                                 contexts.Length));
-                            routedEdgeKeys.Add(contexts[index].Edge.Key);
+                            routedEdgeKeys.Add(contexts[index].Bundle.Key);
                         }
                     }
                 }
             }
 
-            foreach (PackageGraphEdgeRouteContext context in visibleEdges)
+            foreach (PackageGraphEdgeRouteContext context in visibleBundles)
             {
-                if (routedEdgeKeys.Contains(context.Edge.Key))
+                if (routedEdgeKeys.Contains(context.Bundle.Key))
                 {
                     continue;
                 }
@@ -5503,6 +5800,78 @@ namespace Deucarian.PackageInstaller.Editor
             return routes;
         }
 
+        private static List<PackageGraphEdgeRouteContext> BuildConnectionBundleContexts(
+            PackageGraphModel graph,
+            IReadOnlyList<PackageGraphEdge> visibleEdges,
+            IReadOnlyDictionary<string, Rect> nodeRects,
+            PackageGraphFocus focus)
+        {
+            List<PackageGraphEdgeRouteContext> contexts = new List<PackageGraphEdgeRouteContext>();
+
+            foreach (IGrouping<string, PackageGraphEdge> group in visibleEdges.GroupBy(
+                         GetConnectionBundleKey,
+                         StringComparer.OrdinalIgnoreCase))
+            {
+                PackageGraphConnectionBundle bundle = CreateConnectionBundle(group);
+
+                if (!nodeRects.TryGetValue(bundle.SourcePackageId, out Rect fromRect) ||
+                    !nodeRects.TryGetValue(bundle.TargetPackageId, out Rect toRect))
+                {
+                    continue;
+                }
+
+                PackageGraphEdgeRouteZone zone = focus != null &&
+                                                 focus.HasFocus &&
+                                                 bundle.ConnectsPackage(focus.FocusPackageId)
+                    ? GetFocusRouteZone(graph, bundle, focus.FocusPackageId)
+                    : PackageGraphEdgeRouteZone.Direct;
+                contexts.Add(new PackageGraphEdgeRouteContext(bundle, fromRect, toRect, zone));
+            }
+
+            return contexts;
+        }
+
+        private static string GetConnectionBundleKey(PackageGraphEdge edge)
+        {
+            if (edge == null)
+            {
+                return string.Empty;
+            }
+
+            if (edge.Kind != PackageGraphEdgeKind.HardDependency &&
+                edge.Kind != PackageGraphEdgeKind.IntegrationConnection)
+            {
+                return edge.Key;
+            }
+
+            string first = edge.FromPackageId ?? string.Empty;
+            string second = edge.ToPackageId ?? string.Empty;
+
+            if (string.Compare(first, second, StringComparison.OrdinalIgnoreCase) > 0)
+            {
+                string temp = first;
+                first = second;
+                second = temp;
+            }
+
+            return "relationship:" + first + "<>" + second;
+        }
+
+        private static PackageGraphConnectionBundle CreateConnectionBundle(IEnumerable<PackageGraphEdge> edges)
+        {
+            PackageGraphEdge[] safeEdges = (edges ?? Array.Empty<PackageGraphEdge>())
+                .Where(edge => edge != null)
+                .OrderBy(edge => PackageGraphConnectionBundle.GetSemanticPriority(edge.Kind))
+                .ThenBy(edge => edge.Key, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            PackageGraphEdge dependencyEdge = safeEdges.FirstOrDefault(edge => edge.Kind == PackageGraphEdgeKind.HardDependency);
+            PackageGraphEdge primaryEdge = dependencyEdge ?? safeEdges.FirstOrDefault();
+
+            return primaryEdge == null
+                ? new PackageGraphConnectionBundle(string.Empty, string.Empty, Array.Empty<PackageGraphEdge>())
+                : new PackageGraphConnectionBundle(primaryEdge.FromPackageId, primaryEdge.ToPackageId, safeEdges);
+        }
+
         private static void DrawEdge(
             Painter2D painter,
             PackageGraphEdgeRoute route,
@@ -5510,6 +5879,17 @@ namespace Deucarian.PackageInstaller.Editor
             bool focusMode,
             float animationPhase)
         {
+            if (route.Bundle.IsCompositeDependencyIntegration)
+            {
+                DrawCompositeDependencyIntegrationRoute(
+                    painter,
+                    route,
+                    emphasized,
+                    focusMode,
+                    animationPhase);
+                return;
+            }
+
             PackageGraphEdge edge = route.Edge;
             Color color = GetEdgeColor(edge, emphasized, focusMode);
             float width = GetEdgeWidth(edge, emphasized, focusMode);
@@ -5580,21 +5960,83 @@ namespace Deucarian.PackageInstaller.Editor
             }
         }
 
+        private static void DrawCompositeDependencyIntegrationRoute(
+            Painter2D painter,
+            PackageGraphEdgeRoute route,
+            bool emphasized,
+            bool focusMode,
+            float animationPhase)
+        {
+            PackageGraphEdge dependencyEdge = route.Bundle.GetEdge(PackageGraphEdgeKind.HardDependency) ?? route.Edge;
+            PackageGraphEdge integrationEdge = route.Bundle.GetEdge(PackageGraphEdgeKind.IntegrationConnection) ?? route.Edge;
+            Color cableColor = GetEdgeColor(integrationEdge, emphasized, focusMode);
+            Color flowColor = GetEdgeColor(dependencyEdge, emphasized, focusMode);
+            float cableWidth = Mathf.Max(0.9f, GetEdgeWidth(integrationEdge, emphasized, focusMode) * 0.82f);
+            float flowWidth = Mathf.Max(1.1f, GetEdgeWidth(dependencyEdge, emphasized, focusMode) * 0.72f);
+
+            if (route.Points.Count < 2 || (cableColor.a <= 0.01f && flowColor.a <= 0.01f))
+            {
+                return;
+            }
+
+            Color underlay = new Color(0.03f, 0.09f, 0.13f, emphasized ? 0.36f : 0.18f);
+            painter.strokeColor = underlay;
+            painter.lineWidth = Mathf.Max(2.4f, flowWidth + 1.4f);
+            DrawPolylineStroke(painter, route.Points);
+
+            DrawIntegrationCableRoute(
+                painter,
+                route.Points,
+                cableColor,
+                cableWidth,
+                emphasized);
+
+            painter.strokeColor = flowColor;
+            painter.lineWidth = flowWidth;
+            DrawPolylineStroke(painter, route.Points);
+
+            bool animate = emphasized &&
+                           focusMode &&
+                           SupportsDirectionalFlowMarkers(PackageGraphEdgeKind.HardDependency);
+
+            if (animate)
+            {
+                Color markerColor = new Color(
+                    flowColor.r,
+                    flowColor.g,
+                    flowColor.b,
+                    Mathf.Min(0.70f, flowColor.a + 0.06f));
+                DrawFlowMarkers(
+                    painter,
+                    route,
+                    PackageGraphEdgeKind.HardDependency,
+                    markerColor,
+                    animationPhase);
+            }
+
+            if (route.Bundle.Edges.Any(edge => edge.State == PackageGraphEdgeState.Warning))
+            {
+                DrawWarningMarker(painter, GetPointOnRoute(route.Points, 0.5f, out _));
+            }
+        }
+
         private readonly struct PackageGraphEdgeRouteContext
         {
             public PackageGraphEdgeRouteContext(
-                PackageGraphEdge edge,
+                PackageGraphConnectionBundle bundle,
                 Rect fromRect,
                 Rect toRect,
                 PackageGraphEdgeRouteZone zone)
             {
-                Edge = edge;
+                Bundle = bundle;
                 FromRect = fromRect;
                 ToRect = toRect;
                 Zone = zone;
             }
 
-            public PackageGraphEdge Edge { get; }
+            public PackageGraphConnectionBundle Bundle { get; }
+
+            public PackageGraphEdge Edge => Bundle.PrimaryEdge;
 
             public Rect FromRect { get; }
 
@@ -5612,7 +6054,7 @@ namespace Deucarian.PackageInstaller.Editor
             int branchCount)
         {
             bool focusIsSource = string.Equals(
-                context.Edge.FromPackageId,
+                context.Bundle.SourcePackageId,
                 focusPackageId,
                 StringComparison.OrdinalIgnoreCase);
             Rect otherRect = focusIsSource ? context.ToRect : context.FromRect;
@@ -5634,7 +6076,7 @@ namespace Deucarian.PackageInstaller.Editor
                 : selectedToOther.Reverse().ToArray();
 
             return new PackageGraphEdgeRoute(
-                context.Edge,
+                context.Bundle,
                 focusIsSource ? focusPort : otherPort,
                 focusIsSource ? otherPort : focusPort,
                 context.Zone,
@@ -5651,12 +6093,12 @@ namespace Deucarian.PackageInstaller.Editor
             PackageGraphEdgeRouteZone zone = context.Zone;
             bool focusIsSource = !string.IsNullOrWhiteSpace(focusPackageId) &&
                                  string.Equals(
-                                     context.Edge.FromPackageId,
+                                     context.Bundle.SourcePackageId,
                                      focusPackageId,
                                      StringComparison.OrdinalIgnoreCase);
             bool focusIsTarget = !string.IsNullOrWhiteSpace(focusPackageId) &&
                                  string.Equals(
-                                     context.Edge.ToPackageId,
+                                     context.Bundle.TargetPackageId,
                                      focusPackageId,
                                      StringComparison.OrdinalIgnoreCase);
             PackageGraphEdgeRoutePort fromPort = PackageGraphEdgeRoutePort.Auto;
@@ -5674,7 +6116,7 @@ namespace Deucarian.PackageInstaller.Editor
             Vector2 to = GetPort(context.ToRect, toPort, context.FromRect, EdgeEndpointPadding);
 
             return new PackageGraphEdgeRoute(
-                context.Edge,
+                context.Bundle,
                 fromPort,
                 toPort,
                 zone,
@@ -5685,45 +6127,58 @@ namespace Deucarian.PackageInstaller.Editor
         }
 
         private static PackageGraphEdgeRouteZone GetFocusRouteZone(
-            PackageGraphEdge edge,
+            PackageGraphModel graph,
+            PackageGraphConnectionBundle bundle,
             string focusPackageId)
         {
-            if (edge == null || string.IsNullOrWhiteSpace(focusPackageId))
+            if (string.IsNullOrWhiteSpace(focusPackageId))
             {
                 return PackageGraphEdgeRouteZone.Direct;
             }
 
-            switch (edge.Kind)
+            if (bundle.IsCompositeDependencyIntegration &&
+                string.Equals(bundle.SourcePackageId, focusPackageId, StringComparison.OrdinalIgnoreCase) &&
+                graph != null &&
+                graph.TryGetNode(bundle.TargetPackageId, out PackageGraphNode targetNode) &&
+                targetNode.IsIntegration)
             {
-                case PackageGraphEdgeKind.HardDependency:
-                    if (string.Equals(edge.ToPackageId, focusPackageId, StringComparison.OrdinalIgnoreCase))
-                    {
-                        return PackageGraphEdgeRouteZone.Providers;
-                    }
+                return PackageGraphEdgeRouteZone.Integrations;
+            }
 
-                    if (string.Equals(edge.FromPackageId, focusPackageId, StringComparison.OrdinalIgnoreCase))
-                    {
-                        return PackageGraphEdgeRouteZone.Dependents;
-                    }
+            if (bundle.HasDependency)
+            {
+                if (string.Equals(bundle.TargetPackageId, focusPackageId, StringComparison.OrdinalIgnoreCase))
+                {
+                    return PackageGraphEdgeRouteZone.Providers;
+                }
 
-                    break;
-                case PackageGraphEdgeKind.IntegrationConnection:
-                    return PackageGraphEdgeRouteZone.Integrations;
-                case PackageGraphEdgeKind.OptionalCompanion:
-                case PackageGraphEdgeKind.Recommended:
-                case PackageGraphEdgeKind.SuiteMembership:
-                    return PackageGraphEdgeRouteZone.CompanionsAndSuites;
+                if (string.Equals(bundle.SourcePackageId, focusPackageId, StringComparison.OrdinalIgnoreCase))
+                {
+                    return PackageGraphEdgeRouteZone.Dependents;
+                }
+            }
+
+            if (bundle.HasIntegration)
+            {
+                return PackageGraphEdgeRouteZone.Integrations;
+            }
+
+            if (bundle.HasOptionalCompanion ||
+                bundle.HasRecommended ||
+                bundle.HasSuiteMembership)
+            {
+                return PackageGraphEdgeRouteZone.CompanionsAndSuites;
             }
 
             return PackageGraphEdgeRouteZone.Direct;
         }
 
         private static string GetRouteGroupKey(
-            PackageGraphEdge edge,
+            PackageGraphConnectionBundle bundle,
             PackageGraphEdgeRouteZone zone,
             string focusPackageId)
         {
-            return edge.Kind + ":" + zone + ":" + (focusPackageId ?? string.Empty);
+            return bundle.Semantics + ":" + zone + ":" + (focusPackageId ?? string.Empty);
         }
 
         private static float GetRouteSortValue(
@@ -5731,7 +6186,7 @@ namespace Deucarian.PackageInstaller.Editor
             string focusPackageId)
         {
             bool focusIsSource = string.Equals(
-                context.Edge.FromPackageId,
+                context.Bundle.SourcePackageId,
                 focusPackageId,
                 StringComparison.OrdinalIgnoreCase);
             Rect otherRect = focusIsSource ? context.ToRect : context.FromRect;
@@ -5751,10 +6206,10 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static string GetOtherNodeDisplayName(
             PackageGraphModel graph,
-            PackageGraphEdge edge,
+            PackageGraphConnectionBundle bundle,
             string focusPackageId)
         {
-            string otherPackageId = edge.GetOtherPackageId(focusPackageId);
+            string otherPackageId = bundle.GetOtherPackageId(focusPackageId);
             return graph != null &&
                    !string.IsNullOrWhiteSpace(otherPackageId) &&
                    graph.TryGetNode(otherPackageId, out PackageGraphNode node)
@@ -5803,24 +6258,49 @@ namespace Deucarian.PackageInstaller.Editor
         {
             const float PreferredTrunkLength = 94f;
             float distance;
+            float direction;
 
             switch (zone)
             {
                 case PackageGraphEdgeRouteZone.Providers:
-                    distance = Mathf.Max(48f, Mathf.Min(PreferredTrunkLength, Mathf.Abs(focusPoint.x - otherPoint.x) * 0.42f));
-                    return new Vector2(focusPoint.x - distance, focusPoint.y);
+                    direction = otherPoint.x < focusPoint.x ? -1f : 1f;
+                    distance = GetCorridorTrunkDistance(otherPoint.x - focusPoint.x, PreferredTrunkLength);
+                    return new Vector2(focusPoint.x + direction * distance, focusPoint.y);
                 case PackageGraphEdgeRouteZone.Dependents:
-                    distance = Mathf.Max(48f, Mathf.Min(PreferredTrunkLength, Mathf.Abs(otherPoint.x - focusPoint.x) * 0.42f));
-                    return new Vector2(focusPoint.x + distance, focusPoint.y);
+                    direction = otherPoint.x >= focusPoint.x ? 1f : -1f;
+                    distance = GetCorridorTrunkDistance(otherPoint.x - focusPoint.x, PreferredTrunkLength);
+                    return new Vector2(focusPoint.x + direction * distance, focusPoint.y);
                 case PackageGraphEdgeRouteZone.Integrations:
-                    distance = Mathf.Max(54f, Mathf.Min(PreferredTrunkLength, Mathf.Abs(otherPoint.y - focusPoint.y) * 0.42f));
-                    return new Vector2(focusPoint.x, focusPoint.y + distance);
+                    direction = otherPoint.y >= focusPoint.y ? 1f : -1f;
+                    distance = GetCorridorTrunkDistance(otherPoint.y - focusPoint.y, PreferredTrunkLength);
+                    return new Vector2(focusPoint.x, focusPoint.y + direction * distance);
                 case PackageGraphEdgeRouteZone.CompanionsAndSuites:
-                    distance = Mathf.Max(54f, Mathf.Min(PreferredTrunkLength, Mathf.Abs(focusPoint.y - otherPoint.y) * 0.42f));
-                    return new Vector2(focusPoint.x, focusPoint.y - distance);
+                    direction = otherPoint.y < focusPoint.y ? -1f : 1f;
+                    distance = GetCorridorTrunkDistance(otherPoint.y - focusPoint.y, PreferredTrunkLength);
+                    return new Vector2(focusPoint.x, focusPoint.y + direction * distance);
                 default:
                     return (focusPoint + otherPoint) * 0.5f;
             }
+        }
+
+        private static float GetCorridorTrunkDistance(float axisDelta, float preferredDistance)
+        {
+            float axisDistance = Mathf.Abs(axisDelta);
+
+            if (axisDistance <= 1f)
+            {
+                return 28f;
+            }
+
+            float maximum = Mathf.Min(preferredDistance, axisDistance * 0.58f);
+            float desired = axisDistance * 0.38f;
+
+            if (maximum < 28f)
+            {
+                return Mathf.Max(12f, maximum);
+            }
+
+            return Mathf.Clamp(desired, 28f, maximum);
         }
 
         private static Vector2 GetBranchPoint(
@@ -6320,8 +6800,8 @@ namespace Deucarian.PackageInstaller.Editor
 
             foreach (KeyValuePair<string, Rect> nodeRect in nodeRects)
             {
-                if (string.Equals(nodeRect.Key, route.Edge.FromPackageId, StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(nodeRect.Key, route.Edge.ToPackageId, StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(nodeRect.Key, route.Bundle.SourcePackageId, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(nodeRect.Key, route.Bundle.TargetPackageId, StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
                 }
@@ -6338,6 +6818,18 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             return false;
+        }
+
+        internal static float RouteLengthForTests(PackageGraphEdgeRoute route)
+        {
+            return route.Points == null ? 0f : GetRouteLength(route.Points);
+        }
+
+        internal static float DirectRouteDistanceForTests(PackageGraphEdgeRoute route)
+        {
+            return route.Points == null || route.Points.Count < 2
+                ? 0f
+                : Vector2.Distance(route.Points[0], route.Points[route.Points.Count - 1]);
         }
 
         private static Rect ShrinkRect(Rect rect, float amount)

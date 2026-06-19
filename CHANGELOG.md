@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.49 - 2026-06-19
+
+- Render category status rings with explicit full-circle geometry for empty and single-status categories so one-color rings are continuous.
+- Bundled hard dependency and Integration relationships between the same package pair onto one shared route with layered cable/flow rendering.
+- Centralized operation drawer/footer spacing tokens and improved expanded drawer message wrapping without changing the footer layout.
+
 ## 1.1.48 - 2026-06-19
 
 - Routed focused relationship edges through deterministic ports with shared fan-out trunks for multi-target integration/dependency zones.

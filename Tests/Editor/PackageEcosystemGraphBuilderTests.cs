@@ -80,13 +80,14 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             VisualElement footer = PackageInstallerWindow.CreateOperationFooterForTests();
 
             Assert.AreEqual(PackageInstallerWindow.OperationFooterRowName, footer.name);
+            Assert.IsTrue(footer.ClassListContains("dpi-operation-surface"));
             Assert.IsTrue(footer.ClassListContains("dpi-operation-footer"));
             Assert.AreEqual(FlexDirection.Row, footer.style.flexDirection.value);
             Assert.AreEqual(Align.Center, footer.style.alignItems.value);
             Assert.AreEqual(0f, footer.style.flexShrink.value);
             Assert.AreEqual(34f, footer.style.height.value.value);
-            Assert.AreEqual(PackageInstallerWindow.OperationGridOuterPaddingForTests, footer.style.paddingLeft.value.value);
-            Assert.AreEqual(PackageInstallerWindow.OperationGridOuterPaddingForTests, footer.style.paddingRight.value.value);
+            Assert.AreEqual(PackageInstallerWindow.OperationInlinePaddingForTests, footer.style.paddingLeft.value.value);
+            Assert.AreEqual(PackageInstallerWindow.OperationInlinePaddingForTests, footer.style.paddingRight.value.value);
 
             VisualElement statusGroup = footer.Q<VisualElement>(PackageInstallerWindow.OperationFooterStatusGroupName);
             Label statusIcon = footer.Q<Label>(PackageInstallerWindow.OperationFooterStatusIconName);
@@ -105,9 +106,9 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.IsFalse(string.IsNullOrWhiteSpace(statusIcon.text));
             Assert.IsFalse(string.IsNullOrWhiteSpace(statusLabel.text));
             Assert.IsFalse(string.IsNullOrWhiteSpace(summaryLabel.text));
-            Assert.AreEqual(PackageInstallerWindow.OperationGridColumnGapForTests, statusGroup.style.marginRight.value.value);
-            Assert.AreEqual(PackageInstallerWindow.OperationGridColumnGapForTests, summaryLabel.style.marginRight.value.value);
-            Assert.AreEqual(PackageInstallerWindow.OperationGridColumnGapForTests, detailsButton.style.marginRight.value.value);
+            Assert.AreEqual(PackageInstallerWindow.OperationControlGapForTests, statusGroup.style.marginRight.value.value);
+            Assert.AreEqual(PackageInstallerWindow.OperationControlGapForTests, summaryLabel.style.marginRight.value.value);
+            Assert.AreEqual(PackageInstallerWindow.OperationControlGapForTests, detailsButton.style.marginRight.value.value);
             Assert.IsTrue(detailsButton.text == "Show Details" || detailsButton.text == "Hide Details");
             Assert.IsFalse(string.IsNullOrWhiteSpace(versionLabel.text));
             StringAssert.Contains(PackageInstallerWindow.PackageIdForTests, versionLabel.text);
@@ -173,9 +174,28 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
             Assert.AreEqual(0f, collapsedHeight);
             Assert.That(smallHeight, Is.GreaterThan(PackageInstallerWindow.OperationFooterHeightForTests));
-            Assert.That(smallHeight, Is.LessThan(100f));
+            Assert.That(smallHeight, Is.LessThan(110f));
             Assert.That(largeHeight, Is.GreaterThan(smallHeight));
-            Assert.That(largeHeight, Is.LessThanOrEqualTo(132f));
+            Assert.That(largeHeight, Is.LessThanOrEqualTo(PackageInstallerWindow.OperationDrawerExpandedMaxHeightForTests));
+            Assert.That(largeHeight, Is.GreaterThan(180f));
+        }
+
+        [Test]
+        public void Window_OperationSpacingTokensKeepFooterPixelValuesStable()
+        {
+            VisualElement footer = PackageInstallerWindow.CreateOperationFooterForTests();
+            VisualElement statusGroup = footer.Q<VisualElement>(PackageInstallerWindow.OperationFooterStatusGroupName);
+            Label summaryLabel = footer.Q<Label>(PackageInstallerWindow.OperationFooterSummaryName);
+            Button detailsButton = footer.Q<Button>(PackageInstallerWindow.OperationFooterDetailsButtonName);
+
+            Assert.AreEqual(12, PackageInstallerWindow.OperationInlinePaddingForTests);
+            Assert.AreEqual(8, PackageInstallerWindow.OperationControlGapForTests);
+            Assert.AreEqual(34f, PackageInstallerWindow.OperationFooterHeightForTests);
+            Assert.AreEqual(12f, footer.style.paddingLeft.value.value);
+            Assert.AreEqual(12f, footer.style.paddingRight.value.value);
+            Assert.AreEqual(8f, statusGroup.style.marginRight.value.value);
+            Assert.AreEqual(8f, summaryLabel.style.marginRight.value.value);
+            Assert.AreEqual(8f, detailsButton.style.marginRight.value.value);
         }
 
         [Test]
@@ -616,6 +636,105 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual(4, futureSlices.Count);
             Assert.IsTrue(futureSlices.Any(slice => slice.StatusKey == PackageGraphCategoryStatusKey.Unknown));
             Assert.IsEmpty(emptySlices);
+        }
+
+        [Test]
+        public void CategoryStatusRingSegments_EmptyCategoryRendersCompleteNeutralRing()
+        {
+            IReadOnlyList<CategoryStatusRingSegment> segments =
+                PackageGraphCategoryStatusVisuals.CreateRingSegments(
+                    new PackageGraphCategoryStatusSummary(0, 0, 0, 0));
+
+            Assert.AreEqual(1, segments.Count);
+            Assert.AreEqual(PackageGraphCategoryStatusKey.Unknown, segments[0].StatusKey);
+            Assert.IsTrue(segments[0].FullRing);
+            Assert.AreEqual(360f, segments[0].SweepDegrees, 0.001f);
+            Assert.AreEqual(0f, segments[0].SeparatorAfterDegrees, 0.001f);
+        }
+
+        [TestCase(1, 0, 0, PackageGraphCategoryStatusKey.Installed)]
+        [TestCase(2, 0, 0, PackageGraphCategoryStatusKey.Installed)]
+        [TestCase(0, 1, 0, PackageGraphCategoryStatusKey.NotInstalled)]
+        [TestCase(0, 0, 1, PackageGraphCategoryStatusKey.Attention)]
+        public void CategoryStatusRingSegments_SingleNonZeroStatusRendersOneCompleteRing(
+            int installed,
+            int notInstalled,
+            int attention,
+            PackageGraphCategoryStatusKey expectedStatus)
+        {
+            IReadOnlyList<CategoryStatusRingSegment> segments =
+                PackageGraphCategoryStatusVisuals.CreateRingSegments(
+                    new PackageGraphCategoryStatusSummary(installed, notInstalled, attention, 0));
+
+            Assert.AreEqual(1, segments.Count);
+            Assert.AreEqual(expectedStatus, segments[0].StatusKey);
+            Assert.IsTrue(segments[0].FullRing);
+            Assert.AreEqual(360f, segments[0].SweepDegrees, 0.001f);
+            Assert.AreEqual(0f, segments[0].SeparatorAfterDegrees, 0.001f);
+        }
+
+        [Test]
+        public void CategoryStatusRingSegments_MultipleStatusesUseOnlyConfiguredSeparators()
+        {
+            IReadOnlyList<CategoryStatusRingSegment> equalSegments =
+                PackageGraphCategoryStatusVisuals.CreateRingSegments(
+                    new PackageGraphCategoryStatusSummary(1, 1, 0, 0));
+            IReadOnlyList<CategoryStatusRingSegment> mixedSegments =
+                PackageGraphCategoryStatusVisuals.CreateRingSegments(
+                    new PackageGraphCategoryStatusSummary(2, 1, 1, 0));
+
+            Assert.AreEqual(2, equalSegments.Count);
+            Assert.IsTrue(equalSegments.All(segment => !segment.FullRing));
+            Assert.AreEqual(
+                180f - PackageGraphCategoryStatusVisuals.StatusRingSeparatorDegrees,
+                equalSegments[0].SweepDegrees,
+                0.001f);
+            Assert.AreEqual(
+                180f - PackageGraphCategoryStatusVisuals.StatusRingSeparatorDegrees,
+                equalSegments[1].SweepDegrees,
+                0.001f);
+            Assert.AreEqual(
+                360f,
+                equalSegments.Sum(segment => segment.SweepDegrees + segment.SeparatorAfterDegrees),
+                0.001f);
+
+            Assert.AreEqual(3, mixedSegments.Count);
+            float usableAngle = 360f - PackageGraphCategoryStatusVisuals.StatusRingSeparatorDegrees * 3f;
+            Assert.AreEqual(usableAngle * 0.50f, mixedSegments[0].SweepDegrees, 0.001f);
+            Assert.AreEqual(usableAngle * 0.25f, mixedSegments[1].SweepDegrees, 0.001f);
+            Assert.AreEqual(usableAngle * 0.25f, mixedSegments[2].SweepDegrees, 0.001f);
+            Assert.AreEqual(
+                360f,
+                mixedSegments.Sum(segment => segment.SweepDegrees + segment.SeparatorAfterDegrees),
+                0.001f);
+        }
+
+        [Test]
+        public void CategoryStatusRingSegments_BackHintAndHoverDoNotChangeCoverage()
+        {
+            PackageGraphCategoryStatusSummary summary = new PackageGraphCategoryStatusSummary(2, 1, 1, 0);
+            IReadOnlyList<CategoryStatusRingSegment> normalSegments =
+                PackageGraphCategoryStatusVisuals.CreateRingSegments(summary);
+            CategoryStatusRingVisualState hoveredRing = new CategoryStatusRingVisualState(
+                "group:test:status",
+                new Vector2(10f, 12f),
+                44f,
+                5f,
+                PackageGraphCategoryStatusVisuals.CreateSlices(summary),
+                true);
+            IReadOnlyList<CategoryStatusRingSegment> hoveredSegments =
+                PackageGraphCategoryStatusVisuals.CreateRingSegments(
+                    hoveredRing.Slices,
+                    hoveredRing.TotalCount);
+
+            Assert.AreEqual(
+                normalSegments.Sum(segment => segment.SweepDegrees + segment.SeparatorAfterDegrees),
+                hoveredSegments.Sum(segment => segment.SweepDegrees + segment.SeparatorAfterDegrees),
+                0.001f);
+            Assert.AreEqual(10f, hoveredRing.Center.x, 0.001f);
+            Assert.AreEqual(12f, hoveredRing.Center.y, 0.001f);
+            Assert.AreEqual(88f, hoveredRing.Radius * 2f, 0.001f);
+            Assert.That(hoveredRing.Radius, Is.GreaterThan(hoveredRing.Thickness));
         }
 
         [Test]
@@ -2008,8 +2127,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
             PackageGraphEdgeRoute[] integrationRoutes =
                 PackageGraphEdgeLayer.BuildRoutesForTests(graph, layout.NodeRects, focus)
-                    .Where(route => route.Edge.Kind == PackageGraphEdgeKind.IntegrationConnection &&
-                                    route.Edge.ConnectsPackage("com.deucarian.api"))
+                    .Where(route => route.HasKind(PackageGraphEdgeKind.IntegrationConnection) &&
+                                    route.Bundle.ConnectsPackage("com.deucarian.api"))
                     .OrderBy(route => route.BranchIndex)
                     .ToArray();
 
@@ -2019,13 +2138,44 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.IsTrue(integrationRoutes.All(route => route.Zone == PackageGraphEdgeRouteZone.Integrations));
             Assert.IsTrue(integrationRoutes.All(route => route.BranchCount == 2));
             Assert.IsTrue(integrationRoutes.All(route => route.Points.Count == 4));
+            Assert.IsTrue(integrationRoutes.All(route => route.Bundle.IsCompositeDependencyIntegration));
+            Assert.IsTrue(integrationRoutes.All(route => route.HasKind(PackageGraphEdgeKind.HardDependency)));
             Assert.That(
                 Vector2.Distance(
-                    integrationRoutes[0].Points[2],
-                    integrationRoutes[1].Points[2]),
+                    integrationRoutes[0].Points[1],
+                    integrationRoutes[1].Points[1]),
                 Is.LessThan(0.1f));
             Assert.IsTrue(integrationRoutes.All(route =>
                 !PackageGraphEdgeLayer.RouteCrossesNodeInteriorForTests(route, layout.NodeRects)));
+            Assert.IsTrue(integrationRoutes.All(route =>
+                PackageGraphEdgeLayer.RouteLengthForTests(route) <=
+                PackageGraphEdgeLayer.DirectRouteDistanceForTests(route) * 1.8f));
+        }
+
+        [Test]
+        public void GraphEdgeRoutes_BundleDependencyAndIntegrationByEndpointPair()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+            PackageGraphLayoutResult layout = new PackageGraphLayout().Calculate(
+                graph,
+                PackageGraphLayoutMode.Focus,
+                "com.deucarian.api");
+            PackageGraphFocus focus = PackageGraphFocus.Create(graph, "com.deucarian.api");
+
+            PackageGraphEdgeRoute route =
+                PackageGraphEdgeLayer.BuildRoutesForTests(graph, layout.NodeRects, focus)
+                    .Single(candidate =>
+                        candidate.Bundle.SourcePackageId == "com.deucarian.api" &&
+                        candidate.Bundle.TargetPackageId == "com.deucarian.session.api-integration");
+
+            Assert.IsTrue(route.Bundle.IsCompositeDependencyIntegration);
+            Assert.AreEqual(2, route.Bundle.Edges.Count);
+            Assert.IsTrue(route.HasKind(PackageGraphEdgeKind.HardDependency));
+            Assert.IsTrue(route.HasKind(PackageGraphEdgeKind.IntegrationConnection));
+            Assert.AreEqual(PackageGraphEdgeKind.HardDependency, route.Edge.Kind);
+            Assert.AreEqual("com.deucarian.api", route.Edge.FromPackageId);
+            Assert.AreEqual("com.deucarian.session.api-integration", route.Edge.ToPackageId);
         }
 
         [Test]
@@ -2070,10 +2220,10 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
             Assert.IsTrue(routes.All(route => route.Edge != null));
             Assert.IsFalse(routes.Any(route => route.SharedTrunkId.IndexOf("membership", StringComparison.OrdinalIgnoreCase) >= 0));
-            Assert.IsTrue(routes.Any(route => route.Edge.Kind == PackageGraphEdgeKind.IntegrationConnection));
+            Assert.IsTrue(routes.Any(route => route.HasKind(PackageGraphEdgeKind.IntegrationConnection)));
             Assert.IsFalse(routes.Any(route => route.Zone == PackageGraphEdgeRouteZone.Direct &&
-                                               route.Edge.Kind == PackageGraphEdgeKind.IntegrationConnection &&
-                                               route.Edge.ConnectsPackage("com.deucarian.core-state")));
+                                               route.HasKind(PackageGraphEdgeKind.IntegrationConnection) &&
+                                               route.Bundle.ConnectsPackage("com.deucarian.core-state")));
         }
 
         [Test]

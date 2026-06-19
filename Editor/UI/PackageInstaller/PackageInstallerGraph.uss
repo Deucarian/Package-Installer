@@ -85,6 +85,14 @@
     overflow: hidden;
 }
 
+.dpi-operation-surface {
+    --dpi-operation-inline-padding: 12px;
+    --dpi-operation-block-padding: 6px;
+    --dpi-operation-row-gap: 6px;
+    --dpi-operation-control-gap: 8px;
+    --dpi-operation-footer-height: 34px;
+}
+
 .dpi-operation-drawer {
     flex-shrink: 0;
     height: 0;
@@ -129,12 +137,12 @@
     flex-direction: row;
     align-items: center;
     flex-shrink: 0;
-    height: 34px;
-    min-height: 34px;
-    max-height: 34px;
+    height: var(--dpi-operation-footer-height);
+    min-height: var(--dpi-operation-footer-height);
+    max-height: var(--dpi-operation-footer-height);
     margin-top: 0;
-    padding-left: 12px;
-    padding-right: 12px;
+    padding-left: var(--dpi-operation-inline-padding);
+    padding-right: var(--dpi-operation-inline-padding);
     padding-top: 0;
     padding-bottom: 0;
     border-top-left-radius: 6px;
@@ -158,7 +166,7 @@
     align-items: center;
     flex-shrink: 0;
     min-width: 76px;
-    margin-right: 8px;
+    margin-right: var(--dpi-operation-control-gap);
 }
 
 .dpi-operation-footer__status-icon {
@@ -208,7 +216,7 @@
     flex-shrink: 1;
     min-width: 0;
     margin-left: 0;
-    margin-right: 8px;
+    margin-right: var(--dpi-operation-control-gap);
     color: var(--deucarian-muted);
     font-size: 11px;
     -unity-text-align: middle-left;
@@ -233,7 +241,7 @@
     min-height: 24px;
     max-height: 24px;
     margin-left: 0;
-    margin-right: 8px;
+    margin-right: var(--dpi-operation-control-gap);
     padding-left: 8px;
     padding-right: 8px;
     padding-top: 0;

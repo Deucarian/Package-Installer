@@ -20,7 +20,7 @@ namespace Deucarian.PackageInstaller.Editor
     {
         private const string WindowTitle = "Package Installer";
         private const string PackageId = "com.deucarian.package-installer";
-        private const string PackageVersion = "1.1.48";
+        private const string PackageVersion = "1.1.49";
         private const float MinWindowWidth = 820f;
         private const float MinWindowHeight = 650f;
         private const float CompactLayoutWidth = 1180f;
@@ -29,13 +29,14 @@ namespace Deucarian.PackageInstaller.Editor
         private const float SidebarRowMinHeight = 94f;
         private const float SidebarRowMaxHeight = 150f;
         private const float DetailLabelWidth = 118f;
-        private const int OperationGridOuterPadding = 12;
-        private const int OperationGridColumnGap = 8;
-        private const int OperationGridRowGap = 6;
-        private const float OperationDrawerMinHeight = 22f;
-        private const float OperationDrawerMaxHeight = 76f;
-        private const float OperationDrawerExpandedBaseHeight = 48f;
-        private const float OperationDrawerExpandedMaxHeight = 132f;
+        private const int OperationInlinePadding = 12;
+        private const int OperationBlockPadding = 6;
+        private const int OperationControlGap = 8;
+        private const int OperationRowGap = 6;
+        private const float OperationDrawerMinHeight = 30f;
+        private const float OperationDrawerMaxHeight = 152f;
+        private const float OperationDrawerExpandedBaseHeight = 58f;
+        private const float OperationDrawerExpandedMaxHeight = 220f;
         private const float OperationFooterHeight = 34f;
         internal const string OperationFooterRowName = "package-installer-operation-footer";
         internal const string OperationFooterStatusGroupName = "package-installer-operation-footer-status";
@@ -193,6 +194,8 @@ namespace Deucarian.PackageInstaller.Editor
         private GUIStyle _sectionTitleStyle;
         private GUIStyle _miniLabelStyle;
         private GUIStyle _mutedMiniLabelStyle;
+        private GUIStyle _operationDrawerTitleStyle;
+        private GUIStyle _operationDrawerMessageStyle;
         private GUIStyle _rowTitleStyle;
         private GUIStyle _rowSubLabelStyle;
         private GUIStyle _rowStatusStyle;
@@ -222,9 +225,19 @@ namespace Deucarian.PackageInstaller.Editor
 
         internal static float OperationFooterHeightForTests => OperationFooterHeight;
 
-        internal static int OperationGridOuterPaddingForTests => OperationGridOuterPadding;
+        internal static int OperationGridOuterPaddingForTests => OperationInlinePadding;
 
-        internal static int OperationGridColumnGapForTests => OperationGridColumnGap;
+        internal static int OperationGridColumnGapForTests => OperationControlGap;
+
+        internal static int OperationInlinePaddingForTests => OperationInlinePadding;
+
+        internal static int OperationBlockPaddingForTests => OperationBlockPadding;
+
+        internal static int OperationControlGapForTests => OperationControlGap;
+
+        internal static int OperationRowGapForTests => OperationRowGap;
+
+        internal static float OperationDrawerExpandedMaxHeightForTests => OperationDrawerExpandedMaxHeight;
 
         internal static PackageInstallerResponsiveMode ResolveResponsiveModeForTests(float width)
         {
@@ -419,6 +432,7 @@ namespace Deucarian.PackageInstaller.Editor
             content.Add(_graphModeContainer);
 
             _operationDrawerContainer = new IMGUIContainer(DrawOperationDrawerGui);
+            _operationDrawerContainer.AddToClassList("dpi-operation-surface");
             _operationDrawerContainer.AddToClassList("dpi-operation-drawer");
             content.Add(_operationDrawerContainer);
 
@@ -602,6 +616,7 @@ namespace Deucarian.PackageInstaller.Editor
         private static VisualElement CreateOperationFooterRow(Action detailsToggleAction)
         {
             VisualElement footer = new VisualElement { name = OperationFooterRowName };
+            footer.AddToClassList("dpi-operation-surface");
             footer.AddToClassList("dpi-operation-footer");
             footer.style.flexDirection = FlexDirection.Row;
             footer.style.alignItems = Align.Center;
@@ -611,8 +626,8 @@ namespace Deucarian.PackageInstaller.Editor
             footer.style.maxHeight = OperationFooterHeight;
             footer.style.overflow = Overflow.Hidden;
             footer.style.opacity = 1f;
-            footer.style.paddingLeft = OperationGridOuterPadding;
-            footer.style.paddingRight = OperationGridOuterPadding;
+            footer.style.paddingLeft = OperationInlinePadding;
+            footer.style.paddingRight = OperationInlinePadding;
 
             VisualElement statusGroup = new VisualElement { name = OperationFooterStatusGroupName };
             statusGroup.AddToClassList("dpi-operation-footer__status");
@@ -620,7 +635,7 @@ namespace Deucarian.PackageInstaller.Editor
             statusGroup.style.alignItems = Align.Center;
             statusGroup.style.flexShrink = 0f;
             statusGroup.style.opacity = 1f;
-            statusGroup.style.marginRight = OperationGridColumnGap;
+            statusGroup.style.marginRight = OperationControlGap;
 
             Label statusIcon = new Label { name = OperationFooterStatusIconName };
             statusIcon.AddToClassList("dpi-operation-footer__status-icon");
@@ -641,7 +656,7 @@ namespace Deucarian.PackageInstaller.Editor
             summaryLabel.style.flexShrink = 1f;
             summaryLabel.style.minWidth = 0f;
             summaryLabel.style.opacity = 1f;
-            summaryLabel.style.marginRight = OperationGridColumnGap;
+            summaryLabel.style.marginRight = OperationControlGap;
             footer.Add(summaryLabel);
 
             VisualElement spacer = new VisualElement();
@@ -663,7 +678,7 @@ namespace Deucarian.PackageInstaller.Editor
             detailsButton.style.minHeight = 24f;
             detailsButton.style.maxHeight = 24f;
             detailsButton.style.opacity = 1f;
-            detailsButton.style.marginRight = OperationGridColumnGap;
+            detailsButton.style.marginRight = OperationControlGap;
             footer.Add(detailsButton);
 
             Label versionLabel = new Label { name = OperationFooterVersionName };
@@ -1229,10 +1244,10 @@ namespace Deucarian.PackageInstaller.Editor
 
             _operationDrawerStyle = new GUIStyle();
             _operationDrawerStyle.padding = new RectOffset(
-                OperationGridOuterPadding,
-                OperationGridOuterPadding,
-                8,
-                7);
+                OperationInlinePadding,
+                OperationInlinePadding,
+                OperationBlockPadding,
+                OperationBlockPadding);
             _operationDrawerStyle.margin = new RectOffset(0, 0, 0, 0);
 
             _sampleRowStyle = new GUIStyle();
@@ -1249,9 +1264,23 @@ namespace Deucarian.PackageInstaller.Editor
 
             _miniLabelStyle = new GUIStyle(EditorStyles.wordWrappedMiniLabel);
             _miniLabelStyle.normal.textColor = _textColor;
+            _miniLabelStyle.wordWrap = true;
+            _miniLabelStyle.clipping = TextClipping.Overflow;
 
             _mutedMiniLabelStyle = new GUIStyle(DeucarianEditorStyles.MutedLabel);
             _mutedMiniLabelStyle.fontSize = EditorStyles.wordWrappedMiniLabel.fontSize;
+            _mutedMiniLabelStyle.wordWrap = true;
+            _mutedMiniLabelStyle.clipping = TextClipping.Overflow;
+
+            _operationDrawerTitleStyle = new GUIStyle(_sectionTitleStyle);
+            _operationDrawerTitleStyle.normal.textColor = _textColor;
+            _operationDrawerTitleStyle.wordWrap = false;
+            _operationDrawerTitleStyle.clipping = TextClipping.Clip;
+
+            _operationDrawerMessageStyle = new GUIStyle(EditorStyles.wordWrappedMiniLabel);
+            _operationDrawerMessageStyle.normal.textColor = _mutedTextColor;
+            _operationDrawerMessageStyle.wordWrap = true;
+            _operationDrawerMessageStyle.clipping = TextClipping.Overflow;
 
             _rowTitleStyle = new GUIStyle(EditorStyles.miniBoldLabel);
             _rowTitleStyle.normal.textColor = _textColor;
@@ -2972,10 +3001,10 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void DrawOperationSummaryDrawer()
         {
-            EditorGUILayout.LabelField("Last Operation Summary", _sectionTitleStyle, GUILayout.ExpandWidth(true));
-            GUILayout.Space(OperationGridRowGap);
+            EditorGUILayout.LabelField("Last Operation Summary", _operationDrawerTitleStyle, GUILayout.ExpandWidth(true));
+            GUILayout.Space(OperationRowGap);
             DrawOperationSettingsRow();
-            GUILayout.Space(OperationGridRowGap);
+            GUILayout.Space(OperationRowGap);
 
             _operationDetailsScrollPosition = EditorGUILayout.BeginScrollView(
                 _operationDetailsScrollPosition,
@@ -3026,7 +3055,7 @@ namespace Deucarian.PackageInstaller.Editor
         private static float CalculateOperationDrawerScrollHeight(int contentLineCount)
         {
             const float lineHeight = 18f;
-            const float verticalPadding = 3f;
+            float verticalPadding = OperationBlockPadding;
             int lineCount = Mathf.Max(1, contentLineCount);
             float contentHeight = lineCount * lineHeight + verticalPadding;
 
@@ -3044,14 +3073,14 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (!string.IsNullOrWhiteSpace(GetLastOperationSummary()))
             {
-                lineCount++;
+                lineCount += CountOperationMessageLines(GetLastOperationSummary());
             }
 
             IReadOnlyList<string> operationMessages = GetLastOperationMessages();
 
             if (operationMessages != null)
             {
-                lineCount += operationMessages.Count;
+                lineCount += operationMessages.Sum(CountOperationMessageLines);
             }
 
             IReadOnlyList<PackageInstallProgressItem> progressItems = GetLastProgressItems();
@@ -3085,6 +3114,22 @@ namespace Deucarian.PackageInstaller.Editor
             }
         }
 
+        private static int CountOperationMessageLines(string message)
+        {
+            if (string.IsNullOrWhiteSpace(message))
+            {
+                return 0;
+            }
+
+            return Mathf.Max(
+                1,
+                message
+                    .Replace("\r\n", "\n")
+                    .Replace('\r', '\n')
+                    .Split('\n')
+                    .Length);
+        }
+
         private void DrawLastOperationSummaryContent()
         {
             string summary = GetLastOperationSummary();
@@ -3103,7 +3148,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (!string.IsNullOrWhiteSpace(summary))
             {
-                EditorGUILayout.LabelField(new GUIContent(summary, summary), _miniLabelStyle);
+                EditorGUILayout.LabelField(new GUIContent(summary, summary), _operationDrawerMessageStyle);
             }
 
             DrawOperationMessages(operationMessages, int.MaxValue);
@@ -3436,7 +3481,7 @@ namespace Deucarian.PackageInstaller.Editor
                 string itemMessage = string.IsNullOrWhiteSpace(item.Message)
                     ? item.DisplayName
                     : item.Message;
-                DrawColoredLabel(GetProgressItemStateLabel(item.State) + ": " + itemMessage, _mutedMiniLabelStyle, GetStatusColor(kind));
+                DrawColoredLabel(GetProgressItemStateLabel(item.State) + ": " + itemMessage, _operationDrawerMessageStyle, GetStatusColor(kind));
                 drawn++;
 
                 if (drawn >= maxItems)
@@ -3462,7 +3507,7 @@ namespace Deucarian.PackageInstaller.Editor
                     continue;
                 }
 
-                DrawColoredLabel(message, _mutedMiniLabelStyle, GetStatusColor(VisualStatusKind.Info));
+                DrawColoredLabel(message, _operationDrawerMessageStyle, GetStatusColor(VisualStatusKind.Info));
                 drawn++;
 
                 if (drawn >= maxItems)
