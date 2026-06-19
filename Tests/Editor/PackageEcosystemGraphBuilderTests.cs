@@ -181,6 +181,37 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void Window_OperationDrawerBuildsPersistentVisibleContent()
+        {
+            VisualElement drawer = PackageInstallerWindow.CreateOperationDrawerForTests(
+                expanded: true,
+                report: "Package operation completed.\nInstalled com.example.core.");
+            ScrollView scrollView = drawer.Q<ScrollView>(PackageInstallerWindow.OperationDrawerScrollViewName);
+            VisualElement content = drawer.Q<VisualElement>(PackageInstallerWindow.OperationDrawerContentName);
+            Label title = drawer.Q<Label>(PackageInstallerWindow.OperationDrawerTitleName);
+            Toggle toggle = drawer.Q<Toggle>(PackageInstallerWindow.OperationDrawerVerboseToggleName);
+            Label verboseLabel = drawer.Q<Label>(PackageInstallerWindow.OperationDrawerVerboseLabelName);
+            Label message = drawer.Q<Label>(PackageInstallerWindow.OperationDrawerMessageName);
+
+            Assert.AreEqual(PackageInstallerWindow.OperationDrawerName, drawer.name);
+            Assert.IsTrue(drawer.ClassListContains("dpi-operation-surface"));
+            Assert.IsTrue(drawer.ClassListContains("dpi-operation-drawer"));
+            Assert.IsTrue(drawer.ClassListContains("dpi-operation-drawer--expanded"));
+            AssertFooterElementVisible(drawer);
+            AssertFooterElementVisible(scrollView);
+            AssertFooterElementVisible(content);
+            AssertFooterElementVisible(title);
+            AssertFooterElementVisible(toggle);
+            AssertFooterElementVisible(verboseLabel);
+            AssertFooterElementVisible(message);
+            Assert.AreEqual("Last Operation Summary", title.text);
+            Assert.AreEqual("Verbose Console Logging", verboseLabel.text);
+            StringAssert.Contains("Package operation completed.", message.text);
+            StringAssert.Contains("Installed com.example.core.", message.text);
+            Assert.That(drawer.style.height.value.value, Is.GreaterThan(PackageInstallerWindow.OperationFooterHeightForTests));
+        }
+
+        [Test]
         public void Window_OperationSpacingTokensKeepFooterPixelValuesStable()
         {
             VisualElement footer = PackageInstallerWindow.CreateOperationFooterForTests();
@@ -2232,6 +2263,52 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void GraphEdgeRoutes_AvoidPackageAndCategoryObstaclesForApiFocus()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+            PackageGraphLayoutResult layout = new PackageGraphLayout().Calculate(
+                graph,
+                PackageGraphLayoutMode.Focus,
+                "com.deucarian.api");
+            PackageGraphFocus focus = PackageGraphFocus.Create(graph, "com.deucarian.api");
+            IReadOnlyDictionary<string, Rect> groupRects = GetGroupRects(layout);
+
+            PackageGraphEdgeRoute[] routes =
+                PackageGraphEdgeLayer.BuildRoutesForTests(graph, layout.NodeRects, groupRects, focus)
+                    .ToArray();
+
+            Assert.IsTrue(routes.Any(route => route.RouteKind == PackageGraphRouteKind.CompositeDependencyIntegration));
+            Assert.IsTrue(routes.All(route =>
+                !PackageGraphEdgeLayer.RouteCrossesGraphObstacleForTests(route, layout.NodeRects, groupRects)));
+        }
+
+        [Test]
+        public void GraphEdgeRoutes_SuiteMembershipTargetsPackageCardsAndAvoidsCategories()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+            PackageGraphLayoutResult layout = new PackageGraphLayout().Calculate(
+                graph,
+                PackageGraphLayoutMode.Focus,
+                "com.deucarian.selection-suite");
+            PackageGraphFocus focus = PackageGraphFocus.Create(graph, "com.deucarian.selection-suite");
+            IReadOnlyDictionary<string, Rect> groupRects = GetGroupRects(layout);
+
+            PackageGraphEdgeRoute[] suiteRoutes =
+                PackageGraphEdgeLayer.BuildRoutesForTests(graph, layout.NodeRects, groupRects, focus)
+                    .Where(route => route.RouteKind == PackageGraphRouteKind.SuiteMembership)
+                    .ToArray();
+
+            Assert.IsNotEmpty(suiteRoutes);
+            Assert.IsTrue(suiteRoutes.All(route => route.Edge.FromPackageId == "com.deucarian.selection-suite"));
+            Assert.IsTrue(suiteRoutes.All(route => layout.NodeRects.ContainsKey(route.Edge.ToPackageId)));
+            Assert.IsTrue(suiteRoutes.All(route =>
+                !PackageGraphEdgeLayer.RouteCrossesGraphObstacleForTests(route, layout.NodeRects, groupRects)));
+            Assert.IsFalse(PackageGraphEdgeLayer.AnimatesEdgeForTests(PackageGraphEdgeKind.SuiteMembership));
+        }
+
+        [Test]
         public void Layout_CalculatesHierarchicalOverviewWithoutNodeOverlap()
         {
             PackageGraphModel graph = new PackageGraphBuilder(_ => false)
@@ -3370,6 +3447,14 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             IEnumerable<string> visiblePackageIds)
         {
             return PackageGraphActiveLayoutBounds.Calculate(layout);
+        }
+
+        private static IReadOnlyDictionary<string, Rect> GetGroupRects(PackageGraphLayoutResult layout)
+        {
+            return layout.GroupNodes
+                .Where(groupNode => groupNode != null)
+                .GroupBy(groupNode => groupNode.GroupId, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => group.First().Rect, StringComparer.OrdinalIgnoreCase);
         }
 
         private static void AssertFooterElementVisible(VisualElement element)

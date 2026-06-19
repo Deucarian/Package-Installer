@@ -133,6 +133,84 @@
     background-color: rgba(17, 29, 39, 0.00);
 }
 
+.dpi-operation-drawer__scroll {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-height: 0;
+    padding-left: 0;
+    padding-right: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+}
+
+.dpi-operation-content {
+    flex-direction: column;
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-height: 0;
+    padding-left: var(--dpi-operation-inline-padding);
+    padding-right: var(--dpi-operation-inline-padding);
+    padding-top: var(--dpi-operation-block-padding);
+    padding-bottom: var(--dpi-operation-block-padding);
+}
+
+.dpi-operation-row {
+    flex-shrink: 0;
+    margin-top: 0;
+    margin-bottom: var(--dpi-operation-row-gap);
+}
+
+.dpi-operation-row--header {
+    flex-direction: row;
+    align-items: center;
+}
+
+.dpi-operation-row--option {
+    flex-direction: row;
+    align-items: center;
+}
+
+.dpi-operation-row--message {
+    flex-shrink: 1;
+    margin-bottom: 0;
+}
+
+.dpi-operation-text--primary {
+    color: var(--deucarian-text);
+}
+
+.dpi-operation-text--secondary {
+    color: var(--deucarian-muted);
+}
+
+.dpi-operation-drawer__title {
+    -unity-font-style: bold;
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.dpi-operation-drawer__toggle {
+    flex-shrink: 0;
+    margin-left: 0;
+    margin-right: var(--dpi-operation-control-gap);
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
+.dpi-operation-drawer__option-label {
+    font-size: 11px;
+    -unity-text-align: middle-left;
+    white-space: nowrap;
+}
+
+.dpi-operation-drawer__message {
+    font-size: 11px;
+    white-space: normal;
+    overflow: visible;
+}
+
 .dpi-operation-footer {
     flex-direction: row;
     align-items: center;

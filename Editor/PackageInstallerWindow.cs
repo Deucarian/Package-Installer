@@ -20,7 +20,7 @@ namespace Deucarian.PackageInstaller.Editor
     {
         private const string WindowTitle = "Package Installer";
         private const string PackageId = "com.deucarian.package-installer";
-        private const string PackageVersion = "1.1.50";
+        private const string PackageVersion = "1.1.51";
         private const float MinWindowWidth = 820f;
         private const float MinWindowHeight = 650f;
         private const float CompactLayoutWidth = 1180f;
@@ -29,15 +29,22 @@ namespace Deucarian.PackageInstaller.Editor
         private const float SidebarRowMinHeight = 94f;
         private const float SidebarRowMaxHeight = 150f;
         private const float DetailLabelWidth = 118f;
-        private const int OperationInlinePadding = 12;
-        private const int OperationBlockPadding = 6;
-        private const int OperationControlGap = 8;
-        private const int OperationRowGap = 6;
+        private const int OperationInlinePadding = OperationLayoutMetrics.InlinePadding;
+        private const int OperationBlockPadding = OperationLayoutMetrics.BlockPadding;
+        private const int OperationControlGap = OperationLayoutMetrics.ControlGap;
+        private const int OperationRowGap = OperationLayoutMetrics.RowGap;
         private const float OperationDrawerMinHeight = 30f;
         private const float OperationDrawerMaxHeight = 152f;
         private const float OperationDrawerExpandedBaseHeight = 58f;
-        private const float OperationDrawerExpandedMaxHeight = 220f;
-        private const float OperationFooterHeight = 34f;
+        private const float OperationDrawerExpandedMaxHeight = OperationLayoutMetrics.DrawerMaxHeight;
+        private const float OperationFooterHeight = OperationLayoutMetrics.FooterHeight;
+        internal const string OperationDrawerName = "package-installer-operation-drawer";
+        internal const string OperationDrawerScrollViewName = "package-installer-operation-drawer-scroll-view";
+        internal const string OperationDrawerContentName = "package-installer-operation-drawer-content";
+        internal const string OperationDrawerTitleName = "package-installer-operation-drawer-title";
+        internal const string OperationDrawerVerboseToggleName = "package-installer-operation-drawer-verbose-toggle";
+        internal const string OperationDrawerVerboseLabelName = "package-installer-operation-drawer-verbose-label";
+        internal const string OperationDrawerMessageName = "package-installer-operation-drawer-message";
         internal const string OperationFooterRowName = "package-installer-operation-footer";
         internal const string OperationFooterStatusGroupName = "package-installer-operation-footer-status";
         internal const string OperationFooterStatusIconName = "package-installer-operation-footer-status-icon";
@@ -79,6 +86,16 @@ namespace Deucarian.PackageInstaller.Editor
             Busy,
             Info,
             Integration
+        }
+
+        internal readonly struct OperationLayoutMetrics
+        {
+            public const int InlinePadding = 12;
+            public const int BlockPadding = 6;
+            public const int RowGap = 6;
+            public const int ControlGap = 8;
+            public const float FooterHeight = 34f;
+            public const float DrawerMaxHeight = 220f;
         }
 
         private sealed class VisualStatus
@@ -154,7 +171,13 @@ namespace Deucarian.PackageInstaller.Editor
         private VisualElement _windowContentRoot;
         private IMGUIContainer _listViewContainer;
         private IMGUIContainer _graphDetailsContainer;
-        private IMGUIContainer _operationDrawerContainer;
+        private VisualElement _operationDrawerContainer;
+        private ScrollView _operationDrawerScrollView;
+        private VisualElement _operationDrawerContent;
+        private Label _operationDrawerTitleLabel;
+        private Toggle _operationDrawerVerboseToggle;
+        private Label _operationDrawerVerboseLabel;
+        private Label _operationDrawerMessageLabel;
         private VisualElement _operationFooterContainer;
         private VisualElement _operationFooterStatusGroup;
         private Label _operationFooterStatusIcon;
@@ -187,15 +210,12 @@ namespace Deucarian.PackageInstaller.Editor
         private GUIStyle _windowStyle;
         private GUIStyle _sidebarStyle;
         private GUIStyle _detailsStyle;
-        private GUIStyle _operationDrawerStyle;
         private GUIStyle _sampleRowStyle;
         private GUIStyle _titleStyle;
         private GUIStyle _subtitleStyle;
         private GUIStyle _sectionTitleStyle;
         private GUIStyle _miniLabelStyle;
         private GUIStyle _mutedMiniLabelStyle;
-        private GUIStyle _operationDrawerTitleStyle;
-        private GUIStyle _operationDrawerMessageStyle;
         private GUIStyle _rowTitleStyle;
         private GUIStyle _rowSubLabelStyle;
         private GUIStyle _rowStatusStyle;
@@ -255,6 +275,32 @@ namespace Deucarian.PackageInstaller.Editor
                 expanded,
                 GetFooterVersionText());
             return footer;
+        }
+
+        internal static VisualElement CreateOperationDrawerForTests(
+            bool expanded = true,
+            string report = "Package operation completed.\nInstalled package.")
+        {
+            VisualElement drawer = CreateOperationDrawer(
+                null,
+                out ScrollView scrollView,
+                out VisualElement content,
+                out Label titleLabel,
+                out Toggle verboseToggle,
+                out Label verboseLabel,
+                out Label messageLabel);
+            ApplyOperationDrawerData(
+                drawer,
+                scrollView,
+                content,
+                titleLabel,
+                verboseToggle,
+                verboseLabel,
+                messageLabel,
+                expanded,
+                false,
+                report);
+            return drawer;
         }
 
         internal static void SetOperationFooterExpandedForTests(VisualElement footer, bool expanded)
@@ -431,9 +477,14 @@ namespace Deucarian.PackageInstaller.Editor
 
             content.Add(_graphModeContainer);
 
-            _operationDrawerContainer = new IMGUIContainer(DrawOperationDrawerGui);
-            _operationDrawerContainer.AddToClassList("dpi-operation-surface");
-            _operationDrawerContainer.AddToClassList("dpi-operation-drawer");
+            _operationDrawerContainer = CreateOperationDrawer(
+                HandleVerboseConsoleLoggingChanged,
+                out _operationDrawerScrollView,
+                out _operationDrawerContent,
+                out _operationDrawerTitleLabel,
+                out _operationDrawerVerboseToggle,
+                out _operationDrawerVerboseLabel,
+                out _operationDrawerMessageLabel);
             content.Add(_operationDrawerContainer);
 
             _operationFooterContainer = CreateOperationFooterRow(() => SetOperationDetailsExpanded(!_operationDetailsExpanded));
@@ -613,6 +664,184 @@ namespace Deucarian.PackageInstaller.Editor
             return button;
         }
 
+        private static VisualElement CreateOperationDrawer(
+            Action<bool> verboseLoggingChanged,
+            out ScrollView scrollView,
+            out VisualElement content,
+            out Label titleLabel,
+            out Toggle verboseToggle,
+            out Label verboseLabel,
+            out Label messageLabel)
+        {
+            VisualElement drawer = new VisualElement { name = OperationDrawerName };
+            drawer.AddToClassList("dpi-operation-surface");
+            drawer.AddToClassList("dpi-operation-drawer");
+
+            scrollView = new ScrollView(ScrollViewMode.Vertical)
+            {
+                name = OperationDrawerScrollViewName,
+                verticalScrollerVisibility = ScrollerVisibility.Auto,
+                horizontalScrollerVisibility = ScrollerVisibility.Hidden
+            };
+            scrollView.AddToClassList("dpi-operation-drawer__scroll");
+            drawer.Add(scrollView);
+
+            content = new VisualElement { name = OperationDrawerContentName };
+            content.AddToClassList("dpi-operation-content");
+            scrollView.Add(content);
+
+            VisualElement header = new VisualElement();
+            header.AddToClassList("dpi-operation-row");
+            header.AddToClassList("dpi-operation-row--header");
+            content.Add(header);
+
+            titleLabel = new Label("Last Operation Summary") { name = OperationDrawerTitleName };
+            titleLabel.AddToClassList("dpi-operation-text--primary");
+            titleLabel.AddToClassList("dpi-operation-drawer__title");
+            titleLabel.style.color = DeucarianEditorVisualShell.Text;
+            header.Add(titleLabel);
+
+            VisualElement optionRow = new VisualElement();
+            optionRow.AddToClassList("dpi-operation-row");
+            optionRow.AddToClassList("dpi-operation-row--option");
+            content.Add(optionRow);
+
+            Toggle localVerboseToggle = new Toggle { name = OperationDrawerVerboseToggleName };
+            localVerboseToggle.AddToClassList("dpi-operation-drawer__toggle");
+            localVerboseToggle.tooltip = "Send normal Package Installer info messages to the Unity Console. Warnings and errors are always logged.";
+            if (verboseLoggingChanged != null)
+            {
+                localVerboseToggle.RegisterValueChangedCallback(evt => verboseLoggingChanged(evt.newValue));
+            }
+            optionRow.Add(localVerboseToggle);
+            verboseToggle = localVerboseToggle;
+
+            verboseLabel = new Label("Verbose Console Logging") { name = OperationDrawerVerboseLabelName };
+            verboseLabel.AddToClassList("dpi-operation-text--secondary");
+            verboseLabel.AddToClassList("dpi-operation-drawer__option-label");
+            verboseLabel.tooltip = localVerboseToggle.tooltip;
+            verboseLabel.style.color = DeucarianEditorVisualShell.MutedText;
+            verboseLabel.RegisterCallback<ClickEvent>(_ =>
+            {
+                localVerboseToggle.value = !localVerboseToggle.value;
+            });
+            optionRow.Add(verboseLabel);
+
+            messageLabel = new Label("No detailed operation report is available.")
+            {
+                name = OperationDrawerMessageName
+            };
+            messageLabel.AddToClassList("dpi-operation-row");
+            messageLabel.AddToClassList("dpi-operation-row--message");
+            messageLabel.AddToClassList("dpi-operation-text--secondary");
+            messageLabel.AddToClassList("dpi-operation-drawer__message");
+            messageLabel.style.color = DeucarianEditorVisualShell.MutedText;
+            content.Add(messageLabel);
+
+            return drawer;
+        }
+
+        private void HandleVerboseConsoleLoggingChanged(bool enabled)
+        {
+            if (PackageInstallerLoggingPreferences.VerboseConsoleLogging == enabled)
+            {
+                return;
+            }
+
+            PackageInstallerLoggingPreferences.VerboseConsoleLogging = enabled;
+            RefreshOperationDrawerContent();
+        }
+
+        private void RefreshOperationDrawerContent()
+        {
+            ApplyOperationDrawerData(
+                _operationDrawerContainer,
+                _operationDrawerScrollView,
+                _operationDrawerContent,
+                _operationDrawerTitleLabel,
+                _operationDrawerVerboseToggle,
+                _operationDrawerVerboseLabel,
+                _operationDrawerMessageLabel,
+                _operationDetailsExpanded,
+                PackageInstallerLoggingPreferences.VerboseConsoleLogging,
+                GetOperationDrawerReportText());
+        }
+
+        private static void ApplyOperationDrawerData(
+            VisualElement drawer,
+            ScrollView scrollView,
+            VisualElement content,
+            Label titleLabel,
+            Toggle verboseToggle,
+            Label verboseLabel,
+            Label messageLabel,
+            bool expanded,
+            bool verboseConsoleLogging,
+            string report)
+        {
+            if (drawer == null)
+            {
+                return;
+            }
+
+            drawer.style.display = DisplayStyle.Flex;
+            drawer.style.opacity = 1f;
+            drawer.EnableInClassList("dpi-operation-drawer--expanded", expanded);
+            drawer.EnableInClassList("dpi-operation-drawer--collapsed", !expanded);
+
+            float drawerHeight = CalculateOperationDrawerContainerHeight(
+                expanded,
+                CountOperationMessageLines(report));
+            drawer.style.height = drawerHeight;
+            drawer.style.minHeight = drawerHeight;
+            drawer.style.maxHeight = drawerHeight;
+
+            if (scrollView != null)
+            {
+                scrollView.style.display = DisplayStyle.Flex;
+                scrollView.style.opacity = 1f;
+            }
+
+            if (content != null)
+            {
+                content.style.display = DisplayStyle.Flex;
+                content.style.opacity = 1f;
+            }
+
+            if (titleLabel != null)
+            {
+                titleLabel.text = "Last Operation Summary";
+                titleLabel.style.display = DisplayStyle.Flex;
+                titleLabel.style.opacity = 1f;
+                titleLabel.style.color = DeucarianEditorVisualShell.Text;
+            }
+
+            if (verboseToggle != null)
+            {
+                verboseToggle.SetValueWithoutNotify(verboseConsoleLogging);
+                verboseToggle.style.display = DisplayStyle.Flex;
+                verboseToggle.style.opacity = 1f;
+            }
+
+            if (verboseLabel != null)
+            {
+                verboseLabel.text = "Verbose Console Logging";
+                verboseLabel.style.display = DisplayStyle.Flex;
+                verboseLabel.style.opacity = 1f;
+                verboseLabel.style.color = DeucarianEditorVisualShell.MutedText;
+            }
+
+            if (messageLabel != null)
+            {
+                messageLabel.text = string.IsNullOrWhiteSpace(report)
+                    ? "No detailed operation report is available."
+                    : report.Trim();
+                messageLabel.style.display = DisplayStyle.Flex;
+                messageLabel.style.opacity = 1f;
+                messageLabel.style.color = DeucarianEditorVisualShell.MutedText;
+            }
+        }
+
         private static VisualElement CreateOperationFooterRow(Action detailsToggleAction)
         {
             VisualElement footer = new VisualElement { name = OperationFooterRowName };
@@ -736,6 +965,7 @@ namespace Deucarian.PackageInstaller.Editor
                 GetFooterVersionText());
 
             CacheOperationFooterElements(_operationFooterContainer);
+            RefreshOperationDrawerContent();
         }
 
         private static void ApplyOperationFooterData(
@@ -869,13 +1099,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (_operationDrawerContainer != null)
             {
-                _operationDrawerContainer.style.display = DisplayStyle.Flex;
-                _operationDrawerContainer.EnableInClassList("dpi-operation-drawer--expanded", _operationDetailsExpanded);
-                _operationDrawerContainer.EnableInClassList("dpi-operation-drawer--collapsed", !_operationDetailsExpanded);
-                float operationDrawerHeight = GetOperationDrawerContainerHeight();
-                _operationDrawerContainer.style.height = operationDrawerHeight;
-                _operationDrawerContainer.style.minHeight = operationDrawerHeight;
-                _operationDrawerContainer.style.maxHeight = operationDrawerHeight;
+                RefreshOperationDrawerContent();
             }
 
             if (_operationFooterContainer != null)
@@ -1170,18 +1394,6 @@ namespace Deucarian.PackageInstaller.Editor
             DrawDetailsPane();
         }
 
-        private void DrawOperationDrawerGui()
-        {
-            EnsureStyles();
-
-            if (!_operationDetailsExpanded)
-            {
-                return;
-            }
-
-            DrawOperationDetailsDrawer();
-        }
-
         private void DrawListViewGui()
         {
             EnsureStyles();
@@ -1242,14 +1454,6 @@ namespace Deucarian.PackageInstaller.Editor
             _detailsStyle = new GUIStyle();
             _detailsStyle.padding = new RectOffset(10, 10, 10, 10);
 
-            _operationDrawerStyle = new GUIStyle();
-            _operationDrawerStyle.padding = new RectOffset(
-                OperationInlinePadding,
-                OperationInlinePadding,
-                OperationBlockPadding,
-                OperationBlockPadding);
-            _operationDrawerStyle.margin = new RectOffset(0, 0, 0, 0);
-
             _sampleRowStyle = new GUIStyle();
             _sampleRowStyle.padding = new RectOffset(10, 10, 8, 8);
             _sampleRowStyle.margin = new RectOffset(0, 0, 2, 6);
@@ -1271,16 +1475,6 @@ namespace Deucarian.PackageInstaller.Editor
             _mutedMiniLabelStyle.fontSize = EditorStyles.wordWrappedMiniLabel.fontSize;
             _mutedMiniLabelStyle.wordWrap = true;
             _mutedMiniLabelStyle.clipping = TextClipping.Overflow;
-
-            _operationDrawerTitleStyle = new GUIStyle(_sectionTitleStyle);
-            _operationDrawerTitleStyle.normal.textColor = _textColor;
-            _operationDrawerTitleStyle.wordWrap = false;
-            _operationDrawerTitleStyle.clipping = TextClipping.Clip;
-
-            _operationDrawerMessageStyle = new GUIStyle(EditorStyles.wordWrappedMiniLabel);
-            _operationDrawerMessageStyle.normal.textColor = _mutedTextColor;
-            _operationDrawerMessageStyle.wordWrap = true;
-            _operationDrawerMessageStyle.clipping = TextClipping.Overflow;
 
             _rowTitleStyle = new GUIStyle(EditorStyles.miniBoldLabel);
             _rowTitleStyle.normal.textColor = _textColor;
@@ -2980,55 +3174,11 @@ namespace Deucarian.PackageInstaller.Editor
                    packageId;
         }
 
-        private void DrawOperationDetailsDrawer()
-        {
-            BeginSurface(
-                _operationDrawerStyle,
-                _operationDrawerBackgroundColor,
-                _operationDrawerBorderColor,
-                GUILayout.ExpandWidth(true));
-
-            DrawOperationSummaryDrawer();
-            EditorGUILayout.EndVertical();
-        }
-
         private string GetOperationFooterSummaryLine(OperationProgressView operation)
         {
             string title = GetOperationBarTitle(operation);
             string subtitle = GetOperationBarSubtitle(operation);
             return string.IsNullOrWhiteSpace(subtitle) ? title : title + " - " + subtitle;
-        }
-
-        private void DrawOperationSummaryDrawer()
-        {
-            EditorGUILayout.LabelField("Last Operation Summary", _operationDrawerTitleStyle, GUILayout.ExpandWidth(true));
-            GUILayout.Space(OperationRowGap);
-            DrawOperationSettingsRow();
-            GUILayout.Space(OperationRowGap);
-
-            _operationDetailsScrollPosition = EditorGUILayout.BeginScrollView(
-                _operationDetailsScrollPosition,
-                false,
-                true,
-                GUIStyle.none,
-                GUI.skin.verticalScrollbar,
-                GUIStyle.none,
-                GUILayout.Height(GetOperationDrawerScrollHeight()),
-                GUILayout.ExpandWidth(true));
-            DrawLastOperationSummaryContent();
-            EditorGUILayout.EndScrollView();
-        }
-
-        private float GetOperationDrawerContainerHeight()
-        {
-            return CalculateOperationDrawerContainerHeight(
-                _operationDetailsExpanded,
-                GetOperationDrawerContentLineCount());
-        }
-
-        private float GetOperationDrawerScrollHeight()
-        {
-            return CalculateOperationDrawerScrollHeight(GetOperationDrawerContentLineCount());
         }
 
         internal static float CalculateOperationDrawerContainerHeightForTests(
@@ -3069,49 +3219,61 @@ namespace Deucarian.PackageInstaller.Editor
 
         private int GetOperationDrawerContentLineCount()
         {
-            int lineCount = 0;
+            return CountOperationMessageLines(GetOperationDrawerReportText());
+        }
 
-            if (!string.IsNullOrWhiteSpace(GetLastOperationSummary()))
+        private string GetOperationDrawerReportText()
+        {
+            List<string> lines = new List<string>();
+            string summary = GetLastOperationSummary();
+
+            if (!string.IsNullOrWhiteSpace(summary))
             {
-                lineCount += CountOperationMessageLines(GetLastOperationSummary());
+                lines.Add(summary.Trim());
             }
 
             IReadOnlyList<string> operationMessages = GetLastOperationMessages();
 
             if (operationMessages != null)
             {
-                lineCount += operationMessages.Sum(CountOperationMessageLines);
+                foreach (string message in operationMessages)
+                {
+                    if (!string.IsNullOrWhiteSpace(message))
+                    {
+                        lines.Add(message.Trim());
+                    }
+                }
             }
 
             IReadOnlyList<PackageInstallProgressItem> progressItems = GetLastProgressItems();
 
             if (progressItems != null)
             {
-                lineCount += progressItems.Count;
-            }
-
-            return Mathf.Max(1, lineCount);
-        }
-
-        private void DrawOperationSettingsRow()
-        {
-            bool verboseConsoleLogging = PackageInstallerLoggingPreferences.VerboseConsoleLogging;
-
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                bool nextVerboseConsoleLogging = EditorGUILayout.ToggleLeft(
-                    new GUIContent(
-                        "Verbose Console Logging",
-                        "Send normal Package Installer info messages to the Unity Console. Warnings and errors are always logged."),
-                    verboseConsoleLogging,
-                    GUILayout.Width(190f));
-                GUILayout.FlexibleSpace();
-
-                if (nextVerboseConsoleLogging != verboseConsoleLogging)
+                foreach (PackageInstallProgressItem item in progressItems)
                 {
-                    PackageInstallerLoggingPreferences.VerboseConsoleLogging = nextVerboseConsoleLogging;
+                    if (item == null ||
+                        (item.State != PackageInstallProgressItemState.Completed &&
+                         item.State != PackageInstallProgressItemState.Failed &&
+                         item.State != PackageInstallProgressItemState.Skipped))
+                    {
+                        continue;
+                    }
+
+                    string itemMessage = string.IsNullOrWhiteSpace(item.Message)
+                        ? item.DisplayName
+                        : item.Message;
+                    string line = GetProgressItemStateLabel(item.State) + ": " + itemMessage;
+
+                    if (!string.IsNullOrWhiteSpace(line))
+                    {
+                        lines.Add(line.Trim());
+                    }
                 }
             }
+
+            return lines.Count == 0
+                ? "No detailed operation report is available."
+                : string.Join("\n", lines.ToArray());
         }
 
         private static int CountOperationMessageLines(string message)
@@ -3128,31 +3290,6 @@ namespace Deucarian.PackageInstaller.Editor
                     .Replace('\r', '\n')
                     .Split('\n')
                     .Length);
-        }
-
-        private void DrawLastOperationSummaryContent()
-        {
-            string summary = GetLastOperationSummary();
-            IReadOnlyList<PackageInstallProgressItem> progressItems = GetLastProgressItems();
-            IReadOnlyList<string> operationMessages = GetLastOperationMessages();
-
-            if (string.IsNullOrWhiteSpace(summary) &&
-                (operationMessages == null || operationMessages.Count == 0) &&
-                (progressItems == null || progressItems.Count == 0))
-            {
-                EditorGUILayout.LabelField(
-                    new GUIContent("No operations have completed yet.", "No operations have completed yet."),
-                    _mutedMiniLabelStyle);
-                return;
-            }
-
-            if (!string.IsNullOrWhiteSpace(summary))
-            {
-                EditorGUILayout.LabelField(new GUIContent(summary, summary), _operationDrawerMessageStyle);
-            }
-
-            DrawOperationMessages(operationMessages, int.MaxValue);
-            DrawProgressItemSummary(progressItems, int.MaxValue);
         }
 
         private OperationProgressView GetCurrentOperationProgress()
@@ -3365,6 +3502,7 @@ namespace Deucarian.PackageInstaller.Editor
             EditorPrefs.SetBool(GetOperationDrawerPreferenceKey(), expanded);
             UpdateViewVisibility();
             _operationDrawerContainer?.MarkDirtyRepaint();
+            RefreshOperationDrawerContent();
             UpdateOperationFooter();
             Repaint();
         }
@@ -3455,82 +3593,6 @@ namespace Deucarian.PackageInstaller.Editor
                     return "Running";
                 default:
                     return "Complete";
-            }
-        }
-
-        private void DrawProgressItemSummary(IReadOnlyList<PackageInstallProgressItem> progressItems, int maxItems)
-        {
-            if (progressItems == null || progressItems.Count == 0)
-            {
-                return;
-            }
-
-            int drawn = 0;
-
-            foreach (PackageInstallProgressItem item in progressItems)
-            {
-                if (item == null ||
-                    (item.State != PackageInstallProgressItemState.Completed &&
-                     item.State != PackageInstallProgressItemState.Failed &&
-                     item.State != PackageInstallProgressItemState.Skipped))
-                {
-                    continue;
-                }
-
-                VisualStatusKind kind = GetProgressItemStatusKind(item.State);
-                string itemMessage = string.IsNullOrWhiteSpace(item.Message)
-                    ? item.DisplayName
-                    : item.Message;
-                DrawColoredLabel(GetProgressItemStateLabel(item.State) + ": " + itemMessage, _operationDrawerMessageStyle, GetStatusColor(kind));
-                drawn++;
-
-                if (drawn >= maxItems)
-                {
-                    break;
-                }
-            }
-        }
-
-        private void DrawOperationMessages(IReadOnlyList<string> operationMessages, int maxItems)
-        {
-            if (operationMessages == null || operationMessages.Count == 0)
-            {
-                return;
-            }
-
-            int drawn = 0;
-
-            foreach (string message in operationMessages)
-            {
-                if (string.IsNullOrWhiteSpace(message))
-                {
-                    continue;
-                }
-
-                DrawColoredLabel(message, _operationDrawerMessageStyle, GetStatusColor(VisualStatusKind.Info));
-                drawn++;
-
-                if (drawn >= maxItems)
-                {
-                    break;
-                }
-            }
-        }
-
-        private static VisualStatusKind GetProgressItemStatusKind(PackageInstallProgressItemState state)
-        {
-            switch (state)
-            {
-                case PackageInstallProgressItemState.Completed:
-                    return VisualStatusKind.Installed;
-                case PackageInstallProgressItemState.Failed:
-                    return VisualStatusKind.Failed;
-                case PackageInstallProgressItemState.Skipped:
-                    return VisualStatusKind.Info;
-                case PackageInstallProgressItemState.Active:
-                    return VisualStatusKind.Busy;
-                default:
-                    return VisualStatusKind.NotInstalled;
             }
         }
 

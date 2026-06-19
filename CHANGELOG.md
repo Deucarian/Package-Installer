@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.51 - 2026-06-20
+
+- Rebuilt the Last Operation Summary drawer as persistent UI Toolkit content so expanded details remain visible and scrollable.
+- Added explicit graph route kinds and obstacle-aware package relationship routing around package cards and category context nodes.
+- Stopped Suite membership routes from using animated direction cues and kept package relationships separate from structural category membership.
+
 ## 1.1.50 - 2026-06-20
 
 - Replaced package ego contextual category placement with deterministic owning/provider/dependent/integration/companion rails.
