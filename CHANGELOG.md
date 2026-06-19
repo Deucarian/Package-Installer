@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.41 - 2026-06-19
+
+- Restyled the expanded Last Operation Summary drawer as a compact Deucarian frosted-glass panel above the fixed footer.
+- Removed the default grey IMGUI scroll background from the operation drawer while keeping summary text fully opaque.
+- Added drawer height regression coverage so small summaries stay compact and long summaries cap with internal scrolling.
+
 ## 1.1.40 - 2026-06-19
 
 - Added cancellable wheel zoom-through hierarchy exits for package, nested category, top-level category, and root graph modes.

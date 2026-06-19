@@ -128,6 +128,26 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void Window_OperationDrawerHeightShrinksToContentAndCapsLargeSummaries()
+        {
+            float collapsedHeight = PackageInstallerWindow.CalculateOperationDrawerContainerHeightForTests(
+                expanded: false,
+                contentLineCount: 20);
+            float smallHeight = PackageInstallerWindow.CalculateOperationDrawerContainerHeightForTests(
+                expanded: true,
+                contentLineCount: 1);
+            float largeHeight = PackageInstallerWindow.CalculateOperationDrawerContainerHeightForTests(
+                expanded: true,
+                contentLineCount: 40);
+
+            Assert.AreEqual(0f, collapsedHeight);
+            Assert.That(smallHeight, Is.GreaterThan(PackageInstallerWindow.OperationFooterHeightForTests));
+            Assert.That(smallHeight, Is.LessThan(100f));
+            Assert.That(largeHeight, Is.GreaterThan(smallHeight));
+            Assert.That(largeHeight, Is.LessThanOrEqualTo(148f));
+        }
+
+        [Test]
         public void Build_MapsRegistryMetadataToNodeTypesAndRelationships()
         {
             PackageDefinition core = CreatePackage("Core", "com.example.core", "Core");

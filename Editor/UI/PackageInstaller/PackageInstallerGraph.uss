@@ -78,15 +78,38 @@
     min-height: 0;
     max-height: 0;
     margin-top: 0;
+    padding-left: 0;
+    padding-right: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    border-left-width: 0;
+    border-right-width: 0;
+    border-top-width: 0;
+    border-bottom-width: 0;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    border-bottom-right-radius: 8px;
+    border-bottom-left-radius: 8px;
+    background-color: rgba(17, 29, 39, 0.00);
     overflow: hidden;
 }
 
 .dpi-operation-drawer--expanded {
     margin-bottom: 6px;
+    border-left-width: 1px;
+    border-right-width: 1px;
+    border-top-width: 1px;
+    border-bottom-width: 1px;
+    border-left-color: rgba(59, 166, 154, 0.30);
+    border-right-color: rgba(59, 166, 154, 0.30);
+    border-top-color: rgba(90, 111, 160, 0.34);
+    border-bottom-color: rgba(59, 166, 154, 0.24);
+    background-color: rgba(17, 29, 39, 0.56);
 }
 
 .dpi-operation-drawer--collapsed {
     margin-bottom: 0;
+    background-color: rgba(17, 29, 39, 0.00);
 }
 
 .dpi-operation-footer {

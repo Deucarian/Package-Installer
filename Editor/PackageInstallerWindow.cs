@@ -20,7 +20,7 @@ namespace Deucarian.PackageInstaller.Editor
     {
         private const string WindowTitle = "Package Installer";
         private const string PackageId = "com.deucarian.package-installer";
-        private const string PackageVersion = "1.1.40";
+        private const string PackageVersion = "1.1.41";
         private const float MinWindowWidth = 820f;
         private const float MinWindowHeight = 650f;
         private const float CompactLayoutWidth = 1180f;
@@ -29,10 +29,10 @@ namespace Deucarian.PackageInstaller.Editor
         private const float SidebarRowMinHeight = 94f;
         private const float SidebarRowMaxHeight = 150f;
         private const float DetailLabelWidth = 118f;
-        private const float OperationDrawerMinHeight = 24f;
-        private const float OperationDrawerMaxHeight = 86f;
-        private const float OperationDrawerExpandedBaseHeight = 54f;
-        private const float OperationDrawerExpandedMaxHeight = 150f;
+        private const float OperationDrawerMinHeight = 22f;
+        private const float OperationDrawerMaxHeight = 76f;
+        private const float OperationDrawerExpandedBaseHeight = 62f;
+        private const float OperationDrawerExpandedMaxHeight = 148f;
         private const float OperationFooterHeight = 34f;
         internal const string OperationFooterRowName = "package-installer-operation-footer";
         internal const string OperationFooterStatusGroupName = "package-installer-operation-footer-status";
@@ -174,12 +174,15 @@ namespace Deucarian.PackageInstaller.Editor
         private Color _rowBackgroundColor;
         private Color _rowHoverColor;
         private Color _rowSelectedColor;
+        private Color _operationDrawerBackgroundColor;
+        private Color _operationDrawerBorderColor;
         private Color _textColor;
         private Color _mutedTextColor;
 
         private GUIStyle _windowStyle;
         private GUIStyle _sidebarStyle;
         private GUIStyle _detailsStyle;
+        private GUIStyle _operationDrawerStyle;
         private GUIStyle _sampleRowStyle;
         private GUIStyle _titleStyle;
         private GUIStyle _subtitleStyle;
@@ -212,6 +215,8 @@ namespace Deucarian.PackageInstaller.Editor
         internal static string PackageIdForTests => PackageId;
 
         internal static string PackageVersionForTests => PackageVersion;
+
+        internal static float OperationFooterHeightForTests => OperationFooterHeight;
 
         internal static PackageInstallerResponsiveMode ResolveResponsiveModeForTests(float width)
         {
@@ -1136,6 +1141,10 @@ namespace Deucarian.PackageInstaller.Editor
             _rowBackgroundColor = new Color(32f / 255f, 47f / 255f, 56f / 255f, 0.46f);
             _rowHoverColor = new Color(32f / 255f, 47f / 255f, 56f / 255f, 0.62f);
             _rowSelectedColor = new Color(35f / 255f, 62f / 255f, 66f / 255f, 0.58f);
+            _operationDrawerBackgroundColor = DeucarianEditorVisualShell.NestedSurface;
+            _operationDrawerBackgroundColor.a = 0.52f;
+            _operationDrawerBorderColor = DeucarianEditorVisualShell.InteractiveBorder;
+            _operationDrawerBorderColor.a = 0.38f;
             _textColor = DeucarianEditorVisualShell.Text;
             _mutedTextColor = DeucarianEditorVisualShell.MutedText;
 
@@ -1147,6 +1156,10 @@ namespace Deucarian.PackageInstaller.Editor
 
             _detailsStyle = new GUIStyle();
             _detailsStyle.padding = new RectOffset(10, 10, 10, 10);
+
+            _operationDrawerStyle = new GUIStyle();
+            _operationDrawerStyle.padding = new RectOffset(12, 12, 9, 8);
+            _operationDrawerStyle.margin = new RectOffset(0, 0, 0, 0);
 
             _sampleRowStyle = new GUIStyle();
             _sampleRowStyle.padding = new RectOffset(10, 10, 8, 8);
@@ -2867,9 +2880,9 @@ namespace Deucarian.PackageInstaller.Editor
         private void DrawOperationDetailsDrawer()
         {
             BeginSurface(
-                DeucarianEditorStyles.SectionBox,
-                _headerPanelBackgroundColor,
-                _panelBorderColor,
+                _operationDrawerStyle,
+                _operationDrawerBackgroundColor,
+                _operationDrawerBorderColor,
                 GUILayout.ExpandWidth(true));
 
             DrawOperationSummaryDrawer();
@@ -2890,14 +2903,21 @@ namespace Deucarian.PackageInstaller.Editor
                 EditorGUILayout.LabelField("Last Operation Summary", _sectionTitleStyle, GUILayout.ExpandWidth(true));
                 bool hasSummary = HasLastOperationDetails();
                 VisualStatusKind summaryKind = hasSummary ? GetLastSummaryStatusKind(GetLastProgressItems()) : VisualStatusKind.Info;
-                DrawStatusBadge(hasSummary ? GetLastSummaryStatusLabel(summaryKind) : "Idle", summaryKind, GUILayout.Width(118f));
+                DrawStatusBadge(hasSummary ? GetLastSummaryStatusLabel(summaryKind) : "Idle", summaryKind, GUILayout.Width(112f));
             }
 
             DrawOperationSettingsRow();
-            GUILayout.Space(4f);
+            GUILayout.Space(3f);
+            DrawHorizontalSeparator();
+            GUILayout.Space(3f);
 
             _operationDetailsScrollPosition = EditorGUILayout.BeginScrollView(
                 _operationDetailsScrollPosition,
+                false,
+                true,
+                GUIStyle.none,
+                GUI.skin.verticalScrollbar,
+                GUIStyle.none,
                 GUILayout.Height(GetOperationDrawerScrollHeight()),
                 GUILayout.ExpandWidth(true));
             DrawLastOperationSummaryContent();
@@ -2906,21 +2926,42 @@ namespace Deucarian.PackageInstaller.Editor
 
         private float GetOperationDrawerContainerHeight()
         {
-            if (!_operationDetailsExpanded)
+            return CalculateOperationDrawerContainerHeight(
+                _operationDetailsExpanded,
+                GetOperationDrawerContentLineCount());
+        }
+
+        private float GetOperationDrawerScrollHeight()
+        {
+            return CalculateOperationDrawerScrollHeight(GetOperationDrawerContentLineCount());
+        }
+
+        internal static float CalculateOperationDrawerContainerHeightForTests(
+            bool expanded,
+            int contentLineCount)
+        {
+            return CalculateOperationDrawerContainerHeight(expanded, contentLineCount);
+        }
+
+        private static float CalculateOperationDrawerContainerHeight(
+            bool expanded,
+            int contentLineCount)
+        {
+            if (!expanded)
             {
                 return 0f;
             }
 
             return Mathf.Min(
                 OperationDrawerExpandedMaxHeight,
-                OperationDrawerExpandedBaseHeight + GetOperationDrawerScrollHeight());
+                OperationDrawerExpandedBaseHeight + CalculateOperationDrawerScrollHeight(contentLineCount));
         }
 
-        private float GetOperationDrawerScrollHeight()
+        private static float CalculateOperationDrawerScrollHeight(int contentLineCount)
         {
             const float lineHeight = 18f;
-            const float verticalPadding = 4f;
-            int lineCount = GetOperationDrawerContentLineCount();
+            const float verticalPadding = 3f;
+            int lineCount = Mathf.Max(1, contentLineCount);
             float contentHeight = lineCount * lineHeight + verticalPadding;
 
             return Mathf.Clamp(contentHeight, OperationDrawerMinHeight, OperationDrawerMaxHeight);
@@ -2960,16 +3001,21 @@ namespace Deucarian.PackageInstaller.Editor
         private void DrawOperationSettingsRow()
         {
             bool verboseConsoleLogging = PackageInstallerLoggingPreferences.VerboseConsoleLogging;
-            bool nextVerboseConsoleLogging = EditorGUILayout.ToggleLeft(
-                new GUIContent(
-                    "Verbose Console Logging",
-                    "Send normal Package Installer info messages to the Unity Console. Warnings and errors are always logged."),
-                verboseConsoleLogging,
-                GUILayout.Width(190f));
 
-            if (nextVerboseConsoleLogging != verboseConsoleLogging)
+            using (new EditorGUILayout.HorizontalScope())
             {
-                PackageInstallerLoggingPreferences.VerboseConsoleLogging = nextVerboseConsoleLogging;
+                bool nextVerboseConsoleLogging = EditorGUILayout.ToggleLeft(
+                    new GUIContent(
+                        "Verbose Console Logging",
+                        "Send normal Package Installer info messages to the Unity Console. Warnings and errors are always logged."),
+                    verboseConsoleLogging,
+                    GUILayout.Width(190f));
+                GUILayout.FlexibleSpace();
+
+                if (nextVerboseConsoleLogging != verboseConsoleLogging)
+                {
+                    PackageInstallerLoggingPreferences.VerboseConsoleLogging = nextVerboseConsoleLogging;
+                }
             }
         }
 
