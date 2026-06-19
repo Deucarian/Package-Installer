@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.45 - 2026-06-19
+
+- Reworked hierarchy preview frames to derive category hub anchors, rendered orbits, child nodes, and spokes from one animated group center/radius state.
+- Kept zoom-enter previews locked to the captured hovered category so moving layout frames do not cancel the intended navigation.
+- Added regression coverage for animated-anchor camera evaluation and mid-transition child projection onto the visible category orbit.
+
 ## 1.1.44 - 2026-06-19
 
 - Forced category orbit guides to use one scalar world-space radius and derive square render rects from it.

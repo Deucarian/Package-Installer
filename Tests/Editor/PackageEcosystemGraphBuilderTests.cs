@@ -1200,6 +1200,79 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void GraphTransition_AnimatedAnchorCameraUsesRenderedAnchorWorld()
+        {
+            PackageGraphCameraState source = new PackageGraphCameraState(new Vector2(40f, 24f), 0.72f);
+            PackageGraphCameraState target = new PackageGraphCameraState(new Vector2(-180f, 90f), 1.18f);
+            Vector2 sourceAnchorScreen = new Vector2(126.4f, 81.6f);
+            Vector2 targetAnchorScreen = new Vector2(244.8f, 349.6f);
+            Vector2 animatedAnchorWorld = new Vector2(264f, 148f);
+            float eased = PackageGraphTransition.SmoothStep(0.5f);
+
+            PackageGraphCameraState middle = PackageGraphTransition.EvaluateAnchoredCameraFromAnimatedAnchor(
+                source,
+                target,
+                animatedAnchorWorld,
+                sourceAnchorScreen,
+                targetAnchorScreen,
+                0.5f);
+
+            Vector2 expectedAnchorScreen = Vector2.Lerp(sourceAnchorScreen, targetAnchorScreen, eased);
+            Assert.That(middle.Zoom, Is.EqualTo(Mathf.Lerp(source.Zoom, target.Zoom, eased)).Within(0.001f));
+            AssertVectorClose(expectedAnchorScreen, middle.WorldToViewport(animatedAnchorWorld), 0.001f);
+        }
+
+        [Test]
+        public void GraphProjection_KeepsPreviewChildrenOnAnimatedGroupOrbit()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+            PackageGraphLayout layout = new PackageGraphLayout();
+            PackageGraphLayoutResult source = layout.Calculate(
+                graph,
+                PackageGraphLayoutMode.Overview,
+                string.Empty,
+                string.Empty,
+                Vector2.zero,
+                PackageGraphNodePresentationLevel.OverviewCompact);
+            PackageGraphLayoutResult target = layout.Calculate(
+                graph,
+                PackageGraphLayoutMode.GroupFocus,
+                string.Empty,
+                "integrations",
+                Vector2.zero,
+                PackageGraphNodePresentationLevel.Standard);
+            float frameProgress = 0.5f;
+            Dictionary<string, Rect> nodeRects = CreateInterpolatedNodeRects(source, target, frameProgress);
+            Dictionary<string, Rect> groupRects = CreateInterpolatedGroupRects(source, target, frameProgress);
+            Dictionary<string, Vector2> groupCenters = CreateInterpolatedGroupCenters(source, target, frameProgress);
+            Dictionary<string, float> groupRadii = CreateInterpolatedGroupRadii(source, target, frameProgress);
+
+            PackageGraphCanvas.ProjectOrbitalChildrenForTests(
+                graph,
+                target,
+                nodeRects,
+                groupRects,
+                groupCenters,
+                groupRadii);
+
+            Vector2 integrationCenter = groupCenters["integrations"];
+            float integrationRadius = groupRadii["integrations"];
+            Assert.That(integrationRadius, Is.GreaterThan(0f));
+
+            foreach (PackageGraphNode node in graph.Nodes.Where(node =>
+                         node != null &&
+                         string.Equals(node.GroupId, "integrations", StringComparison.OrdinalIgnoreCase) &&
+                         target.NodeRects.ContainsKey(node.PackageId)))
+            {
+                Assert.That(
+                    Vector2.Distance(nodeRects[node.PackageId].center, integrationCenter),
+                    Is.EqualTo(integrationRadius).Within(0.5f),
+                    node.DisplayName);
+            }
+        }
+
+        [Test]
         public void GraphHierarchyExitController_AccumulatesOnlyAtMinimumAndCommitsOnce()
         {
             PackageGraphHierarchyExitController controller = new PackageGraphHierarchyExitController();
@@ -2573,6 +2646,104 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                         "com.deucarian.object-selection.core-state-integration"
                     })
             };
+        }
+
+        private static Dictionary<string, Rect> CreateInterpolatedNodeRects(
+            PackageGraphLayoutResult source,
+            PackageGraphLayoutResult target,
+            float progress)
+        {
+            Dictionary<string, Rect> result = new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (KeyValuePair<string, Rect> targetRect in target.NodeRects)
+            {
+                Rect start = source.NodeRects.TryGetValue(targetRect.Key, out Rect sourceRect)
+                    ? sourceRect
+                    : CenterRectOnForTests(targetRect.Value, source.ActiveCenter);
+                result[targetRect.Key] = LerpRectForTests(start, targetRect.Value, progress);
+            }
+
+            return result;
+        }
+
+        private static Dictionary<string, Rect> CreateInterpolatedGroupRects(
+            PackageGraphLayoutResult source,
+            PackageGraphLayoutResult target,
+            float progress)
+        {
+            Dictionary<string, Rect> result = new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (PackageGraphGroupLayoutNode targetGroup in target.GroupNodes)
+            {
+                PackageGraphGroupLayoutNode sourceGroup = FindGroupForTests(source, targetGroup.GroupId);
+                Rect start = sourceGroup != null
+                    ? sourceGroup.Rect
+                    : CenterRectOnForTests(targetGroup.Rect, source.ActiveCenter);
+                result[targetGroup.GroupId] = LerpRectForTests(start, targetGroup.Rect, progress);
+            }
+
+            return result;
+        }
+
+        private static Dictionary<string, Vector2> CreateInterpolatedGroupCenters(
+            PackageGraphLayoutResult source,
+            PackageGraphLayoutResult target,
+            float progress)
+        {
+            Dictionary<string, Vector2> result = new Dictionary<string, Vector2>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (PackageGraphGroupLayoutNode targetGroup in target.GroupNodes)
+            {
+                PackageGraphGroupLayoutNode sourceGroup = FindGroupForTests(source, targetGroup.GroupId);
+                Vector2 start = sourceGroup != null ? sourceGroup.HubCenter : source.ActiveCenter;
+                result[targetGroup.GroupId] = Vector2.Lerp(start, targetGroup.HubCenter, progress);
+            }
+
+            return result;
+        }
+
+        private static Dictionary<string, float> CreateInterpolatedGroupRadii(
+            PackageGraphLayoutResult source,
+            PackageGraphLayoutResult target,
+            float progress)
+        {
+            Dictionary<string, float> result = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (PackageGraphGroupLayoutNode targetGroup in target.GroupNodes)
+            {
+                PackageGraphGroupLayoutNode sourceGroup = FindGroupForTests(source, targetGroup.GroupId);
+                float start = sourceGroup != null ? sourceGroup.OrbitRadius : 0f;
+                result[targetGroup.GroupId] = Mathf.Lerp(start, targetGroup.OrbitRadius, progress);
+            }
+
+            return result;
+        }
+
+        private static PackageGraphGroupLayoutNode FindGroupForTests(
+            PackageGraphLayoutResult layout,
+            string groupId)
+        {
+            return layout.GroupNodes.FirstOrDefault(groupNode =>
+                groupNode != null &&
+                string.Equals(groupNode.GroupId, groupId, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static Rect LerpRectForTests(Rect start, Rect end, float progress)
+        {
+            return new Rect(
+                Mathf.Lerp(start.x, end.x, progress),
+                Mathf.Lerp(start.y, end.y, progress),
+                Mathf.Lerp(start.width, end.width, progress),
+                Mathf.Lerp(start.height, end.height, progress));
+        }
+
+        private static Rect CenterRectOnForTests(Rect rect, Vector2 center)
+        {
+            return new Rect(
+                center.x - rect.width * 0.5f,
+                center.y - rect.height * 0.5f,
+                rect.width,
+                rect.height);
         }
 
         private static void AssertEdgeVisible(

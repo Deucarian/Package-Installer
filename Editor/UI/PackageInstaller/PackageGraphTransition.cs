@@ -98,6 +98,32 @@ namespace Deucarian.PackageInstaller.Editor
             return new PackageGraphCameraState(anchorScreen - anchorWorld * zoom, zoom);
         }
 
+        public static PackageGraphCameraState EvaluateAnchoredCameraFromAnimatedAnchor(
+            PackageGraphCameraState sourceCamera,
+            PackageGraphCameraState targetCamera,
+            Vector2 animatedAnchorWorld,
+            Vector2 sourceAnchorScreen,
+            Vector2 targetAnchorScreen,
+            float normalizedTime)
+        {
+            float t = Mathf.Clamp01(normalizedTime);
+
+            if (t <= 0f)
+            {
+                return sourceCamera;
+            }
+
+            if (t >= 1f)
+            {
+                return targetCamera;
+            }
+
+            float eased = SmoothStep(t);
+            float zoom = Mathf.Lerp(sourceCamera.Zoom, targetCamera.Zoom, eased);
+            Vector2 anchorScreen = Vector2.Lerp(sourceAnchorScreen, targetAnchorScreen, eased);
+            return new PackageGraphCameraState(anchorScreen - animatedAnchorWorld * zoom, zoom);
+        }
+
         public static float SmoothStep(float normalizedTime)
         {
             float t = Mathf.Clamp01(normalizedTime);

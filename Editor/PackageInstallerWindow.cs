@@ -20,7 +20,7 @@ namespace Deucarian.PackageInstaller.Editor
     {
         private const string WindowTitle = "Package Installer";
         private const string PackageId = "com.deucarian.package-installer";
-        private const string PackageVersion = "1.1.44";
+        private const string PackageVersion = "1.1.45";
         private const float MinWindowWidth = 820f;
         private const float MinWindowHeight = 650f;
         private const float CompactLayoutWidth = 1180f;
