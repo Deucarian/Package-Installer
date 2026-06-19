@@ -5,6 +5,7 @@
 - Polished Ecosystem Graph navigation with empty-canvas left-drag panning and context-aware right-click menus.
 - Reduced overview package footprints and dynamic zoom-out limits so Fit can frame dense hierarchy views.
 - Clarified structural category display, package kind terminology, and persistent membership cues in graph focus modes.
+- Tightened the persistent installer footer into one centered row with stable status, summary, details toggle, and version alignment.
 
 ## 1.1.35 - 2026-06-19
 

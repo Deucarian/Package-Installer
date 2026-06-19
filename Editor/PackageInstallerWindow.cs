@@ -23,7 +23,10 @@ namespace Deucarian.PackageInstaller.Editor
         private const float OperationDrawerMaxHeight = 86f;
         private const float OperationDrawerExpandedBaseHeight = 54f;
         private const float OperationDrawerExpandedMaxHeight = 150f;
-        private const float OperationFooterHeight = 40f;
+        private const float OperationFooterHeight = 34f;
+        private const float OperationFooterControlHeight = 24f;
+        private const float OperationFooterHorizontalPadding = 10f;
+        private const float OperationFooterGap = 8f;
         private const string ChannelPreferencePrefix = "Deucarian.PackageInstaller.SelectedChannel.";
         private const string AdvancedFoldoutPreferencePrefix = "Deucarian.PackageInstaller.AdvancedFoldout.";
         private const string CategoryFoldoutPreferencePrefix = "Deucarian.PackageInstaller.CategoryFoldout.";
@@ -162,7 +165,10 @@ namespace Deucarian.PackageInstaller.Editor
         private GUIStyle _miniLabelStyle;
         private GUIStyle _mutedMiniLabelStyle;
         private GUIStyle _operationLineStyle;
+        private GUIStyle _footerStatusIconStyle;
+        private GUIStyle _footerStatusTextStyle;
         private GUIStyle _footerVersionStyle;
+        private GUIStyle _footerButtonStyle;
         private GUIStyle _rowTitleStyle;
         private GUIStyle _rowSubLabelStyle;
         private GUIStyle _rowStatusStyle;
@@ -784,15 +790,37 @@ namespace Deucarian.PackageInstaller.Editor
             _mutedMiniLabelStyle.fontSize = EditorStyles.wordWrappedMiniLabel.fontSize;
 
             _operationLineStyle = new GUIStyle(EditorStyles.miniLabel);
-            _operationLineStyle.normal.textColor = _textColor;
+            _operationLineStyle.normal.textColor = _mutedTextColor;
+            _operationLineStyle.alignment = TextAnchor.MiddleLeft;
             _operationLineStyle.clipping = TextClipping.Clip;
             _operationLineStyle.wordWrap = false;
+            _operationLineStyle.margin = new RectOffset(0, 0, 0, 0);
+            _operationLineStyle.padding = new RectOffset(0, 0, 0, 0);
+
+            _footerStatusIconStyle = new GUIStyle(EditorStyles.miniBoldLabel);
+            _footerStatusIconStyle.alignment = TextAnchor.MiddleCenter;
+            _footerStatusIconStyle.fontSize = 11;
+            _footerStatusIconStyle.normal.textColor = _textColor;
+            _footerStatusIconStyle.clipping = TextClipping.Clip;
+            _footerStatusIconStyle.wordWrap = false;
+            _footerStatusIconStyle.margin = new RectOffset(0, 0, 0, 0);
+            _footerStatusIconStyle.padding = new RectOffset(0, 0, 0, 0);
+
+            _footerStatusTextStyle = new GUIStyle(EditorStyles.miniLabel);
+            _footerStatusTextStyle.normal.textColor = _textColor;
+            _footerStatusTextStyle.alignment = TextAnchor.MiddleLeft;
+            _footerStatusTextStyle.clipping = TextClipping.Clip;
+            _footerStatusTextStyle.wordWrap = false;
+            _footerStatusTextStyle.margin = new RectOffset(0, 0, 0, 0);
+            _footerStatusTextStyle.padding = new RectOffset(0, 0, 0, 0);
 
             _footerVersionStyle = new GUIStyle(DeucarianEditorStyles.FooterVersionText);
             _footerVersionStyle.alignment = TextAnchor.MiddleRight;
             _footerVersionStyle.margin = new RectOffset(0, 0, 0, 0);
+            _footerVersionStyle.padding = new RectOffset(0, 0, 0, 0);
             _footerVersionStyle.wordWrap = false;
             _footerVersionStyle.clipping = TextClipping.Clip;
+            _footerVersionStyle.normal.textColor = _textColor;
 
             _rowTitleStyle = new GUIStyle(EditorStyles.miniBoldLabel);
             _rowTitleStyle.normal.textColor = _textColor;
@@ -827,6 +855,12 @@ namespace Deucarian.PackageInstaller.Editor
 
             _secondaryButtonStyle = new GUIStyle(DeucarianEditorStyles.ToolbarButton);
             _secondaryButtonStyle.fixedHeight = 24f;
+
+            _footerButtonStyle = new GUIStyle(DeucarianEditorStyles.ToolbarButton);
+            _footerButtonStyle.alignment = TextAnchor.MiddleCenter;
+            _footerButtonStyle.fixedHeight = 22f;
+            _footerButtonStyle.margin = new RectOffset(0, 0, 0, 0);
+            _footerButtonStyle.padding = new RectOffset(8, 8, 1, 2);
         }
 
         private void DrawWindowBackground()
@@ -2506,68 +2540,99 @@ namespace Deucarian.PackageInstaller.Editor
         private void DrawOperationFooter()
         {
             OperationProgressView operation = GetCurrentOperationProgress();
-            BeginSurface(
-                DeucarianEditorStyles.SectionBox,
-                _headerPanelBackgroundColor,
-                _panelBorderColor,
+            Rect footerRect = GUILayoutUtility.GetRect(
+                1f,
+                OperationFooterHeight,
                 GUILayout.ExpandWidth(true),
                 GUILayout.Height(OperationFooterHeight));
+            DrawSurface(footerRect, _headerPanelBackgroundColor, _panelBorderColor);
 
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                DrawOperationFooterSummary(operation);
-
-                GUILayout.Space(8f);
-
-                if (GUILayout.Button(
-                        _operationDetailsExpanded ? "Hide Details" : "Show Details",
-                        _secondaryButtonStyle,
-                        GUILayout.Width(96f),
-                        GUILayout.Height(22f)))
-                {
-                    SetOperationDetailsExpanded(!_operationDetailsExpanded);
-                }
-
-                GUILayout.Space(12f);
-
-                GUILayout.Label(
-                    GetFooterVersionText(),
-                    _footerVersionStyle,
-                    GUILayout.Width(244f),
-                    GUILayout.Height(22f));
-            }
-
-            EditorGUILayout.EndVertical();
-        }
-
-        private void DrawOperationFooterSummary(OperationProgressView operation)
-        {
             string stateLabel = GetGlobalOperationStateLabel(operation);
             VisualStatusKind stateKind = GetGlobalOperationStatusKind(operation);
+            string summaryLine = GetOperationFooterSummaryLine(operation);
+            string footerVersionText = GetFooterVersionText();
+            string detailsButtonText = _operationDetailsExpanded ? "Hide Details" : "Show Details";
+
+            Rect contentRect = new Rect(
+                footerRect.x + OperationFooterHorizontalPadding,
+                footerRect.y + Mathf.Floor((footerRect.height - OperationFooterControlHeight) * 0.5f),
+                Mathf.Max(0f, footerRect.width - OperationFooterHorizontalPadding * 2f),
+                OperationFooterControlHeight);
+
+            const float statusIconWidth = 16f;
+            const float statusIconLabelGap = 5f;
+            const float detailsButtonWidth = 96f;
+            const float detailsButtonHeight = 22f;
+
+            float statusLabelWidth = Mathf.Ceil(_footerStatusTextStyle.CalcSize(new GUIContent(stateLabel)).x);
+            float statusWidth = Mathf.Clamp(
+                statusIconWidth + statusIconLabelGap + statusLabelWidth,
+                72f,
+                128f);
+
+            float versionWidth = Mathf.Clamp(
+                Mathf.Ceil(_footerVersionStyle.CalcSize(new GUIContent(footerVersionText)).x) + 2f,
+                238f,
+                292f);
+
+            Rect versionRect = new Rect(
+                contentRect.xMax - versionWidth,
+                contentRect.y,
+                versionWidth,
+                contentRect.height);
+            Rect detailsButtonRect = new Rect(
+                versionRect.x - OperationFooterGap - detailsButtonWidth,
+                contentRect.y + Mathf.Floor((contentRect.height - detailsButtonHeight) * 0.5f),
+                detailsButtonWidth,
+                detailsButtonHeight);
+            Rect statusRect = new Rect(
+                contentRect.x,
+                contentRect.y,
+                statusWidth,
+                contentRect.height);
+            Rect summaryRect = new Rect(
+                statusRect.xMax + OperationFooterGap,
+                contentRect.y,
+                Mathf.Max(0f, detailsButtonRect.x - OperationFooterGap - (statusRect.xMax + OperationFooterGap)),
+                contentRect.height);
+
+            DrawFooterStatus(statusRect, stateLabel, stateKind);
+            DrawTruncatedRectLabel(summaryRect, summaryLine, _operationLineStyle, _mutedTextColor);
+
+            if (GUI.Button(detailsButtonRect, detailsButtonText, _footerButtonStyle))
+            {
+                SetOperationDetailsExpanded(!_operationDetailsExpanded);
+            }
+
+            DrawTruncatedRectLabel(versionRect, footerVersionText, _footerVersionStyle, _textColor);
+        }
+
+        private void DrawFooterStatus(Rect rect, string text, VisualStatusKind statusKind)
+        {
+            Rect iconRect = new Rect(
+                rect.x,
+                rect.y + Mathf.Floor((rect.height - 18f) * 0.5f),
+                16f,
+                18f);
+            Rect labelRect = new Rect(
+                iconRect.xMax + 5f,
+                rect.y,
+                Mathf.Max(0f, rect.width - 21f),
+                rect.height);
+
+            DrawColoredRectLabel(
+                iconRect,
+                new GUIContent(GetStatusMarker(statusKind), text),
+                _footerStatusIconStyle,
+                GetStatusColor(statusKind));
+            DrawTruncatedRectLabel(labelRect, text, _footerStatusTextStyle, _textColor);
+        }
+
+        private string GetOperationFooterSummaryLine(OperationProgressView operation)
+        {
             string title = GetOperationBarTitle(operation);
             string subtitle = GetOperationBarSubtitle(operation);
-
-            DrawStatusBadge(stateLabel, stateKind, GUILayout.Width(142f));
-            GUILayout.Space(8f);
-
-            string line = string.IsNullOrWhiteSpace(subtitle) ? title : title + " - " + subtitle;
-            EditorGUILayout.LabelField(
-                new GUIContent(line, line),
-                _operationLineStyle,
-                GUILayout.ExpandWidth(true),
-                GUILayout.Height(22f));
-
-            if (operation != null)
-            {
-                GUILayout.Space(8f);
-                float progress = GetOperationProgress(operation);
-                Rect progressRect = GUILayoutUtility.GetRect(
-                    120f,
-                    18f,
-                    GUILayout.Width(120f),
-                    GUILayout.Height(18f));
-                EditorGUI.ProgressBar(progressRect, progress, Mathf.RoundToInt(progress * 100f) + "%");
-            }
+            return string.IsNullOrWhiteSpace(subtitle) ? title : title + " - " + subtitle;
         }
 
         private void DrawOperationSummaryDrawer()
@@ -3223,6 +3288,64 @@ namespace Deucarian.PackageInstaller.Editor
             GUI.contentColor = color;
             EditorGUILayout.LabelField(new GUIContent(text, text), style, options);
             GUI.contentColor = previousColor;
+        }
+
+        private static void DrawTruncatedRectLabel(Rect rect, string text, GUIStyle style, Color color)
+        {
+            if (rect.width <= 0f || rect.height <= 0f)
+            {
+                return;
+            }
+
+            string safeText = text ?? string.Empty;
+            string displayText = GetEllipsizedText(safeText, style, rect.width);
+            Color previousColor = GUI.contentColor;
+            GUI.contentColor = color;
+            GUI.Label(rect, new GUIContent(displayText, safeText), style ?? EditorStyles.label);
+            GUI.contentColor = previousColor;
+        }
+
+        private static string GetEllipsizedText(string text, GUIStyle style, float maxWidth)
+        {
+            if (string.IsNullOrEmpty(text) || maxWidth <= 0f)
+            {
+                return string.Empty;
+            }
+
+            GUIStyle resolvedStyle = style ?? EditorStyles.label;
+            GUIContent content = new GUIContent(text);
+            if (resolvedStyle.CalcSize(content).x <= maxWidth)
+            {
+                return text;
+            }
+
+            const string ellipsis = "...";
+            if (resolvedStyle.CalcSize(new GUIContent(ellipsis)).x > maxWidth)
+            {
+                return string.Empty;
+            }
+
+            int low = 0;
+            int high = text.Length;
+            int best = 0;
+
+            while (low <= high)
+            {
+                int mid = (low + high) / 2;
+                string candidate = text.Substring(0, mid).TrimEnd() + ellipsis;
+
+                if (resolvedStyle.CalcSize(new GUIContent(candidate)).x <= maxWidth)
+                {
+                    best = mid;
+                    low = mid + 1;
+                }
+                else
+                {
+                    high = mid - 1;
+                }
+            }
+
+            return text.Substring(0, best).TrimEnd() + ellipsis;
         }
 
         private void DrawColoredRectLabel(Rect rect, string text, GUIStyle style, Color color)
