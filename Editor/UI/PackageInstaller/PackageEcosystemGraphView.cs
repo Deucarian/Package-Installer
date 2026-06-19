@@ -36,6 +36,8 @@ namespace Deucarian.PackageInstaller.Editor
         private readonly Button _emptyStateActionButton;
         private readonly PackageGraphHierarchyExitController _hierarchyExitController =
             new PackageGraphHierarchyExitController();
+        private readonly PackageGraphHierarchyExitController _hierarchyEnterController =
+            new PackageGraphHierarchyExitController();
         private PackageVisibilityFilterCounts _filterCounts =
             new PackageVisibilityFilterCounts(0, 0, 0, 0);
         private PackageGraphModel _currentGraph;
@@ -43,6 +45,8 @@ namespace Deucarian.PackageInstaller.Editor
         private PackageGraphSearchState _searchState = PackageGraphSearchState.Empty;
         private string _activeTopLevelGroupId = string.Empty;
         private string _hoveredTopLevelGroupId = string.Empty;
+        private string _hierarchyEnterStableGroupId = string.Empty;
+        private double _hierarchyEnterStableSince = double.NegativeInfinity;
         private PackageGraphHierarchyExitPreview _hierarchyExitPreview;
         private int _hiddenRelatedCount;
         private bool _hasAppliedGraphFrame;
@@ -122,6 +126,7 @@ namespace Deucarian.PackageInstaller.Editor
             _viewport.CameraTransitionCompleted += zoom => _canvas.SetViewportZoom(zoom);
             _viewport.ContextMenuRequested += ShowContextMenu;
             _viewport.HierarchyExitWheel += HandleHierarchyExitWheel;
+            _viewport.HierarchyEnterWheel += HandleHierarchyEnterWheel;
             _viewport.SetContent(_canvas);
 
             VisualElement header = new VisualElement();
@@ -696,6 +701,256 @@ namespace Deucarian.PackageInstaller.Editor
             return true;
         }
 
+        private bool HandleHierarchyEnterWheel(PackageGraphHierarchyEnterWheelEvent evt)
+        {
+            if (evt == null)
+            {
+                return false;
+            }
+
+            double currentTime = EditorApplication.timeSinceStartup;
+            string hoverGroupId = _canvas.DirectHoverGroupId;
+            bool hadPreview = _hierarchyExitPreview != null && _hierarchyEnterController.IsActive;
+
+            if (!UpdateHierarchyEnterStableHover(hoverGroupId, currentTime, hadPreview))
+            {
+                if (hadPreview)
+                {
+                    ResetHierarchyExitPreview();
+                    return true;
+                }
+
+                return false;
+            }
+
+            bool hoverStable = currentTime - _hierarchyEnterStableSince >= 0.12d;
+            bool canEnter = hadPreview ||
+                            (hoverStable &&
+                             !_viewport.IsCameraTransitionActive &&
+                             !_canvas.InteractionsLocked &&
+                             TryBeginHierarchyEnterPreview(hoverGroupId));
+            PackageGraphHierarchyExitResult result = _hierarchyEnterController.ApplyWheel(
+                -evt.WheelDeltaY,
+                canEnter,
+                evt.AtNormalMaximum,
+                currentTime);
+
+            if (!result.Consumed)
+            {
+                if (!hadPreview && _hierarchyExitPreview != null)
+                {
+                    ResetHierarchyExitPreview();
+                }
+
+                return false;
+            }
+
+            if (result.Cancelled)
+            {
+                ResetHierarchyExitPreview();
+                return true;
+            }
+
+            if (result.Committed)
+            {
+                ApplyHierarchyExitPreview(1f);
+                CommitHierarchyEnterPreview();
+                return true;
+            }
+
+            ApplyHierarchyExitPreview(result.Progress);
+            return true;
+        }
+
+        private bool UpdateHierarchyEnterStableHover(
+            string hoverGroupId,
+            double currentTime,
+            bool hadPreview)
+        {
+            if (string.IsNullOrWhiteSpace(hoverGroupId))
+            {
+                _hierarchyEnterStableGroupId = string.Empty;
+                _hierarchyEnterStableSince = double.NegativeInfinity;
+                return false;
+            }
+
+            if (hadPreview &&
+                _hierarchyExitPreview != null &&
+                !string.Equals(
+                    _hierarchyExitPreview.Target.GroupId,
+                    hoverGroupId,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                _hierarchyEnterStableGroupId = hoverGroupId;
+                _hierarchyEnterStableSince = currentTime;
+                return false;
+            }
+
+            if (!string.Equals(_hierarchyEnterStableGroupId, hoverGroupId, StringComparison.OrdinalIgnoreCase))
+            {
+                _hierarchyEnterStableGroupId = hoverGroupId;
+                _hierarchyEnterStableSince = currentTime;
+                _hierarchyEnterController.Cancel();
+            }
+
+            return true;
+        }
+
+        private bool TryBeginHierarchyEnterPreview(string groupId)
+        {
+            if (_hierarchyExitPreview != null)
+            {
+                return true;
+            }
+
+            if (!TryCreateHierarchyEnterTarget(groupId, out PackageGraphHierarchyExitTarget target))
+            {
+                return false;
+            }
+
+            if (!_canvas.TryGetTransitionAnchorCenter(target.Anchor, out Vector2 sourceAnchorWorld))
+            {
+                sourceAnchorWorld = _canvas.GetActiveCenter();
+            }
+
+            if (!TryGetLayoutAnchorCenter(target.Layout, target.Anchor, out Vector2 targetAnchorWorld))
+            {
+                targetAnchorWorld = target.Layout != null
+                    ? target.Layout.ActiveCenter
+                    : _canvas.GetActiveCenter();
+            }
+
+            PackageGraphCameraState sourceCamera = _viewport.GetCameraState();
+            PackageGraphCameraState targetCamera = _viewport.CalculateFitCamera(target.Bounds, target.Mode);
+            _hierarchyExitPreview = new PackageGraphHierarchyExitPreview(
+                target,
+                sourceCamera,
+                targetCamera,
+                sourceAnchorWorld,
+                targetAnchorWorld,
+                sourceCamera.WorldToViewport(sourceAnchorWorld),
+                targetCamera.WorldToViewport(targetAnchorWorld));
+
+            if (!_canvas.BeginHierarchyExitPreview(target.Layout))
+            {
+                _hierarchyExitPreview = null;
+                return false;
+            }
+
+            _viewport.SetHierarchyEnterPreviewActive(true);
+            return true;
+        }
+
+        private bool TryCreateHierarchyEnterTarget(
+            string groupId,
+            out PackageGraphHierarchyExitTarget target)
+        {
+            target = null;
+
+            if (_currentGraph == null ||
+                string.IsNullOrWhiteSpace(groupId) ||
+                _canvas.LayoutMode == PackageGraphLayoutMode.Focus ||
+                _viewport.ViewportSize.x <= 1f ||
+                _viewport.ViewportSize.y <= 1f)
+            {
+                return false;
+            }
+
+            PackageGraphModel visibleGraph = CreateCurrentVisibleGraph();
+
+            string activeGroupId = _canvas.LayoutMode == PackageGraphLayoutMode.GroupFocus
+                ? _canvas.LayoutFocusGroupId
+                : string.Empty;
+
+            if (!CanEnterHierarchy(visibleGraph, groupId, _canvas.LayoutMode, activeGroupId, out PackageGraphGroup group))
+            {
+                return false;
+            }
+
+            PackageGraphNodePresentationLevel presentation =
+                PackageGraphPresentationPolicy.ResolveForZoom(
+                    PackageGraphLayoutMode.GroupFocus,
+                    _viewport.Zoom,
+                    PackageGraphPresentationPolicy.GetDefaultForMode(PackageGraphLayoutMode.GroupFocus));
+            PackageGraphLayoutResult layout = new PackageGraphLayout().Calculate(
+                visibleGraph,
+                PackageGraphLayoutMode.GroupFocus,
+                string.Empty,
+                group.Id,
+                _viewport.ViewportSize,
+                presentation);
+            Rect bounds = PackageGraphActiveLayoutBounds.Calculate(layout);
+            target = new PackageGraphHierarchyExitTarget(
+                PackageGraphLayoutMode.GroupFocus,
+                group.Id,
+                group,
+                new PackageGraphTransitionAnchor(PackageGraphTransitionAnchorKind.Group, group.Id),
+                layout,
+                bounds);
+            return true;
+        }
+
+        internal static bool CanEnterHierarchyForTests(
+            PackageGraphModel visibleGraph,
+            string groupId,
+            PackageGraphLayoutMode layoutMode,
+            string activeGroupId)
+        {
+            return CanEnterHierarchy(visibleGraph, groupId, layoutMode, activeGroupId, out _);
+        }
+
+        private static bool CanEnterHierarchy(
+            PackageGraphModel visibleGraph,
+            string groupId,
+            PackageGraphLayoutMode layoutMode,
+            string activeGroupId,
+            out PackageGraphGroup group)
+        {
+            group = null;
+
+            if (visibleGraph == null ||
+                string.IsNullOrWhiteSpace(groupId) ||
+                layoutMode == PackageGraphLayoutMode.Focus ||
+                !visibleGraph.TryGetGroup(groupId, out group) ||
+                !IsEligibleHierarchyEnterGroup(visibleGraph, group))
+            {
+                return false;
+            }
+
+            string safeActiveGroupId = activeGroupId ?? string.Empty;
+
+            if (string.Equals(safeActiveGroupId, group.Id, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            if (layoutMode == PackageGraphLayoutMode.Overview)
+            {
+                return string.IsNullOrWhiteSpace(group.ParentGroupId);
+            }
+
+            return layoutMode == PackageGraphLayoutMode.GroupFocus &&
+                   string.Equals(group.ParentGroupId, safeActiveGroupId, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsEligibleHierarchyEnterGroup(
+            PackageGraphModel graph,
+            PackageGraphGroup group)
+        {
+            if (graph == null || group == null)
+            {
+                return false;
+            }
+
+            bool hasDirectPackage = graph.Nodes.Any(node =>
+                node != null &&
+                string.Equals(node.GroupId, group.Id, StringComparison.OrdinalIgnoreCase));
+            bool hasDirectGroup = graph.Groups.Any(candidate =>
+                candidate != null &&
+                string.Equals(candidate.ParentGroupId, group.Id, StringComparison.OrdinalIgnoreCase));
+            return hasDirectPackage || hasDirectGroup;
+        }
+
         private bool TryBeginHierarchyExitPreview()
         {
             if (_hierarchyExitPreview != null)
@@ -928,6 +1183,25 @@ namespace Deucarian.PackageInstaller.Editor
             }
         }
 
+        private void CommitHierarchyEnterPreview()
+        {
+            if (_hierarchyExitPreview == null)
+            {
+                return;
+            }
+
+            PackageGraphHierarchyExitTarget target = _hierarchyExitPreview.Target;
+            _hierarchyExitPreview = null;
+            _hierarchyEnterController.Commit(EditorApplication.timeSinceStartup);
+            _canvas.EndHierarchyExitPreview(restoreSource: false);
+            _viewport.SetHierarchyEnterPreviewActive(false);
+
+            if (target.Group != null)
+            {
+                _groupFocused?.Invoke(target.Group);
+            }
+        }
+
         private void ResetHierarchyExitPreview(bool restoreCamera = true)
         {
             if (_hierarchyExitPreview != null)
@@ -943,7 +1217,11 @@ namespace Deucarian.PackageInstaller.Editor
 
             _hierarchyExitPreview = null;
             _hierarchyExitController.Cancel();
+            _hierarchyEnterController.Cancel();
+            _hierarchyEnterStableGroupId = string.Empty;
+            _hierarchyEnterStableSince = double.NegativeInfinity;
             _viewport.SetHierarchyExitPreviewActive(false);
+            _viewport.SetHierarchyEnterPreviewActive(false);
         }
 
         private sealed class PackageGraphHierarchyExitTarget
@@ -2028,6 +2306,7 @@ namespace Deucarian.PackageInstaller.Editor
         private bool _hasInitialBounds;
         private bool _cameraTransitionActive;
         private bool _hierarchyExitPreviewActive;
+        private bool _hierarchyEnterPreviewActive;
         private bool _panCandidate;
         private bool _panning;
         private bool _panMoved;
@@ -2095,6 +2374,8 @@ namespace Deucarian.PackageInstaller.Editor
 
         public event Func<PackageGraphHierarchyExitWheelEvent, bool> HierarchyExitWheel;
 
+        public event Func<PackageGraphHierarchyEnterWheelEvent, bool> HierarchyEnterWheel;
+
         public float Zoom => _zoom;
 
         public Vector2 Pan => _pan;
@@ -2158,6 +2439,21 @@ namespace Deucarian.PackageInstaller.Editor
         public void SetHierarchyExitPreviewActive(bool active)
         {
             _hierarchyExitPreviewActive = active;
+
+            if (active)
+            {
+                _hierarchyEnterPreviewActive = false;
+            }
+        }
+
+        public void SetHierarchyEnterPreviewActive(bool active)
+        {
+            _hierarchyEnterPreviewActive = active;
+
+            if (active)
+            {
+                _hierarchyExitPreviewActive = false;
+            }
         }
 
         public void EnsureInitialFrame(Rect worldBounds, bool force = false)
@@ -2313,7 +2609,9 @@ namespace Deucarian.PackageInstaller.Editor
             float zoomMultiplier = evt.delta.y > 0f ? 0.90f : 1.10f;
             float normalMinimumZoom = GetMinZoom();
             bool zoomingOut = evt.delta.y > 0f;
+            bool zoomingIn = evt.delta.y < 0f;
             bool atNormalMinimum = _zoom <= normalMinimumZoom + 0.002f;
+            bool atNormalMaximum = _zoom >= MaxZoom - 0.002f;
 
             if (_hierarchyExitPreviewActive ||
                 (zoomingOut &&
@@ -2333,12 +2631,36 @@ namespace Deucarian.PackageInstaller.Editor
                 }
             }
 
+            if (_hierarchyEnterPreviewActive ||
+                (zoomingIn &&
+                 _layoutMode != PackageGraphLayoutMode.Focus &&
+                 atNormalMaximum))
+            {
+                PackageGraphHierarchyEnterWheelEvent hierarchyEnterEvent =
+                    new PackageGraphHierarchyEnterWheelEvent(
+                        evt.delta.y,
+                        evt.localMousePosition,
+                        atNormalMaximum);
+
+                if (HierarchyEnterWheel?.Invoke(hierarchyEnterEvent) == true)
+                {
+                    evt.StopPropagation();
+                    return;
+                }
+            }
+
             ZoomAround(evt.localMousePosition, _zoom * zoomMultiplier);
             evt.StopPropagation();
         }
 
         private void HandleMouseDown(MouseDownEvent evt)
         {
+            if (_hierarchyExitPreviewActive || _hierarchyEnterPreviewActive)
+            {
+                evt.StopPropagation();
+                return;
+            }
+
             if (!ShouldConsiderPan(evt))
             {
                 return;
@@ -2973,6 +3295,10 @@ namespace Deucarian.PackageInstaller.Editor
         public PackageGraphLayoutMode LayoutMode => _layoutResult != null ? _layoutResult.Mode : PackageGraphLayoutMode.Overview;
 
         public bool InteractionsLocked => _interactionsLocked;
+
+        public string ActiveHoverGroupId => GetActiveHoverGroupId();
+
+        public string DirectHoverGroupId => _hoveredGroupId;
 
         internal float HierarchyExitProgressForTests => _hierarchyExitProgress;
 
@@ -5624,11 +5950,6 @@ namespace Deucarian.PackageInstaller.Editor
             icon.AddToClassList("dpi-graph-node__icon");
             header.Add(icon);
 
-            Label statusMarker = new Label(GetStatusMarker(node.Status));
-            statusMarker.AddToClassList("dpi-graph-node__status-icon");
-            statusMarker.AddToClassList("dpi-graph-node__status-icon--" + GetStatusClass(node.Status));
-            header.Add(statusMarker);
-
             VisualElement titleBlock = new VisualElement();
             titleBlock.AddToClassList("dpi-graph-node__title-block");
             header.Add(titleBlock);
@@ -5636,6 +5957,11 @@ namespace Deucarian.PackageInstaller.Editor
             Label title = new Label(node.DisplayName);
             title.AddToClassList("dpi-graph-node__title");
             titleBlock.Add(title);
+
+            Label statusMarker = new Label(GetStatusMarker(node.Status));
+            statusMarker.AddToClassList("dpi-graph-node__status-icon");
+            statusMarker.AddToClassList("dpi-graph-node__status-icon--" + GetStatusClass(node.Status));
+            header.Add(statusMarker);
 
             bool showHierarchy = presentationLevel == PackageGraphNodePresentationLevel.OverviewCompact ||
                                  presentationLevel == PackageGraphNodePresentationLevel.Standard ||
@@ -5658,7 +5984,7 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 Label categoryPath = new Label(categoryPathLabel);
                 categoryPath.AddToClassList("dpi-graph-node__category-path");
-                titleBlock.Add(categoryPath);
+                Add(categoryPath);
             }
 
             if (showBadges)

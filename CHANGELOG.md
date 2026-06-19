@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.43 - 2026-06-19
+
+- Added deliberate wheel zoom-enter previews for structural category nodes using the shared anchored hierarchy transition path.
+- Enlarged graph package card metrics and row styling so Standard and Full cards reserve space for category, status, channel, and safe action rows.
+- Moved the fixed Deucarian wallpaper into a clipped application shell with a top safe scrim below the editor chrome.
+
 ## 1.1.42 - 2026-06-19
 
 - Reworked Ecosystem Graph search into a strict structural finder for category names, category paths, package names, and package IDs.

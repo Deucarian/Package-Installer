@@ -237,4 +237,23 @@ namespace Deucarian.PackageInstaller.Editor
 
         public bool AtNormalMinimum { get; }
     }
+
+    internal sealed class PackageGraphHierarchyEnterWheelEvent
+    {
+        public PackageGraphHierarchyEnterWheelEvent(
+            float wheelDeltaY,
+            Vector2 viewportMousePosition,
+            bool atNormalMaximum)
+        {
+            WheelDeltaY = wheelDeltaY;
+            ViewportMousePosition = viewportMousePosition;
+            AtNormalMaximum = atNormalMaximum;
+        }
+
+        public float WheelDeltaY { get; }
+
+        public Vector2 ViewportMousePosition { get; }
+
+        public bool AtNormalMaximum { get; }
+    }
 }

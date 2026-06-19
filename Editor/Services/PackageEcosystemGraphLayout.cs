@@ -57,11 +57,11 @@ namespace Deucarian.PackageInstaller.Editor
             switch (level)
             {
                 case PackageGraphNodePresentationLevel.OverviewMicro:
-                    return new PackageGraphNodeMetrics(104f, 46f);
+                    return new PackageGraphNodeMetrics(112f, 52f);
                 case PackageGraphNodePresentationLevel.OverviewCompact:
-                    return new PackageGraphNodeMetrics(132f, 60f);
+                    return new PackageGraphNodeMetrics(150f, 70f);
                 case PackageGraphNodePresentationLevel.Standard:
-                    return new PackageGraphNodeMetrics(168f, 78f);
+                    return new PackageGraphNodeMetrics(218f, 150f);
                 default:
                     return new PackageGraphNodeMetrics(PackageGraphLayout.NodeWidth, PackageGraphLayout.NodeHeight);
             }
@@ -327,10 +327,10 @@ namespace Deucarian.PackageInstaller.Editor
 
     internal sealed class PackageGraphLayout
     {
-        public const float CanvasWidth = 4000f;
-        public const float CanvasHeight = 3800f;
-        public const float NodeWidth = 206f;
-        public const float NodeHeight = 104f;
+        public const float CanvasWidth = 4800f;
+        public const float CanvasHeight = 4600f;
+        public const float NodeWidth = 268f;
+        public const float NodeHeight = 190f;
 
         private const float HubWidth = 188f;
         private const float HubHeight = 188f;
@@ -353,7 +353,7 @@ namespace Deucarian.PackageInstaller.Editor
         private const float ContextGroupCollisionPadding = 18f;
         private const float CategoryCaptionClearance = 24f;
 
-        public static readonly Vector2 GraphCenter = new Vector2(2000f, 1850f);
+        public static readonly Vector2 GraphCenter = new Vector2(2400f, 2250f);
 
         public PackageGraphLayoutResult Calculate(PackageGraphModel graph)
         {
@@ -1233,10 +1233,13 @@ namespace Deucarian.PackageInstaller.Editor
             float groupWidth,
             float groupHeight)
         {
-            float childRadialHalfExtent = Mathf.Max(
-                Mathf.Max(packageMetrics.Width, packageMetrics.Height),
-                Mathf.Max(groupWidth, groupHeight)) * 0.5f;
-            float groupRadialHalfExtent = CalculateHalfDiagonal(GroupCaptionWidth, GroupHubSize + GroupCaptionHeight);
+            float packageRadialHalfExtent = CalculateHalfDiagonal(packageMetrics.Width, packageMetrics.Height);
+            float childGroupRadialHalfExtent = CalculateHalfDiagonal(groupWidth, groupHeight);
+            float childRadialHalfExtent = Mathf.Max(packageRadialHalfExtent, childGroupRadialHalfExtent);
+            float groupRadialHalfExtent = CalculateGroupElementRadiusFromHub(
+                GroupCaptionWidth,
+                GroupHubSize,
+                GroupCaptionHeight);
             float centerClearanceRadius = childRadialHalfExtent + groupRadialHalfExtent + NodeGap + CategoryCaptionClearance;
 
             if (childCount <= 0)
@@ -1258,6 +1261,16 @@ namespace Deucarian.PackageInstaller.Editor
             float chordRadius = chordFootprint / Mathf.Max(0.01f, 2f * Mathf.Sin(Mathf.PI / childCount));
             float radialFootprint = Mathf.Max(packageMetrics.Height, groupHeight) * 0.5f;
             return Mathf.Clamp(chordRadius + radialFootprint * 0.28f, Mathf.Max(centerClearanceRadius, 168f), 520f);
+        }
+
+        private static float CalculateGroupElementRadiusFromHub(
+            float captionWidth,
+            float hubSize,
+            float captionHeight)
+        {
+            float halfWidth = Mathf.Max(captionWidth, hubSize) * 0.5f;
+            float downwardExtent = hubSize * 0.5f + Mathf.Max(0f, captionHeight);
+            return Mathf.Sqrt(halfWidth * halfWidth + downwardExtent * downwardExtent);
         }
 
         private static float CalculateGlobalGroupOrbitRadius(

@@ -49,6 +49,32 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void Window_FixedWallpaperUsesApplicationShellHostAndTopSafeFade()
+        {
+            VisualElement root = new VisualElement();
+            VisualElement shell = new VisualElement { name = "deucarian-application-shell" };
+            VisualElement background = new VisualElement { name = "deucarian-window-background" };
+            VisualElement overlay = new VisualElement { name = "deucarian-window-overlay" };
+            root.Add(background);
+            root.Add(overlay);
+            root.Add(shell);
+
+            PackageInstallerWindow.ConfigureFixedWallpaperForTests(root, shell);
+
+            Assert.AreSame(shell, background.parent);
+            Assert.AreSame(shell, overlay.parent);
+            Assert.IsTrue(shell.ClassListContains("dpi-wallpaper-safe-shell"));
+            Assert.AreEqual(Overflow.Hidden, shell.style.overflow.value);
+
+            VisualElement fade = shell.Q<VisualElement>(PackageInstallerWindow.WallpaperTopSafeFadeName);
+            Assert.NotNull(fade);
+            Assert.IsTrue(fade.ClassListContains("dpi-wallpaper-top-safe-fade"));
+            Assert.AreEqual(PickingMode.Ignore, fade.pickingMode);
+            Assert.AreEqual(Position.Absolute, fade.style.position.value);
+            Assert.AreEqual(86f, fade.style.height.value.value);
+        }
+
+        [Test]
         public void Window_OperationFooterBuildsStableVisibleHierarchy()
         {
             VisualElement footer = PackageInstallerWindow.CreateOperationFooterForTests();
@@ -1021,6 +1047,47 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void PresentationMetrics_ReserveRowsForStandardAndFullCards()
+        {
+            PackageGraphNodeMetrics standard =
+                PackageGraphPresentationPolicy.GetMetrics(PackageGraphNodePresentationLevel.Standard);
+            PackageGraphNodeMetrics full =
+                PackageGraphPresentationPolicy.GetMetrics(PackageGraphNodePresentationLevel.Full);
+
+            Assert.That(standard.Width, Is.GreaterThanOrEqualTo(218f));
+            Assert.That(standard.Height, Is.GreaterThanOrEqualTo(150f));
+            Assert.That(full.Width, Is.GreaterThanOrEqualTo(268f));
+            Assert.That(full.Height, Is.GreaterThanOrEqualTo(190f));
+        }
+
+        [Test]
+        public void GraphView_NodePresentationProfilesUseDedicatedRows()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+            PackageGraphView focused = new PackageGraphView(_ => { }, (_, __) => { });
+
+            focused.SetGraph(graph, "com.deucarian.session", actionsEnabled: true);
+
+            VisualElement selected = FindGraphNode(focused, "com.deucarian.session");
+            VisualElement related = FindGraphNode(focused, "com.deucarian.logging");
+
+            Assert.IsTrue(selected.ClassListContains("dpi-graph-node--presentation-full"));
+            Assert.IsTrue(related.ClassListContains("dpi-graph-node--presentation-standard"));
+            Assert.AreEqual(1, FindByClass(selected, "dpi-graph-node__header").Count);
+            Assert.AreEqual(1, FindByClass(selected, "dpi-graph-node__package-id").Count);
+            Assert.AreEqual(1, FindByClass(selected, "dpi-graph-node__category-path").Count);
+            Assert.AreEqual(1, FindByClass(selected, "dpi-graph-node__badges").Count);
+            Assert.AreEqual(1, FindByClass(selected, "dpi-graph-node__footer").Count);
+            Assert.AreEqual(1, FindByClass(selected, "dpi-graph-node__action").Count);
+
+            Assert.IsEmpty(FindByClass(related, "dpi-graph-node__package-id"));
+            Assert.AreEqual(1, FindByClass(related, "dpi-graph-node__category-path").Count);
+            Assert.AreEqual(1, FindByClass(related, "dpi-graph-node__badges").Count);
+            Assert.AreEqual(1, FindByClass(related, "dpi-graph-node__footer").Count);
+        }
+
+        [Test]
         public void GraphViewport_SemanticZoomClassesTrackZoomThresholds()
         {
             PackageGraphViewport viewport = new PackageGraphViewport(null);
@@ -1205,6 +1272,68 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.IsTrue(cancelled.Consumed);
             Assert.IsTrue(cancelled.Cancelled);
             Assert.AreEqual(0f, cancelled.Progress);
+        }
+
+        [Test]
+        public void GraphHierarchyEnterEligibility_OnlyAllowsDirectStructuralChildren()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+
+            Assert.IsTrue(PackageGraphView.CanEnterHierarchyForTests(
+                graph,
+                "infrastructure",
+                PackageGraphLayoutMode.Overview,
+                string.Empty));
+            Assert.IsFalse(PackageGraphView.CanEnterHierarchyForTests(
+                graph,
+                "ui-presentation",
+                PackageGraphLayoutMode.Overview,
+                string.Empty));
+            Assert.IsTrue(PackageGraphView.CanEnterHierarchyForTests(
+                graph,
+                "ui-presentation",
+                PackageGraphLayoutMode.GroupFocus,
+                "experience-interaction"));
+            Assert.IsFalse(PackageGraphView.CanEnterHierarchyForTests(
+                graph,
+                "ui-presentation",
+                PackageGraphLayoutMode.GroupFocus,
+                "ui-presentation"));
+            Assert.IsFalse(PackageGraphView.CanEnterHierarchyForTests(
+                graph,
+                "ui-presentation",
+                PackageGraphLayoutMode.GroupFocus,
+                "infrastructure"));
+            Assert.IsFalse(PackageGraphView.CanEnterHierarchyForTests(
+                graph,
+                "experience-interaction",
+                PackageGraphLayoutMode.Focus,
+                "experience-interaction"));
+            Assert.IsFalse(PackageGraphView.CanEnterHierarchyForTests(
+                graph,
+                "com.deucarian.ui-binding",
+                PackageGraphLayoutMode.GroupFocus,
+                "ui-presentation"));
+        }
+
+        [Test]
+        public void GraphHierarchyEnterHover_UsesDirectGroupHoverNotPackageParent()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+            PackageGraphCanvas canvas = new PackageGraphCanvas(_ => { }, (_, __) => { }, null);
+
+            canvas.SetGraph(graph, string.Empty, string.Empty, true);
+            canvas.SetPreviewPackageForTests("com.deucarian.logging");
+
+            Assert.AreEqual("infrastructure", canvas.ActiveHoverGroupId);
+            Assert.AreEqual(string.Empty, canvas.DirectHoverGroupId);
+
+            canvas.SetExternalHoverGroup("infrastructure", respectInteractionLock: false);
+
+            Assert.AreEqual("infrastructure", canvas.ActiveHoverGroupId);
+            Assert.AreEqual("infrastructure", canvas.DirectHoverGroupId);
         }
 
         [Test]
