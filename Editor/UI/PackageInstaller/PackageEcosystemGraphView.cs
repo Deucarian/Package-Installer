@@ -102,6 +102,7 @@ namespace Deucarian.PackageInstaller.Editor
             };
             _viewport = new PackageGraphViewport(selectionCleared);
             _viewport.ViewportSizeChanged += HandleViewportSizeChanged;
+            _viewport.ZoomChanged += zoom => _canvas.SetViewportZoom(zoom);
             _viewport.SetContent(_canvas);
 
             VisualElement header = new VisualElement();
@@ -121,7 +122,7 @@ namespace Deucarian.PackageInstaller.Editor
                 name = "ecosystem-graph-search"
             };
             _searchField.AddToClassList("dpi-ecosystem-graph__search");
-            _searchField.tooltip = "Search package names, package IDs, categories, package types, descriptions, URLs, versions, and dependencies.";
+            _searchField.tooltip = "Search package names, package IDs, hierarchy groups, package roles, descriptions, URLs, versions, and dependencies.";
             _searchField.SetValueWithoutNotify(_filterState.SearchText);
             _searchField.RegisterValueChangedCallback(evt =>
             {
@@ -280,6 +281,7 @@ namespace Deucarian.PackageInstaller.Editor
             _currentGraph = graph;
             _canvas.SetGraph(graph, selectedPackageId, focusedPackageId, focusedGroupId, actionsEnabled, visiblePackageIds);
             _viewport.SetLayoutMode(_canvas.LayoutMode);
+            _canvas.SetViewportZoom(_viewport.Zoom);
             _viewport.SetContentSize(_canvas.ContentSize.x, _canvas.ContentSize.y);
             _viewport.EnsureInitialFrame(_canvas.GetContentBounds(), shouldForceInitialFrame);
             UpdateLegend(_canvas.LayoutMode);
@@ -910,7 +912,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (layoutMode == PackageGraphLayoutMode.GroupFocus)
             {
-                _legend.Add(CreateLegendItem("Group", "Category", "dpi-graph-legend__line--group"));
+                _legend.Add(CreateLegendItem("Group", "Group", "dpi-graph-legend__line--group"));
                 _legend.Add(CreateLegendItem("Pkg", "Package", "dpi-graph-legend__line--package"));
                 _legend.Add(CreateLegendItem("Line", "Structural membership", "dpi-graph-legend__line--membership", "Structural group membership, not a dependency"));
                 _legend.Add(CreateLegendItem("!", "Attention", "dpi-graph-legend__line--warning"));
@@ -918,7 +920,7 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             _legend.Add(CreateLegendItem("Root", "Deucarian root", "dpi-graph-legend__line--root"));
-            _legend.Add(CreateLegendItem("Group", "Category", "dpi-graph-legend__line--group"));
+            _legend.Add(CreateLegendItem("Group", "Group", "dpi-graph-legend__line--group"));
             _legend.Add(CreateLegendItem("Pkg", "Package", "dpi-graph-legend__line--package"));
             _legend.Add(CreateLegendItem(InstalledStatusMarker, "Installed", "dpi-graph-legend__line--installed"));
             _legend.Add(CreateLegendItem(NotInstalledStatusMarker, "Not installed", "dpi-graph-legend__line--available"));
@@ -1027,6 +1029,8 @@ namespace Deucarian.PackageInstaller.Editor
 
         public event Action<Vector2> ViewportSizeChanged;
 
+        public event Action<float> ZoomChanged;
+
         public float Zoom => _zoom;
 
         public Vector2 Pan => _pan;
@@ -1095,6 +1099,7 @@ namespace Deucarian.PackageInstaller.Editor
             _pan = GetViewportCenter() - bounds.center * _zoom;
             _initialized = true;
             ClampAndApplyTransform();
+            ZoomChanged?.Invoke(_zoom);
         }
 
         public void ResetZoom()
@@ -1114,6 +1119,7 @@ namespace Deucarian.PackageInstaller.Editor
             _pan = viewportCenter - worldCenter * _zoom;
             _initialized = true;
             ClampAndApplyTransform();
+            ZoomChanged?.Invoke(_zoom);
         }
 
         public void CenterOn(Vector2 worldPoint)
@@ -1241,6 +1247,7 @@ namespace Deucarian.PackageInstaller.Editor
             _pan = viewportPoint - worldPoint * _zoom;
             _initialized = true;
             ClampAndApplyTransform();
+            ZoomChanged?.Invoke(_zoom);
         }
 
         private void ClampAndApplyTransform()
@@ -1503,7 +1510,10 @@ namespace Deucarian.PackageInstaller.Editor
         private string _layoutFocusGroupId = string.Empty;
         private PackageGraphFocus _currentFocus = PackageGraphFocus.Create(null, string.Empty);
         private PackageGraphFocus _actionFocus = PackageGraphFocus.Create(null, string.Empty);
+        private PackageGraphNodePresentationLevel _layoutPresentationLevel =
+            PackageGraphNodePresentationLevel.OverviewCompact;
         private Vector2 _viewportSize;
+        private float _viewportZoom = 1f;
         private IVisualElementScheduledItem _layoutAnimationItem;
         private double _layoutAnimationStartedAt;
         private bool _layoutAnimationActive;
@@ -1620,6 +1630,30 @@ namespace Deucarian.PackageInstaller.Editor
             return true;
         }
 
+        public void SetViewportZoom(float zoom)
+        {
+            _viewportZoom = Mathf.Max(0.01f, zoom);
+
+            if (_layoutResult == null)
+            {
+                return;
+            }
+
+            PackageGraphNodePresentationLevel nextPresentation =
+                PackageGraphPresentationPolicy.ResolveForZoom(
+                    _layoutResult.Mode,
+                    _viewportZoom,
+                    _layoutPresentationLevel);
+
+            if (nextPresentation == _layoutPresentationLevel)
+            {
+                return;
+            }
+
+            _layoutPresentationLevel = nextPresentation;
+            Rebuild();
+        }
+
         public void SetGraph(
             PackageGraphModel graph,
             string selectedPackageId,
@@ -1680,12 +1714,17 @@ namespace Deucarian.PackageInstaller.Editor
                 : (!string.IsNullOrWhiteSpace(_layoutFocusGroupId)
                     ? PackageGraphLayoutMode.GroupFocus
                     : PackageGraphLayoutMode.Overview);
+            _layoutPresentationLevel = PackageGraphPresentationPolicy.ResolveForZoom(
+                layoutMode,
+                _viewportZoom,
+                _layoutPresentationLevel);
             PackageGraphLayoutResult fullLayoutResult = _layout.Calculate(
                 _visibleGraph,
                 layoutMode,
                 _layoutFocusPackageId,
                 _layoutFocusGroupId,
-                _viewportSize);
+                _viewportSize,
+                _layoutPresentationLevel);
             _currentFocus = PackageGraphFocus.Create(
                 _visibleGraph,
                 _layoutFocusPackageId);
@@ -1755,6 +1794,10 @@ namespace Deucarian.PackageInstaller.Editor
             Dictionary<string, PackageGraphLayoutRing> visibleNodeRings = fullLayoutResult.NodeRings
                 .Where(pair => _visiblePackageIds.Contains(pair.Key))
                 .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
+            Dictionary<string, PackageGraphNodePresentationLevel> visibleNodePresentations =
+                fullLayoutResult.NodePresentationLevels
+                    .Where(pair => _visiblePackageIds.Contains(pair.Key))
+                    .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
             int visibleUnrelatedCount = fullLayoutResult.Mode == PackageGraphLayoutMode.Focus && fullFocus != null
                 ? _visibleGraph.Nodes.Count(node => !fullFocus.IsPackageRelated(node.PackageId))
                 : 0;
@@ -1782,7 +1825,8 @@ namespace Deucarian.PackageInstaller.Editor
                 visibleUnrelatedCount,
                 unrelatedSummaryRect,
                 visibleGroupNodes,
-                fullLayoutResult.FocusGroupId);
+                fullLayoutResult.FocusGroupId,
+                visibleNodePresentations);
         }
 
         private Dictionary<string, Rect> CaptureCurrentNodeRects()
@@ -2111,6 +2155,12 @@ namespace Deucarian.PackageInstaller.Editor
                 bool hoverContext = hoverActive && IsPackageInHoverContext(node, activeHoverGroupId);
                 bool hoverDimmed = hoverActive && !hoverContext;
                 PackageGraphNodeVisualMode visualMode = GetNodeVisualMode(dimmed);
+                PackageGraphNodePresentationLevel presentationLevel =
+                    _layoutResult.NodePresentationLevels.TryGetValue(
+                        node.PackageId,
+                        out PackageGraphNodePresentationLevel resolvedPresentation)
+                        ? resolvedPresentation
+                        : PackageGraphPresentationPolicy.GetFocusPresentation(selected);
                 string categoryPathLabel = GetGroupPathLabel(node.GroupId);
                 bool showNodeAction = ShouldShowNodeAction(
                     node,
@@ -2122,6 +2172,7 @@ namespace Deucarian.PackageInstaller.Editor
                     node,
                     ring,
                     visualMode,
+                    presentationLevel,
                     selected,
                     related,
                     dimmed,
@@ -3516,6 +3567,7 @@ namespace Deucarian.PackageInstaller.Editor
             PackageGraphNode node,
             PackageGraphLayoutRing ring,
             PackageGraphNodeVisualMode visualMode,
+            PackageGraphNodePresentationLevel presentationLevel,
             bool selected,
             bool related,
             bool dimmed,
@@ -3538,6 +3590,7 @@ namespace Deucarian.PackageInstaller.Editor
             AddToClassList("dpi-graph-node");
             AddToClassList("dpi-graph-node--" + GetNodeClass(node.NodeType));
             AddToClassList("dpi-graph-node--" + GetVisualModeClass(visualMode));
+            AddToClassList("dpi-graph-node--presentation-" + GetPresentationClass(presentationLevel));
             AddToClassList("dpi-graph-node--status-" + GetStatusClass(node.Status));
             AddToClassList("dpi-graph-node--ring-" + GetRingClass(ring));
             EnableInClassList("dpi-graph-node--installed", node.IsInstalled);
@@ -3611,32 +3664,45 @@ namespace Deucarian.PackageInstaller.Editor
             title.AddToClassList("dpi-graph-node__title");
             titleBlock.Add(title);
 
-            bool fullCard = visualMode == PackageGraphNodeVisualMode.Focus;
+            bool showHierarchy = presentationLevel == PackageGraphNodePresentationLevel.OverviewCompact ||
+                                 presentationLevel == PackageGraphNodePresentationLevel.Standard ||
+                                 presentationLevel == PackageGraphNodePresentationLevel.Full;
+            bool showBadges = presentationLevel != PackageGraphNodePresentationLevel.OverviewMicro;
+            bool showTypeBadge = presentationLevel == PackageGraphNodePresentationLevel.Standard ||
+                                 presentationLevel == PackageGraphNodePresentationLevel.Full;
+            bool showPackageId = presentationLevel == PackageGraphNodePresentationLevel.Full;
+            bool showFooter = presentationLevel == PackageGraphNodePresentationLevel.Standard ||
+                              presentationLevel == PackageGraphNodePresentationLevel.Full;
 
-            if (fullCard)
+            if (showPackageId)
             {
                 Label packageId = new Label(node.PackageId);
                 packageId.AddToClassList("dpi-graph-node__package-id");
                 titleBlock.Add(packageId);
-
-                if (!string.IsNullOrWhiteSpace(categoryPathLabel))
-                {
-                    Label categoryPath = new Label(categoryPathLabel);
-                    categoryPath.AddToClassList("dpi-graph-node__category-path");
-                    titleBlock.Add(categoryPath);
-                }
             }
 
-            VisualElement badges = new VisualElement();
-            badges.AddToClassList("dpi-graph-node__badges");
-            if (fullCard)
+            if (showHierarchy && !string.IsNullOrWhiteSpace(categoryPathLabel))
             {
-                badges.Add(CreateBadge(GetNodeTypeLabel(node.NodeType), "dpi-graph-node__badge--type"));
+                Label categoryPath = new Label(categoryPathLabel);
+                categoryPath.AddToClassList("dpi-graph-node__category-path");
+                titleBlock.Add(categoryPath);
             }
-            badges.Add(CreateBadge(GetStatusLabel(node), GetStatusBadgeClass(node.Status)));
-            Add(badges);
 
-            if (!fullCard)
+            if (showBadges)
+            {
+                VisualElement badges = new VisualElement();
+                badges.AddToClassList("dpi-graph-node__badges");
+
+                if (showTypeBadge)
+                {
+                    badges.Add(CreateBadge(GetNodeTypeLabel(node.NodeType), "dpi-graph-node__badge--type"));
+                }
+
+                badges.Add(CreateBadge(GetStatusLabel(node), GetStatusBadgeClass(node.Status)));
+                Add(badges);
+            }
+
+            if (!showFooter)
             {
                 return;
             }
@@ -3677,6 +3743,21 @@ namespace Deucarian.PackageInstaller.Editor
                     return "stack";
                 default:
                     return "focus";
+            }
+        }
+
+        private static string GetPresentationClass(PackageGraphNodePresentationLevel presentationLevel)
+        {
+            switch (presentationLevel)
+            {
+                case PackageGraphNodePresentationLevel.OverviewMicro:
+                    return "micro";
+                case PackageGraphNodePresentationLevel.OverviewCompact:
+                    return "compact";
+                case PackageGraphNodePresentationLevel.Standard:
+                    return "standard";
+                default:
+                    return "full";
             }
         }
 

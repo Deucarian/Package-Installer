@@ -126,11 +126,11 @@ The registry schema uses `schemaVersion` 1 and contains:
 - `groups`: optional structural graph groups. Each group has `id`, `displayName`, optional `parentGroupId`, `description`, `sortOrder`, `iconKey`, and `styleKey`.
 - `id`: the Unity package name, such as `com.deucarian.api`. This must exactly match the target package's `package.json` `name` value.
 - `displayName`: the name shown in the installer window.
-- `category`: grouping shown in the sidebar. Core, UI, World, Integration, and Suites are ordered first; unknown categories are shown alphabetically after them.
+- `category`: legacy compatibility/package-role metadata used by older registries and List View fallback grouping. The Ecosystem Graph and package details use `groupId` hierarchy as the user-facing structural source of truth.
 - `description`: explanatory text shown in the detail pane.
 - `stableUrl`: the stable Git URL or UPM identifier passed to `UnityEditor.PackageManager.Client.Add`.
 - `developmentUrl`: optional development-channel Git URL or UPM identifier. If this is empty, the Development channel is disabled for that package.
-- `dependencies`: package IDs that should be installed before this package is installed, reinstalled, or updated. Integration packages are just packages in the `Integration` category with dependencies.
+- `dependencies`: package IDs that should be installed before this package is installed, reinstalled, or updated. Integration packages are regular packages with the `Integration` package role and hard dependencies.
 - `optionalCompanions`: package IDs shown as optional integrations that should not be installed as required dependencies.
 - `groupId`: optional structural Ecosystem Graph group ID. Supported top-level IDs are `infrastructure`, `state-data`, `runtime-services`, `experience-interaction`, `tools-quality`, `integrations`, and `suites`. If omitted, the graph falls back to `ecosystemGroup`, category, package type, and known package IDs.
 - `ecosystemGroup`: legacy optional overview-wheel sector override retained for older registries. Old values are normalized to the current group IDs without creating duplicate visible groups.
@@ -253,7 +253,7 @@ Keeping the installer editor-only ensures:
 
 ## Versioning
 
-Current package version: `1.1.31`.
+Current package version: `1.1.35`.
 
 Branch strategy:
 

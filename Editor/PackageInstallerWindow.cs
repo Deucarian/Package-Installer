@@ -12,7 +12,7 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed class PackageInstallerWindow : EditorWindow
     {
         private const string WindowTitle = "Package Installer";
-        private const string PackageVersion = "1.1.31";
+        private const string PackageVersion = "1.1.35";
         private const float MinWindowWidth = 850f;
         private const float MinWindowHeight = 650f;
         private const float SidebarWidth = 340f;
@@ -1388,14 +1388,14 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             string channelSummary = GetChannelSummary(packageDefinition);
-            string typeSummary = selectionKind == SelectionKind.Integration ? "Integration package" : packageDefinition.Category;
+            string hierarchySummary = GetPackageHierarchyPath(packageDefinition);
 
             if (packageDefinition.HasDisplayVersion)
             {
-                return typeSummary + " | " + channelSummary + " | " + packageDefinition.DisplayVersion;
+                return hierarchySummary + " | " + channelSummary + " | " + packageDefinition.DisplayVersion;
             }
 
-            return typeSummary + " | " + channelSummary;
+            return hierarchySummary + " | " + channelSummary;
         }
 
         private string GetSidebarMetadataTooltip(PackageDefinition packageDefinition, SelectionKind selectionKind)
@@ -1804,9 +1804,9 @@ namespace Deucarian.PackageInstaller.Editor
 
             DrawStatusBadge(status.Label, status.Kind, GUILayout.Width(150f));
             GUILayout.Space(6f);
-            DrawKeyValueRow("Category", packageDefinition.Category);
-            DrawKeyValueRow("Package type", GetPackageTypeDisplayName(packageDefinition));
-            DrawKeyValueRow("Parent hierarchy path", GetPackageHierarchyPath(packageDefinition));
+            DrawKeyValueRow("Hierarchy", GetPackageHierarchyPath(packageDefinition));
+            DrawKeyValueRow("Package role", GetPackageTypeDisplayName(packageDefinition));
+            DrawKeyValueRow("Package ID", packageDefinition.PackageId);
 
             if (_packageDetectionService.TryGetInstalledPackage(
                     packageDefinition.PackageId,
@@ -2418,9 +2418,9 @@ namespace Deucarian.PackageInstaller.Editor
             PackageUpdateStatus updateStatus = _packageUpdateCheckService.GetStatus(packageDefinition, selectedChannel);
 
             DrawSelectableValue("Package ID", packageDefinition.PackageId);
-            DrawSelectableValue("Category", packageDefinition.Category);
-            DrawSelectableValue("Package type", GetPackageTypeDisplayName(packageDefinition));
-            DrawSelectableValue("Parent hierarchy path", GetPackageHierarchyPath(packageDefinition));
+            DrawSelectableValue("Hierarchy", GetPackageHierarchyPath(packageDefinition));
+            DrawSelectableValue("Package role", GetPackageTypeDisplayName(packageDefinition));
+            DrawSelectableValue("Legacy category", packageDefinition.Category);
             DrawSelectableValue("Selected URL", packageDefinition.GetUrl(selectedChannel));
             DrawSelectableValue("Stable URL", packageDefinition.StableUrl);
             DrawSelectableValue("Development URL", packageDefinition.DevelopmentUrl);
@@ -3682,62 +3682,12 @@ namespace Deucarian.PackageInstaller.Editor
 
         private string GetPackageHierarchyPath(PackageDefinition packageDefinition)
         {
-            if (packageDefinition == null)
-            {
-                return "-";
-            }
-
-            string groupId = GetGraphPackageGroupId(packageDefinition.PackageId);
-
-            if (string.IsNullOrWhiteSpace(groupId))
-            {
-                return string.IsNullOrWhiteSpace(packageDefinition.Category)
-                    ? "-"
-                    : packageDefinition.Category;
-            }
-
-            List<string> path = new List<string>();
-            HashSet<string> visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            string currentGroupId = groupId;
-
-            while (!string.IsNullOrWhiteSpace(currentGroupId) &&
-                   visited.Add(currentGroupId) &&
-                   _lastPackageGraph != null &&
-                   _lastPackageGraph.TryGetGroup(currentGroupId, out PackageGraphGroup group))
-            {
-                path.Add(group.DisplayName);
-                currentGroupId = group.ParentGroupId;
-            }
-
-            path.Reverse();
-            return path.Count == 0
-                ? packageDefinition.Category
-                : string.Join(" / ", path.ToArray());
+            return PackageGraphHierarchyDisplay.GetPackageHierarchyPath(_lastPackageGraph, packageDefinition);
         }
 
         private static string GetPackageTypeDisplayName(PackageDefinition packageDefinition)
         {
-            if (packageDefinition == null)
-            {
-                return "-";
-            }
-
-            if (packageDefinition.IsIntegration)
-            {
-                return "Integration";
-            }
-
-            if (packageDefinition.IsSuite)
-            {
-                return "Suite";
-            }
-
-            if (!string.IsNullOrWhiteSpace(packageDefinition.MetadataType))
-            {
-                return packageDefinition.MetadataType;
-            }
-
-            return packageDefinition.PackageType.ToString();
+            return PackageGraphHierarchyDisplay.GetPackageRole(packageDefinition);
         }
 
         private string GetGraphParentGroupId(string groupId)

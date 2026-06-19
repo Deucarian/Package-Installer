@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.35 - 2026-06-19
+
+- Added adaptive Ecosystem Graph package node presentation levels and compact overview metrics.
+- Tightened root/category orbit sizing from active node footprints so overview Fit lands at a more readable zoom.
+- Updated package detail terminology to separate structural hierarchy from package role/type.
+
 ## 1.1.34 - 2026-06-19
 
 - Made opening the Package Installer window refetch the remote registry instead of only using the first registry refresh from the editor session.

@@ -348,7 +348,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             float globalRadius = Vector2.Distance(topGroups[0].Rect.center, PackageGraphLayout.GraphCenter);
 
             Assert.AreEqual(7, topGroups.Length);
-            Assert.That(globalRadius, Is.GreaterThanOrEqualTo(900f));
+            Assert.That(globalRadius, Is.GreaterThanOrEqualTo(560f));
             foreach (PackageGraphGroupLayoutNode groupNode in topGroups)
             {
                 Assert.That(
@@ -670,10 +670,39 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 .ToArray();
 
             CollectionAssert.AreEquivalent(
-                new[] { "Deucarian root", "Category", "Package", "Installed", "Not installed", "Attention" },
+                new[] { "Deucarian root", "Group", "Package", "Installed", "Not installed", "Attention" },
                 labels);
             CollectionAssert.DoesNotContain(labels, "Dependency flow");
             CollectionAssert.DoesNotContain(labels, "Integration connection");
+        }
+
+        [Test]
+        public void PresentationPolicy_UsesHysteresisForOverviewZoomLevels()
+        {
+            Assert.AreEqual(
+                PackageGraphNodePresentationLevel.OverviewMicro,
+                PackageGraphPresentationPolicy.ResolveForZoom(
+                    PackageGraphLayoutMode.Overview,
+                    0.60f,
+                    PackageGraphNodePresentationLevel.OverviewMicro));
+            Assert.AreEqual(
+                PackageGraphNodePresentationLevel.OverviewCompact,
+                PackageGraphPresentationPolicy.ResolveForZoom(
+                    PackageGraphLayoutMode.Overview,
+                    0.60f,
+                    PackageGraphNodePresentationLevel.OverviewCompact));
+            Assert.AreEqual(
+                PackageGraphNodePresentationLevel.Standard,
+                PackageGraphPresentationPolicy.ResolveForZoom(
+                    PackageGraphLayoutMode.Overview,
+                    1.10f,
+                    PackageGraphNodePresentationLevel.Standard));
+            Assert.AreEqual(
+                PackageGraphNodePresentationLevel.OverviewCompact,
+                PackageGraphPresentationPolicy.ResolveForZoom(
+                    PackageGraphLayoutMode.Overview,
+                    1.10f,
+                    PackageGraphNodePresentationLevel.OverviewCompact));
         }
 
         [Test]
@@ -905,6 +934,20 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void HierarchyDisplay_SeparatesStructuralHierarchyFromPackageRole()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+
+            AssertHierarchyAndRole(graph, "com.deucarian.api", "Runtime Services", "Core");
+            AssertHierarchyAndRole(graph, "com.deucarian.session", "Runtime Services", "Core");
+            AssertHierarchyAndRole(graph, "com.deucarian.core-state", "State & Data", "Core");
+            AssertHierarchyAndRole(graph, "com.deucarian.package-installer", "Tools & Quality", "Tool");
+            AssertHierarchyAndRole(graph, "com.deucarian.session.api-integration", "Integrations", "Integration");
+            AssertHierarchyAndRole(graph, "com.deucarian.selection-suite", "Suites", "Suite");
+        }
+
+        [Test]
         public void Build_MarksMissingInstalledDependencyRequirementAsWarningNode()
         {
             PackageDefinition dependency = CreatePackage("Dependency", "com.example.dependency", "Core");
@@ -1000,6 +1043,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 .Build(CreateDefaultGraphPackages());
 
             PackageGraphLayoutResult layout = new PackageGraphLayout().Calculate(graph);
+            PackageGraphNodeMetrics compactMetrics =
+                PackageGraphPresentationPolicy.GetMetrics(PackageGraphNodePresentationLevel.OverviewCompact);
 
             Assert.AreEqual(PackageGraphLayoutMode.Overview, layout.Mode);
             Assert.AreEqual(graph.Nodes.Count, layout.NodeRects.Count);
@@ -1033,10 +1078,14 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual(
                 PackageGraphLayoutRing.Runtime,
                 layout.NodeRings["com.deucarian.package-installer"]);
+            Assert.IsTrue(layout.NodePresentationLevels.Values.All(level =>
+                level == PackageGraphNodePresentationLevel.OverviewCompact));
+            Assert.That(layout.NodeRects["com.deucarian.session"].width, Is.EqualTo(compactMetrics.Width).Within(0.1f));
+            Assert.That(layout.NodeRects["com.deucarian.session"].height, Is.EqualTo(compactMetrics.Height).Within(0.1f));
             PackageGraphGroupLayoutNode infrastructure = layout.GroupNodes.Single(groupNode => groupNode.GroupId == "infrastructure");
             PackageGraphGroupLayoutNode integrations = layout.GroupNodes.Single(groupNode => groupNode.GroupId == "integrations");
             float globalRadius = Vector2.Distance(infrastructure.Rect.center, PackageGraphLayout.GraphCenter);
-            Assert.That(globalRadius, Is.GreaterThanOrEqualTo(900f));
+            Assert.That(globalRadius, Is.GreaterThanOrEqualTo(560f));
             Assert.That(Vector2.Distance(integrations.Rect.center, PackageGraphLayout.GraphCenter), Is.EqualTo(globalRadius).Within(0.1f));
             Assert.That(
                 Vector2.Distance(layout.NodeRects["com.deucarian.editor"].center, infrastructure.Rect.center),
@@ -1046,6 +1095,63 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 Is.EqualTo(Vector2.Distance(layout.NodeRects["com.deucarian.object-loading.api-integration"].center, integrations.Rect.center)).Within(1.5f));
             AssertNoOverlaps(layout.NodeRects.Values.Concat(layout.GroupNodes.Select(groupNode => groupNode.Rect)).ToArray());
             AssertGroupClustersSeparated(graph, layout, 40f);
+        }
+
+        [Test]
+        public void Layout_CompactOverviewUsesSmallerRootOrbitThanStandardCards()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+            PackageGraphLayout layout = new PackageGraphLayout();
+
+            PackageGraphLayoutResult compact = layout.Calculate(
+                graph,
+                PackageGraphLayoutMode.Overview,
+                string.Empty,
+                string.Empty,
+                Vector2.zero,
+                PackageGraphNodePresentationLevel.OverviewCompact);
+            PackageGraphLayoutResult standard = layout.Calculate(
+                graph,
+                PackageGraphLayoutMode.Overview,
+                string.Empty,
+                string.Empty,
+                Vector2.zero,
+                PackageGraphNodePresentationLevel.Standard);
+            PackageGraphGroupLayoutNode compactInfrastructure =
+                compact.GroupNodes.Single(groupNode => groupNode.GroupId == "infrastructure");
+            PackageGraphGroupLayoutNode standardInfrastructure =
+                standard.GroupNodes.Single(groupNode => groupNode.GroupId == "infrastructure");
+
+            Assert.Less(
+                Vector2.Distance(compactInfrastructure.Rect.center, PackageGraphLayout.GraphCenter),
+                Vector2.Distance(standardInfrastructure.Rect.center, PackageGraphLayout.GraphCenter));
+            Assert.Less(compactInfrastructure.OrbitRadius, standardInfrastructure.OrbitRadius);
+            AssertGroupClustersSeparated(graph, compact, 40f);
+            AssertGroupClustersSeparated(graph, standard, 40f);
+        }
+
+        [Test]
+        public void Layout_FocusUsesFullSelectedCardAndStandardRelatedCards()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+
+            PackageGraphLayoutResult layout = new PackageGraphLayout().Calculate(
+                graph,
+                PackageGraphLayoutMode.Focus,
+                "com.deucarian.session");
+            PackageGraphNodeMetrics fullMetrics =
+                PackageGraphPresentationPolicy.GetMetrics(PackageGraphNodePresentationLevel.Full);
+            PackageGraphNodeMetrics standardMetrics =
+                PackageGraphPresentationPolicy.GetMetrics(PackageGraphNodePresentationLevel.Standard);
+
+            Assert.AreEqual(PackageGraphNodePresentationLevel.Full, layout.NodePresentationLevels["com.deucarian.session"]);
+            Assert.AreEqual(PackageGraphNodePresentationLevel.Standard, layout.NodePresentationLevels["com.deucarian.logging"]);
+            Assert.That(layout.NodeRects["com.deucarian.session"].width, Is.EqualTo(fullMetrics.Width).Within(0.1f));
+            Assert.That(layout.NodeRects["com.deucarian.session"].height, Is.EqualTo(fullMetrics.Height).Within(0.1f));
+            Assert.That(layout.NodeRects["com.deucarian.logging"].width, Is.EqualTo(standardMetrics.Width).Within(0.1f));
+            Assert.That(layout.NodeRects["com.deucarian.logging"].height, Is.EqualTo(standardMetrics.Height).Within(0.1f));
         }
 
         [Test]
@@ -1588,6 +1694,19 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
             Assert.IsTrue(focus.IsEdgeVisible(edge), edge.Key);
             Assert.IsTrue(focus.IsEdgeEmphasized(edge), edge.Key);
+        }
+
+        private static void AssertHierarchyAndRole(
+            PackageGraphModel graph,
+            string packageId,
+            string expectedHierarchy,
+            string expectedRole)
+        {
+            Assert.IsTrue(graph.TryGetNode(packageId, out PackageGraphNode node), packageId);
+            Assert.AreEqual(
+                expectedHierarchy,
+                PackageGraphHierarchyDisplay.GetPackageHierarchyPath(graph, node.PackageDefinition));
+            Assert.AreEqual(expectedRole, PackageGraphHierarchyDisplay.GetPackageRole(node.PackageDefinition));
         }
 
         private static float GetAngle(Rect rect)
