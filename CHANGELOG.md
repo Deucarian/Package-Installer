@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.37 - 2026-06-19
+
+- Separated category hub anchors from captions so orbit centers, spokes, Fit, and Center target the circular hub.
+- Added explicit wide/compact/narrow Package Installer responsive modes with narrow stacked graph details.
+- Kept the Deucarian wallpaper fixed to the EditorWindow viewport while graph and details layouts resize.
+
 ## 1.1.36 - 2026-06-19
 
 - Polished Ecosystem Graph navigation with empty-canvas left-drag panning and context-aware right-click menus.

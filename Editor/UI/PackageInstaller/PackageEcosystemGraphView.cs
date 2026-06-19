@@ -41,6 +41,7 @@ namespace Deucarian.PackageInstaller.Editor
         private string _hoveredTopLevelGroupId = string.Empty;
         private int _hiddenRelatedCount;
         private bool _hasAppliedGraphFrame;
+        private PackageInstallerResponsiveMode _responsiveMode = PackageInstallerResponsiveMode.Wide;
 
         public PackageGraphView(
             Action<PackageDefinition> packageSelected,
@@ -217,7 +218,22 @@ namespace Deucarian.PackageInstaller.Editor
             _emptyState.Add(_emptyStateActionButton);
             _viewport.Add(_emptyState);
 
+            SetResponsiveMode(PackageInstallerResponsiveMode.Wide);
             UpdateFilterControls();
+        }
+
+        public void SetResponsiveMode(PackageInstallerResponsiveMode responsiveMode)
+        {
+            bool changed = responsiveMode != _responsiveMode;
+            _responsiveMode = responsiveMode;
+            EnableInClassList("dpi-ecosystem-graph--wide", responsiveMode == PackageInstallerResponsiveMode.Wide);
+            EnableInClassList("dpi-ecosystem-graph--compact", responsiveMode == PackageInstallerResponsiveMode.Compact);
+            EnableInClassList("dpi-ecosystem-graph--narrow", responsiveMode == PackageInstallerResponsiveMode.Narrow);
+
+            if (changed)
+            {
+                schedule.Execute(FitCurrentContext).ExecuteLater(80);
+            }
         }
 
         public void SetGraph(PackageGraphModel graph, string selectedPackageId, bool actionsEnabled)
@@ -1780,6 +1796,7 @@ namespace Deucarian.PackageInstaller.Editor
                 }
 
                 AddRect(ref bounds, ref hasBounds, groupNode.Rect);
+                AddRect(ref bounds, ref hasBounds, groupNode.HubRect);
 
                 if (!groupNode.Collapsed && groupNode.OrbitRadius > 0.01f)
                 {
@@ -1787,8 +1804,8 @@ namespace Deucarian.PackageInstaller.Editor
                         ref bounds,
                         ref hasBounds,
                         new Rect(
-                            groupNode.Rect.center.x - groupNode.OrbitRadius,
-                            groupNode.Rect.center.y - groupNode.OrbitRadius,
+                            groupNode.HubCenter.x - groupNode.OrbitRadius,
+                            groupNode.HubCenter.y - groupNode.OrbitRadius,
                             groupNode.OrbitRadius * 2f,
                             groupNode.OrbitRadius * 2f));
                 }
@@ -2953,13 +2970,14 @@ namespace Deucarian.PackageInstaller.Editor
                 }
 
                 Rect groupRect = GetGroupRect(groupNode);
+                Rect groupHubRect = GetGroupHubRect(groupNode, groupRect);
                 bool hoverActive = !_interactionsLocked && !string.IsNullOrWhiteSpace(_hoveredGroupId);
                 bool emphasized = hoverActive && IsGroupInHoverContext(groupNode.GroupId, _hoveredGroupId, groupNodeById);
                 bool muted = hoverActive && !emphasized;
 
                 DrawOrbitCircle(
                     painter,
-                    groupRect.center,
+                    groupHubRect.center,
                     groupNode.OrbitRadius,
                     emphasized,
                     muted,
@@ -2967,7 +2985,7 @@ namespace Deucarian.PackageInstaller.Editor
 
                 foreach (Rect childRect in childRects)
                 {
-                    DrawSpoke(painter, groupRect.center, childRect.center, emphasized, muted);
+                    DrawSpoke(painter, groupHubRect, childRect, emphasized, muted);
                 }
             }
         }
@@ -2984,6 +3002,7 @@ namespace Deucarian.PackageInstaller.Editor
                 }
 
                 Rect groupRect = GetGroupRect(groupNode);
+                Rect groupHubRect = GetGroupHubRect(groupNode, groupRect);
                 bool hoverActive = !_interactionsLocked && !string.IsNullOrWhiteSpace(_hoveredGroupId);
                 bool emphasized = hoverActive && string.Equals(groupNode.GroupId, _hoveredGroupId, StringComparison.OrdinalIgnoreCase);
                 bool muted = hoverActive && !emphasized;
@@ -2995,7 +3014,7 @@ namespace Deucarian.PackageInstaller.Editor
                         continue;
                     }
 
-                    DrawSpoke(painter, groupRect.center, packageRect.center, emphasized, muted);
+                    DrawSpoke(painter, groupHubRect, packageRect, emphasized, muted);
                 }
             }
         }
@@ -3025,7 +3044,7 @@ namespace Deucarian.PackageInstaller.Editor
                     continue;
                 }
 
-                yield return GetGroupRect(groupNode);
+                yield return GetGroupHubRect(groupNode, GetGroupRect(groupNode));
             }
         }
 
@@ -3037,6 +3056,22 @@ namespace Deucarian.PackageInstaller.Editor
                 : groupNode != null
                     ? groupNode.Rect
                     : default(Rect);
+        }
+
+        private static Rect GetGroupHubRect(PackageGraphGroupLayoutNode groupNode, Rect groupRect)
+        {
+            if (groupNode == null)
+            {
+                return groupRect;
+            }
+
+            Vector2 hubSize = groupNode.HubRect.size;
+            Vector2 hubOffset = groupNode.HubRect.position - groupNode.Rect.position;
+            return new Rect(
+                groupRect.x + hubOffset.x,
+                groupRect.y + hubOffset.y,
+                hubSize.x,
+                hubSize.y);
         }
 
         private static void DrawOrbitCircle(
@@ -3055,8 +3090,19 @@ namespace Deucarian.PackageInstaller.Editor
             DrawCircle(painter, center, radius);
         }
 
-        private static void DrawSpoke(Painter2D painter, Vector2 from, Vector2 to, bool emphasized, bool muted)
+        private static void DrawSpoke(Painter2D painter, Rect fromHubRect, Rect toRect, bool emphasized, bool muted)
         {
+            Vector2 fromCenter = fromHubRect.center;
+            Vector2 toCenter = toRect.center;
+            Vector2 direction = toCenter - fromCenter;
+
+            if (direction.sqrMagnitude <= 0.01f)
+            {
+                return;
+            }
+
+            Vector2 from = fromCenter + direction.normalized * (Mathf.Min(fromHubRect.width, fromHubRect.height) * 0.5f + 2f);
+            Vector2 to = GetRectBorderPoint(toRect, fromCenter, 2f);
             Color color = emphasized
                 ? new Color(0.48f, 0.80f, 0.84f, 0.24f)
                 : muted
@@ -3068,6 +3114,25 @@ namespace Deucarian.PackageInstaller.Editor
             painter.MoveTo(from);
             painter.LineTo(to);
             painter.Stroke();
+        }
+
+        private static Vector2 GetRectBorderPoint(Rect rect, Vector2 externalPoint, float padding)
+        {
+            Vector2 center = rect.center;
+            Vector2 direction = center - externalPoint;
+
+            if (direction.sqrMagnitude <= 0.01f)
+            {
+                return center;
+            }
+
+            float halfWidth = Mathf.Max(0.01f, rect.width * 0.5f);
+            float halfHeight = Mathf.Max(0.01f, rect.height * 0.5f);
+            Vector2 normalized = direction.normalized;
+            float scaleX = Mathf.Abs(normalized.x) > 0.001f ? halfWidth / Mathf.Abs(normalized.x) : float.PositiveInfinity;
+            float scaleY = Mathf.Abs(normalized.y) > 0.001f ? halfHeight / Mathf.Abs(normalized.y) : float.PositiveInfinity;
+            float distance = Mathf.Max(0f, Mathf.Min(scaleX, scaleY) - padding);
+            return center - normalized * distance;
         }
 
         private static void DrawCircle(Painter2D painter, Vector2 center, float radius)
@@ -3869,9 +3934,15 @@ namespace Deucarian.PackageInstaller.Editor
                 });
             }
 
+            float symbolSize = Mathf.Min(groupNode.HubRect.width, groupNode.HubRect.height);
+            float symbolLeft = groupNode.HubRect.x - groupNode.Rect.x;
+            float symbolTop = groupNode.HubRect.y - groupNode.Rect.y;
+
             VisualElement symbol = new VisualElement();
             symbol.AddToClassList("dpi-graph-group__symbol");
-            float symbolSize = groupNode.Focused ? 78f : groupNode.Collapsed ? 48f : 64f;
+            symbol.style.position = Position.Absolute;
+            symbol.style.left = symbolLeft;
+            symbol.style.top = symbolTop;
             symbol.style.width = symbolSize;
             symbol.style.height = symbolSize;
             Add(symbol);
@@ -3895,16 +3966,24 @@ namespace Deucarian.PackageInstaller.Editor
                 symbol.Add(attention);
             }
 
+            VisualElement caption = new VisualElement();
+            caption.AddToClassList("dpi-graph-group__caption");
+            caption.style.position = Position.Absolute;
+            caption.style.left = 0f;
+            caption.style.top = symbolTop + symbolSize + 7f;
+            caption.style.width = groupNode.Rect.width;
+            Add(caption);
+
             Label title = new Label(GetTitle(groupNode));
             title.AddToClassList("dpi-graph-group__title");
-            Add(title);
+            caption.Add(title);
 
             string subtitleText = groupNode.Collapsed && !string.IsNullOrWhiteSpace(groupNode.SummaryLabel)
                 ? groupNode.SummaryLabel
                 : groupNode.PackageCount + " packages";
             Label subtitle = new Label(subtitleText);
             subtitle.AddToClassList("dpi-graph-group__subtitle");
-            Add(subtitle);
+            caption.Add(subtitle);
 
             VisualElement stats = new VisualElement();
             stats.AddToClassList("dpi-graph-group__stats");
@@ -3916,7 +3995,7 @@ namespace Deucarian.PackageInstaller.Editor
                 stats.Add(CreateStat("Updates", groupNode.UpdateCount, "update"));
             }
 
-            Add(stats);
+            caption.Add(stats);
         }
 
         private static string GetTitle(PackageGraphGroupLayoutNode groupNode)

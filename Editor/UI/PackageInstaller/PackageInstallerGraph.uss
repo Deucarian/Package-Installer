@@ -1,11 +1,24 @@
+.dpi-fixed-wallpaper-layer,
+.dpi-fixed-wallpaper-overlay {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+}
+
 .dpi-view-toolbar {
     margin-bottom: 8px;
+    flex-wrap: wrap;
+    align-items: center;
 }
 
 .dpi-view-toolbar__summary {
     margin-left: 8px;
     color: var(--deucarian-muted);
     font-size: 11px;
+    min-width: 0;
+    flex-shrink: 1;
 }
 
 .dpi-view-toolbar__action {
@@ -85,6 +98,48 @@
     overflow: hidden;
 }
 
+.dpi-responsive--compact .dpi-graph-details {
+    width: 350px;
+    min-width: 310px;
+    max-width: 370px;
+}
+
+.dpi-responsive--compact .dpi-view-toolbar__action {
+    min-width: 76px;
+    padding-left: 6px;
+    padding-right: 6px;
+}
+
+.dpi-responsive--narrow .dpi-view-toolbar {
+    min-height: 58px;
+    align-items: center;
+}
+
+.dpi-responsive--narrow .dpi-view-toolbar__summary {
+    width: 100%;
+    margin-left: 0;
+    margin-top: 4px;
+}
+
+.dpi-responsive--narrow .dpi-graph-content-row {
+    flex-direction: column;
+    margin-bottom: 6px;
+}
+
+.dpi-responsive--narrow .dpi-graph-details {
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    height: 190px;
+    min-height: 150px;
+    max-height: 220px;
+    margin-left: 0;
+    margin-top: 8px;
+    align-self: stretch;
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+
 .dpi-ecosystem-graph {
     flex-grow: 1;
     flex-shrink: 1;
@@ -103,6 +158,11 @@
     border-top-color: rgba(90, 111, 160, 0.34);
     border-bottom-color: rgba(90, 111, 160, 0.34);
     background-color: rgba(11, 18, 25, 0.62);
+}
+
+.dpi-responsive--narrow .dpi-ecosystem-graph {
+    min-width: 0;
+    min-height: 300px;
 }
 
 .dpi-ecosystem-graph__header {
@@ -611,6 +671,24 @@
     background-color: rgba(12, 20, 28, 0.46);
 }
 
+.dpi-ecosystem-graph--compact .dpi-category-rail {
+    width: 142px;
+    min-width: 142px;
+    max-width: 142px;
+    padding-left: 6px;
+    padding-right: 6px;
+}
+
+.dpi-ecosystem-graph--narrow .dpi-category-rail {
+    width: 72px;
+    min-width: 72px;
+    max-width: 72px;
+    padding-left: 5px;
+    padding-right: 5px;
+    padding-top: 7px;
+    padding-bottom: 7px;
+}
+
 .dpi-category-rail--hidden {
     display: none;
 }
@@ -641,6 +719,13 @@
     border-top-color: rgba(90, 111, 160, 0.16);
     border-bottom-color: rgba(90, 111, 160, 0.16);
     background-color: rgba(17, 28, 38, 0.28);
+}
+
+.dpi-ecosystem-graph--narrow .dpi-category-rail__item {
+    min-height: 48px;
+    padding-left: 4px;
+    padding-right: 4px;
+    justify-content: center;
 }
 
 .dpi-category-rail__item:hover {
@@ -689,6 +774,10 @@
     background-color: rgba(18, 35, 45, 0.62);
 }
 
+.dpi-ecosystem-graph--narrow .dpi-category-rail__symbol {
+    margin-right: 0;
+}
+
 .dpi-category-rail__item--active .dpi-category-rail__symbol {
     border-left-color: rgba(59, 209, 191, 0.78);
     border-right-color: rgba(59, 209, 191, 0.58);
@@ -718,6 +807,10 @@
 .dpi-category-rail__text {
     flex-grow: 1;
     min-width: 0;
+}
+
+.dpi-ecosystem-graph--narrow .dpi-category-rail__text {
+    display: none;
 }
 
 .dpi-category-rail__label {
@@ -1156,19 +1249,20 @@
     position: absolute;
     overflow: visible;
     align-items: center;
-    justify-content: center;
-    padding-left: 4px;
-    padding-right: 4px;
-    padding-top: 4px;
-    padding-bottom: 4px;
+    justify-content: flex-start;
+    padding-left: 0;
+    padding-right: 0;
+    padding-top: 0;
+    padding-bottom: 0;
     background-color: rgba(0, 0, 0, 0);
 }
 
 .dpi-graph-group__symbol {
-    min-width: 54px;
-    min-height: 54px;
-    max-width: 88px;
-    max-height: 88px;
+    position: absolute;
+    min-width: 0;
+    min-height: 0;
+    max-width: none;
+    max-height: none;
     align-items: center;
     justify-content: center;
     border-top-left-radius: 999px;
@@ -1208,6 +1302,12 @@
 
 .dpi-graph-group--collapsed .dpi-graph-group__symbol {
     background-color: rgba(16, 25, 34, 0.72);
+}
+
+.dpi-graph-group__caption {
+    align-items: center;
+    justify-content: flex-start;
+    overflow: visible;
 }
 
 .dpi-graph-group--locked {
@@ -1271,7 +1371,7 @@
 }
 
 .dpi-graph-group__title {
-    margin-top: 7px;
+    margin-top: 0;
     color: rgba(234, 244, 247, 0.92);
     -unity-font-style: bold;
     font-size: 12px;

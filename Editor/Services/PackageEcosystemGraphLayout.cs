@@ -215,6 +215,7 @@ namespace Deucarian.PackageInstaller.Editor
         public PackageGraphGroupLayoutNode(
             PackageGraphGroup group,
             Rect rect,
+            Rect hubRect,
             PackageGraphLayoutRing ring,
             int packageCount,
             int installedCount,
@@ -228,6 +229,7 @@ namespace Deucarian.PackageInstaller.Editor
         {
             Group = group;
             Rect = rect;
+            HubRect = hubRect.width > 0.01f && hubRect.height > 0.01f ? hubRect : rect;
             Ring = ring;
             PackageCount = Math.Max(0, packageCount);
             InstalledCount = Math.Max(0, installedCount);
@@ -250,6 +252,12 @@ namespace Deucarian.PackageInstaller.Editor
         public string GroupId => Group != null ? Group.Id : string.Empty;
 
         public Rect Rect { get; }
+
+        public Rect HubRect { get; }
+
+        public Vector2 HubCenter => HubRect.center;
+
+        public float HubRadius => Mathf.Min(HubRect.width, HubRect.height) * 0.5f;
 
         public PackageGraphLayoutRing Ring { get; }
 
@@ -326,12 +334,15 @@ namespace Deucarian.PackageInstaller.Editor
 
         private const float HubWidth = 188f;
         private const float HubHeight = 188f;
-        private const float GroupWidth = 152f;
-        private const float GroupHeight = 152f;
-        private const float FocusGroupWidth = 172f;
-        private const float FocusGroupHeight = 172f;
-        private const float GroupChipWidth = 124f;
-        private const float GroupChipHeight = 124f;
+        private const float GroupHubSize = 72f;
+        private const float FocusGroupHubSize = 88f;
+        private const float GroupChipHubSize = 58f;
+        private const float GroupCaptionWidth = 154f;
+        private const float FocusGroupCaptionWidth = 178f;
+        private const float GroupChipCaptionWidth = 132f;
+        private const float GroupCaptionHeight = 78f;
+        private const float FocusGroupCaptionHeight = 88f;
+        private const float GroupChipCaptionHeight = 58f;
         private const float NodeGap = 22f;
         private const float MinimumGlobalGroupOrbitRadius = 560f;
         private const float MinimumClusterGap = 56f;
@@ -340,6 +351,7 @@ namespace Deucarian.PackageInstaller.Editor
         private const float FocusGridGapY = 28f;
         private const float ContextGroupBaseOffset = 118f;
         private const float ContextGroupCollisionPadding = 18f;
+        private const float CategoryCaptionClearance = 24f;
 
         public static readonly Vector2 GraphCenter = new Vector2(2000f, 1850f);
 
@@ -440,16 +452,22 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 PackageGraphGroup group = topGroups[index];
                 Vector2 groupCenter = PointOnOrbit(GraphCenter, groupAngles[index], globalOrbitRadius);
-                Rect groupRect = CenteredRect(groupCenter, GroupWidth, GroupHeight);
+                Rect groupRect = CreateGroupElementRect(groupCenter, GroupHubSize, GroupCaptionWidth, GroupCaptionHeight);
+                Rect groupHubRect = CreateHubRect(groupCenter, GroupHubSize);
                 IReadOnlyList<PackageGraphNode> directPackages = GetDirectPackages(graph, group.Id);
                 IReadOnlyList<PackageGraphGroup> directGroups = GetChildGroups(graph, group.Id);
                 int childCount = directPackages.Count + directGroups.Count;
-                float localRadius = CalculateLocalOrbitRadius(childCount, packageMetrics, GroupChipWidth, GroupChipHeight);
+                float localRadius = CalculateLocalOrbitRadius(
+                    childCount,
+                    packageMetrics,
+                    GroupChipCaptionWidth,
+                    GroupChipHubSize + GroupChipCaptionHeight);
 
                 groupNodes.Add(CreateGroupLayoutNode(
                     graph,
                     group,
                     groupRect,
+                    groupHubRect,
                     focused: false,
                     collapsed: false,
                     orbitRadius: localRadius));
@@ -498,12 +516,24 @@ namespace Deucarian.PackageInstaller.Editor
             IReadOnlyList<PackageGraphNode> directPackages = GetDirectPackages(graph, focusedGroup.Id);
             IReadOnlyList<PackageGraphGroup> directGroups = GetChildGroups(graph, focusedGroup.Id);
             int childCount = directPackages.Count + directGroups.Count;
-            float localRadius = Mathf.Max(260f, CalculateLocalOrbitRadius(childCount, packageMetrics, GroupChipWidth, GroupChipHeight));
-            Rect focusedGroupRect = CenteredRect(GraphCenter, FocusGroupWidth, FocusGroupHeight);
+            float localRadius = Mathf.Max(
+                260f,
+                CalculateLocalOrbitRadius(
+                    childCount,
+                    packageMetrics,
+                    GroupChipCaptionWidth,
+                    GroupChipHubSize + GroupChipCaptionHeight));
+            Rect focusedGroupRect = CreateGroupElementRect(
+                GraphCenter,
+                FocusGroupHubSize,
+                FocusGroupCaptionWidth,
+                FocusGroupCaptionHeight);
+            Rect focusedGroupHubRect = CreateHubRect(GraphCenter, FocusGroupHubSize);
             groupNodes.Add(CreateGroupLayoutNode(
                 graph,
                 focusedGroup,
                 focusedGroupRect,
+                focusedGroupHubRect,
                 focused: true,
                 collapsed: false,
                 orbitRadius: childCount > 0 ? localRadius : 0f));
@@ -672,11 +702,17 @@ namespace Deucarian.PackageInstaller.Editor
 
                 if (child.Group != null)
                 {
-                    Rect groupRect = CenteredRect(childCenter, GroupChipWidth, GroupChipHeight);
+                    Rect groupRect = CreateGroupElementRect(
+                        childCenter,
+                        GroupChipHubSize,
+                        GroupChipCaptionWidth,
+                        GroupChipCaptionHeight);
+                    Rect groupHubRect = CreateHubRect(childCenter, GroupChipHubSize);
                     groupNodes.Add(CreateGroupLayoutNode(
                         graph,
                         child.Group,
                         groupRect,
+                        groupHubRect,
                         focused: false,
                         collapsed: true));
                     continue;
@@ -755,10 +791,12 @@ namespace Deucarian.PackageInstaller.Editor
                     direction.normalized,
                     nodeRects.Values,
                     groupNodes.Select(groupNode => groupNode.Rect));
+                Rect hubRect = CreateGroupHubRectFromElement(rect, GroupChipHubSize);
                 groupNodes.Add(CreateGroupLayoutNode(
                     graph,
                     group,
                     rect,
+                    hubRect,
                     focused: false,
                     collapsed: true,
                     packageScope: packages,
@@ -790,20 +828,21 @@ namespace Deucarian.PackageInstaller.Editor
             float[] perpendicularOffsets =
             {
                 0f,
-                GroupChipHeight + 24f,
-                -(GroupChipHeight + 24f),
-                (GroupChipHeight + 24f) * 1.55f,
-                -(GroupChipHeight + 24f) * 1.55f
+                GroupChipHubSize + 24f,
+                -(GroupChipHubSize + 24f),
+                (GroupChipHubSize + 24f) * 1.55f,
+                -(GroupChipHubSize + 24f) * 1.55f
             };
 
             foreach (float offset in offsets)
             {
                 foreach (float perpendicularOffset in perpendicularOffsets)
                 {
-                    Rect candidate = ClampToCanvas(CenteredRect(
+                    Rect candidate = ClampToCanvas(CreateGroupElementRect(
                         anchor + safeDirection * offset + perpendicular * perpendicularOffset,
-                        GroupChipWidth,
-                        GroupChipHeight));
+                        GroupChipHubSize,
+                        GroupChipCaptionWidth,
+                        GroupChipCaptionHeight));
 
                     if (!occupiedRects.Any(rect => rect.Overlaps(candidate)))
                     {
@@ -812,10 +851,11 @@ namespace Deucarian.PackageInstaller.Editor
                 }
             }
 
-            return ClampToCanvas(CenteredRect(
+            return ClampToCanvas(CreateGroupElementRect(
                 anchor + safeDirection * offsets[offsets.Length - 1],
-                GroupChipWidth,
-                GroupChipHeight));
+                GroupChipHubSize,
+                GroupChipCaptionWidth,
+                GroupChipCaptionHeight));
         }
 
         private static Vector2 CalculateAverageCenter(
@@ -846,6 +886,7 @@ namespace Deucarian.PackageInstaller.Editor
             PackageGraphModel graph,
             PackageGraphGroup group,
             Rect rect,
+            Rect hubRect,
             bool focused,
             bool collapsed,
             IEnumerable<PackageGraphNode> packageScope = null,
@@ -861,10 +902,18 @@ namespace Deucarian.PackageInstaller.Editor
                 node.Status == PackageGraphNodeStatus.Missing ||
                 node.Status == PackageGraphNodeStatus.Warning);
             int updateCount = packages.Count(node => node.Status == PackageGraphNodeStatus.UpdateAvailable);
+            Rect clampedRect = ClampToCanvas(rect);
+            Vector2 hubOffset = hubRect.position - rect.position;
+            Rect clampedHubRect = new Rect(
+                clampedRect.x + hubOffset.x,
+                clampedRect.y + hubOffset.y,
+                hubRect.width,
+                hubRect.height);
 
             return new PackageGraphGroupLayoutNode(
                 group,
-                ClampToCanvas(rect),
+                clampedRect,
+                clampedHubRect,
                 ResolveRing(group.Id),
                 packages.Length,
                 installedCount,
@@ -1187,8 +1236,8 @@ namespace Deucarian.PackageInstaller.Editor
             float childRadialHalfExtent = Mathf.Max(
                 Mathf.Max(packageMetrics.Width, packageMetrics.Height),
                 Mathf.Max(groupWidth, groupHeight)) * 0.5f;
-            float groupRadialHalfExtent = Mathf.Max(GroupWidth, GroupHeight) * 0.5f;
-            float centerClearanceRadius = childRadialHalfExtent + groupRadialHalfExtent + NodeGap;
+            float groupRadialHalfExtent = CalculateHalfDiagonal(GroupCaptionWidth, GroupHubSize + GroupCaptionHeight);
+            float centerClearanceRadius = childRadialHalfExtent + groupRadialHalfExtent + NodeGap + CategoryCaptionClearance;
 
             if (childCount <= 0)
             {
@@ -1227,7 +1276,11 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 PackageGraphGroup group = topGroups[index];
                 int childCount = GetDirectPackages(graph, group.Id).Count + GetChildGroups(graph, group.Id).Count;
-                float localRadius = CalculateLocalOrbitRadius(childCount, packageMetrics, GroupChipWidth, GroupChipHeight);
+                float localRadius = CalculateLocalOrbitRadius(
+                    childCount,
+                    packageMetrics,
+                    GroupChipCaptionWidth,
+                    GroupChipHubSize + GroupChipCaptionHeight);
                 clusterRadii[index] = CalculateClusterCollisionRadius(childCount, localRadius, packageMetrics);
             }
 
@@ -1258,7 +1311,7 @@ namespace Deucarian.PackageInstaller.Editor
             float localRadius,
             PackageGraphNodeMetrics packageMetrics)
         {
-            float groupHalfExtent = CalculateHalfDiagonal(GroupWidth, GroupHeight);
+            float groupHalfExtent = CalculateHalfDiagonal(GroupCaptionWidth, GroupHubSize + GroupCaptionHeight);
 
             if (childCount <= 0 || localRadius <= 0.01f)
             {
@@ -1266,9 +1319,9 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             float childHalfDiagonal = CalculateHalfDiagonal(
-                Mathf.Max(packageMetrics.Width, GroupChipWidth),
-                Mathf.Max(packageMetrics.Height, GroupChipHeight));
-            float axisAlignedOrbitPadding = Mathf.Max(packageMetrics.Width, GroupChipWidth) * 0.4f;
+                Mathf.Max(packageMetrics.Width, GroupChipCaptionWidth),
+                Mathf.Max(packageMetrics.Height, GroupChipHubSize));
+            float axisAlignedOrbitPadding = Mathf.Max(packageMetrics.Width, GroupChipCaptionWidth) * 0.4f;
             return Mathf.Max(groupHalfExtent, localRadius + childHalfDiagonal + axisAlignedOrbitPadding);
         }
 
@@ -1420,6 +1473,34 @@ namespace Deucarian.PackageInstaller.Editor
                 center.y - height * 0.5f,
                 width,
                 height);
+        }
+
+        private static Rect CreateGroupElementRect(
+            Vector2 hubCenter,
+            float hubSize,
+            float captionWidth,
+            float captionHeight)
+        {
+            float width = Mathf.Max(hubSize, captionWidth);
+            return new Rect(
+                hubCenter.x - width * 0.5f,
+                hubCenter.y - hubSize * 0.5f,
+                width,
+                hubSize + Mathf.Max(0f, captionHeight));
+        }
+
+        private static Rect CreateHubRect(Vector2 hubCenter, float hubSize)
+        {
+            return CenteredRect(hubCenter, hubSize, hubSize);
+        }
+
+        private static Rect CreateGroupHubRectFromElement(Rect elementRect, float hubSize)
+        {
+            return new Rect(
+                elementRect.center.x - hubSize * 0.5f,
+                elementRect.y,
+                hubSize,
+                hubSize);
         }
 
         private static Rect CreateOverviewHubRect()

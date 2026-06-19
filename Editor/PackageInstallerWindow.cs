@@ -9,12 +9,21 @@ using PackageManagerPackageInfo = UnityEditor.PackageManager.PackageInfo;
 
 namespace Deucarian.PackageInstaller.Editor
 {
+    internal enum PackageInstallerResponsiveMode
+    {
+        Wide,
+        Compact,
+        Narrow
+    }
+
     internal sealed class PackageInstallerWindow : EditorWindow
     {
         private const string WindowTitle = "Package Installer";
-        private const string PackageVersion = "1.1.36";
-        private const float MinWindowWidth = 850f;
+        private const string PackageVersion = "1.1.37";
+        private const float MinWindowWidth = 820f;
         private const float MinWindowHeight = 650f;
+        private const float CompactLayoutWidth = 1180f;
+        private const float NarrowLayoutWidth = 900f;
         private const float SidebarWidth = 340f;
         private const float SidebarRowMinHeight = 94f;
         private const float SidebarRowMaxHeight = 150f;
@@ -132,11 +141,13 @@ namespace Deucarian.PackageInstaller.Editor
         private VisualElement _listViewContainerHost;
         private VisualElement _graphModeContainer;
         private VisualElement _graphContentRow;
+        private VisualElement _windowContentRoot;
         private IMGUIContainer _listViewContainer;
         private IMGUIContainer _graphDetailsContainer;
         private IMGUIContainer _operationDrawerContainer;
         private IMGUIContainer _operationFooterContainer;
         private PackageGraphView _graphView;
+        private PackageInstallerResponsiveMode _responsiveMode = PackageInstallerResponsiveMode.Wide;
 
         private bool _stylesInitialized;
         private bool _lastProSkin;
@@ -189,6 +200,13 @@ namespace Deucarian.PackageInstaller.Editor
         internal static bool DefaultsToEcosystemGraphForTests => DefaultInstallerViewMode == InstallerViewMode.EcosystemGraph;
 
         internal static IReadOnlyList<string> ViewToggleOrderForTests => new[] { "Ecosystem Graph", "List View" };
+
+        internal static Vector2 MinWindowSizeForTests => new Vector2(MinWindowWidth, MinWindowHeight);
+
+        internal static PackageInstallerResponsiveMode ResolveResponsiveModeForTests(float width)
+        {
+            return ResolveResponsiveMode(width);
+        }
 
         internal static bool ShouldClearGraphSelectionForFilters(
             string selectedPackageId,
@@ -300,6 +318,9 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
+            _windowContentRoot = content;
+            ConfigureFixedWallpaper(rootVisualElement);
+
             StyleSheet graphStyleSheet = DeucarianEditorUIResources.LoadStyleSheet(GraphStyleSheetPath);
 
             if (graphStyleSheet != null)
@@ -308,6 +329,7 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             rootVisualElement.RegisterCallback<KeyDownEvent>(HandleRootKeyDown);
+            content.RegisterCallback<GeometryChangedEvent>(evt => ApplyResponsiveLayout(evt.newRect.width));
             BuildViewToolbar(content);
 
             _listViewContainerHost = new VisualElement();
@@ -350,7 +372,72 @@ namespace Deucarian.PackageInstaller.Editor
             content.Add(_operationFooterContainer);
 
             SetViewMode(_viewMode);
+            ApplyResponsiveLayout(position.width);
             RefreshGraphView();
+        }
+
+        private void ApplyResponsiveLayout(float contentWidth)
+        {
+            if (_windowContentRoot == null)
+            {
+                return;
+            }
+
+            PackageInstallerResponsiveMode nextMode = ResolveResponsiveMode(contentWidth);
+            _responsiveMode = nextMode;
+
+            _windowContentRoot.EnableInClassList("dpi-responsive--wide", nextMode == PackageInstallerResponsiveMode.Wide);
+            _windowContentRoot.EnableInClassList("dpi-responsive--compact", nextMode == PackageInstallerResponsiveMode.Compact);
+            _windowContentRoot.EnableInClassList("dpi-responsive--narrow", nextMode == PackageInstallerResponsiveMode.Narrow);
+
+            _graphView?.SetResponsiveMode(nextMode);
+        }
+
+        private static PackageInstallerResponsiveMode ResolveResponsiveMode(float width)
+        {
+            if (width < NarrowLayoutWidth)
+            {
+                return PackageInstallerResponsiveMode.Narrow;
+            }
+
+            return width < CompactLayoutWidth
+                ? PackageInstallerResponsiveMode.Compact
+                : PackageInstallerResponsiveMode.Wide;
+        }
+
+        private static void ConfigureFixedWallpaper(VisualElement root)
+        {
+            if (root == null)
+            {
+                return;
+            }
+
+            ConfigureFixedLayer(root.Q<VisualElement>("deucarian-window-background"), "dpi-fixed-wallpaper-layer");
+            ConfigureFixedLayer(root.Q<VisualElement>("deucarian-window-overlay"), "dpi-fixed-wallpaper-overlay");
+        }
+
+        internal static void ConfigureFixedWallpaperForTests(VisualElement root)
+        {
+            ConfigureFixedWallpaper(root);
+        }
+
+        private static void ConfigureFixedLayer(VisualElement element, string className)
+        {
+            if (element == null)
+            {
+                return;
+            }
+
+            element.AddToClassList(className);
+            element.pickingMode = PickingMode.Ignore;
+            element.style.position = Position.Absolute;
+            element.style.left = 0f;
+            element.style.right = 0f;
+            element.style.top = 0f;
+            element.style.bottom = 0f;
+            element.style.translate = new Translate(0f, 0f, 0f);
+            element.style.scale = new Scale(Vector3.one);
+            element.style.unityBackgroundScaleMode = ScaleMode.ScaleAndCrop;
         }
 
         private void BuildViewToolbar(VisualElement content)
