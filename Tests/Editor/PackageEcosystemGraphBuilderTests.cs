@@ -77,20 +77,69 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             CollectionAssert.AreEquivalent(
                 new[]
                 {
-                    "foundation",
-                    "runtime-world",
-                    "ui-experience",
+                    "infrastructure",
+                    "state-data",
+                    "runtime-services",
+                    "experience-interaction",
                     "tools-quality",
                     "integrations",
                     "suites"
                 },
                 graph.Groups.Select(group => group.Id).ToArray());
-            Assert.AreEqual("foundation", graph.Nodes.Single(node => node.PackageId == "com.deucarian.api").GroupId);
-            Assert.AreEqual("runtime-world", graph.Nodes.Single(node => node.PackageId == "com.deucarian.object-selection").GroupId);
+            Assert.IsFalse(graph.Groups.Any(group => string.Equals(group.DisplayName, "Foundation", StringComparison.OrdinalIgnoreCase)));
+            Assert.AreEqual("infrastructure", graph.Nodes.Single(node => node.PackageId == "com.deucarian.editor").GroupId);
+            Assert.AreEqual("infrastructure", graph.Nodes.Single(node => node.PackageId == "com.deucarian.logging").GroupId);
+            Assert.AreEqual("state-data", graph.Nodes.Single(node => node.PackageId == "com.deucarian.core-state").GroupId);
+            Assert.AreEqual("runtime-services", graph.Nodes.Single(node => node.PackageId == "com.deucarian.api").GroupId);
+            Assert.AreEqual("runtime-services", graph.Nodes.Single(node => node.PackageId == "com.deucarian.session").GroupId);
+            Assert.AreEqual("runtime-services", graph.Nodes.Single(node => node.PackageId == "com.deucarian.object-loading").GroupId);
+            Assert.AreEqual("experience-interaction", graph.Nodes.Single(node => node.PackageId == "com.deucarian.ui-binding").GroupId);
+            Assert.AreEqual("experience-interaction", graph.Nodes.Single(node => node.PackageId == "com.deucarian.theming").GroupId);
+            Assert.AreEqual("experience-interaction", graph.Nodes.Single(node => node.PackageId == "com.deucarian.object-selection").GroupId);
+            Assert.AreEqual("tools-quality", graph.Nodes.Single(node => node.PackageId == "com.deucarian.package-installer").GroupId);
+            Assert.AreEqual("tools-quality", graph.Nodes.Single(node => node.PackageId == "com.deucarian.diagnostics").GroupId);
             Assert.AreEqual("integrations", graph.Nodes.Single(node => node.PackageId == "com.deucarian.session.api-integration").GroupId);
             Assert.AreEqual("suites", graph.Nodes.Single(node => node.PackageId == "com.deucarian.selection-suite").GroupId);
             Assert.AreEqual(PackageGraphNodeType.Integration, graph.Nodes.Single(node => node.PackageId == "com.deucarian.session.api-integration").NodeType);
             Assert.AreEqual(PackageGraphNodeType.Suite, graph.Nodes.Single(node => node.PackageId == "com.deucarian.selection-suite").NodeType);
+        }
+
+        [Test]
+        public void Build_MigratesLegacyGroupAliasesToCurrentTaxonomy()
+        {
+            PackageGraphGroup[] groups =
+            {
+                new PackageGraphGroup("infrastructure", "Infrastructure", string.Empty, string.Empty, 10, string.Empty, string.Empty),
+                new PackageGraphGroup("state-data", "State & Data", string.Empty, string.Empty, 20, string.Empty, string.Empty),
+                new PackageGraphGroup("runtime-services", "Runtime Services", string.Empty, string.Empty, 30, string.Empty, string.Empty),
+                new PackageGraphGroup("experience-interaction", "Experience & Interaction", string.Empty, string.Empty, 40, string.Empty, string.Empty),
+                new PackageGraphGroup("tools-quality", "Tools & Quality", string.Empty, string.Empty, 50, string.Empty, string.Empty),
+                new PackageGraphGroup("integrations", "Integrations", string.Empty, string.Empty, 60, string.Empty, string.Empty),
+                new PackageGraphGroup("suites", "Suites", string.Empty, string.Empty, 70, string.Empty, string.Empty)
+            };
+            PackageDefinition logging = CreatePackage(
+                "Logging",
+                "com.deucarian.logging",
+                "Core",
+                groupId: "Foundation");
+            PackageDefinition session = CreatePackage(
+                "Session",
+                "com.deucarian.session",
+                "Core",
+                ecosystemGroup: "ServicesRuntime");
+            PackageDefinition ui = CreatePackage(
+                "UI Binding",
+                "com.deucarian.ui-binding",
+                "UI",
+                ecosystemGroup: "ExperienceUiWorld");
+
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(new[] { logging, session, ui }, groups);
+
+            Assert.AreEqual("infrastructure", graph.Nodes.Single(node => node.PackageId == logging.PackageId).GroupId);
+            Assert.AreEqual("runtime-services", graph.Nodes.Single(node => node.PackageId == session.PackageId).GroupId);
+            Assert.AreEqual("experience-interaction", graph.Nodes.Single(node => node.PackageId == ui.PackageId).GroupId);
+            Assert.IsFalse(graph.Groups.Any(group => string.Equals(group.DisplayName, "Foundation", StringComparison.OrdinalIgnoreCase)));
         }
 
         [Test]
@@ -282,6 +331,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 FindByClass(FindGraphNode(view, "com.example.missing"), "dpi-graph-node__badge--missing")
                     .OfType<Label>()
                     .Any(label => label.text == "Missing dependency"));
+            Assert.IsEmpty(FindByClass(view, "deucarian-badge"));
         }
 
         [Test]
@@ -297,7 +347,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 .ToArray();
             float globalRadius = Vector2.Distance(topGroups[0].Rect.center, PackageGraphLayout.GraphCenter);
 
-            Assert.AreEqual(6, topGroups.Length);
+            Assert.AreEqual(7, topGroups.Length);
+            Assert.That(globalRadius, Is.GreaterThanOrEqualTo(900f));
             foreach (PackageGraphGroupLayoutNode groupNode in topGroups)
             {
                 Assert.That(
@@ -306,22 +357,21 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                     groupNode.GroupId);
             }
 
-            PackageGraphGroupLayoutNode foundation = topGroups.Single(groupNode => groupNode.GroupId == "foundation");
+            PackageGraphGroupLayoutNode infrastructure = topGroups.Single(groupNode => groupNode.GroupId == "infrastructure");
             foreach (string packageId in new[]
                      {
                          "com.deucarian.editor",
-                         "com.deucarian.logging",
-                         "com.deucarian.api",
-                         "com.deucarian.core-state"
+                         "com.deucarian.logging"
                      })
             {
                 Assert.That(
-                    Vector2.Distance(layout.NodeRects[packageId].center, foundation.Rect.center),
-                    Is.EqualTo(Vector2.Distance(layout.NodeRects["com.deucarian.editor"].center, foundation.Rect.center)).Within(1.5f),
+                    Vector2.Distance(layout.NodeRects[packageId].center, infrastructure.Rect.center),
+                    Is.EqualTo(Vector2.Distance(layout.NodeRects["com.deucarian.editor"].center, infrastructure.Rect.center)).Within(1.5f),
                     packageId);
             }
 
             AssertNoOverlaps(layout.NodeRects.Values.ToArray());
+            AssertGroupClustersSeparated(graph, layout, 40f);
         }
 
         [Test]
@@ -606,6 +656,55 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void GraphView_OverviewLegendShowsOnlyStructuralItems()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+            PackageGraphView view = new PackageGraphView(_ => { }, (_, __) => { });
+
+            view.SetGraph(graph, string.Empty, actionsEnabled: true);
+
+            string[] labels = FindByClass(view, "dpi-graph-legend__label")
+                .OfType<Label>()
+                .Select(label => label.text)
+                .ToArray();
+
+            CollectionAssert.AreEquivalent(
+                new[] { "Root", "Group", "Package", "Installed", "Not installed", "Attention" },
+                labels);
+            CollectionAssert.DoesNotContain(labels, "Dependency flow");
+            CollectionAssert.DoesNotContain(labels, "Integration connection");
+        }
+
+        [Test]
+        public void GraphViewport_SemanticZoomClassesTrackZoomThresholds()
+        {
+            PackageGraphViewport viewport = new PackageGraphViewport(null);
+            VisualElement contentRoot = viewport.Q<VisualElement>("ecosystem-graph-content");
+            System.Reflection.FieldInfo zoomField = typeof(PackageGraphViewport).GetField(
+                "_zoom",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            System.Reflection.MethodInfo applyTransform = typeof(PackageGraphViewport).GetMethod(
+                "ApplyTransform",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+
+            zoomField.SetValue(viewport, 0.50f);
+            applyTransform.Invoke(viewport, null);
+
+            Assert.IsTrue(contentRoot.ClassListContains("dpi-ecosystem-graph__content--low-zoom"));
+
+            zoomField.SetValue(viewport, 0.80f);
+            applyTransform.Invoke(viewport, null);
+
+            Assert.IsTrue(contentRoot.ClassListContains("dpi-ecosystem-graph__content--medium-zoom"));
+
+            zoomField.SetValue(viewport, 1.20f);
+            applyTransform.Invoke(viewport, null);
+
+            Assert.IsTrue(contentRoot.ClassListContains("dpi-ecosystem-graph__content--high-zoom"));
+        }
+
+        [Test]
         public void GraphView_DisablesSelectedNodeActionDuringLayoutTransition()
         {
             PackageDefinition package = CreatePackage("Installable", "com.example.installable", "Core");
@@ -668,7 +767,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 graph,
                 string.Empty,
                 string.Empty,
-                "foundation",
+                "infrastructure",
                 actionsEnabled: true,
                 visiblePackageIds: null,
                 filterCounts: null,
@@ -677,6 +776,14 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual(1, FindByClass(groupFocused, "dpi-graph-group--focused").Count);
             Assert.IsEmpty(FindByClass(groupFocused, "dpi-graph-node__action"));
             Assert.IsTrue(FindGraphNode(groupFocused, "com.deucarian.logging").ClassListContains("dpi-graph-node--overview"));
+            Assert.IsTrue(
+                FindByClass(groupFocused, "dpi-graph-legend__label")
+                    .OfType<Label>()
+                    .Any(label => label.text == "Membership"));
+            Assert.IsFalse(
+                FindByClass(groupFocused, "dpi-graph-legend__label")
+                    .OfType<Label>()
+                    .Any(label => label.text == "Dependency flow"));
         }
 
         [Test]
@@ -719,6 +826,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.IsNull(view.Q<ScrollView>());
             Assert.IsNotNull(view.Q<VisualElement>("ecosystem-graph-viewport"));
             Assert.IsNotNull(view.Q<VisualElement>("ecosystem-graph-content"));
+            Assert.IsNotNull(view.Q<VisualElement>("ecosystem-graph-membership-layer"));
             Assert.IsNotNull(view.Q<VisualElement>("ecosystem-graph-edge-layer"));
             Assert.IsTrue(
                 FindByClass(view, "dpi-graph-legend__label")
@@ -777,15 +885,16 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
             Assert.AreEqual(PackageGraphLayoutMode.Overview, layout.Mode);
             Assert.AreEqual(graph.Nodes.Count, layout.NodeRects.Count);
-            Assert.AreEqual(7, layout.RingGuides.Count);
+            Assert.AreEqual(8, layout.RingGuides.Count);
             Assert.IsEmpty(layout.SectorLabels);
-            Assert.AreEqual(6, layout.GroupNodes.Count(groupNode => !groupNode.Collapsed));
+            Assert.AreEqual(7, layout.GroupNodes.Count(groupNode => !groupNode.Collapsed));
             CollectionAssert.AreEquivalent(
                 new[]
                 {
-                    "foundation",
-                    "runtime-world",
-                    "ui-experience",
+                    "infrastructure",
+                    "state-data",
+                    "runtime-services",
+                    "experience-interaction",
                     "tools-quality",
                     "integrations",
                     "suites"
@@ -795,7 +904,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                     .Select(groupNode => groupNode.GroupId)
                     .ToArray());
             Assert.AreEqual(
-                PackageGraphLayoutRing.Foundation,
+                PackageGraphLayoutRing.Infrastructure,
                 layout.NodeRings["com.deucarian.logging"]);
             Assert.AreEqual(
                 PackageGraphLayoutRing.Runtime,
@@ -806,17 +915,19 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual(
                 PackageGraphLayoutRing.Runtime,
                 layout.NodeRings["com.deucarian.package-installer"]);
-            PackageGraphGroupLayoutNode foundation = layout.GroupNodes.Single(groupNode => groupNode.GroupId == "foundation");
+            PackageGraphGroupLayoutNode infrastructure = layout.GroupNodes.Single(groupNode => groupNode.GroupId == "infrastructure");
             PackageGraphGroupLayoutNode integrations = layout.GroupNodes.Single(groupNode => groupNode.GroupId == "integrations");
-            Assert.That(Vector2.Distance(foundation.Rect.center, PackageGraphLayout.GraphCenter), Is.EqualTo(800f).Within(0.1f));
-            Assert.That(Vector2.Distance(integrations.Rect.center, PackageGraphLayout.GraphCenter), Is.EqualTo(800f).Within(0.1f));
+            float globalRadius = Vector2.Distance(infrastructure.Rect.center, PackageGraphLayout.GraphCenter);
+            Assert.That(globalRadius, Is.GreaterThanOrEqualTo(900f));
+            Assert.That(Vector2.Distance(integrations.Rect.center, PackageGraphLayout.GraphCenter), Is.EqualTo(globalRadius).Within(0.1f));
             Assert.That(
-                Vector2.Distance(layout.NodeRects["com.deucarian.api"].center, foundation.Rect.center),
-                Is.EqualTo(Vector2.Distance(layout.NodeRects["com.deucarian.logging"].center, foundation.Rect.center)).Within(1.5f));
+                Vector2.Distance(layout.NodeRects["com.deucarian.editor"].center, infrastructure.Rect.center),
+                Is.EqualTo(Vector2.Distance(layout.NodeRects["com.deucarian.logging"].center, infrastructure.Rect.center)).Within(1.5f));
             Assert.That(
                 Vector2.Distance(layout.NodeRects["com.deucarian.session.api-integration"].center, integrations.Rect.center),
                 Is.EqualTo(Vector2.Distance(layout.NodeRects["com.deucarian.object-loading.api-integration"].center, integrations.Rect.center)).Within(1.5f));
             AssertNoOverlaps(layout.NodeRects.Values.Concat(layout.GroupNodes.Select(groupNode => groupNode.Rect)).ToArray());
+            AssertGroupClustersSeparated(graph, layout, 40f);
         }
 
         [Test]
@@ -829,24 +940,22 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 graph,
                 PackageGraphLayoutMode.GroupFocus,
                 string.Empty,
-                "foundation",
+                "infrastructure",
                 Vector2.zero);
             PackageGraphGroupLayoutNode focusedGroup = layout.GroupNodes.Single(groupNode =>
-                groupNode.GroupId == "foundation" && groupNode.Focused);
+                groupNode.GroupId == "infrastructure" && groupNode.Focused);
 
             Assert.AreEqual(PackageGraphLayoutMode.GroupFocus, layout.Mode);
-            Assert.AreEqual("foundation", layout.FocusGroupId);
+            Assert.AreEqual("infrastructure", layout.FocusGroupId);
             Assert.That(Vector2.Distance(PackageGraphLayout.GraphCenter, focusedGroup.Rect.center), Is.LessThan(0.1f));
             CollectionAssert.AreEquivalent(
                 new[]
                 {
                     "com.deucarian.editor",
-                    "com.deucarian.logging",
-                    "com.deucarian.api",
-                    "com.deucarian.core-state"
+                    "com.deucarian.logging"
                 },
                 layout.NodeRects.Keys.ToArray());
-            Assert.IsTrue(layout.GroupNodes.Any(groupNode => groupNode.Collapsed && groupNode.GroupId == "runtime-world"));
+            Assert.IsTrue(layout.GroupNodes.Any(groupNode => groupNode.Collapsed && groupNode.GroupId == "runtime-services"));
             Assert.IsFalse(layout.NodeRects.ContainsKey("com.deucarian.session"));
             AssertNoOverlaps(layout.NodeRects.Values.Concat(layout.GroupNodes.Select(groupNode => groupNode.Rect)).ToArray());
         }
@@ -1107,7 +1216,9 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             string[] integrationTargets = null,
             string[] suiteMembers = null,
             string[] optionalCompanions = null,
-            string[] recommendedWith = null)
+            string[] recommendedWith = null,
+            string ecosystemGroup = null,
+            string groupId = null)
         {
             return new PackageDefinition(
                 displayName,
@@ -1123,7 +1234,9 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 integrationTargets: integrationTargets,
                 suiteMembers: suiteMembers,
                 optionalCompanions: optionalCompanions,
-                recommendedWith: recommendedWith);
+                recommendedWith: recommendedWith,
+                ecosystemGroup: ecosystemGroup,
+                groupId: groupId);
         }
 
         private static PackageDefinition[] CreateDefaultGraphPackages()
@@ -1346,6 +1459,71 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                         rects[firstIndex] + " overlaps " + rects[secondIndex]);
                 }
             }
+        }
+
+        private static void AssertGroupClustersSeparated(
+            PackageGraphModel graph,
+            PackageGraphLayoutResult layout,
+            float minimumGap)
+        {
+            PackageGraphGroupLayoutNode[] topGroups = layout.GroupNodes
+                .Where(groupNode => groupNode != null && !groupNode.Collapsed)
+                .OrderBy(groupNode => groupNode.Group.SortOrder)
+                .ToArray();
+
+            for (int firstIndex = 0; firstIndex < topGroups.Length; firstIndex++)
+            {
+                for (int secondIndex = firstIndex + 1; secondIndex < topGroups.Length; secondIndex++)
+                {
+                    PackageGraphGroupLayoutNode first = topGroups[firstIndex];
+                    PackageGraphGroupLayoutNode second = topGroups[secondIndex];
+                    float firstRadius = CalculateClusterRadius(graph, layout, first);
+                    float secondRadius = CalculateClusterRadius(graph, layout, second);
+                    float distance = Vector2.Distance(first.Rect.center, second.Rect.center);
+
+                    Assert.That(
+                        distance + 1.0f,
+                        Is.GreaterThanOrEqualTo(firstRadius + secondRadius + minimumGap),
+                        first.GroupId + " overlaps cluster space for " + second.GroupId);
+                }
+            }
+        }
+
+        private static float CalculateClusterRadius(
+            PackageGraphModel graph,
+            PackageGraphLayoutResult layout,
+            PackageGraphGroupLayoutNode groupNode)
+        {
+            Rect bounds = groupNode.Rect;
+
+            foreach (PackageGraphNode node in graph.Nodes)
+            {
+                if (node == null ||
+                    !string.Equals(node.GroupId, groupNode.GroupId, StringComparison.OrdinalIgnoreCase) ||
+                    !layout.NodeRects.TryGetValue(node.PackageId, out Rect nodeRect))
+                {
+                    continue;
+                }
+
+                bounds = Union(bounds, nodeRect);
+            }
+
+            float radius = 0f;
+            Vector2 center = groupNode.Rect.center;
+            Vector2[] corners =
+            {
+                new Vector2(bounds.xMin, bounds.yMin),
+                new Vector2(bounds.xMax, bounds.yMin),
+                new Vector2(bounds.xMax, bounds.yMax),
+                new Vector2(bounds.xMin, bounds.yMax)
+            };
+
+            foreach (Vector2 corner in corners)
+            {
+                radius = Mathf.Max(radius, Vector2.Distance(center, corner));
+            }
+
+            return radius;
         }
 
         private static Rect CreateExpectedFitBounds(PackageGraphLayoutResult layout)

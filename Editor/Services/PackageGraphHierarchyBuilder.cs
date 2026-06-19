@@ -6,9 +6,10 @@ namespace Deucarian.PackageInstaller.Editor
 {
     internal static class PackageGraphHierarchyBuilder
     {
-        public const string FoundationGroupId = "foundation";
-        public const string RuntimeWorldGroupId = "runtime-world";
-        public const string UiExperienceGroupId = "ui-experience";
+        public const string InfrastructureGroupId = "infrastructure";
+        public const string StateDataGroupId = "state-data";
+        public const string RuntimeServicesGroupId = "runtime-services";
+        public const string ExperienceInteractionGroupId = "experience-interaction";
         public const string ToolsQualityGroupId = "tools-quality";
         public const string IntegrationsGroupId = "integrations";
         public const string SuitesGroupId = "suites";
@@ -16,35 +17,43 @@ namespace Deucarian.PackageInstaller.Editor
         private static readonly PackageGraphGroup[] DefaultGroups =
         {
             new PackageGraphGroup(
-                FoundationGroupId,
-                "Foundation",
+                InfrastructureGroupId,
+                "Infrastructure",
                 string.Empty,
-                "Base editor, logging, API, and shared state packages.",
+                "Cross-cutting shared infrastructure used by multiple Deucarian packages.",
                 10,
                 "editor",
-                "foundation"),
+                "infrastructure"),
             new PackageGraphGroup(
-                RuntimeWorldGroupId,
-                "Runtime / World",
+                StateDataGroupId,
+                "State & Data",
                 string.Empty,
-                "Runtime services and world-facing package capabilities.",
+                "Generic state, data, repository, and selection primitives.",
                 20,
-                "object-loading",
-                "runtime"),
+                "core-state",
+                "state-data"),
             new PackageGraphGroup(
-                UiExperienceGroupId,
-                "UI / Experience",
+                RuntimeServicesGroupId,
+                "Runtime Services",
                 string.Empty,
-                "UI binding, theming, and user-facing experience packages.",
+                "Application-facing runtime API, session, and loading services.",
                 30,
+                "object-loading",
+                "runtime-services"),
+            new PackageGraphGroup(
+                ExperienceInteractionGroupId,
+                "Experience & Interaction",
+                string.Empty,
+                "UI, presentation, interaction, selection, and user/world experience systems.",
+                40,
                 "generic-ui-items",
-                "experience"),
+                "experience-interaction"),
             new PackageGraphGroup(
                 ToolsQualityGroupId,
-                "Tools / Quality",
+                "Tools & Quality",
                 string.Empty,
                 "Installer, diagnostics, and development quality tooling.",
-                40,
+                50,
                 "package-installer",
                 "tools"),
             new PackageGraphGroup(
@@ -52,7 +61,7 @@ namespace Deucarian.PackageInstaller.Editor
                 "Integrations",
                 string.Empty,
                 "Installable packages that connect two or more systems.",
-                50,
+                60,
                 "api-helper",
                 "integration"),
             new PackageGraphGroup(
@@ -60,7 +69,7 @@ namespace Deucarian.PackageInstaller.Editor
                 "Suites",
                 string.Empty,
                 "Curated installable bundle packages.",
-                60,
+                70,
                 "selection",
                 "suite")
         };
@@ -109,11 +118,21 @@ namespace Deucarian.PackageInstaller.Editor
                 CreateGroups(groups).Select(group => group.Id),
                 StringComparer.OrdinalIgnoreCase);
 
-            string explicitGroupId = NormalizeGroupId(package != null ? package.GroupId : string.Empty);
+            string rawGroupId = package != null ? package.GroupId : string.Empty;
+            string explicitGroupId = NormalizeGroupId(rawGroupId);
 
-            if (!string.IsNullOrWhiteSpace(explicitGroupId) && knownGroupIds.Contains(explicitGroupId))
+            if (!IsLegacyGroupAlias(rawGroupId) &&
+                !string.IsNullOrWhiteSpace(explicitGroupId) &&
+                knownGroupIds.Contains(explicitGroupId))
             {
                 return explicitGroupId;
+            }
+
+            string inferredGroupId = InferPackageGroupId(package);
+
+            if (knownGroupIds.Contains(inferredGroupId))
+            {
+                return inferredGroupId;
             }
 
             string legacyGroupId = NormalizeLegacyGroupId(package != null ? package.EcosystemGroup : string.Empty);
@@ -123,11 +142,9 @@ namespace Deucarian.PackageInstaller.Editor
                 return legacyGroupId;
             }
 
-            string inferredGroupId = InferPackageGroupId(package);
-
-            return knownGroupIds.Contains(inferredGroupId)
-                ? inferredGroupId
-                : FoundationGroupId;
+            return !string.IsNullOrWhiteSpace(explicitGroupId) && knownGroupIds.Contains(explicitGroupId)
+                ? explicitGroupId
+                : InfrastructureGroupId;
         }
 
         public static string NormalizeGroupId(string value)
@@ -239,7 +256,7 @@ namespace Deucarian.PackageInstaller.Editor
         {
             if (package == null)
             {
-                return FoundationGroupId;
+                return InfrastructureGroupId;
             }
 
             if (package.IsIntegration)
@@ -256,16 +273,17 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 case "com.deucarian.editor":
                 case "com.deucarian.logging":
-                case "com.deucarian.api":
+                    return InfrastructureGroupId;
                 case "com.deucarian.core-state":
-                    return FoundationGroupId;
+                    return StateDataGroupId;
+                case "com.deucarian.api":
                 case "com.deucarian.session":
                 case "com.deucarian.object-loading":
-                case "com.deucarian.object-selection":
-                    return RuntimeWorldGroupId;
+                    return RuntimeServicesGroupId;
                 case "com.deucarian.ui-binding":
                 case "com.deucarian.theming":
-                    return UiExperienceGroupId;
+                case "com.deucarian.object-selection":
+                    return ExperienceInteractionGroupId;
                 case "com.deucarian.package-installer":
                 case "com.deucarian.diagnostics":
                     return ToolsQualityGroupId;
@@ -290,17 +308,17 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (string.Equals(package.Category, "UI", StringComparison.OrdinalIgnoreCase))
             {
-                return UiExperienceGroupId;
+                return ExperienceInteractionGroupId;
             }
 
             if (string.Equals(package.Category, "World", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(package.Category, "Runtime", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(package.Category, "Services", StringComparison.OrdinalIgnoreCase))
             {
-                return RuntimeWorldGroupId;
+                return RuntimeServicesGroupId;
             }
 
-            return FoundationGroupId;
+            return InfrastructureGroupId;
         }
 
         private static string NormalizeLegacyGroupId(string value)
@@ -311,18 +329,28 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 case "foundation":
                 case "core":
-                    return FoundationGroupId;
+                    return InfrastructureGroupId;
+                case "infrastructure":
+                    return InfrastructureGroupId;
+                case "statedata":
+                case "state":
+                case "data":
+                case "corestate":
+                    return StateDataGroupId;
                 case "servicesruntime":
                 case "services":
                 case "runtime":
                 case "runtimeworld":
+                case "runtimeservices":
                 case "world":
-                    return RuntimeWorldGroupId;
+                    return RuntimeServicesGroupId;
                 case "experienceuiworld":
                 case "uiexperience":
+                case "experienceinteraction":
+                case "interaction":
                 case "experience":
                 case "ui":
-                    return UiExperienceGroupId;
+                    return ExperienceInteractionGroupId;
                 case "toolsquality":
                 case "tools":
                 case "quality":
@@ -350,6 +378,25 @@ namespace Deucarian.PackageInstaller.Editor
                 .Select(char.ToLowerInvariant)
                 .ToArray();
             return new string(chars);
+        }
+
+        private static bool IsLegacyGroupAlias(string value)
+        {
+            string token = NormalizeToken(value);
+
+            switch (token)
+            {
+                case "foundation":
+                case "core":
+                case "servicesruntime":
+                case "runtimeworld":
+                case "experienceuiworld":
+                case "uiexperience":
+                case "toolsquality":
+                    return true;
+                default:
+                    return false;
+            }
         }
     }
 }

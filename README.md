@@ -14,7 +14,7 @@ Tools > Deucarian > Package Installer
 
 The installer keeps its Unity Editor entry point at `Tools > Deucarian > Package Installer`. This package does not own the Theming, Logging, Object Loading, Session, or Selection menu groups; those packages provide their own package-local menu items under the shared `Tools > Deucarian` menu.
 
-The UI Toolkit preview foundation is a development-only window available from:
+The UI Toolkit preview base is a development-only window available from:
 
 ```text
 Tools > Deucarian > Development > Package Installer Preview
@@ -75,14 +75,14 @@ If the remote registry succeeds and validates, the window uses it. If it fails, 
 
 Remote registry validation also checks each package entry against the target package's `package.json` name so installed-package detection uses Unity's exact package IDs. If a target manifest cannot be fetched, the validation message includes the exact `package.json` URL that failed.
 
-The current bundled fallback registry includes these package entries:
+The current bundled fallback registry includes these Ecosystem Graph groups:
 
-- Editor: Deucarian Editor
-- Core: Core State, API, Logging, Object Loading, Session
-- UI: UI Binding, Theming
-- World: Object Selection
-- Integration: UI Binding + Core State Integration, Object Loading API Integration, ObjectSelection + CoreState Integration, Session + API Integration
-- Tools: Package Installer, Diagnostics
+- Infrastructure: Editor, Logging
+- State & Data: Core State
+- Runtime Services: API, Session, Object Loading
+- Experience & Interaction: UI Binding, Theming, Object Selection
+- Tools & Quality: Package Installer, Diagnostics
+- Integrations: UI Binding + Core State Integration, Object Loading API Integration, Object Selection + Core State Integration, Session + API Integration
 - Suites: Selection Suite
 
 Registered packages are first-class UPM packages with their own package IDs:
@@ -129,8 +129,8 @@ The registry schema uses `schemaVersion` 1 and contains:
 - `developmentUrl`: optional development-channel Git URL or UPM identifier. If this is empty, the Development channel is disabled for that package.
 - `dependencies`: package IDs that should be installed before this package is installed, reinstalled, or updated. Integration packages are just packages in the `Integration` category with dependencies.
 - `optionalCompanions`: package IDs shown as optional integrations that should not be installed as required dependencies.
-- `groupId`: optional structural Ecosystem Graph group ID. If omitted, the graph falls back to `ecosystemGroup`, category, package type, and known package IDs.
-- `ecosystemGroup`: legacy optional overview-wheel sector override retained for older registries.
+- `groupId`: optional structural Ecosystem Graph group ID. Supported top-level IDs are `infrastructure`, `state-data`, `runtime-services`, `experience-interaction`, `tools-quality`, `integrations`, and `suites`. If omitted, the graph falls back to `ecosystemGroup`, category, package type, and known package IDs.
+- `ecosystemGroup`: legacy optional overview-wheel sector override retained for older registries. Old values are normalized to the current group IDs without creating duplicate visible groups.
 - `overviewOrder`: optional positive integer used to order packages within their structural group orbit.
 - `integrationTargets`: optional package IDs used to place Integration nodes near the systems they connect.
 - `suiteMembers`: optional package IDs used to place Suite nodes near the packages they compose.
@@ -250,7 +250,7 @@ Keeping the installer editor-only ensures:
 
 ## Versioning
 
-Current package version: `1.1.28`.
+Current package version: `1.1.29`.
 
 Branch strategy:
 

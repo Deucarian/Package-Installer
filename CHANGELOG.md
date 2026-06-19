@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.29 - 2026-06-19
+
+- Reclassified the Ecosystem Graph into Infrastructure, State & Data, Runtime Services, Experience & Interaction, Tools & Quality, Integrations, and Suites.
+- Added group discs, membership spokes, hover isolation, context-sensitive legends, and semantic zoom classes for the hierarchical graph.
+- Replaced rounded Package Installer status badges with compact flat icon-and-text indicators and expanded the empty graph details pane into an ecosystem overview dashboard.
+
 ## 1.1.28 - 2026-06-18
 
 - Added structural Ecosystem Graph groups with recursive-ready group metadata and package `groupId` assignments.
@@ -26,7 +32,7 @@
 
 ## 1.1.24 - 2026-06-18
 
-- Reworked the Ecosystem Graph overview into a deterministic semantic wheel with Foundation, Services / Runtime, Experience / UI / World, and Tools / Quality sectors.
+- Reworked the Ecosystem Graph overview into an earlier deterministic semantic wheel with registry-driven sectors.
 - Added optional `ecosystemGroup` and `overviewOrder` registry metadata with deterministic fallback grouping for older registries.
 - Positioned Integration and Suite nodes from target/member circular means while preserving the existing strict ego-focus layout.
 

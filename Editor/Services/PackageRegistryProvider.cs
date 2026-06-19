@@ -198,7 +198,7 @@ namespace Deucarian.PackageInstaller.Editor
                 "https://github.com/Deucarian/Package-Installer.git#develop",
                 category: "Tools",
                 metadataType: "Tool",
-                ecosystemGroup: "ToolsQuality",
+                ecosystemGroup: "Tools & Quality",
                 groupId: PackageGraphHierarchyBuilder.ToolsQualityGroupId,
                 overviewOrder: 20);
         }

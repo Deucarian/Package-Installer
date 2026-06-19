@@ -142,10 +142,10 @@
     min-width: 0;
     padding-left: 8px;
     padding-right: 8px;
-    border-top-left-radius: 999px;
-    border-top-right-radius: 999px;
-    border-bottom-right-radius: 999px;
-    border-bottom-left-radius: 999px;
+    border-top-left-radius: 3px;
+    border-top-right-radius: 3px;
+    border-bottom-right-radius: 3px;
+    border-bottom-left-radius: 3px;
     border-left-width: 1px;
     border-right-width: 1px;
     border-top-width: 1px;
@@ -199,10 +199,10 @@
     margin-left: 4px;
     padding-left: 7px;
     padding-right: 7px;
-    border-top-left-radius: 999px;
-    border-top-right-radius: 999px;
-    border-bottom-right-radius: 999px;
-    border-bottom-left-radius: 999px;
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+    border-bottom-right-radius: 4px;
+    border-bottom-left-radius: 4px;
     border-left-width: 1px;
     border-right-width: 1px;
     border-top-width: 1px;
@@ -211,7 +211,7 @@
     border-right-color: rgba(90, 111, 160, 0.34);
     border-top-color: rgba(90, 111, 160, 0.34);
     border-bottom-color: rgba(90, 111, 160, 0.34);
-    background-color: rgba(22, 34, 43, 0.68);
+    background-color: rgba(22, 34, 43, 0.22);
     color: var(--deucarian-muted);
     font-size: 10px;
 }
@@ -229,7 +229,7 @@
     border-right-color: rgba(59, 166, 154, 0.48);
     border-top-color: rgba(59, 166, 154, 0.48);
     border-bottom-color: rgba(59, 166, 154, 0.48);
-    background-color: rgba(27, 55, 58, 0.72);
+    background-color: rgba(27, 55, 58, 0.36);
     color: rgba(224, 242, 244, 0.92);
 }
 
@@ -238,7 +238,7 @@
     border-right-color: rgba(74, 86, 105, 0.32);
     border-top-color: rgba(74, 86, 105, 0.32);
     border-bottom-color: rgba(74, 86, 105, 0.32);
-    background-color: rgba(18, 24, 33, 0.56);
+    background-color: rgba(18, 24, 33, 0.18);
 }
 
 .dpi-ecosystem-graph__filter-icon {
@@ -248,10 +248,10 @@
     margin-right: 5px;
     padding-left: 0;
     padding-right: 0;
-    border-top-left-radius: 999px;
-    border-top-right-radius: 999px;
-    border-bottom-right-radius: 999px;
-    border-bottom-left-radius: 999px;
+    border-top-left-radius: 3px;
+    border-top-right-radius: 3px;
+    border-bottom-right-radius: 3px;
+    border-bottom-left-radius: 3px;
     border-left-width: 1px;
     border-right-width: 1px;
     border-top-width: 1px;
@@ -267,7 +267,7 @@
     border-right-color: rgba(74, 202, 182, 0.64);
     border-top-color: rgba(74, 202, 182, 0.64);
     border-bottom-color: rgba(74, 202, 182, 0.64);
-    background-color: rgba(35, 116, 105, 0.70);
+    background-color: rgba(35, 116, 105, 0.18);
 }
 
 .dpi-ecosystem-graph__filter-icon--not-installed {
@@ -276,7 +276,7 @@
     border-right-color: rgba(126, 145, 163, 0.54);
     border-top-color: rgba(126, 145, 163, 0.54);
     border-bottom-color: rgba(126, 145, 163, 0.54);
-    background-color: rgba(14, 20, 29, 0.42);
+    background-color: rgba(14, 20, 29, 0.08);
 }
 
 .dpi-ecosystem-graph__filter-label {
@@ -290,13 +290,13 @@
     margin-left: 5px;
     padding-left: 4px;
     padding-right: 4px;
-    border-top-left-radius: 999px;
-    border-top-right-radius: 999px;
-    border-bottom-right-radius: 999px;
-    border-bottom-left-radius: 999px;
+    border-top-left-radius: 3px;
+    border-top-right-radius: 3px;
+    border-bottom-right-radius: 3px;
+    border-bottom-left-radius: 3px;
     -unity-text-align: middle-center;
     color: rgba(170, 190, 202, 0.92);
-    background-color: rgba(9, 14, 22, 0.42);
+    background-color: rgba(9, 14, 22, 0.18);
     font-size: 9px;
 }
 
@@ -411,7 +411,34 @@
     border-bottom-color: rgba(59, 166, 154, 0.46);
 }
 
+.dpi-graph-legend__line--root {
+    border-bottom-color: rgba(59, 209, 191, 0.70);
+}
+
+.dpi-graph-legend__line--group {
+    border-bottom-color: rgba(126, 172, 202, 0.56);
+}
+
+.dpi-graph-legend__line--package {
+    border-bottom-color: rgba(95, 119, 156, 0.52);
+}
+
+.dpi-graph-legend__line--membership {
+    border-bottom-color: rgba(120, 170, 182, 0.34);
+}
+
+.dpi-graph-legend__line--installed {
+    color: rgba(124, 214, 197, 0.94);
+    border-bottom-color: rgba(59, 166, 154, 0.44);
+}
+
+.dpi-graph-legend__line--available {
+    color: rgba(166, 181, 194, 0.92);
+    border-bottom-color: rgba(116, 130, 150, 0.38);
+}
+
 .dpi-graph-legend__line--warning {
+    color: rgba(255, 226, 184, 0.96);
     border-bottom-color: rgba(217, 157, 72, 0.86);
 }
 
@@ -488,6 +515,7 @@
 }
 
 .dpi-ecosystem-graph__guide-layer,
+.dpi-ecosystem-graph__membership-layer,
 .dpi-ecosystem-graph__edge-layer,
 .dpi-ecosystem-graph__node-layer {
     position: absolute;
@@ -511,7 +539,7 @@
     border-bottom-color: rgba(90, 111, 160, 0.11);
 }
 
-.dpi-graph-ring-guide--foundation {
+.dpi-graph-ring-guide--infrastructure {
     border-left-color: rgba(100, 137, 205, 0.17);
     border-right-color: rgba(100, 137, 205, 0.17);
     border-top-color: rgba(100, 137, 205, 0.17);
@@ -560,7 +588,7 @@
     border-bottom-left-radius: 999px;
 }
 
-.dpi-graph-sector-label--foundation {
+.dpi-graph-sector-label--infrastructure {
     color: rgba(154, 184, 230, 0.62);
 }
 
@@ -738,6 +766,17 @@
     border-bottom-color: rgba(59, 209, 191, 0.58);
 }
 
+.dpi-graph-node--hover-context {
+    border-left-color: rgba(59, 209, 191, 0.64);
+    border-right-color: rgba(59, 209, 191, 0.42);
+    border-top-color: rgba(59, 209, 191, 0.42);
+    border-bottom-color: rgba(59, 209, 191, 0.42);
+}
+
+.dpi-graph-node--hover-dimmed {
+    opacity: 0.38;
+}
+
 .dpi-graph-node--dimmed {
     opacity: 0.24;
 }
@@ -862,10 +901,10 @@
     padding-right: 11px;
     padding-top: 9px;
     padding-bottom: 8px;
-    border-top-left-radius: 8px;
-    border-top-right-radius: 8px;
-    border-bottom-right-radius: 8px;
-    border-bottom-left-radius: 8px;
+    border-top-left-radius: 999px;
+    border-top-right-radius: 999px;
+    border-bottom-right-radius: 999px;
+    border-bottom-left-radius: 999px;
     border-left-width: 1px;
     border-right-width: 1px;
     border-top-width: 1px;
@@ -905,6 +944,22 @@
 
 .dpi-graph-group--locked {
     opacity: 0.70;
+}
+
+.dpi-graph-group--empty {
+    opacity: 0.42;
+}
+
+.dpi-graph-group--hover-context {
+    border-left-color: rgba(59, 209, 191, 0.72);
+    border-right-color: rgba(59, 209, 191, 0.54);
+    border-top-color: rgba(59, 209, 191, 0.54);
+    border-bottom-color: rgba(59, 209, 191, 0.54);
+    background-color: rgba(24, 51, 58, 0.90);
+}
+
+.dpi-graph-group--hover-dimmed {
+    opacity: 0.34;
 }
 
 .dpi-graph-group--attention {
@@ -962,30 +1017,25 @@
 }
 
 .dpi-graph-group__stat {
-    height: 16px;
+    height: 15px;
     margin-right: 4px;
     margin-bottom: 3px;
-    padding-left: 6px;
+    padding-left: 0;
     padding-right: 6px;
-    border-top-left-radius: 999px;
-    border-top-right-radius: 999px;
-    border-bottom-right-radius: 999px;
-    border-bottom-left-radius: 999px;
-    background-color: rgba(43, 49, 59, 0.76);
+    background-color: rgba(0, 0, 0, 0);
     color: rgba(209, 222, 228, 0.84);
     font-size: 8px;
 }
 
 .dpi-graph-group__stat--installed {
-    background-color: rgba(39, 96, 101, 0.74);
+    color: rgba(124, 214, 197, 0.88);
 }
 
 .dpi-graph-group__stat--missing {
-    background-color: rgba(82, 66, 43, 0.74);
+    color: rgba(204, 181, 137, 0.88);
 }
 
 .dpi-graph-group__stat--update {
-    background-color: rgba(129, 96, 35, 0.82);
     color: rgba(255, 236, 184, 0.94);
 }
 
@@ -1078,7 +1128,7 @@
     font-size: 10px;
     -unity-font-style: bold;
     color: rgba(228, 241, 244, 0.90);
-    background-color: rgba(61, 79, 107, 0.72);
+    background-color: rgba(0, 0, 0, 0);
 }
 
 .dpi-graph-node__status-icon--installed {
@@ -1087,7 +1137,7 @@
     border-right-color: rgba(69, 193, 175, 0.58);
     border-top-color: rgba(69, 193, 175, 0.58);
     border-bottom-color: rgba(69, 193, 175, 0.58);
-    background-color: rgba(35, 111, 104, 0.82);
+    background-color: rgba(35, 111, 104, 0.10);
 }
 
 .dpi-graph-node__status-icon--available {
@@ -1096,7 +1146,7 @@
     border-right-color: rgba(122, 140, 158, 0.50);
     border-top-color: rgba(122, 140, 158, 0.50);
     border-bottom-color: rgba(122, 140, 158, 0.50);
-    background-color: rgba(29, 36, 47, 0.84);
+    background-color: rgba(29, 36, 47, 0.04);
 }
 
 .dpi-graph-node__status-icon--update {
@@ -1105,7 +1155,7 @@
     border-right-color: rgba(220, 178, 75, 0.72);
     border-top-color: rgba(220, 178, 75, 0.72);
     border-bottom-color: rgba(220, 178, 75, 0.72);
-    background-color: rgba(129, 96, 35, 0.94);
+    background-color: rgba(129, 96, 35, 0.10);
 }
 
 .dpi-graph-node__status-icon--warning {
@@ -1114,7 +1164,7 @@
     border-right-color: rgba(223, 135, 68, 0.68);
     border-top-color: rgba(223, 135, 68, 0.68);
     border-bottom-color: rgba(223, 135, 68, 0.68);
-    background-color: rgba(137, 75, 35, 0.92);
+    background-color: rgba(137, 75, 35, 0.10);
 }
 
 .dpi-graph-node__status-icon--missing {
@@ -1123,7 +1173,7 @@
     border-right-color: rgba(225, 105, 91, 0.70);
     border-top-color: rgba(225, 105, 91, 0.70);
     border-bottom-color: rgba(225, 105, 91, 0.70);
-    background-color: rgba(137, 54, 45, 0.92);
+    background-color: rgba(137, 54, 45, 0.10);
 }
 
 .dpi-graph-node__title-block {
@@ -1147,9 +1197,54 @@
 }
 
 .dpi-ecosystem-graph__content--low-zoom .dpi-graph-node__package-id,
+.dpi-ecosystem-graph__content--low-zoom .dpi-graph-node__badges,
+.dpi-ecosystem-graph__content--low-zoom .dpi-graph-node__footer,
 .dpi-ecosystem-graph__content--low-zoom .dpi-graph-node--stack .dpi-graph-node__badges,
 .dpi-ecosystem-graph__content--low-zoom .dpi-graph-node--stack .dpi-graph-node__footer {
     display: none;
+}
+
+.dpi-ecosystem-graph__content--low-zoom .dpi-graph-node {
+    padding-left: 10px;
+    padding-right: 8px;
+    padding-top: 8px;
+}
+
+.dpi-ecosystem-graph__content--low-zoom .dpi-graph-node__header {
+    min-height: 32px;
+    max-height: 36px;
+    align-items: center;
+}
+
+.dpi-ecosystem-graph__content--low-zoom .dpi-graph-node__icon {
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+}
+
+.dpi-ecosystem-graph__content--low-zoom .dpi-graph-node__title {
+    font-size: 10px;
+    max-height: 24px;
+}
+
+.dpi-ecosystem-graph__content--low-zoom .dpi-graph-node__status-icon {
+    width: 12px;
+    min-width: 12px;
+    height: 12px;
+    font-size: 7px;
+    margin-right: 5px;
+}
+
+.dpi-ecosystem-graph__content--low-zoom .dpi-graph-group__stats {
+    display: none;
+}
+
+.dpi-ecosystem-graph__content--low-zoom .dpi-graph-group__title {
+    font-size: 11px;
+}
+
+.dpi-ecosystem-graph__content--low-zoom .dpi-graph-group__subtitle {
+    font-size: 8px;
 }
 
 .dpi-graph-node__badges {
@@ -1164,35 +1259,38 @@
     margin-right: 4px;
     font-size: 9px;
     max-width: 96px;
+    padding-left: 0;
+    padding-right: 8px;
+    color: rgba(190, 207, 214, 0.86);
+    background-color: rgba(0, 0, 0, 0);
 }
 
 .dpi-graph-node__badge--type {
-    background-color: rgba(61, 79, 107, 0.74);
+    color: rgba(139, 174, 194, 0.82);
 }
 
 .dpi-graph-node__badge--installed {
-    background-color: rgba(39, 96, 101, 0.82);
+    color: rgba(124, 214, 197, 0.90);
 }
 
 .dpi-graph-node__badge--available {
-    background-color: rgba(43, 49, 59, 0.82);
+    color: rgba(166, 181, 194, 0.88);
 }
 
 .dpi-graph-node__badge--update {
-    background-color: rgba(129, 96, 35, 0.92);
     color: rgba(255, 236, 184, 0.96);
 }
 
 .dpi-graph-node__badge--checking {
-    background-color: rgba(61, 79, 107, 0.84);
+    color: rgba(151, 206, 226, 0.88);
 }
 
 .dpi-graph-node__badge--warning {
-    background-color: rgba(115, 91, 46, 0.86);
+    color: rgba(255, 215, 172, 0.92);
 }
 
 .dpi-graph-node__badge--missing {
-    background-color: rgba(115, 91, 46, 0.86);
+    color: rgba(255, 198, 176, 0.92);
 }
 
 .dpi-graph-node__footer {

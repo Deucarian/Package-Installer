@@ -12,7 +12,7 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed class PackageInstallerWindow : EditorWindow
     {
         private const string WindowTitle = "Package Installer";
-        private const string PackageVersion = "1.1.28";
+        private const string PackageVersion = "1.1.29";
         private const float MinWindowWidth = 850f;
         private const float MinWindowHeight = 650f;
         private const float SidebarWidth = 340f;
@@ -804,8 +804,9 @@ namespace Deucarian.PackageInstaller.Editor
             _rowSubLabelStyle.wordWrap = true;
             _rowSubLabelStyle.clipping = TextClipping.Clip;
 
-            _rowStatusStyle = new GUIStyle(DeucarianEditorStyles.StatusBadge);
-            _rowStatusStyle.alignment = TextAnchor.MiddleCenter;
+            _rowStatusStyle = new GUIStyle(EditorStyles.miniLabel);
+            _rowStatusStyle.normal.textColor = _textColor;
+            _rowStatusStyle.alignment = TextAnchor.MiddleLeft;
             _rowStatusStyle.clipping = TextClipping.Clip;
 
             _markerStyle = new GUIStyle(EditorStyles.miniBoldLabel);
@@ -1468,14 +1469,7 @@ namespace Deucarian.PackageInstaller.Editor
                 }
                 else
                 {
-                    DrawPanel("Ecosystem Overview", () =>
-                    {
-                        EditorGUILayout.LabelField("Select a package or group node to inspect details.", _mutedMiniLabelStyle);
-                        EditorGUILayout.Space(4f);
-                        EditorGUILayout.LabelField(
-                            "Use Fit, 100%, Center, pan, and zoom to explore package relationships.",
-                            _mutedMiniLabelStyle);
-                    });
+                    DrawEcosystemOverviewDashboard();
                 }
             }
             else if (_selectionKind == SelectionKind.Integration)
@@ -1489,6 +1483,144 @@ namespace Deucarian.PackageInstaller.Editor
 
             EditorGUILayout.EndScrollView();
             EditorGUILayout.EndVertical();
+        }
+
+        private void DrawEcosystemOverviewDashboard()
+        {
+            PackageGraphModel graph = _lastPackageGraph;
+            PackageGraphNode[] nodes = graph == null
+                ? Array.Empty<PackageGraphNode>()
+                : graph.Nodes.Where(node => node != null && node.IsRegistered).ToArray();
+            PackageGraphGroup[] groups = graph == null
+                ? Array.Empty<PackageGraphGroup>()
+                : graph.Groups
+                    .Where(group => group != null && string.IsNullOrWhiteSpace(group.ParentGroupId))
+                    .OrderBy(group => group.SortOrder)
+                    .ThenBy(group => group.DisplayName, StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+            int installedCount = nodes.Count(node => node.IsInstalled);
+            int updateCount = nodes.Count(node => node.Status == PackageGraphNodeStatus.UpdateAvailable);
+            int attentionCount = nodes.Count(node =>
+                node.Status == PackageGraphNodeStatus.Missing ||
+                node.Status == PackageGraphNodeStatus.Warning);
+            int notInstalledCount = Math.Max(0, nodes.Length - installedCount);
+
+            DrawPanel("Ecosystem Overview", () =>
+            {
+                EditorGUILayout.LabelField("Deucarian Unity Package System", _titleStyle);
+                EditorGUILayout.LabelField(
+                    "Select a group or package node to inspect details. Use pan, zoom, Fit, 100%, and Center to navigate the graph.",
+                    _mutedMiniLabelStyle);
+                GUILayout.Space(8f);
+
+                DrawKeyValueRow("Packages", nodes.Length.ToString());
+                DrawFlatStatusRow(InstalledStatusMarker, installedCount + " installed", VisualStatusKind.Installed);
+                DrawFlatStatusRow(NotInstalledStatusMarker, notInstalledCount + " not installed", VisualStatusKind.NotInstalled);
+                DrawFlatStatusRow(AttentionStatusMarker, updateCount + " updates", VisualStatusKind.UpdateAvailable);
+                DrawFlatStatusRow(
+                    AttentionStatusMarker,
+                    attentionCount + " attention",
+                    attentionCount > 0 ? VisualStatusKind.UpdateAvailable : VisualStatusKind.Info);
+                GUILayout.Space(6f);
+                DrawKeyValueRow("Registry", PackageRegistryProvider.StatusMessage);
+                DrawKeyValueRow("Filters", GetActiveFilterSummary());
+            }, GUILayout.ExpandWidth(true));
+
+            DrawPanel("Groups", () =>
+            {
+                if (groups.Length == 0)
+                {
+                    EditorGUILayout.LabelField("No structural groups are available.", _mutedMiniLabelStyle);
+                    return;
+                }
+
+                foreach (PackageGraphGroup group in groups)
+                {
+                    DrawEcosystemOverviewGroupRow(group);
+                }
+            }, GUILayout.ExpandWidth(true));
+        }
+
+        private void DrawEcosystemOverviewGroupRow(PackageGraphGroup group)
+        {
+            PackageGraphNode[] descendants = GetGraphGroupDescendantPackages(group.Id).ToArray();
+            int installedCount = descendants.Count(node => node.IsInstalled);
+            int updateCount = descendants.Count(node => node.Status == PackageGraphNodeStatus.UpdateAvailable);
+            int attentionCount = descendants.Count(node =>
+                node.Status == PackageGraphNodeStatus.Missing ||
+                node.Status == PackageGraphNodeStatus.Warning);
+            Rect rowRect = GUILayoutUtility.GetRect(1f, 30f, GUILayout.ExpandWidth(true));
+            bool hover = rowRect.Contains(Event.current.mousePosition);
+
+            if (Event.current.type == EventType.Repaint)
+            {
+                DeucarianEditorVisualShell.DrawInsetSurface(
+                    rowRect,
+                    hover ? _rowHoverColor : _sampleRowBackgroundColor,
+                    hover ? _interactiveBorderColor : _separatorColor,
+                    4f);
+            }
+
+            if (Event.current.type == EventType.MouseDown && hover && Event.current.button == 0)
+            {
+                HandleGraphGroupFocused(group);
+                Event.current.Use();
+            }
+
+            EditorGUIUtility.AddCursorRect(rowRect, MouseCursor.Link);
+
+            Rect nameRect = new Rect(rowRect.x + 8f, rowRect.y + 6f, rowRect.width * 0.44f, 18f);
+            GUI.Label(nameRect, new GUIContent(group.DisplayName, group.Description), _miniLabelStyle);
+
+            Rect countRect = new Rect(nameRect.xMax + 4f, rowRect.y + 6f, 74f, 18f);
+            GUI.Label(
+                countRect,
+                descendants.Length == 1 ? "1 package" : descendants.Length + " packages",
+                _mutedMiniLabelStyle);
+
+            Rect statusRect = new Rect(rowRect.xMax - 172f, rowRect.y + 6f, 160f, 18f);
+            string summary = installedCount + " / " + descendants.Length + " installed";
+            if (updateCount > 0)
+            {
+                summary += "  " + updateCount + " updates";
+            }
+            else if (attentionCount > 0)
+            {
+                summary += "  " + attentionCount + " attention";
+            }
+
+            DrawStatusBadge(
+                statusRect,
+                summary,
+                updateCount > 0 || attentionCount > 0 ? VisualStatusKind.UpdateAvailable : VisualStatusKind.Installed,
+                _rowStatusStyle);
+        }
+
+        private string GetActiveFilterSummary()
+        {
+            if (_visibilityFilterState == null || _visibilityFilterState.IsDefault)
+            {
+                return "All packages";
+            }
+
+            List<string> parts = new List<string>();
+
+            if (!_visibilityFilterState.ShowInstalled)
+            {
+                parts.Add("Installed hidden");
+            }
+
+            if (!_visibilityFilterState.ShowNotInstalled)
+            {
+                parts.Add("Not installed hidden");
+            }
+
+            if (!string.IsNullOrWhiteSpace(_visibilityFilterState.SearchText))
+            {
+                parts.Add("Search: " + _visibilityFilterState.SearchText);
+            }
+
+            return parts.Count == 0 ? "All packages" : string.Join(", ", parts.ToArray());
         }
 
         private void DrawPackageDetails(PackageDefinition packageDefinition)
@@ -2985,35 +3117,50 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void DrawInlineMarker(Rect rect, string text, VisualStatusKind statusKind)
         {
-            if (Event.current.type == EventType.Repaint)
-            {
-                Color color = GetStatusColor(statusKind);
-                DeucarianEditorVisualShell.DrawInsetSurface(
-                    rect,
-                    new Color(color.r, color.g, color.b, 0.16f),
-                    new Color(color.r, color.g, color.b, 0.65f),
-                    5f);
-            }
-
             DrawColoredRectLabel(rect, text, _markerStyle, GetStatusColor(statusKind));
         }
 
         private void DrawStatusBadge(string text, VisualStatusKind statusKind, params GUILayoutOption[] options)
         {
-            DeucarianEditorStatus status = ToEditorStatus(statusKind);
-            GUIStyle style = DeucarianEditorStatusBadge.CreateStyle(status);
-            GUIContent content = new GUIContent(text ?? string.Empty, text ?? string.Empty);
+            GUIStyle style = _rowStatusStyle ?? EditorStyles.miniLabel;
+            string safeText = text ?? string.Empty;
+            GUIContent content = new GUIContent(GetStatusMarker(statusKind) + " " + safeText, safeText);
             Rect rect = GUILayoutUtility.GetRect(content, style, options);
-            DeucarianEditorStatusBadge.Draw(rect, content, status, style);
+            DrawStatusIndicator(rect, safeText, statusKind, style);
         }
 
         private void DrawStatusBadge(Rect rect, string text, VisualStatusKind statusKind, GUIStyle style)
         {
-            DeucarianEditorStatusBadge.Draw(
-                rect,
-                new GUIContent(text ?? string.Empty, text ?? string.Empty),
-                ToEditorStatus(statusKind),
-                style);
+            DrawStatusIndicator(rect, text, statusKind, style);
+        }
+
+        private void DrawStatusIndicator(Rect rect, string text, VisualStatusKind statusKind, GUIStyle style)
+        {
+            GUIStyle labelStyle = style ?? _rowStatusStyle ?? EditorStyles.miniLabel;
+            string safeText = text ?? string.Empty;
+            Rect markerRect = new Rect(rect.x, rect.y, Mathf.Min(18f, rect.width), rect.height);
+            Rect labelRect = new Rect(markerRect.xMax + 3f, rect.y, Mathf.Max(0f, rect.width - markerRect.width - 3f), rect.height);
+
+            DrawColoredRectLabel(
+                markerRect,
+                new GUIContent(GetStatusMarker(statusKind), safeText),
+                _markerStyle,
+                GetStatusColor(statusKind));
+            DrawColoredRectLabel(
+                labelRect,
+                new GUIContent(safeText, safeText),
+                labelStyle,
+                _textColor);
+        }
+
+        private void DrawFlatStatusRow(string marker, string text, VisualStatusKind statusKind)
+        {
+            Rect rowRect = GUILayoutUtility.GetRect(1f, 20f, GUILayout.ExpandWidth(true));
+            Rect markerRect = new Rect(rowRect.x, rowRect.y + 1f, 18f, 18f);
+            Rect labelRect = new Rect(markerRect.xMax + 4f, rowRect.y, rowRect.width - 22f, 20f);
+
+            DrawColoredRectLabel(markerRect, marker, _markerStyle, GetStatusColor(statusKind));
+            DrawColoredRectLabel(labelRect, new GUIContent(text, text), _miniLabelStyle, _textColor);
         }
 
         private void DrawInlineHelp(string message, VisualStatusKind statusKind)
@@ -3132,6 +3279,27 @@ namespace Deucarian.PackageInstaller.Editor
         private Color GetStatusColor(VisualStatusKind statusKind)
         {
             return DeucarianEditorStatusBadge.GetColor(ToEditorStatus(statusKind));
+        }
+
+        private static string GetStatusMarker(VisualStatusKind statusKind)
+        {
+            switch (statusKind)
+            {
+                case VisualStatusKind.Installed:
+                    return InstalledStatusMarker;
+                case VisualStatusKind.NotInstalled:
+                    return NotInstalledStatusMarker;
+                case VisualStatusKind.UpdateAvailable:
+                case VisualStatusKind.Failed:
+                    return AttentionStatusMarker;
+                case VisualStatusKind.Busy:
+                    return "...";
+                case VisualStatusKind.Integration:
+                    return "+";
+                case VisualStatusKind.Info:
+                default:
+                    return "i";
+            }
         }
 
         private static DeucarianEditorStatus ToEditorStatus(VisualStatusKind statusKind)

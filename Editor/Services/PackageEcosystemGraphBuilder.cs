@@ -282,7 +282,7 @@ namespace Deucarian.PackageInstaller.Editor
                     "Missing",
                     "Registry relationship target is not registered.",
                     PackageGraphNodeType.Companion,
-                    PackageGraphHierarchyBuilder.FoundationGroupId,
+                    PackageGraphHierarchyBuilder.InfrastructureGroupId,
                     PackageGraphNodeStatus.Missing,
                     PackageChannel.Stable,
                     false,

@@ -14,7 +14,7 @@ namespace Deucarian.PackageInstaller.Editor
 
     internal enum PackageGraphLayoutRing
     {
-        Foundation,
+        Infrastructure,
         Runtime,
         Integration,
         Suite
@@ -187,8 +187,8 @@ namespace Deucarian.PackageInstaller.Editor
 
     internal sealed class PackageGraphLayout
     {
-        public const float CanvasWidth = 2600f;
-        public const float CanvasHeight = 2300f;
+        public const float CanvasWidth = 4000f;
+        public const float CanvasHeight = 3800f;
         public const float NodeWidth = 238f;
         public const float NodeHeight = 136f;
 
@@ -199,12 +199,13 @@ namespace Deucarian.PackageInstaller.Editor
         private const float GroupChipWidth = 226f;
         private const float GroupChipHeight = 72f;
         private const float NodeGap = 22f;
-        private const float GlobalGroupOrbitRadius = 800f;
+        private const float MinimumGlobalGroupOrbitRadius = 960f;
+        private const float MinimumClusterGap = 56f;
         private const float FocusOrbitRadius = 335f;
         private const float FocusGridGapX = 48f;
         private const float FocusGridGapY = 28f;
 
-        public static readonly Vector2 GraphCenter = new Vector2(1250f, 1100f);
+        public static readonly Vector2 GraphCenter = new Vector2(2000f, 1850f);
 
         public PackageGraphLayoutResult Calculate(PackageGraphModel graph)
         {
@@ -262,18 +263,17 @@ namespace Deucarian.PackageInstaller.Editor
             List<PackageGraphRingGuide> ringGuides = new List<PackageGraphRingGuide>();
             Rect hubRect = CreateOverviewHubRect();
 
-            PackageGraphGroup[] topGroups = GetTopLevelGroups(graph)
-                .Where(group => GetDescendantPackages(graph, group.Id).Count > 0 || GetChildGroups(graph, group.Id).Count > 0)
-                .ToArray();
+            PackageGraphGroup[] topGroups = GetTopLevelGroups(graph).ToArray();
+            float globalOrbitRadius = CalculateGlobalGroupOrbitRadius(graph, topGroups);
 
             if (topGroups.Length > 0)
             {
                 ringGuides.Add(new PackageGraphRingGuide(
                     string.Empty,
-                    PackageGraphLayoutRing.Foundation,
+                    PackageGraphLayoutRing.Infrastructure,
                     GraphCenter,
-                    GlobalGroupOrbitRadius,
-                    GlobalGroupOrbitRadius));
+                    globalOrbitRadius,
+                    globalOrbitRadius));
             }
 
             float[] groupAngles = CreateEvenCircleAngles(topGroups.Length, -90f);
@@ -281,7 +281,7 @@ namespace Deucarian.PackageInstaller.Editor
             for (int index = 0; index < topGroups.Length; index++)
             {
                 PackageGraphGroup group = topGroups[index];
-                Vector2 groupCenter = PointOnOrbit(GraphCenter, groupAngles[index], GlobalGroupOrbitRadius);
+                Vector2 groupCenter = PointOnOrbit(GraphCenter, groupAngles[index], globalOrbitRadius);
                 Rect groupRect = CenteredRect(groupCenter, GroupWidth, GroupHeight);
                 IReadOnlyList<PackageGraphNode> directPackages = GetDirectPackages(graph, group.Id);
                 IReadOnlyList<PackageGraphGroup> directGroups = GetChildGroups(graph, group.Id);
@@ -566,7 +566,7 @@ namespace Deucarian.PackageInstaller.Editor
                 }
 
                 PackageGraphGroup topGroup = GetTopLevelGroupForPackage(graph, node);
-                string groupId = topGroup != null ? topGroup.Id : PackageGraphHierarchyBuilder.FoundationGroupId;
+                string groupId = topGroup != null ? topGroup.Id : PackageGraphHierarchyBuilder.InfrastructureGroupId;
 
                 if (!unrelatedByTopGroup.TryGetValue(groupId, out List<PackageGraphNode> packageNodes))
                 {
@@ -983,18 +983,72 @@ namespace Deucarian.PackageInstaller.Editor
                 return 0f;
             }
 
+            if (childCount == 1)
+            {
+                return 190f;
+            }
+
+            if (childCount == 2)
+            {
+                return 250f;
+            }
+
             float maxDiameter = Mathf.Max(Mathf.Max(packageWidth, packageHeight), Mathf.Max(groupWidth, groupHeight));
-            float circumferenceRadius = childCount <= 1
-                ? 178f
-                : (childCount * (maxDiameter + NodeGap)) / (Mathf.PI * 2f);
-            return Mathf.Clamp(circumferenceRadius + maxDiameter * 0.18f, 270f, 340f);
+            float circumferenceRadius = (childCount * (maxDiameter + NodeGap)) / (Mathf.PI * 2f);
+            return Mathf.Clamp(circumferenceRadius + maxDiameter * 0.18f, 270f, 360f);
+        }
+
+        private static float CalculateGlobalGroupOrbitRadius(
+            PackageGraphModel graph,
+            IReadOnlyList<PackageGraphGroup> topGroups)
+        {
+            if (topGroups == null || topGroups.Count <= 1)
+            {
+                return MinimumGlobalGroupOrbitRadius;
+            }
+
+            float largestClusterRadius = 0f;
+
+            foreach (PackageGraphGroup group in topGroups)
+            {
+                int childCount = GetDirectPackages(graph, group.Id).Count + GetChildGroups(graph, group.Id).Count;
+                float localRadius = CalculateLocalOrbitRadius(childCount, NodeWidth, NodeHeight, GroupChipWidth, GroupChipHeight);
+                float childHalfWidth = childCount > 0
+                    ? Mathf.Max(NodeWidth, GroupChipWidth) * 0.5f
+                    : 0f;
+                float childHalfHeight = childCount > 0
+                    ? Mathf.Max(NodeHeight, GroupChipHeight) * 0.5f
+                    : 0f;
+                float childClusterHalfDiagonal = childCount > 0
+                    ? CalculateHalfDiagonal(
+                        localRadius * 2f + childHalfWidth * 2f,
+                        localRadius * 2f + childHalfHeight * 2f)
+                    : 0f;
+                float groupHalfExtent = CalculateHalfDiagonal(GroupWidth, GroupHeight);
+                largestClusterRadius = Mathf.Max(largestClusterRadius, Mathf.Max(groupHalfExtent, childClusterHalfDiagonal));
+            }
+
+            float angleStepRadians = Mathf.PI * 2f / topGroups.Count;
+            float requiredChord = largestClusterRadius * 2f + MinimumClusterGap;
+            float radiusForGap = requiredChord / Mathf.Max(0.01f, 2f * Mathf.Sin(angleStepRadians * 0.5f));
+            float canvasLimitedRadius = Mathf.Min(
+                GraphCenter.x - largestClusterRadius - 48f,
+                GraphCenter.y - largestClusterRadius - 48f,
+                CanvasWidth - GraphCenter.x - largestClusterRadius - 48f,
+                CanvasHeight - GraphCenter.y - largestClusterRadius - 48f);
+            return Mathf.Min(Mathf.Max(MinimumGlobalGroupOrbitRadius, radiusForGap), canvasLimitedRadius);
+        }
+
+        private static float CalculateHalfDiagonal(float width, float height)
+        {
+            return Mathf.Sqrt(width * width + height * height) * 0.5f;
         }
 
         private static PackageGraphLayoutRing ResolveRing(PackageGraphNode node)
         {
             if (node == null)
             {
-                return PackageGraphLayoutRing.Foundation;
+                return PackageGraphLayoutRing.Infrastructure;
             }
 
             if (node.NodeType == PackageGraphNodeType.Integration)
@@ -1018,12 +1072,12 @@ namespace Deucarian.PackageInstaller.Editor
                     return PackageGraphLayoutRing.Integration;
                 case PackageGraphHierarchyBuilder.SuitesGroupId:
                     return PackageGraphLayoutRing.Suite;
-                case PackageGraphHierarchyBuilder.RuntimeWorldGroupId:
-                case PackageGraphHierarchyBuilder.UiExperienceGroupId:
+                case PackageGraphHierarchyBuilder.RuntimeServicesGroupId:
+                case PackageGraphHierarchyBuilder.ExperienceInteractionGroupId:
                 case PackageGraphHierarchyBuilder.ToolsQualityGroupId:
                     return PackageGraphLayoutRing.Runtime;
                 default:
-                    return PackageGraphLayoutRing.Foundation;
+                    return PackageGraphLayoutRing.Infrastructure;
             }
         }
 
@@ -1071,7 +1125,7 @@ namespace Deucarian.PackageInstaller.Editor
         {
             switch (ring)
             {
-                case PackageGraphLayoutRing.Foundation:
+                case PackageGraphLayoutRing.Infrastructure:
                     return 0;
                 case PackageGraphLayoutRing.Runtime:
                     return 1;

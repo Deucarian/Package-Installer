@@ -107,7 +107,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         {
             string json =
                 "{ \"schemaVersion\": 1, \"packages\": [" +
-                "{ \"id\": \"com.deucarian.session\", \"displayName\": \"Session\", \"category\": \"Core\", \"stableUrl\": \"https://example.com/session.git#main\", \"ecosystemGroup\": \"ServicesRuntime\", \"overviewOrder\": 20, \"dependencies\": [] }," +
+                "{ \"id\": \"com.deucarian.session\", \"displayName\": \"Session\", \"category\": \"Core\", \"stableUrl\": \"https://example.com/session.git#main\", \"ecosystemGroup\": \"Runtime Services\", \"overviewOrder\": 20, \"dependencies\": [] }," +
                 "{ \"id\": \"com.deucarian.legacy\", \"displayName\": \"Legacy\", \"category\": \"Core\", \"stableUrl\": \"https://example.com/legacy.git#main\", \"dependencies\": [] }" +
                 "] }";
 
@@ -122,7 +122,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 .Single(package => package.PackageId == "com.deucarian.legacy");
 
             Assert.IsTrue(result.IsValid, result.ErrorMessage);
-            Assert.AreEqual("ServicesRuntime", session.EcosystemGroup);
+            Assert.AreEqual("Runtime Services", session.EcosystemGroup);
             Assert.AreEqual(20, session.OverviewOrder);
             Assert.IsTrue(session.HasOverviewOrder);
             Assert.IsEmpty(legacy.EcosystemGroup);
@@ -135,9 +135,9 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         {
             string json =
                 "{ \"schemaVersion\": 1, \"groups\": [" +
-                "{ \"id\": \"foundation\", \"displayName\": \"Foundation\", \"sortOrder\": 10 }" +
+                "{ \"id\": \"infrastructure\", \"displayName\": \"Infrastructure\", \"sortOrder\": 10 }" +
                 "], \"packages\": [" +
-                "{ \"id\": \"com.deucarian.logging\", \"displayName\": \"Logging\", \"category\": \"Core\", \"stableUrl\": \"https://example.com/logging.git#main\", \"groupId\": \"foundation\", \"dependencies\": [] }" +
+                "{ \"id\": \"com.deucarian.logging\", \"displayName\": \"Logging\", \"category\": \"Core\", \"stableUrl\": \"https://example.com/logging.git#main\", \"groupId\": \"infrastructure\", \"dependencies\": [] }" +
                 "] }";
 
             PackageRegistryLoadResult result = new PackageRegistryLoader()
@@ -147,8 +147,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 .Single(definition => definition.PackageId == "com.deucarian.logging");
 
             Assert.IsTrue(result.IsValid, result.ErrorMessage);
-            Assert.AreEqual("foundation", result.Registry.groups[0].id);
-            Assert.AreEqual("foundation", package.GroupId);
+            Assert.AreEqual("infrastructure", result.Registry.groups[0].id);
+            Assert.AreEqual("infrastructure", package.GroupId);
         }
 
         [Test]
@@ -156,8 +156,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         {
             string json =
                 "{ \"schemaVersion\": 1, \"groups\": [" +
-                "{ \"id\": \"foundation\", \"displayName\": \"Foundation\" }," +
-                "{ \"id\": \"Foundation\", \"displayName\": \"Duplicate Foundation\" }" +
+                "{ \"id\": \"infrastructure\", \"displayName\": \"Infrastructure\" }," +
+                "{ \"id\": \"Infrastructure\", \"displayName\": \"Duplicate Infrastructure\" }" +
                 "], \"packages\": [" +
                 "{ \"id\": \"com.deucarian.logging\", \"displayName\": \"Logging\", \"category\": \"Core\", \"stableUrl\": \"https://example.com/logging.git#main\", \"dependencies\": [] }" +
                 "] }";
@@ -486,7 +486,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
             Assert.AreEqual("Tools", packageInstaller.Category);
             StringAssert.Contains("Package-Installer.git#main", packageInstaller.StableUrl);
-            Assert.AreEqual("ToolsQuality", packageInstaller.EcosystemGroup);
+            Assert.AreEqual("Tools & Quality", packageInstaller.EcosystemGroup);
             Assert.AreEqual("tools-quality", packageInstaller.GroupId);
             Assert.AreEqual(20, packageInstaller.OverviewOrder);
         }
