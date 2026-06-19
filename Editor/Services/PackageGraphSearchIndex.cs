@@ -84,6 +84,14 @@ namespace Deucarian.PackageInstaller.Editor
 
         public PackageGraphSearchResult BestResult => Results.Count > 0 ? Results[0] : null;
 
+        public IReadOnlyCollection<string> DirectCategoryMatchIds => _directCategoryMatchIds;
+
+        public IReadOnlyCollection<string> DirectPackageMatchIds => _directPackageMatchIds;
+
+        public IReadOnlyCollection<string> ContextCategoryIds => _contextCategoryIds;
+
+        public IReadOnlyCollection<string> ContextPackageIds => _contextPackageIds;
+
         public bool IsDirectCategoryMatch(string groupId)
         {
             return !string.IsNullOrWhiteSpace(groupId) && _directCategoryMatchIds.Contains(groupId);
@@ -231,6 +239,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             string displayName = node.DisplayName ?? string.Empty;
             string packageId = node.PackageId ?? string.Empty;
+            string explicitSearchText = CreatePackageExplicitSearchText(node);
 
             if (MatchesExact(displayName, tokens))
             {
@@ -247,7 +256,12 @@ namespace Deucarian.PackageInstaller.Editor
                 return 2;
             }
 
-            return MatchesSubstring(packageId, tokens) ? 3 : -1;
+            if (MatchesSubstring(packageId, tokens))
+            {
+                return 3;
+            }
+
+            return MatchesSubstring(explicitSearchText, tokens) ? 4 : -1;
         }
 
         private static int GetCategoryMatchRank(
@@ -327,6 +341,21 @@ namespace Deucarian.PackageInstaller.Editor
                     .Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries));
         }
 
+        private static string CreatePackageExplicitSearchText(PackageGraphNode node)
+        {
+            if (node == null || node.PackageDefinition == null)
+            {
+                return string.Empty;
+            }
+
+            return string.Join(
+                " ",
+                node.PackageDefinition.SearchAliases
+                    .Concat(node.PackageDefinition.SearchTags)
+                    .Where(value => !string.IsNullOrWhiteSpace(value))
+                    .ToArray());
+        }
+
         private static bool TryCreateSearchTokens(string searchText, out string[] tokens)
         {
             tokens = string.IsNullOrWhiteSpace(searchText)
@@ -398,6 +427,106 @@ namespace Deucarian.PackageInstaller.Editor
             HashSet<string> groupIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             AddDescendantGroups(graph, groupId, groupIds);
             return graph.Nodes.Where(node => node != null && groupIds.Contains(node.GroupId));
+        }
+
+        public static PackageGraphModel CreateFilteredGraph(
+            PackageGraphModel graph,
+            PackageGraphSearchState searchState,
+            ISet<string> statusVisiblePackageIds,
+            IEnumerable<string> relationshipContextPackageIds = null)
+        {
+            if (graph == null || searchState == null || !searchState.HasQuery)
+            {
+                return graph ?? new PackageGraphModel(
+                    Array.Empty<PackageGraphNode>(),
+                    Array.Empty<PackageGraphEdge>(),
+                    Array.Empty<PackageGraphSuiteRegion>(),
+                    Array.Empty<PackageGraphGroup>());
+            }
+
+            HashSet<string> statusVisibleIds = statusVisiblePackageIds == null
+                ? new HashSet<string>(
+                    graph.Nodes.Select(node => node.PackageId),
+                    StringComparer.OrdinalIgnoreCase)
+                : new HashSet<string>(statusVisiblePackageIds, StringComparer.OrdinalIgnoreCase);
+            HashSet<string> visiblePackageIds = new HashSet<string>(
+                searchState.ContextPackageIds.Where(statusVisibleIds.Contains),
+                StringComparer.OrdinalIgnoreCase);
+
+            if (relationshipContextPackageIds != null)
+            {
+                foreach (string packageId in relationshipContextPackageIds)
+                {
+                    if (!string.IsNullOrWhiteSpace(packageId) && statusVisibleIds.Contains(packageId))
+                    {
+                        visiblePackageIds.Add(packageId);
+                    }
+                }
+            }
+
+            HashSet<string> visibleGroupIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (PackageGraphNode node in graph.Nodes)
+            {
+                if (node != null && visiblePackageIds.Contains(node.PackageId))
+                {
+                    AddAncestorGroups(graph, node.GroupId, visibleGroupIds);
+                }
+            }
+
+            PackageGraphNode[] visibleNodes = graph.Nodes
+                .Where(node => node != null && visiblePackageIds.Contains(node.PackageId))
+                .ToArray();
+            PackageGraphEdge[] visibleEdges = graph.Edges
+                .Where(edge => edge != null &&
+                               visiblePackageIds.Contains(edge.FromPackageId) &&
+                               visiblePackageIds.Contains(edge.ToPackageId))
+                .ToArray();
+            PackageGraphSuiteRegion[] visibleSuiteRegions = graph.SuiteRegions
+                .Where(region => region != null && visiblePackageIds.Contains(region.SuitePackageId))
+                .Select(region => new PackageGraphSuiteRegion(
+                    region.SuitePackageId,
+                    region.MemberPackageIds.Where(visiblePackageIds.Contains)))
+                .Where(region => region.MemberPackageIds.Count > 0)
+                .ToArray();
+            PackageGraphGroup[] visibleGroups = graph.Groups
+                .Where(group => group != null && visibleGroupIds.Contains(group.Id))
+                .ToArray();
+
+            return new PackageGraphModel(
+                visibleNodes,
+                visibleEdges,
+                visibleSuiteRegions,
+                visibleGroups);
+        }
+
+        public static HashSet<string> CreateDirectRelationshipContextPackageIdSet(
+            PackageGraphModel graph,
+            string packageId)
+        {
+            HashSet<string> relatedPackageIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            if (graph == null || string.IsNullOrWhiteSpace(packageId))
+            {
+                return relatedPackageIds;
+            }
+
+            foreach (PackageGraphEdge edge in graph.Edges)
+            {
+                if (edge == null || !edge.ConnectsPackage(packageId))
+                {
+                    continue;
+                }
+
+                string otherPackageId = edge.GetOtherPackageId(packageId);
+
+                if (!string.IsNullOrWhiteSpace(otherPackageId))
+                {
+                    relatedPackageIds.Add(otherPackageId);
+                }
+            }
+
+            return relatedPackageIds;
         }
     }
 }

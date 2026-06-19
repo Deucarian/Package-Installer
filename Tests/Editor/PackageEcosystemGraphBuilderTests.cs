@@ -1070,7 +1070,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 hiddenRelatedCount: 0);
 
             Assert.AreEqual(
-                "No categories or packages match this search.",
+                "No categories or packages match the current search and status filters.",
                 FindByClass(searchView, "dpi-ecosystem-graph__empty-title")
                     .OfType<Label>()
                     .Single()
@@ -1078,7 +1078,34 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
-        public void GraphSearch_CategoryMatchIncludesOnlyStructuralDescendants()
+        public void GraphSearch_PackageMatchIncludesAncestorPathAndPrunesUnrelatedNodes()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+            PackageVisibilityFilterState filterState = new PackageVisibilityFilterState(
+                "Theming",
+                showInstalled: true,
+                showNotInstalled: true);
+            HashSet<string> visiblePackageIds = PackageVisibilityFilter.CreateStatusVisiblePackageIdSet(graph, filterState);
+            PackageGraphSearchState searchState = PackageGraphSearchIndex.Create(graph, filterState, visiblePackageIds);
+            PackageGraphModel filteredGraph = PackageGraphSearchIndex.CreateFilteredGraph(graph, searchState, visiblePackageIds);
+
+            Assert.IsTrue(searchState.IsDirectPackageMatch("com.deucarian.theming"));
+            Assert.IsTrue(searchState.IsCategoryContext("experience-interaction"));
+            Assert.IsTrue(searchState.IsCategoryContext("ui-presentation"));
+            Assert.IsTrue(searchState.IsPackageContext("com.deucarian.theming"));
+            Assert.IsFalse(searchState.IsPackageContext("com.deucarian.editor"));
+            Assert.IsFalse(searchState.IsPackageContext("com.deucarian.logging"));
+            CollectionAssert.AreEquivalent(
+                new[] { "experience-interaction", "ui-presentation" },
+                filteredGraph.Groups.Select(group => group.Id).ToArray());
+            CollectionAssert.AreEquivalent(
+                new[] { "com.deucarian.theming" },
+                filteredGraph.Nodes.Select(node => node.PackageId).ToArray());
+        }
+
+        [Test]
+        public void GraphSearch_CategoryMatchIncludesRecursiveDescendants()
         {
             PackageGraphModel graph = new PackageGraphBuilder(_ => false)
                 .Build(CreateDefaultGraphPackages());
@@ -1088,6 +1115,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 showNotInstalled: true);
             HashSet<string> visiblePackageIds = PackageVisibilityFilter.CreateStatusVisiblePackageIdSet(graph, filterState);
             PackageGraphSearchState searchState = PackageGraphSearchIndex.Create(graph, filterState, visiblePackageIds);
+            PackageGraphModel filteredGraph = PackageGraphSearchIndex.CreateFilteredGraph(graph, searchState, visiblePackageIds);
 
             Assert.IsTrue(searchState.IsDirectCategoryMatch("experience-interaction"));
             Assert.IsTrue(searchState.IsCategoryContext("ui-presentation"));
@@ -1097,6 +1125,42 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.IsTrue(searchState.IsPackageContext("com.deucarian.object-selection"));
             Assert.IsFalse(searchState.IsPackageContext("com.deucarian.session"));
             Assert.IsFalse(searchState.IsPackageContext("com.deucarian.session.api-integration"));
+            CollectionAssert.AreEquivalent(
+                new[] { "experience-interaction", "ui-presentation", "world-interaction" },
+                filteredGraph.Groups.Select(group => group.Id).ToArray());
+            CollectionAssert.AreEquivalent(
+                new[]
+                {
+                    "com.deucarian.ui-binding",
+                    "com.deucarian.theming",
+                    "com.deucarian.object-selection"
+                },
+                filteredGraph.Nodes.Select(node => node.PackageId).ToArray());
+        }
+
+        [Test]
+        public void GraphSearch_MultipleResultsUseStructuralUnion()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+            PackageVisibilityFilterState filterState = new PackageVisibilityFilterState(
+                "Integration",
+                showInstalled: true,
+                showNotInstalled: true);
+            HashSet<string> visiblePackageIds = PackageVisibilityFilter.CreateStatusVisiblePackageIdSet(graph, filterState);
+            PackageGraphSearchState searchState = PackageGraphSearchIndex.Create(graph, filterState, visiblePackageIds);
+            PackageGraphModel filteredGraph = PackageGraphSearchIndex.CreateFilteredGraph(graph, searchState, visiblePackageIds);
+            string[] packageIds = filteredGraph.Nodes.Select(node => node.PackageId).ToArray();
+
+            Assert.IsTrue(searchState.IsDirectCategoryMatch("integrations"));
+            Assert.IsTrue(searchState.IsDirectPackageMatch("com.deucarian.session.api-integration"));
+            Assert.IsTrue(searchState.IsDirectPackageMatch("com.deucarian.object-loading.api-integration"));
+            Assert.IsTrue(packageIds.Contains("com.deucarian.session.api-integration"));
+            Assert.IsTrue(packageIds.Contains("com.deucarian.object-loading.api-integration"));
+            Assert.IsTrue(packageIds.Contains("com.deucarian.ui-binding.core-state-integration"));
+            Assert.IsTrue(packageIds.Contains("com.deucarian.object-selection.core-state-integration"));
+            Assert.IsFalse(packageIds.Contains("com.deucarian.session"));
+            Assert.IsFalse(packageIds.Contains("com.deucarian.api"));
         }
 
         [Test]
@@ -1118,6 +1182,13 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.IsFalse(loggingSearch.IsDirectPackageMatch("com.deucarian.session"));
             Assert.IsFalse(loggingSearch.IsPackageContext("com.deucarian.session"));
             Assert.IsFalse(loggingSearch.IsPackageContext("com.deucarian.api"));
+            PackageGraphModel filteredLoggingGraph = PackageGraphSearchIndex.CreateFilteredGraph(
+                graph,
+                loggingSearch,
+                PackageVisibilityFilter.CreateStatusVisiblePackageIdSet(graph, loggingFilterState));
+            CollectionAssert.AreEquivalent(
+                new[] { "com.deucarian.logging" },
+                filteredLoggingGraph.Nodes.Select(node => node.PackageId).ToArray());
 
             PackageVisibilityFilterState integrationFilterState = new PackageVisibilityFilterState(
                 "integration",
@@ -1155,13 +1226,52 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
-        public void GraphView_SearchPreviewHighlightsWithoutChangingNodeSet()
+        public void GraphSearch_FilteredGraphLayoutIncludesNestedPackageMatches()
         {
             PackageGraphModel graph = new PackageGraphBuilder(_ => false)
                 .Build(CreateDefaultGraphPackages());
-            PackageGraphView normalView = new PackageGraphView(_ => { }, (_, __) => { });
-            normalView.SetGraph(graph, string.Empty, actionsEnabled: true);
+            PackageVisibilityFilterState filterState = new PackageVisibilityFilterState(
+                "Theming",
+                showInstalled: true,
+                showNotInstalled: true);
+            HashSet<string> visiblePackageIds = PackageVisibilityFilter.CreateStatusVisiblePackageIdSet(graph, filterState);
+            PackageGraphSearchState searchState = PackageGraphSearchIndex.Create(graph, filterState, visiblePackageIds);
+            PackageGraphView searchView = new PackageGraphView(
+                _ => { },
+                (_, __) => { },
+                null,
+                filterState,
+                null);
 
+            searchView.SetGraph(
+                graph,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                actionsEnabled: true,
+                visiblePackageIds,
+                searchState,
+                PackageVisibilityFilter.CalculateCounts(graph, filterState),
+                hiddenRelatedCount: 0);
+
+            Assert.AreEqual(PackageGraphLayoutMode.Filtered, GetCanvas(searchView).LayoutMode);
+            Assert.IsTrue(HasGraphNode(searchView, "com.deucarian.theming"));
+            Assert.IsFalse(HasGraphNode(searchView, "com.deucarian.logging"));
+            Assert.IsTrue(FindGraphGroup(searchView, "experience-interaction").ClassListContains("dpi-graph-search--context"));
+            Assert.IsTrue(FindGraphGroup(searchView, "ui-presentation").ClassListContains("dpi-graph-search--context"));
+            Assert.AreEqual(
+                "1 direct matches",
+                FindByClass(searchView, "dpi-ecosystem-graph__visible-count")
+                    .OfType<Label>()
+                    .Single()
+                    .text);
+        }
+
+        [Test]
+        public void GraphSearch_HoveringDirectMatchTemporarilyRevealsRelationshipContext()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
             PackageVisibilityFilterState filterState = new PackageVisibilityFilterState(
                 "Logging",
                 showInstalled: true,
@@ -1186,17 +1296,88 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 PackageVisibilityFilter.CalculateCounts(graph, filterState),
                 hiddenRelatedCount: 0);
 
-            Assert.AreEqual(
-                FindByClass(normalView, "dpi-graph-node").Count,
-                FindByClass(searchView, "dpi-graph-node").Count);
-            Assert.IsTrue(FindGraphNode(searchView, "com.deucarian.logging").ClassListContains("dpi-graph-search--match"));
-            Assert.IsTrue(FindGraphNode(searchView, "com.deucarian.session").ClassListContains("dpi-graph-search--dimmed"));
+            Assert.IsFalse(HasGraphNode(searchView, "com.deucarian.session"));
+
+            searchView.PreviewPackageHoverForTests("com.deucarian.logging");
+
+            Assert.IsTrue(HasGraphNode(searchView, "com.deucarian.session"));
+            Assert.IsTrue(FindGraphNode(searchView, "com.deucarian.session")
+                .ClassListContains("dpi-graph-search--relationship-context"));
             Assert.AreEqual(
                 "1 direct matches",
                 FindByClass(searchView, "dpi-ecosystem-graph__visible-count")
                     .OfType<Label>()
                     .Single()
                     .text);
+
+            searchView.ClearPackageHoverForTests("com.deucarian.logging");
+
+            Assert.IsFalse(HasGraphNode(searchView, "com.deucarian.session"));
+        }
+
+        [Test]
+        public void GraphSearch_ClearRestoresPreviousLayoutAndCameraState()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+            PackageVisibilityFilterState filterState = new PackageVisibilityFilterState(
+                string.Empty,
+                showInstalled: true,
+                showNotInstalled: true);
+            PackageGraphView view = new PackageGraphView(
+                _ => { },
+                (_, __) => { },
+                null,
+                filterState,
+                null);
+            HashSet<string> visiblePackageIds = PackageVisibilityFilter.CreateStatusVisiblePackageIdSet(graph, filterState);
+
+            view.SetGraph(
+                graph,
+                "com.deucarian.session",
+                "com.deucarian.session",
+                "runtime-services",
+                actionsEnabled: true,
+                visiblePackageIds,
+                PackageGraphSearchState.Empty,
+                PackageVisibilityFilter.CalculateCounts(graph, filterState),
+                hiddenRelatedCount: 0);
+            PackageGraphCanvas canvas = GetCanvas(view);
+            Assert.AreEqual(PackageGraphLayoutMode.Focus, canvas.LayoutMode);
+
+            PackageVisibilityFilterState activeSearch = new PackageVisibilityFilterState(
+                "Theming",
+                showInstalled: true,
+                showNotInstalled: true);
+            HashSet<string> searchVisibleIds = PackageVisibilityFilter.CreateStatusVisiblePackageIdSet(graph, activeSearch);
+            PackageGraphSearchState searchState = PackageGraphSearchIndex.Create(graph, activeSearch, searchVisibleIds);
+
+            view.SetGraph(
+                graph,
+                "com.deucarian.session",
+                "com.deucarian.session",
+                "runtime-services",
+                actionsEnabled: true,
+                searchVisibleIds,
+                searchState,
+                PackageVisibilityFilter.CalculateCounts(graph, activeSearch),
+                hiddenRelatedCount: 0);
+
+            Assert.AreEqual(PackageGraphLayoutMode.Filtered, canvas.LayoutMode);
+
+            view.SetGraph(
+                graph,
+                "com.deucarian.session",
+                "com.deucarian.session",
+                "runtime-services",
+                actionsEnabled: true,
+                visiblePackageIds,
+                PackageGraphSearchState.Empty,
+                PackageVisibilityFilter.CalculateCounts(graph, filterState),
+                hiddenRelatedCount: 0);
+
+            Assert.AreEqual(PackageGraphLayoutMode.Focus, canvas.LayoutMode);
+            Assert.AreEqual("com.deucarian.session", canvas.LayoutFocusPackageId);
         }
 
         [Test]
@@ -3507,6 +3688,26 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         {
             return FindByClass(root, "dpi-graph-group")
                 .Single(group => string.Equals(group.name, "group-" + groupId, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static PackageGraphCanvas GetCanvas(VisualElement root)
+        {
+            if (root is PackageGraphCanvas canvas)
+            {
+                return canvas;
+            }
+
+            foreach (VisualElement child in root.Children())
+            {
+                PackageGraphCanvas childCanvas = GetCanvas(child);
+
+                if (childCanvas != null)
+                {
+                    return childCanvas;
+                }
+            }
+
+            return null;
         }
 
         private static bool HasGraphNode(VisualElement root, string packageId)

@@ -175,7 +175,9 @@ namespace Deucarian.PackageInstaller.Editor
                 recommendedWith: entry.recommendedWith,
                 ecosystemGroup: entry.ecosystemGroup,
                 groupId: entry.groupId,
-                overviewOrder: entry.overviewOrder);
+                overviewOrder: entry.overviewOrder,
+                searchAliases: entry.searchAliases,
+                searchTags: entry.searchTags);
         }
 
         private static IReadOnlyList<PackageDefinition> EnsureInstallerPackageDefinition(
@@ -208,7 +210,9 @@ namespace Deucarian.PackageInstaller.Editor
                 metadataType: "Tool",
                 ecosystemGroup: "Tools & Quality",
                 groupId: PackageGraphHierarchyBuilder.ToolsQualityGroupId,
-                overviewOrder: 20);
+                overviewOrder: 20,
+                searchAliases: new[] { "installer" },
+                searchTags: new[] { "package-management", "upm" });
         }
 
         private static PackageType ParsePackageType(string category)

@@ -25,7 +25,9 @@ namespace Deucarian.PackageInstaller.Editor
             IEnumerable<string> recommendedWith = null,
             string ecosystemGroup = null,
             string groupId = null,
-            int overviewOrder = 0)
+            int overviewOrder = 0,
+            IEnumerable<string> searchAliases = null,
+            IEnumerable<string> searchTags = null)
         {
             if (string.IsNullOrWhiteSpace(displayName))
             {
@@ -64,6 +66,8 @@ namespace Deucarian.PackageInstaller.Editor
             DisplayVersion = displayVersion ?? string.Empty;
             Extras = ToReadOnlyList(extras);
             OptionalCompanions = ToReadOnlyList(optionalCompanions);
+            SearchAliases = ToReadOnlyList(searchAliases);
+            SearchTags = ToReadOnlyList(searchTags);
         }
 
         public string DisplayName { get; }
@@ -107,6 +111,10 @@ namespace Deucarian.PackageInstaller.Editor
         public int OverviewOrder { get; }
 
         public bool HasOverviewOrder => OverviewOrder > 0;
+
+        public IReadOnlyList<string> SearchAliases { get; }
+
+        public IReadOnlyList<string> SearchTags { get; }
 
         public bool IsIntegration =>
             string.Equals(Category, "Integration", StringComparison.OrdinalIgnoreCase) ||

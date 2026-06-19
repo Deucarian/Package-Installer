@@ -21,5 +21,7 @@ namespace Deucarian.PackageInstaller.Editor
         public string[] integrationTargets;
         public string[] suiteMembers;
         public string[] recommendedWith;
+        public string[] searchAliases;
+        public string[] searchTags;
     }
 }

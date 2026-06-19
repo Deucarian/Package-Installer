@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.52 - 2026-06-20
+
+- Replaced dim-only Ecosystem Graph search with a structurally pruned filtered graph mode.
+- Added recursive filtered hierarchy layout, pruned category rail rendering, and hover-only relationship context reveals.
+- Preserved graph navigation/camera state while searching and restored the previous focus/camera when search is cleared.
+
 ## 1.1.51 - 2026-06-20
 
 - Rebuilt the Last Operation Summary drawer as persistent UI Toolkit content so expanded details remain visible and scrollable.
