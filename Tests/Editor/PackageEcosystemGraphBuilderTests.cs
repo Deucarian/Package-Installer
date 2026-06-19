@@ -384,7 +384,9 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 graph,
                 PackageGraphLayoutMode.Overview,
                 string.Empty,
-                compactViewport);
+                string.Empty,
+                compactViewport,
+                PackageGraphNodePresentationLevel.OverviewCompact);
             PackageGraphCanvas canvas = new PackageGraphCanvas(_ => { }, (_, __) => { }, () => { });
 
             canvas.SetViewportSize(compactViewport);
@@ -473,7 +475,9 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 visibleGraph,
                 PackageGraphLayoutMode.Overview,
                 string.Empty,
-                compactViewport);
+                string.Empty,
+                compactViewport,
+                PackageGraphNodePresentationLevel.OverviewCompact);
             PackageGraphCanvas canvas = new PackageGraphCanvas(_ => { }, (_, __) => { }, () => { });
 
             canvas.SetViewportSize(compactViewport);
@@ -689,20 +693,40 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 PackageGraphNodePresentationLevel.OverviewCompact,
                 PackageGraphPresentationPolicy.ResolveForZoom(
                     PackageGraphLayoutMode.Overview,
-                    0.60f,
+                    0.76f,
                     PackageGraphNodePresentationLevel.OverviewCompact));
             Assert.AreEqual(
                 PackageGraphNodePresentationLevel.Standard,
                 PackageGraphPresentationPolicy.ResolveForZoom(
                     PackageGraphLayoutMode.Overview,
-                    1.10f,
+                    1.24f,
                     PackageGraphNodePresentationLevel.Standard));
             Assert.AreEqual(
                 PackageGraphNodePresentationLevel.OverviewCompact,
                 PackageGraphPresentationPolicy.ResolveForZoom(
                     PackageGraphLayoutMode.Overview,
-                    1.10f,
+                    1.24f,
                     PackageGraphNodePresentationLevel.OverviewCompact));
+        }
+
+        [Test]
+        public void PresentationMetrics_UseMateriallyDifferentFootprints()
+        {
+            PackageGraphNodeMetrics micro =
+                PackageGraphPresentationPolicy.GetMetrics(PackageGraphNodePresentationLevel.OverviewMicro);
+            PackageGraphNodeMetrics compact =
+                PackageGraphPresentationPolicy.GetMetrics(PackageGraphNodePresentationLevel.OverviewCompact);
+            PackageGraphNodeMetrics standard =
+                PackageGraphPresentationPolicy.GetMetrics(PackageGraphNodePresentationLevel.Standard);
+            PackageGraphNodeMetrics full =
+                PackageGraphPresentationPolicy.GetMetrics(PackageGraphNodePresentationLevel.Full);
+
+            Assert.Less(micro.Width, compact.Width);
+            Assert.Less(compact.Width, standard.Width);
+            Assert.Less(standard.Width, full.Width);
+            Assert.Less(micro.Height, compact.Height);
+            Assert.Less(compact.Height, standard.Height);
+            Assert.Less(standard.Height, full.Height);
         }
 
         [Test]
@@ -731,6 +755,40 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             applyTransform.Invoke(viewport, null);
 
             Assert.IsTrue(contentRoot.ClassListContains("dpi-ecosystem-graph__content--high-zoom"));
+        }
+
+        [Test]
+        public void GraphViewport_LeftPanPolicyAllowsBackgroundAndRootOnly()
+        {
+            VisualElement packageNode = new VisualElement();
+            packageNode.AddToClassList("dpi-graph-node");
+            VisualElement groupNode = new VisualElement();
+            groupNode.AddToClassList("dpi-graph-group");
+            VisualElement hub = new VisualElement();
+            hub.AddToClassList("dpi-graph-hub");
+            VisualElement hubChild = new VisualElement();
+            hub.Add(hubChild);
+            VisualElement canvas = new VisualElement();
+            canvas.AddToClassList("dpi-ecosystem-graph__canvas");
+
+            Assert.IsFalse(PackageGraphViewport.IsLeftPanTargetForTests(packageNode));
+            Assert.IsFalse(PackageGraphViewport.IsLeftPanTargetForTests(groupNode));
+            Assert.IsTrue(PackageGraphViewport.IsLeftPanTargetForTests(hubChild));
+            Assert.IsTrue(PackageGraphViewport.IsLeftPanTargetForTests(canvas));
+        }
+
+        [Test]
+        public void GraphViewport_EffectiveMinimumZoomAllowsFitBelowNormalClamp()
+        {
+            Assert.That(
+                PackageGraphViewport.CalculateEffectiveMinZoomForTests(0.35f, 0.18f),
+                Is.EqualTo(0.18f).Within(0.001f));
+            Assert.That(
+                PackageGraphViewport.CalculateEffectiveMinZoomForTests(0.35f, 0.04f),
+                Is.EqualTo(0.10f).Within(0.001f));
+            Assert.That(
+                PackageGraphViewport.CalculateEffectiveMinZoomForTests(0.35f, 0.90f),
+                Is.EqualTo(0.35f).Within(0.001f));
         }
 
         [Test]
@@ -934,17 +992,17 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
-        public void HierarchyDisplay_SeparatesStructuralHierarchyFromPackageRole()
+        public void HierarchyDisplay_SeparatesStructuralCategoryFromPackageKind()
         {
             PackageGraphModel graph = new PackageGraphBuilder(_ => false)
                 .Build(CreateDefaultGraphPackages());
 
-            AssertHierarchyAndRole(graph, "com.deucarian.api", "Runtime Services", "Core");
-            AssertHierarchyAndRole(graph, "com.deucarian.session", "Runtime Services", "Core");
-            AssertHierarchyAndRole(graph, "com.deucarian.core-state", "State & Data", "Core");
-            AssertHierarchyAndRole(graph, "com.deucarian.package-installer", "Tools & Quality", "Tool");
-            AssertHierarchyAndRole(graph, "com.deucarian.session.api-integration", "Integrations", "Integration");
-            AssertHierarchyAndRole(graph, "com.deucarian.selection-suite", "Suites", "Suite");
+            AssertCategoryAndKind(graph, "com.deucarian.api", "Runtime Services", "Library");
+            AssertCategoryAndKind(graph, "com.deucarian.session", "Runtime Services", "Library");
+            AssertCategoryAndKind(graph, "com.deucarian.core-state", "State & Data", "Library");
+            AssertCategoryAndKind(graph, "com.deucarian.package-installer", "Tools & Quality", "Tool");
+            AssertCategoryAndKind(graph, "com.deucarian.session.api-integration", "Integrations", "Integration");
+            AssertCategoryAndKind(graph, "com.deucarian.selection-suite", "Suites", "Suite");
         }
 
         [Test]
@@ -1043,8 +1101,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 .Build(CreateDefaultGraphPackages());
 
             PackageGraphLayoutResult layout = new PackageGraphLayout().Calculate(graph);
-            PackageGraphNodeMetrics compactMetrics =
-                PackageGraphPresentationPolicy.GetMetrics(PackageGraphNodePresentationLevel.OverviewCompact);
+            PackageGraphNodeMetrics microMetrics =
+                PackageGraphPresentationPolicy.GetMetrics(PackageGraphNodePresentationLevel.OverviewMicro);
 
             Assert.AreEqual(PackageGraphLayoutMode.Overview, layout.Mode);
             Assert.AreEqual(graph.Nodes.Count, layout.NodeRects.Count);
@@ -1079,9 +1137,9 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 PackageGraphLayoutRing.Runtime,
                 layout.NodeRings["com.deucarian.package-installer"]);
             Assert.IsTrue(layout.NodePresentationLevels.Values.All(level =>
-                level == PackageGraphNodePresentationLevel.OverviewCompact));
-            Assert.That(layout.NodeRects["com.deucarian.session"].width, Is.EqualTo(compactMetrics.Width).Within(0.1f));
-            Assert.That(layout.NodeRects["com.deucarian.session"].height, Is.EqualTo(compactMetrics.Height).Within(0.1f));
+                level == PackageGraphNodePresentationLevel.OverviewMicro));
+            Assert.That(layout.NodeRects["com.deucarian.session"].width, Is.EqualTo(microMetrics.Width).Within(0.1f));
+            Assert.That(layout.NodeRects["com.deucarian.session"].height, Is.EqualTo(microMetrics.Height).Within(0.1f));
             PackageGraphGroupLayoutNode infrastructure = layout.GroupNodes.Single(groupNode => groupNode.GroupId == "infrastructure");
             PackageGraphGroupLayoutNode integrations = layout.GroupNodes.Single(groupNode => groupNode.GroupId == "integrations");
             float globalRadius = Vector2.Distance(infrastructure.Rect.center, PackageGraphLayout.GraphCenter);
@@ -1249,6 +1307,11 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.IsFalse(layout.NodeRects.ContainsKey("com.deucarian.theming"));
             Assert.IsFalse(layout.HasUnrelatedSummary);
             Assert.IsTrue(layout.GroupNodes.Any(groupNode => groupNode.Collapsed && groupNode.SummaryLabel.Contains("related package")));
+            PackageGraphGroupLayoutNode integrationContext =
+                layout.GroupNodes.Single(groupNode => groupNode.GroupId == "integrations");
+            CollectionAssert.Contains(
+                integrationContext.RepresentedPackageIds.ToArray(),
+                "com.deucarian.session.api-integration");
             Assert.AreEqual(layout.ActiveCenter, session.center);
             Assert.IsEmpty(layout.RingGuides);
             AssertNoOverlaps(layout.NodeRects.Values.Concat(layout.GroupNodes.Select(groupNode => groupNode.Rect)).ToArray());
@@ -1288,6 +1351,16 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
             Assert.IsFalse(layout.HasUnrelatedSummary);
             Assert.IsTrue(layout.GroupNodes.Any(groupNode => groupNode.Collapsed));
+            PackageGraphGroupLayoutNode runtimeContext =
+                layout.GroupNodes.Single(groupNode => groupNode.GroupId == "runtime-services");
+            CollectionAssert.IsSubsetOf(
+                new[]
+                {
+                    "com.deucarian.api",
+                    "com.deucarian.object-loading",
+                    "com.deucarian.session"
+                },
+                runtimeContext.RepresentedPackageIds.ToArray());
             AssertNoOverlaps(layout.NodeRects.Values.Concat(layout.GroupNodes.Select(groupNode => groupNode.Rect)).ToArray());
         }
 
@@ -1696,17 +1769,17 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.IsTrue(focus.IsEdgeEmphasized(edge), edge.Key);
         }
 
-        private static void AssertHierarchyAndRole(
+        private static void AssertCategoryAndKind(
             PackageGraphModel graph,
             string packageId,
-            string expectedHierarchy,
-            string expectedRole)
+            string expectedCategory,
+            string expectedKind)
         {
             Assert.IsTrue(graph.TryGetNode(packageId, out PackageGraphNode node), packageId);
             Assert.AreEqual(
-                expectedHierarchy,
+                expectedCategory,
                 PackageGraphHierarchyDisplay.GetPackageHierarchyPath(graph, node.PackageDefinition));
-            Assert.AreEqual(expectedRole, PackageGraphHierarchyDisplay.GetPackageRole(node.PackageDefinition));
+            Assert.AreEqual(expectedKind, PackageGraphHierarchyDisplay.GetPackageKind(node.PackageDefinition));
         }
 
         private static float GetAngle(Rect rect)

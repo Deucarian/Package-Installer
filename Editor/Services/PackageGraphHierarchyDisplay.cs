@@ -43,6 +43,11 @@ namespace Deucarian.PackageInstaller.Editor
 
         public static string GetPackageRole(PackageDefinition packageDefinition)
         {
+            return GetPackageKind(packageDefinition);
+        }
+
+        public static string GetPackageKind(PackageDefinition packageDefinition)
+        {
             if (packageDefinition == null)
             {
                 return "-";
@@ -58,12 +63,12 @@ namespace Deucarian.PackageInstaller.Editor
                 return "Suite";
             }
 
-            if (!string.IsNullOrWhiteSpace(packageDefinition.MetadataType))
+            if (string.Equals(packageDefinition.MetadataType, "Tool", StringComparison.OrdinalIgnoreCase))
             {
-                return packageDefinition.MetadataType;
+                return "Tool";
             }
 
-            return packageDefinition.PackageType.ToString();
+            return "Library";
         }
 
         private static string GetGroupPath(PackageGraphModel graph, string groupId)

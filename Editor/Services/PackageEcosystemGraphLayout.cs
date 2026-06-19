@@ -45,10 +45,10 @@ namespace Deucarian.PackageInstaller.Editor
 
     internal static class PackageGraphPresentationPolicy
     {
-        private const float OverviewMicroToCompactZoom = 0.68f;
-        private const float OverviewCompactToMicroZoom = 0.56f;
-        private const float OverviewCompactToStandardZoom = 1.18f;
-        private const float OverviewStandardToCompactZoom = 1.02f;
+        private const float OverviewMicroToCompactZoom = 0.82f;
+        private const float OverviewCompactToMicroZoom = 0.70f;
+        private const float OverviewCompactToStandardZoom = 1.36f;
+        private const float OverviewStandardToCompactZoom = 1.18f;
         private const float GroupCompactToStandardZoom = 0.92f;
         private const float GroupStandardToCompactZoom = 0.78f;
 
@@ -57,11 +57,11 @@ namespace Deucarian.PackageInstaller.Editor
             switch (level)
             {
                 case PackageGraphNodePresentationLevel.OverviewMicro:
-                    return new PackageGraphNodeMetrics(132f, 58f);
+                    return new PackageGraphNodeMetrics(104f, 46f);
                 case PackageGraphNodePresentationLevel.OverviewCompact:
-                    return new PackageGraphNodeMetrics(178f, 84f);
+                    return new PackageGraphNodeMetrics(132f, 60f);
                 case PackageGraphNodePresentationLevel.Standard:
-                    return new PackageGraphNodeMetrics(238f, 112f);
+                    return new PackageGraphNodeMetrics(168f, 78f);
                 default:
                     return new PackageGraphNodeMetrics(PackageGraphLayout.NodeWidth, PackageGraphLayout.NodeHeight);
             }
@@ -72,9 +72,9 @@ namespace Deucarian.PackageInstaller.Editor
             switch (mode)
             {
                 case PackageGraphLayoutMode.Overview:
-                    return PackageGraphNodePresentationLevel.OverviewCompact;
+                    return PackageGraphNodePresentationLevel.OverviewMicro;
                 case PackageGraphLayoutMode.GroupFocus:
-                    return PackageGraphNodePresentationLevel.Standard;
+                    return PackageGraphNodePresentationLevel.OverviewCompact;
                 default:
                     return PackageGraphNodePresentationLevel.Standard;
             }
@@ -223,7 +223,8 @@ namespace Deucarian.PackageInstaller.Editor
             bool focused,
             bool collapsed,
             float orbitRadius = 0f,
-            string summaryLabel = null)
+            string summaryLabel = null,
+            IEnumerable<string> representedPackageIds = null)
         {
             Group = group;
             Rect = rect;
@@ -236,6 +237,12 @@ namespace Deucarian.PackageInstaller.Editor
             Collapsed = collapsed;
             OrbitRadius = Mathf.Max(0f, orbitRadius);
             SummaryLabel = summaryLabel ?? string.Empty;
+            RepresentedPackageIds = representedPackageIds == null
+                ? Array.Empty<string>()
+                : representedPackageIds
+                    .Where(packageId => !string.IsNullOrWhiteSpace(packageId))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
         }
 
         public PackageGraphGroup Group { get; }
@@ -261,6 +268,8 @@ namespace Deucarian.PackageInstaller.Editor
         public float OrbitRadius { get; }
 
         public string SummaryLabel { get; }
+
+        public IReadOnlyList<string> RepresentedPackageIds { get; }
     }
 
     internal sealed class PackageGraphRingGuide
@@ -312,24 +321,24 @@ namespace Deucarian.PackageInstaller.Editor
     {
         public const float CanvasWidth = 4000f;
         public const float CanvasHeight = 3800f;
-        public const float NodeWidth = 238f;
-        public const float NodeHeight = 136f;
+        public const float NodeWidth = 206f;
+        public const float NodeHeight = 104f;
 
         private const float HubWidth = 188f;
         private const float HubHeight = 188f;
-        private const float GroupWidth = 168f;
-        private const float GroupHeight = 168f;
-        private const float FocusGroupWidth = 188f;
-        private const float FocusGroupHeight = 188f;
-        private const float GroupChipWidth = 150f;
-        private const float GroupChipHeight = 150f;
+        private const float GroupWidth = 152f;
+        private const float GroupHeight = 152f;
+        private const float FocusGroupWidth = 172f;
+        private const float FocusGroupHeight = 172f;
+        private const float GroupChipWidth = 124f;
+        private const float GroupChipHeight = 124f;
         private const float NodeGap = 22f;
         private const float MinimumGlobalGroupOrbitRadius = 560f;
         private const float MinimumClusterGap = 56f;
         private const float FocusOrbitRadius = 335f;
         private const float FocusGridGapX = 48f;
         private const float FocusGridGapY = 28f;
-        private const float ContextGroupBaseOffset = 340f;
+        private const float ContextGroupBaseOffset = 118f;
         private const float ContextGroupCollisionPadding = 18f;
 
         public static readonly Vector2 GraphCenter = new Vector2(2000f, 1850f);
@@ -489,7 +498,7 @@ namespace Deucarian.PackageInstaller.Editor
             IReadOnlyList<PackageGraphNode> directPackages = GetDirectPackages(graph, focusedGroup.Id);
             IReadOnlyList<PackageGraphGroup> directGroups = GetChildGroups(graph, focusedGroup.Id);
             int childCount = directPackages.Count + directGroups.Count;
-            float localRadius = Mathf.Max(FocusOrbitRadius, CalculateLocalOrbitRadius(childCount, packageMetrics, GroupChipWidth, GroupChipHeight));
+            float localRadius = Mathf.Max(260f, CalculateLocalOrbitRadius(childCount, packageMetrics, GroupChipWidth, GroupChipHeight));
             Rect focusedGroupRect = CenteredRect(GraphCenter, FocusGroupWidth, FocusGroupHeight);
             groupNodes.Add(CreateGroupLayoutNode(
                 graph,
@@ -774,16 +783,17 @@ namespace Deucarian.PackageInstaller.Editor
             float[] offsets =
             {
                 ContextGroupBaseOffset,
-                ContextGroupBaseOffset + 120f,
-                ContextGroupBaseOffset + 240f
+                ContextGroupBaseOffset + 76f,
+                ContextGroupBaseOffset + 152f,
+                ContextGroupBaseOffset + 228f
             };
             float[] perpendicularOffsets =
             {
                 0f,
-                GroupChipHeight + 28f,
-                -(GroupChipHeight + 28f),
-                (GroupChipHeight + 28f) * 1.6f,
-                -(GroupChipHeight + 28f) * 1.6f
+                GroupChipHeight + 24f,
+                -(GroupChipHeight + 24f),
+                (GroupChipHeight + 24f) * 1.55f,
+                -(GroupChipHeight + 24f) * 1.55f
             };
 
             foreach (float offset in offsets)
@@ -863,7 +873,8 @@ namespace Deucarian.PackageInstaller.Editor
                 focused,
                 collapsed,
                 orbitRadius,
-                summaryLabel);
+                summaryLabel,
+                packages.Select(package => package.PackageId));
         }
 
         private static List<PackageGraphNode> GetProviderNodes(
@@ -1186,18 +1197,18 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (childCount == 1)
             {
-                return Mathf.Max(138f, centerClearanceRadius);
+                return Mathf.Max(118f, centerClearanceRadius);
             }
 
             if (childCount == 2)
             {
-                return Mathf.Max(178f, centerClearanceRadius);
+                return Mathf.Max(148f, centerClearanceRadius);
             }
 
             float chordFootprint = Mathf.Max(packageMetrics.Width, groupWidth) + NodeGap;
             float chordRadius = chordFootprint / Mathf.Max(0.01f, 2f * Mathf.Sin(Mathf.PI / childCount));
             float radialFootprint = Mathf.Max(packageMetrics.Height, groupHeight) * 0.5f;
-            return Mathf.Clamp(chordRadius + radialFootprint * 0.28f, Mathf.Max(centerClearanceRadius, 210f), 560f);
+            return Mathf.Clamp(chordRadius + radialFootprint * 0.28f, Mathf.Max(centerClearanceRadius, 168f), 520f);
         }
 
         private static float CalculateGlobalGroupOrbitRadius(

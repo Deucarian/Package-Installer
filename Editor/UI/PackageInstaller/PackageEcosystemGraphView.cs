@@ -18,7 +18,9 @@ namespace Deucarian.PackageInstaller.Editor
         private readonly VisualElement _graphBody;
         private readonly VisualElement _categoryRail;
         private readonly PackageVisibilityFilterState _filterState;
+        private readonly Action<PackageDefinition> _packageSelected;
         private readonly Action _filterChanged;
+        private readonly Action _selectionCleared;
         private readonly Action _rootFocused;
         private readonly Action<PackageGraphGroup> _groupFocused;
         private readonly TextField _searchField;
@@ -89,7 +91,9 @@ namespace Deucarian.PackageInstaller.Editor
             AddToClassList("dpi-ecosystem-graph");
             focusable = true;
             _filterState = filterState ?? new PackageVisibilityFilterState();
+            _packageSelected = packageSelected;
             _filterChanged = filterChanged;
+            _selectionCleared = selectionCleared;
             _rootFocused = rootFocused;
             _groupFocused = groupFocused;
 
@@ -103,6 +107,7 @@ namespace Deucarian.PackageInstaller.Editor
             _viewport = new PackageGraphViewport(selectionCleared);
             _viewport.ViewportSizeChanged += HandleViewportSizeChanged;
             _viewport.ZoomChanged += zoom => _canvas.SetViewportZoom(zoom);
+            _viewport.ContextMenuRequested += ShowContextMenu;
             _viewport.SetContent(_canvas);
 
             VisualElement header = new VisualElement();
@@ -181,7 +186,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             VisualElement toolbar = new VisualElement();
             toolbar.AddToClassList("dpi-ecosystem-graph__toolbar");
-            toolbar.Add(CreateToolbarButton("Fit", () => _viewport.FitToContent(_canvas.GetContentBounds())));
+            toolbar.Add(CreateToolbarButton("Fit", FitCurrentContext));
             toolbar.Add(CreateToolbarButton("100%", () => _viewport.ResetZoom(_canvas.GetActiveCenter())));
             toolbar.Add(CreateToolbarButton("Center", () => _viewport.CenterOn(_canvas.GetActiveCenter())));
             filterRow.Add(toolbar);
@@ -283,6 +288,7 @@ namespace Deucarian.PackageInstaller.Editor
             _viewport.SetLayoutMode(_canvas.LayoutMode);
             _canvas.SetViewportZoom(_viewport.Zoom);
             _viewport.SetContentSize(_canvas.ContentSize.x, _canvas.ContentSize.y);
+            _viewport.SetActiveBounds(_canvas.GetContentBounds());
             _viewport.EnsureInitialFrame(_canvas.GetContentBounds(), shouldForceInitialFrame);
             UpdateLegend(_canvas.LayoutMode);
             _hasAppliedGraphFrame = _hasAppliedGraphFrame || shouldForceInitialFrame;
@@ -304,7 +310,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (layoutTargetChanged)
             {
-                _viewport.FitToContent(_canvas.GetContentBounds());
+                FitCurrentContext();
             }
         }
 
@@ -317,7 +323,37 @@ namespace Deucarian.PackageInstaller.Editor
 
             _viewport.SetLayoutMode(_canvas.LayoutMode);
             _viewport.SetContentSize(_canvas.ContentSize.x, _canvas.ContentSize.y);
+            _viewport.SetActiveBounds(_canvas.GetContentBounds());
             _viewport.EnsureInitialFrame(_canvas.GetContentBounds(), force: true);
+        }
+
+        private void FitCurrentContext()
+        {
+            for (int iteration = 0; iteration < 4; iteration++)
+            {
+                Rect beforeBounds = _canvas.GetContentBounds();
+                _viewport.SetActiveBounds(beforeBounds);
+                _viewport.FitToContent(beforeBounds);
+                _viewport.SetLayoutMode(_canvas.LayoutMode);
+                _viewport.SetContentSize(_canvas.ContentSize.x, _canvas.ContentSize.y);
+                Rect afterBounds = _canvas.GetContentBounds();
+                _viewport.SetActiveBounds(afterBounds);
+
+                if (AreBoundsClose(beforeBounds, afterBounds))
+                {
+                    return;
+                }
+            }
+
+            _viewport.FitToContent(_canvas.GetContentBounds());
+        }
+
+        private static bool AreBoundsClose(Rect first, Rect second)
+        {
+            return Mathf.Abs(first.x - second.x) < 0.5f &&
+                   Mathf.Abs(first.y - second.y) < 0.5f &&
+                   Mathf.Abs(first.width - second.width) < 0.5f &&
+                   Mathf.Abs(first.height - second.height) < 0.5f;
         }
 
         private void HandleSearchKeyDown(KeyDownEvent evt)
@@ -501,7 +537,7 @@ namespace Deucarian.PackageInstaller.Editor
 
                 if (IsOverviewRailActive())
                 {
-                    _viewport.FitToContent(_canvas.GetContentBounds());
+                    FitCurrentContext();
                     return;
                 }
 
@@ -559,7 +595,7 @@ namespace Deucarian.PackageInstaller.Editor
 
                 if (string.Equals(group.Id, _activeTopLevelGroupId, StringComparison.OrdinalIgnoreCase))
                 {
-                    _viewport.FitToContent(_canvas.GetContentBounds());
+                    FitCurrentContext();
                     return;
                 }
 
@@ -959,18 +995,222 @@ namespace Deucarian.PackageInstaller.Editor
             button.AddToClassList("dpi-ecosystem-graph__toolbar-button");
             return button;
         }
+
+        private void ShowContextMenu(PackageGraphContextMenuRequest request)
+        {
+            if (request == null || _canvas.InteractionsLocked)
+            {
+                return;
+            }
+
+            GenericMenu menu = new GenericMenu();
+
+            if (TryResolvePackageFromTarget(request.Target, out PackageGraphNode packageNode))
+            {
+                PopulatePackageContextMenu(menu, packageNode);
+            }
+            else if (TryResolveGroupFromTarget(request.Target, out PackageGraphGroup group))
+            {
+                PopulateGroupContextMenu(menu, group);
+            }
+            else if (HasAncestorClass(request.Target, "dpi-graph-hub"))
+            {
+                PopulateRootContextMenu(menu);
+            }
+            else
+            {
+                PopulateCanvasContextMenu(menu);
+            }
+
+            menu.ShowAsContext();
+        }
+
+        private void PopulateCanvasContextMenu(GenericMenu menu)
+        {
+            menu.AddItem(new GUIContent("Fit current context"), false, FitCurrentContext);
+            menu.AddItem(new GUIContent("Center current focus"), false, () => _viewport.CenterOn(_canvas.GetActiveCenter()));
+            menu.AddItem(new GUIContent("100%"), false, () => _viewport.ResetZoom(_canvas.GetActiveCenter()));
+
+            if (_canvas.LayoutMode != PackageGraphLayoutMode.Overview)
+            {
+                menu.AddItem(new GUIContent("Back one hierarchy level"), false, () => _selectionCleared?.Invoke());
+            }
+            else
+            {
+                menu.AddDisabledItem(new GUIContent("Back one hierarchy level"));
+            }
+
+            menu.AddItem(new GUIContent("Ecosystem Overview"), false, () => _rootFocused?.Invoke());
+        }
+
+        private void PopulatePackageContextMenu(GenericMenu menu, PackageGraphNode packageNode)
+        {
+            if (packageNode == null || packageNode.PackageDefinition == null)
+            {
+                PopulateCanvasContextMenu(menu);
+                return;
+            }
+
+            PackageDefinition packageDefinition = packageNode.PackageDefinition;
+            menu.AddItem(new GUIContent("Focus / Select Package"), false, () => _packageSelected?.Invoke(packageDefinition));
+            menu.AddItem(new GUIContent("Show Package Details"), false, () => _packageSelected?.Invoke(packageDefinition));
+            menu.AddItem(new GUIContent("Copy Package ID"), false, () => EditorGUIUtility.systemCopyBuffer = packageDefinition.PackageId);
+
+            string repositoryUrl = GetRepositoryUrl(packageDefinition);
+            if (!string.IsNullOrWhiteSpace(repositoryUrl))
+            {
+                menu.AddItem(new GUIContent("Open Repository"), false, () => Application.OpenURL(repositoryUrl));
+            }
+            else
+            {
+                menu.AddDisabledItem(new GUIContent("Open Repository"));
+            }
+        }
+
+        private void PopulateGroupContextMenu(GenericMenu menu, PackageGraphGroup group)
+        {
+            if (group == null)
+            {
+                PopulateCanvasContextMenu(menu);
+                return;
+            }
+
+            bool active = string.Equals(group.Id, _canvas.LayoutFocusGroupId, StringComparison.OrdinalIgnoreCase);
+            menu.AddItem(new GUIContent("Focus Category"), false, () => _groupFocused?.Invoke(group));
+            menu.AddItem(new GUIContent("Fit Category"), false, () =>
+            {
+                if (!active)
+                {
+                    _groupFocused?.Invoke(group);
+                }
+
+                schedule.Execute(FitCurrentContext).ExecuteLater(1);
+            });
+
+            if (active)
+            {
+                menu.AddItem(new GUIContent("Back to Parent"), false, () => _selectionCleared?.Invoke());
+            }
+            else
+            {
+                menu.AddDisabledItem(new GUIContent("Back to Parent"));
+            }
+
+            menu.AddItem(new GUIContent("Ecosystem Overview"), false, () => _rootFocused?.Invoke());
+        }
+
+        private void PopulateRootContextMenu(GenericMenu menu)
+        {
+            menu.AddItem(new GUIContent("Ecosystem Overview"), false, () => _rootFocused?.Invoke());
+            menu.AddItem(new GUIContent("Fit Overview"), false, FitCurrentContext);
+            menu.AddItem(new GUIContent("Center Root"), false, () => _viewport.CenterOn(PackageGraphLayout.GraphCenter));
+            menu.AddItem(new GUIContent("100%"), false, () => _viewport.ResetZoom(PackageGraphLayout.GraphCenter));
+        }
+
+        private bool TryResolvePackageFromTarget(VisualElement target, out PackageGraphNode packageNode)
+        {
+            packageNode = null;
+            VisualElement nodeElement = FindAncestorWithClass(target, "dpi-graph-node");
+
+            return nodeElement != null &&
+                   _currentGraph != null &&
+                   _currentGraph.TryGetNode(nodeElement.name, out packageNode);
+        }
+
+        private bool TryResolveGroupFromTarget(VisualElement target, out PackageGraphGroup group)
+        {
+            group = null;
+            VisualElement groupElement = FindAncestorWithClass(target, "dpi-graph-group");
+
+            if (groupElement == null ||
+                string.IsNullOrWhiteSpace(groupElement.name) ||
+                !groupElement.name.StartsWith("group-", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            string groupId = groupElement.name.Substring("group-".Length);
+            return _currentGraph != null && _currentGraph.TryGetGroup(groupId, out group);
+        }
+
+        private static string GetRepositoryUrl(PackageDefinition packageDefinition)
+        {
+            if (packageDefinition == null)
+            {
+                return string.Empty;
+            }
+
+            string url = !string.IsNullOrWhiteSpace(packageDefinition.StableUrl)
+                ? packageDefinition.StableUrl
+                : packageDefinition.DevelopmentUrl;
+
+            if (string.IsNullOrWhiteSpace(url))
+            {
+                return string.Empty;
+            }
+
+            int hashIndex = url.IndexOf('#');
+            if (hashIndex >= 0)
+            {
+                url = url.Substring(0, hashIndex);
+            }
+
+            return url.EndsWith(".git", StringComparison.OrdinalIgnoreCase)
+                ? url.Substring(0, url.Length - 4)
+                : url;
+        }
+
+        private static bool HasAncestorClass(VisualElement target, string className)
+        {
+            return FindAncestorWithClass(target, className) != null;
+        }
+
+        private static VisualElement FindAncestorWithClass(VisualElement target, string className)
+        {
+            VisualElement current = target;
+
+            while (current != null)
+            {
+                if (current.ClassListContains(className))
+                {
+                    return current;
+                }
+
+                current = current.parent;
+            }
+
+            return null;
+        }
+    }
+
+    internal sealed class PackageGraphContextMenuRequest
+    {
+        public PackageGraphContextMenuRequest(VisualElement target, Vector2 viewportPosition, Vector2 worldPosition)
+        {
+            Target = target;
+            ViewportPosition = viewportPosition;
+            WorldPosition = worldPosition;
+        }
+
+        public VisualElement Target { get; }
+
+        public Vector2 ViewportPosition { get; }
+
+        public Vector2 WorldPosition { get; }
     }
 
     internal sealed class PackageGraphViewport : VisualElement
     {
-        private const float OverviewMinZoom = 0.35f;
-        private const float FocusMinZoom = 0.68f;
+        private const float OverviewMinZoom = 0.28f;
+        private const float FocusMinZoom = 0.42f;
+        private const float AbsoluteMinZoom = 0.10f;
         private const float MaxZoom = 1.75f;
         private const float FitMarginRatio = 0.10f;
         private const float MinFitPadding = 28f;
         private const float MaxFitPadding = 88f;
         private const float PanMargin = 220f;
-        private const float PanClickToleranceSqr = 4f;
+        private const float PanDragThreshold = 5f;
+        private const float PanDragThresholdSqr = PanDragThreshold * PanDragThreshold;
 
         private readonly VisualElement _contentRoot;
         private readonly Action _selectionCleared;
@@ -981,12 +1221,18 @@ namespace Deucarian.PackageInstaller.Editor
         private float _contentWidth = PackageGraphLayout.CanvasWidth;
         private float _contentHeight = PackageGraphLayout.CanvasHeight;
         private Vector2 _lastReportedViewportSize;
+        private VisualElement _mouseDownTarget;
         private PackageGraphLayoutMode _layoutMode = PackageGraphLayoutMode.Overview;
         private Rect _initialBounds;
+        private Rect _activeBounds = default(Rect);
         private bool _initialized;
         private bool _hasInitialBounds;
+        private bool _panCandidate;
         private bool _panning;
         private bool _panMoved;
+        private int _panButton = -1;
+        private float _requiredFitZoom = 1f;
+        private bool _suppressNextClick;
 
         public PackageGraphViewport(Action selectionCleared)
         {
@@ -1005,12 +1251,15 @@ namespace Deucarian.PackageInstaller.Editor
             Add(_contentRoot);
 
             RegisterCallback<WheelEvent>(HandleWheel);
-            RegisterCallback<MouseDownEvent>(HandleMouseDown);
+            RegisterCallback<MouseDownEvent>(HandleMouseDown, TrickleDown.TrickleDown);
             RegisterCallback<MouseMoveEvent>(HandleMouseMove);
             RegisterCallback<MouseUpEvent>(HandleMouseUp);
+            RegisterCallback<DetachFromPanelEvent>(_ => CancelPan());
+            RegisterCallback<BlurEvent>(_ => CancelPan());
+            RegisterCallback<ClickEvent>(HandleClickCapture, TrickleDown.TrickleDown);
             RegisterCallback<ClickEvent>(HandleClick);
             RegisterCallback<KeyDownEvent>(HandleKeyDown);
-            RegisterCallback<MouseCaptureOutEvent>(_ => _panning = false);
+            RegisterCallback<MouseCaptureOutEvent>(_ => ResetPanState());
             RegisterCallback<GeometryChangedEvent>(_ =>
             {
                 ReportViewportSizeIfNeeded();
@@ -1031,13 +1280,20 @@ namespace Deucarian.PackageInstaller.Editor
 
         public event Action<float> ZoomChanged;
 
+        public event Action<PackageGraphContextMenuRequest> ContextMenuRequested;
+
         public float Zoom => _zoom;
 
         public Vector2 Pan => _pan;
 
+        internal float EffectiveMinZoomForTests => GetMinZoom();
+
+        internal float RequiredFitZoomForTests => _requiredFitZoom;
+
         public void SetLayoutMode(PackageGraphLayoutMode layoutMode)
         {
             _layoutMode = layoutMode;
+            UpdateRequiredFitZoom(_activeBounds);
 
             if (_zoom < GetMinZoom())
             {
@@ -1062,13 +1318,21 @@ namespace Deucarian.PackageInstaller.Editor
             _contentHeight = Mathf.Max(1f, height);
             _contentRoot.style.width = _contentWidth;
             _contentRoot.style.height = _contentHeight;
+            UpdateRequiredFitZoom(_activeBounds);
             ClampAndApplyTransform();
+        }
+
+        public void SetActiveBounds(Rect worldBounds)
+        {
+            _activeBounds = NormalizeBounds(worldBounds);
+            UpdateRequiredFitZoom(_activeBounds);
         }
 
         public void EnsureInitialFrame(Rect worldBounds, bool force = false)
         {
             _initialBounds = worldBounds;
             _hasInitialBounds = true;
+            SetActiveBounds(worldBounds);
 
             if (force)
             {
@@ -1091,10 +1355,8 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             Rect bounds = NormalizeBounds(worldBounds);
-            float fitPadding = GetFitPadding();
-            float availableWidth = Mathf.Max(1f, contentRect.width - fitPadding * 2f);
-            float availableHeight = Mathf.Max(1f, contentRect.height - fitPadding * 2f);
-            float fitZoom = Mathf.Min(availableWidth / bounds.width, availableHeight / bounds.height);
+            SetActiveBounds(bounds);
+            float fitZoom = CalculateFitZoom(bounds);
             _zoom = Mathf.Clamp(fitZoom, GetMinZoom(), MaxZoom);
             _pan = GetViewportCenter() - bounds.center * _zoom;
             _initialized = true;
@@ -1158,12 +1420,15 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void HandleMouseDown(MouseDownEvent evt)
         {
-            if (!ShouldStartPan(evt))
+            if (!ShouldConsiderPan(evt))
             {
                 return;
             }
 
-            _panning = true;
+            _panCandidate = true;
+            _panning = false;
+            _panButton = evt.button;
+            _mouseDownTarget = evt.target as VisualElement;
             _lastMousePosition = evt.localMousePosition;
             _mouseDownPosition = evt.localMousePosition;
             _panMoved = false;
@@ -1174,18 +1439,25 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void HandleMouseMove(MouseMoveEvent evt)
         {
-            if (!_panning || !MouseCaptureController.HasMouseCapture(this))
+            if (!_panCandidate || !MouseCaptureController.HasMouseCapture(this))
             {
                 return;
             }
 
             Vector2 nextMousePosition = evt.localMousePosition;
-            if ((nextMousePosition - _mouseDownPosition).sqrMagnitude > PanClickToleranceSqr)
+            Vector2 totalDelta = nextMousePosition - _mouseDownPosition;
+
+            if (!_panning && totalDelta.sqrMagnitude > PanDragThresholdSqr)
             {
+                _panning = true;
                 _panMoved = true;
             }
 
-            _pan += nextMousePosition - _lastMousePosition;
+            if (_panning)
+            {
+                _pan += nextMousePosition - _lastMousePosition;
+            }
+
             _lastMousePosition = nextMousePosition;
             _initialized = true;
             ClampAndApplyTransform();
@@ -1194,12 +1466,23 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void HandleMouseUp(MouseUpEvent evt)
         {
-            if (!_panning)
+            if (!_panCandidate)
             {
                 return;
             }
 
-            _panning = false;
+            bool openedMenu = false;
+            if (_panButton == 1 && !_panMoved)
+            {
+                ContextMenuRequested?.Invoke(new PackageGraphContextMenuRequest(
+                    _mouseDownTarget,
+                    evt.localMousePosition,
+                    ViewportToWorld(evt.localMousePosition)));
+                openedMenu = true;
+            }
+
+            _suppressNextClick = _panMoved || openedMenu;
+            ResetPanState();
 
             if (MouseCaptureController.HasMouseCapture(this))
             {
@@ -1209,13 +1492,23 @@ namespace Deucarian.PackageInstaller.Editor
             evt.StopPropagation();
         }
 
+        private void HandleClickCapture(ClickEvent evt)
+        {
+            if (!_suppressNextClick)
+            {
+                return;
+            }
+
+            _suppressNextClick = false;
+            evt.StopImmediatePropagation();
+        }
+
         private void HandleClick(ClickEvent evt)
         {
             Focus();
 
-            if (evt.button != 0 || _panMoved)
+            if (evt.button != 0)
             {
-                _panMoved = false;
                 return;
             }
 
@@ -1302,13 +1595,30 @@ namespace Deucarian.PackageInstaller.Editor
 
         private float GetMinZoom()
         {
-            return _layoutMode == PackageGraphLayoutMode.Overview ? OverviewMinZoom : FocusMinZoom;
+            float configuredMinimum = _layoutMode == PackageGraphLayoutMode.Overview ? OverviewMinZoom : FocusMinZoom;
+            return CalculateEffectiveMinZoom(configuredMinimum, _requiredFitZoom);
         }
 
         private float GetFitPadding()
         {
             float smallestViewportAxis = Mathf.Min(contentRect.width, contentRect.height);
             return Mathf.Clamp(smallestViewportAxis * FitMarginRatio, MinFitPadding, MaxFitPadding);
+        }
+
+        private void UpdateRequiredFitZoom(Rect worldBounds)
+        {
+            _requiredFitZoom = HasViewportSize()
+                ? Mathf.Max(AbsoluteMinZoom, CalculateFitZoom(NormalizeBounds(worldBounds)) * 0.96f)
+                : 1f;
+        }
+
+        private float CalculateFitZoom(Rect worldBounds)
+        {
+            Rect bounds = NormalizeBounds(worldBounds);
+            float fitPadding = GetFitPadding();
+            float availableWidth = Mathf.Max(1f, contentRect.width - fitPadding * 2f);
+            float availableHeight = Mathf.Max(1f, contentRect.height - fitPadding * 2f);
+            return Mathf.Min(availableWidth / bounds.width, availableHeight / bounds.height);
         }
 
         private void ReportViewportSizeIfNeeded()
@@ -1344,11 +1654,82 @@ namespace Deucarian.PackageInstaller.Editor
             return bounds;
         }
 
-        private static bool ShouldStartPan(MouseDownEvent evt)
+        private void CancelPan()
+        {
+            if (MouseCaptureController.HasMouseCapture(this))
+            {
+                MouseCaptureController.ReleaseMouse(this);
+            }
+
+            ResetPanState();
+        }
+
+        private void ResetPanState()
+        {
+            _panCandidate = false;
+            _panning = false;
+            _panMoved = false;
+            _panButton = -1;
+            _mouseDownTarget = null;
+        }
+
+        private static bool ShouldConsiderPan(MouseDownEvent evt)
         {
             return evt.button == 2 ||
                    evt.button == 1 ||
-                   (evt.button == 0 && evt.altKey);
+                   (evt.button == 0 && (evt.altKey || IsLeftPanTarget(evt.target as VisualElement)));
+        }
+
+        internal static bool IsLeftPanTargetForTests(VisualElement target)
+        {
+            return IsLeftPanTarget(target);
+        }
+
+        internal static float CalculateEffectiveMinZoomForTests(float configuredMinimum, float requiredFitZoom)
+        {
+            return CalculateEffectiveMinZoom(configuredMinimum, requiredFitZoom);
+        }
+
+        private static float CalculateEffectiveMinZoom(float configuredMinimum, float requiredFitZoom)
+        {
+            return Mathf.Max(AbsoluteMinZoom, Mathf.Min(configuredMinimum, requiredFitZoom));
+        }
+
+        private static bool IsLeftPanTarget(VisualElement target)
+        {
+            if (target == null)
+            {
+                return true;
+            }
+
+            if (HasAncestorClass(target, "dpi-graph-hub"))
+            {
+                return true;
+            }
+
+            return !HasAncestorClass(target, "dpi-graph-node") &&
+                   !HasAncestorClass(target, "dpi-graph-group") &&
+                   !HasAncestorClass(target, "dpi-category-rail") &&
+                   !HasAncestorClass(target, "dpi-ecosystem-graph__toolbar") &&
+                   !HasAncestorClass(target, "dpi-ecosystem-graph__breadcrumbs") &&
+                   !HasAncestorClass(target, "dpi-ecosystem-graph__legend");
+        }
+
+        private static bool HasAncestorClass(VisualElement element, string className)
+        {
+            VisualElement current = element;
+
+            while (current != null)
+            {
+                if (current.ClassListContains(className))
+                {
+                    return true;
+                }
+
+                current = current.parent;
+            }
+
+            return false;
         }
     }
 
@@ -2541,7 +2922,6 @@ namespace Deucarian.PackageInstaller.Editor
         private void GenerateMembershipGuides(MeshGenerationContext context)
         {
             if (_layout == null ||
-                _layout.Mode == PackageGraphLayoutMode.Focus ||
                 _layout.GroupNodes.Count == 0)
             {
                 return;
@@ -2552,6 +2932,12 @@ namespace Deucarian.PackageInstaller.Editor
                 .Where(groupNode => groupNode != null && groupNode.Group != null)
                 .GroupBy(groupNode => groupNode.GroupId, StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+
+            if (_layout.Mode == PackageGraphLayoutMode.Focus)
+            {
+                DrawFocusMembershipGuides(painter);
+                return;
+            }
 
             foreach (PackageGraphGroupLayoutNode groupNode in _layout.GroupNodes)
             {
@@ -2582,6 +2968,34 @@ namespace Deucarian.PackageInstaller.Editor
                 foreach (Rect childRect in childRects)
                 {
                     DrawSpoke(painter, groupRect.center, childRect.center, emphasized, muted);
+                }
+            }
+        }
+
+        private void DrawFocusMembershipGuides(Painter2D painter)
+        {
+            foreach (PackageGraphGroupLayoutNode groupNode in _layout.GroupNodes)
+            {
+                if (groupNode == null ||
+                    groupNode.Group == null ||
+                    groupNode.RepresentedPackageIds.Count == 0)
+                {
+                    continue;
+                }
+
+                Rect groupRect = GetGroupRect(groupNode);
+                bool hoverActive = !_interactionsLocked && !string.IsNullOrWhiteSpace(_hoveredGroupId);
+                bool emphasized = hoverActive && string.Equals(groupNode.GroupId, _hoveredGroupId, StringComparison.OrdinalIgnoreCase);
+                bool muted = hoverActive && !emphasized;
+
+                foreach (string packageId in groupNode.RepresentedPackageIds)
+                {
+                    if (!_nodeRects.TryGetValue(packageId, out Rect packageRect))
+                    {
+                        continue;
+                    }
+
+                    DrawSpoke(painter, groupRect.center, packageRect.center, emphasized, muted);
                 }
             }
         }
@@ -3457,7 +3871,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             VisualElement symbol = new VisualElement();
             symbol.AddToClassList("dpi-graph-group__symbol");
-            float symbolSize = groupNode.Focused ? 88f : groupNode.Collapsed ? 54f : 76f;
+            float symbolSize = groupNode.Focused ? 78f : groupNode.Collapsed ? 48f : 64f;
             symbol.style.width = symbolSize;
             symbol.style.height = symbolSize;
             Add(symbol);
@@ -3821,13 +4235,13 @@ namespace Deucarian.PackageInstaller.Editor
                 case PackageGraphNodeType.Tool:
                     return "Tool";
                 case PackageGraphNodeType.Companion:
-                    return "Companion";
+                    return "Library";
                 case PackageGraphNodeType.Suite:
                     return "Suite";
                 case PackageGraphNodeType.Integration:
                     return "Integration";
                 default:
-                    return "Core";
+                    return "Library";
             }
         }
 

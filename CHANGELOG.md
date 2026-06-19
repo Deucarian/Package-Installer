@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.36 - 2026-06-19
+
+- Polished Ecosystem Graph navigation with empty-canvas left-drag panning and context-aware right-click menus.
+- Reduced overview package footprints and dynamic zoom-out limits so Fit can frame dense hierarchy views.
+- Clarified structural category display, package kind terminology, and persistent membership cues in graph focus modes.
+
 ## 1.1.35 - 2026-06-19
 
 - Added adaptive Ecosystem Graph package node presentation levels and compact overview metrics.

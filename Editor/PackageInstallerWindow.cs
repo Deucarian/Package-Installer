@@ -12,7 +12,7 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed class PackageInstallerWindow : EditorWindow
     {
         private const string WindowTitle = "Package Installer";
-        private const string PackageVersion = "1.1.35";
+        private const string PackageVersion = "1.1.36";
         private const float MinWindowWidth = 850f;
         private const float MinWindowHeight = 650f;
         private const float SidebarWidth = 340f;
@@ -1804,8 +1804,8 @@ namespace Deucarian.PackageInstaller.Editor
 
             DrawStatusBadge(status.Label, status.Kind, GUILayout.Width(150f));
             GUILayout.Space(6f);
-            DrawKeyValueRow("Hierarchy", GetPackageHierarchyPath(packageDefinition));
-            DrawKeyValueRow("Package role", GetPackageTypeDisplayName(packageDefinition));
+            DrawKeyValueRow("Category", GetPackageHierarchyPath(packageDefinition));
+            DrawKeyValueRow("Package kind", GetPackageKindDisplayName(packageDefinition));
             DrawKeyValueRow("Package ID", packageDefinition.PackageId);
 
             if (_packageDetectionService.TryGetInstalledPackage(
@@ -2418,8 +2418,8 @@ namespace Deucarian.PackageInstaller.Editor
             PackageUpdateStatus updateStatus = _packageUpdateCheckService.GetStatus(packageDefinition, selectedChannel);
 
             DrawSelectableValue("Package ID", packageDefinition.PackageId);
-            DrawSelectableValue("Hierarchy", GetPackageHierarchyPath(packageDefinition));
-            DrawSelectableValue("Package role", GetPackageTypeDisplayName(packageDefinition));
+            DrawSelectableValue("Category", GetPackageHierarchyPath(packageDefinition));
+            DrawSelectableValue("Package kind", GetPackageKindDisplayName(packageDefinition));
             DrawSelectableValue("Legacy category", packageDefinition.Category);
             DrawSelectableValue("Selected URL", packageDefinition.GetUrl(selectedChannel));
             DrawSelectableValue("Stable URL", packageDefinition.StableUrl);
@@ -3685,9 +3685,9 @@ namespace Deucarian.PackageInstaller.Editor
             return PackageGraphHierarchyDisplay.GetPackageHierarchyPath(_lastPackageGraph, packageDefinition);
         }
 
-        private static string GetPackageTypeDisplayName(PackageDefinition packageDefinition)
+        private static string GetPackageKindDisplayName(PackageDefinition packageDefinition)
         {
-            return PackageGraphHierarchyDisplay.GetPackageRole(packageDefinition);
+            return PackageGraphHierarchyDisplay.GetPackageKind(packageDefinition);
         }
 
         private string GetGraphParentGroupId(string groupId)
