@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.42 - 2026-06-19
+
+- Reworked Ecosystem Graph search into a strict structural finder for category names, category paths, package names, and package IDs.
+- Kept graph layout stable while typing by previewing direct matches and structural context instead of filtering nodes out of the canvas.
+- Synchronized category hover between the left rail and graph category/package context without triggering navigation or relationship expansion.
+
 ## 1.1.41 - 2026-06-19
 
 - Restyled the expanded Last Operation Summary drawer as a compact Deucarian frosted-glass panel above the fixed footer.

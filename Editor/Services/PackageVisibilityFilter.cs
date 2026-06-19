@@ -87,6 +87,21 @@ namespace Deucarian.PackageInstaller.Editor
                 StringComparer.OrdinalIgnoreCase);
         }
 
+        public static HashSet<string> CreateStatusVisiblePackageIdSet(
+            PackageGraphModel graph,
+            PackageVisibilityFilterState filterState)
+        {
+            PackageVisibilityFilterState activeState = filterState ?? new PackageVisibilityFilterState();
+            return new HashSet<string>(
+                graph == null
+                    ? Array.Empty<string>()
+                    : graph.Nodes
+                        .Where(node => node != null &&
+                                       IsVisibleByInstalledState(node.IsInstalled, activeState))
+                        .Select(node => node.PackageId),
+                StringComparer.OrdinalIgnoreCase);
+        }
+
         public static PackageGraphModel CreateVisibleGraph(
             PackageGraphModel graph,
             ISet<string> visiblePackageIds)
@@ -178,13 +193,10 @@ namespace Deucarian.PackageInstaller.Editor
                     {
                         node.DisplayName,
                         node.PackageId,
-                        node.Category,
-                        node.Description,
-                        node.NodeType.ToString(),
-                        node.UpdateStatusLabel
+                        node.Category
                     });
 
-            return MatchesSearchTokens(tokens, searchableText + "\n" + node.NodeType);
+            return MatchesSearchTokens(tokens, searchableText);
         }
 
         private static bool IsVisibleByInstalledState(
@@ -222,26 +234,7 @@ namespace Deucarian.PackageInstaller.Editor
                 {
                     packageDefinition.DisplayName,
                     packageDefinition.PackageId,
-                    packageDefinition.Category,
-                    packageDefinition.Description,
-                    packageDefinition.DisplayVersion,
-                    packageDefinition.StableUrl,
-                    packageDefinition.DevelopmentUrl,
-                    packageDefinition.PackageType.ToString(),
-                    packageDefinition.MetadataType,
-                    packageDefinition.IsIntegration ? "Integration" : string.Empty,
-                    packageDefinition.IsSuite ? "Suite" : string.Empty,
-                    string.Equals(
-                        packageDefinition.MetadataType,
-                        "OptionalIntegration",
-                        StringComparison.OrdinalIgnoreCase)
-                        ? "Companion"
-                        : string.Empty,
-                    string.Join(" ", packageDefinition.Dependencies.ToArray()),
-                    string.Join(" ", packageDefinition.OptionalIntegrations.ToArray()),
-                    string.Join(" ", packageDefinition.OptionalCompanions.ToArray()),
-                    string.Join(" ", packageDefinition.IntegrationTargets.ToArray()),
-                    string.Join(" ", packageDefinition.SuiteMembers.ToArray())
+                    packageDefinition.Category
                 });
         }
     }

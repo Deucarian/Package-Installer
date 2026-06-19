@@ -107,7 +107,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
-        public void SearchMatchesPackageIdCategoryAndType()
+        public void SearchMatchesPackageIdAndCategoryOnly()
         {
             PackageDefinition integration = CreatePackage(
                 "Session API",
@@ -119,6 +119,29 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.IsTrue(PackageVisibilityFilter.MatchesSearch(integration, "session-api"));
             Assert.IsTrue(PackageVisibilityFilter.MatchesSearch(tools, "tools"));
             Assert.IsTrue(PackageVisibilityFilter.MatchesSearch(integration, "integration"));
+            Assert.IsFalse(PackageVisibilityFilter.MatchesSearch(integration, "optionalintegration"));
+        }
+
+        [Test]
+        public void SearchDoesNotMatchDescriptionOrRelationships()
+        {
+            PackageDefinition source = new PackageDefinition(
+                "Source",
+                "com.example.source",
+                "https://example.com/com.example.source.git#main",
+                "Includes surprising relationship prose.",
+                new[] { "com.example.dependency" },
+                PackageType.Core,
+                "https://example.com/com.example.source.git#develop",
+                category: "Core",
+                optionalIntegrations: new[] { "com.example.integration" },
+                integrationTargets: new[] { "com.example.target" },
+                suiteMembers: new[] { "com.example.member" },
+                optionalCompanions: new[] { "com.example.companion" });
+
+            Assert.IsFalse(PackageVisibilityFilter.MatchesSearch(source, "surprising"));
+            Assert.IsFalse(PackageVisibilityFilter.MatchesSearch(source, "dependency"));
+            Assert.IsFalse(PackageVisibilityFilter.MatchesSearch(source, "companion"));
         }
 
         [Test]

@@ -20,7 +20,7 @@ namespace Deucarian.PackageInstaller.Editor
     {
         private const string WindowTitle = "Package Installer";
         private const string PackageId = "com.deucarian.package-installer";
-        private const string PackageVersion = "1.1.41";
+        private const string PackageVersion = "1.1.42";
         private const float MinWindowWidth = 820f;
         private const float MinWindowHeight = 650f;
         private const float CompactLayoutWidth = 1180f;
@@ -868,9 +868,13 @@ namespace Deucarian.PackageInstaller.Editor
                         : null))
                 .Build(PackageRegistryProvider.All, PackageRegistryProvider.EcosystemGroups);
             _lastPackageGraph = graph;
-            HashSet<string> visiblePackageIds = PackageVisibilityFilter.CreateVisiblePackageIdSet(
+            HashSet<string> visiblePackageIds = PackageVisibilityFilter.CreateStatusVisiblePackageIdSet(
                 graph,
                 _visibilityFilterState);
+            PackageGraphSearchState searchState = PackageGraphSearchIndex.Create(
+                graph,
+                _visibilityFilterState,
+                visiblePackageIds);
 
             ClearGraphSelectionIfHidden(visiblePackageIds);
 
@@ -889,6 +893,7 @@ namespace Deucarian.PackageInstaller.Editor
                 _graphFocusedGroupId,
                 !IsAnyOperationBusy(),
                 visiblePackageIds,
+                searchState,
                 filterCounts,
                 hiddenRelatedCount);
             _graphDetailsContainer?.MarkDirtyRepaint();
@@ -1442,7 +1447,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             EditorGUI.BeginChangeCheck();
             string nextSearchText = EditorGUILayout.TextField(
-                new GUIContent("Search", "Search package names, package IDs, descriptions, URLs, versions, and dependencies."),
+                new GUIContent("Search", "Find packages by package name, package ID, or category."),
                 _visibilityFilterState.SearchText);
 
             if (EditorGUI.EndChangeCheck() && _visibilityFilterState.SetSearchText(nextSearchText))
