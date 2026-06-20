@@ -362,11 +362,13 @@ namespace Deucarian.PackageInstaller.Editor
             bool shouldForceInitialFrame = !_hasAppliedGraphFrame && graph != null && graph.Nodes.Count > 0;
             PackageGraphSearchState nextSearchState = searchState ?? PackageGraphSearchState.Empty;
             bool nextSearchActive = nextSearchState.HasQuery;
+            bool nextPackageEgoActive = IsPackageEgoRequest(graph, focusedPackageId);
             bool searchStarted = !_wasSearchActive && nextSearchActive;
+            bool structuralSearchStarted = searchStarted && !nextPackageEgoActive;
             bool searchCleared = _wasSearchActive && !nextSearchActive;
             PackageGraphCameraState restoreCamera = _preSearchCameraState;
 
-            if (searchStarted)
+            if (structuralSearchStarted)
             {
                 _preSearchCameraState = _viewport.GetCameraState();
                 _hasPreSearchCameraState = true;
@@ -424,17 +426,18 @@ namespace Deucarian.PackageInstaller.Editor
             _hiddenRelatedCount = Math.Max(0, hiddenRelatedCount);
             UpdateFilterControls();
             UpdateBreadcrumbs(graph, focusedGroupId, focusedPackageId);
-            UpdateCategoryRail(
-                CreateCategoryRailGraph(graph, _searchState, _currentVisiblePackageIds),
-                focusedGroupId,
-                focusedPackageId);
+            UpdateCategoryRail(graph, focusedGroupId, focusedPackageId);
 
             if (searchCleared && _hasPreSearchCameraState)
             {
-                _viewport.AnimateToCamera(restoreCamera);
+                if (_canvas.LayoutMode != PackageGraphLayoutMode.Focus)
+                {
+                    _viewport.AnimateToCamera(restoreCamera);
+                }
+
                 _hasPreSearchCameraState = false;
             }
-            else if (layoutTargetChanged && !shouldForceInitialFrame && !searchStarted)
+            else if (layoutTargetChanged && !shouldForceInitialFrame && !structuralSearchStarted)
             {
                 AnimateToCurrentContext(anchorCandidates, sourceAnchorCenters, sourceAnchorScreens);
             }
@@ -442,19 +445,11 @@ namespace Deucarian.PackageInstaller.Editor
             _wasSearchActive = nextSearchActive;
         }
 
-        private static PackageGraphModel CreateCategoryRailGraph(
-            PackageGraphModel graph,
-            PackageGraphSearchState searchState,
-            IReadOnlyCollection<string> statusVisiblePackageIds)
+        private static bool IsPackageEgoRequest(PackageGraphModel graph, string focusedPackageId)
         {
-            return searchState != null && searchState.HasQuery
-                ? PackageGraphSearchIndex.CreateFilteredGraph(
-                    graph,
-                    searchState,
-                    statusVisiblePackageIds != null
-                        ? new HashSet<string>(statusVisiblePackageIds, StringComparer.OrdinalIgnoreCase)
-                        : null)
-                : graph;
+            return graph != null &&
+                   !string.IsNullOrWhiteSpace(focusedPackageId) &&
+                   graph.TryGetNode(focusedPackageId, out _);
         }
 
         private PackageGraphTransitionAnchor[] CreateTransitionAnchorCandidates(
@@ -1011,6 +1006,9 @@ namespace Deucarian.PackageInstaller.Editor
             int attentionCount = descendants.Count(node =>
                 node.Status == PackageGraphNodeStatus.Missing ||
                 node.Status == PackageGraphNodeStatus.Warning);
+            int searchMatchCount = GetCategoryRailSearchMatchCount(graph, group.Id);
+            bool searchActive = _searchState != null && _searchState.HasQuery;
+            bool containsSearchMatch = !searchActive || searchMatchCount > 0 || IsCategoryRailSearchContext(graph, group.Id);
             bool active = string.Equals(group.Id, _activeTopLevelGroupId, StringComparison.OrdinalIgnoreCase);
             bool hovered = string.Equals(group.Id, _hoveredTopLevelGroupId, StringComparison.OrdinalIgnoreCase);
 
@@ -1037,6 +1035,8 @@ namespace Deucarian.PackageInstaller.Editor
             item.EnableInClassList("dpi-category-rail__item--active", active);
             item.EnableInClassList("dpi-category-rail__item--hover-context", hovered);
             item.EnableInClassList("dpi-category-rail__item--attention", updateCount > 0 || attentionCount > 0);
+            item.EnableInClassList("dpi-category-rail__item--search-match", searchActive && containsSearchMatch);
+            item.EnableInClassList("dpi-category-rail__item--search-dimmed", searchActive && !containsSearchMatch);
             item.RegisterCallback<MouseEnterEvent>(_ => SetRailCategoryHover(group.Id));
             item.RegisterCallback<MouseLeaveEvent>(_ => ClearRailCategoryHover(group.Id));
             item.RegisterCallback<FocusInEvent>(_ => SetRailCategoryHover(group.Id));
@@ -1069,10 +1069,50 @@ namespace Deucarian.PackageInstaller.Editor
             title.AddToClassList("dpi-category-rail__label");
             textBlock.Add(title);
             Label count = new Label(descendants.Length + " packages");
+            if (searchActive && searchMatchCount > 0)
+            {
+                count.text += " - " + searchMatchCount + " matches";
+            }
+
             count.AddToClassList("dpi-category-rail__count");
             textBlock.Add(count);
             item.Add(textBlock);
             return item;
+        }
+
+        private int GetCategoryRailSearchMatchCount(PackageGraphModel graph, string topLevelGroupId)
+        {
+            if (graph == null ||
+                _searchState == null ||
+                !_searchState.HasQuery ||
+                string.IsNullOrWhiteSpace(topLevelGroupId))
+            {
+                return 0;
+            }
+
+            HashSet<string> descendantGroupIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            CollectDescendantGroupIds(graph, topLevelGroupId, descendantGroupIds);
+            return graph.Nodes.Count(node =>
+                node != null &&
+                descendantGroupIds.Contains(node.GroupId) &&
+                _searchState.IsPackageContext(node.PackageId));
+        }
+
+        private bool IsCategoryRailSearchContext(PackageGraphModel graph, string topLevelGroupId)
+        {
+            if (graph == null ||
+                _searchState == null ||
+                !_searchState.HasQuery ||
+                string.IsNullOrWhiteSpace(topLevelGroupId))
+            {
+                return false;
+            }
+
+            HashSet<string> descendantGroupIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            CollectDescendantGroupIds(graph, topLevelGroupId, descendantGroupIds);
+            return descendantGroupIds.Any(groupId =>
+                _searchState.IsDirectCategoryMatch(groupId) ||
+                _searchState.IsCategoryContext(groupId));
         }
 
         private void SetRailCategoryHover(string groupId)
@@ -1110,6 +1150,13 @@ namespace Deucarian.PackageInstaller.Editor
         internal void ClearPackageHoverForTests(string packageId)
         {
             _canvas.ClearPreviewPackageForTests(packageId);
+        }
+
+        internal PackageGraphCameraState CameraStateForTests => _viewport.GetCameraState();
+
+        internal void ApplyCameraForTests(PackageGraphCameraState camera)
+        {
+            _viewport.ApplyPreviewCamera(camera);
         }
 
         private void ApplyCategoryHover(string groupId, bool respectInteractionLock)
@@ -1315,10 +1362,21 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void UpdateEmptyState(PackageVisibilityFilterCounts counts)
         {
+            if (_canvas != null && _canvas.LayoutMode == PackageGraphLayoutMode.Focus)
+            {
+                _emptyState.style.display = DisplayStyle.None;
+                return;
+            }
+
             bool noSearchResults =
                 _filterState.HasSearch &&
                 _searchState != null &&
                 _searchState.DirectMatchCount == 0;
+            bool noRenderedStructuralSearchResults =
+                _filterState.HasSearch &&
+                _canvas != null &&
+                _canvas.LayoutMode != PackageGraphLayoutMode.Focus &&
+                _canvas.RenderedPackageCount == 0;
             bool searchMatchesOnlyFilteredPackages =
                 _filterState.HasSearch &&
                 _searchState != null &&
@@ -1329,6 +1387,7 @@ namespace Deucarian.PackageInstaller.Editor
                 counts.TotalCount > 0 &&
                 (!_filterState.HasAnyVisibilityEnabled ||
                  noSearchResults ||
+                 noRenderedStructuralSearchResults ||
                  searchMatchesOnlyFilteredPackages ||
                  (!_filterState.HasSearch && counts.VisibleCount == 0));
             _emptyState.style.display = showEmptyState ? DisplayStyle.Flex : DisplayStyle.None;
@@ -2904,10 +2963,6 @@ namespace Deucarian.PackageInstaller.Editor
                 Array.Empty<PackageGraphSuiteRegion>());
         private HashSet<string> _visiblePackageIds =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        private readonly HashSet<string> _searchRelationshipPackageIds =
-            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        private readonly HashSet<string> _searchRelationshipGroupIds =
-            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private PackageGraphLayoutResult _layoutResult;
         private string _selectedPackageId = string.Empty;
         private string _focusedPackageId = string.Empty;
@@ -3018,6 +3073,8 @@ namespace Deucarian.PackageInstaller.Editor
         public string LayoutFocusGroupId => _layoutFocusGroupId;
 
         public PackageGraphLayoutMode LayoutMode => _layoutResult != null ? _layoutResult.Mode : PackageGraphLayoutMode.Overview;
+
+        public int RenderedPackageCount => _visibleGraph != null ? _visibleGraph.Nodes.Count : 0;
 
         public bool InteractionsLocked => _interactionsLocked;
 
@@ -3341,13 +3398,13 @@ namespace Deucarian.PackageInstaller.Editor
             _layoutFocusGroupId = string.IsNullOrWhiteSpace(_layoutFocusPackageId)
                 ? GetLayoutFocusGroupId()
                 : string.Empty;
-            PackageGraphLayoutMode layoutMode = _searchState.HasQuery
-                ? PackageGraphLayoutMode.Filtered
-                : (!string.IsNullOrWhiteSpace(_layoutFocusPackageId)
+            PackageGraphLayoutMode layoutMode = !string.IsNullOrWhiteSpace(_layoutFocusPackageId)
                 ? PackageGraphLayoutMode.Focus
                 : (!string.IsNullOrWhiteSpace(_layoutFocusGroupId)
                     ? PackageGraphLayoutMode.GroupFocus
-                    : PackageGraphLayoutMode.Overview));
+                    : (_searchState.HasQuery
+                        ? PackageGraphLayoutMode.Filtered
+                        : PackageGraphLayoutMode.Overview));
             _layoutPresentationLevel = PackageGraphPresentationPolicy.ResolveForZoom(
                 layoutMode,
                 _viewportZoom,
@@ -3412,71 +3469,72 @@ namespace Deucarian.PackageInstaller.Editor
 
         private PackageGraphModel CreateRenderedGraph()
         {
-            _searchRelationshipPackageIds.Clear();
-            _searchRelationshipGroupIds.Clear();
+            if (HasPackageEgoFocus())
+            {
+                return _graph;
+            }
 
             if (_searchState == null || !_searchState.HasQuery)
             {
                 return PackageVisibilityFilter.CreateVisibleGraph(_graph, _visiblePackageIds);
             }
 
-            HashSet<string> relationshipPackageIds = CreateHoveredSearchRelationshipPackageIds();
+            string[] requiredCategoryIds = !string.IsNullOrWhiteSpace(_focusedGroupId) &&
+                                           _graph.TryGetGroup(_focusedGroupId, out _)
+                ? new[] { _focusedGroupId }
+                : Array.Empty<string>();
+            ISet<string> structuralVisiblePackageIds = _visiblePackageIds;
 
-            foreach (string packageId in relationshipPackageIds)
+            if (requiredCategoryIds.Length > 0)
             {
-                _searchRelationshipPackageIds.Add(packageId);
-
-                if (_graph.TryGetNode(packageId, out PackageGraphNode node))
-                {
-                    AddAncestorGroupIds(node.GroupId, _searchRelationshipGroupIds);
-                }
+                structuralVisiblePackageIds = CreateDescendantVisiblePackageIdSet(requiredCategoryIds[0]);
             }
 
             return PackageGraphSearchIndex.CreateFilteredGraph(
                 _graph,
                 _searchState,
-                _visiblePackageIds,
-                relationshipPackageIds);
+                structuralVisiblePackageIds,
+                requiredCategoryIds);
         }
 
-        private HashSet<string> CreateHoveredSearchRelationshipPackageIds()
+        private bool HasPackageEgoFocus()
         {
-            if (_searchState == null ||
-                !_searchState.HasQuery ||
-                string.IsNullOrWhiteSpace(_hoveredPackageId) ||
-                !_searchState.IsDirectPackageMatch(_hoveredPackageId))
+            return !string.IsNullOrWhiteSpace(_focusedPackageId) &&
+                   _graph.TryGetNode(_focusedPackageId, out _);
+        }
+
+        private ISet<string> CreateDescendantVisiblePackageIdSet(string groupId)
+        {
+            HashSet<string> descendantGroupIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            CollectDescendantGroupIds(groupId, descendantGroupIds);
+            return new HashSet<string>(
+                _graph.Nodes
+                    .Where(node => node != null &&
+                                   _visiblePackageIds.Contains(node.PackageId) &&
+                                   descendantGroupIds.Contains(node.GroupId))
+                    .Select(node => node.PackageId),
+                StringComparer.OrdinalIgnoreCase);
+        }
+
+        private void CollectDescendantGroupIds(string groupId, ISet<string> groupIds)
+        {
+            if (string.IsNullOrWhiteSpace(groupId) || !groupIds.Add(groupId))
             {
-                return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                return;
             }
 
-            HashSet<string> relatedPackageIds =
-                PackageGraphSearchIndex.CreateDirectRelationshipContextPackageIdSet(_graph, _hoveredPackageId);
-            relatedPackageIds.RemoveWhere(packageId =>
-                string.IsNullOrWhiteSpace(packageId) ||
-                !_visiblePackageIds.Contains(packageId) ||
-                _searchState.IsPackageContext(packageId));
-            return relatedPackageIds;
-        }
-
-        private void AddAncestorGroupIds(string groupId, ISet<string> groupIds)
-        {
-            string currentGroupId = groupId;
-            HashSet<string> visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-            while (!string.IsNullOrWhiteSpace(currentGroupId) &&
-                   visited.Add(currentGroupId) &&
-                   _graph.TryGetGroup(currentGroupId, out PackageGraphGroup group))
+            foreach (PackageGraphGroup childGroup in _graph.Groups.Where(group =>
+                         group != null &&
+                         string.Equals(group.ParentGroupId, groupId, StringComparison.OrdinalIgnoreCase)))
             {
-                groupIds.Add(group.Id);
-                currentGroupId = group.ParentGroupId;
+                CollectDescendantGroupIds(childGroup.Id, groupIds);
             }
         }
 
         private string GetLayoutFocusPackageId()
         {
             return !string.IsNullOrWhiteSpace(_focusedPackageId) &&
-                   _graph.TryGetNode(_focusedPackageId, out _) &&
-                   _visiblePackageIds.Contains(_focusedPackageId)
+                   _graph.TryGetNode(_focusedPackageId, out _)
                 ? _focusedPackageId
                 : string.Empty;
         }
@@ -3498,15 +3556,16 @@ namespace Deucarian.PackageInstaller.Editor
                 return null;
             }
 
+            bool applyStructuralVisibility = fullLayoutResult.Mode != PackageGraphLayoutMode.Focus;
             Dictionary<string, Rect> visibleNodeRects = fullLayoutResult.NodeRects
-                .Where(pair => _visiblePackageIds.Contains(pair.Key))
+                .Where(pair => !applyStructuralVisibility || _visiblePackageIds.Contains(pair.Key))
                 .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
             Dictionary<string, PackageGraphLayoutRing> visibleNodeRings = fullLayoutResult.NodeRings
-                .Where(pair => _visiblePackageIds.Contains(pair.Key))
+                .Where(pair => !applyStructuralVisibility || _visiblePackageIds.Contains(pair.Key))
                 .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
             Dictionary<string, PackageGraphNodePresentationLevel> visibleNodePresentations =
                 fullLayoutResult.NodePresentationLevels
-                    .Where(pair => _visiblePackageIds.Contains(pair.Key))
+                    .Where(pair => !applyStructuralVisibility || _visiblePackageIds.Contains(pair.Key))
                     .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
             int visibleUnrelatedCount = fullLayoutResult.Mode == PackageGraphLayoutMode.Focus && fullFocus != null
                 ? _visibleGraph.Nodes.Count(node => !fullFocus.IsPackageRelated(node.PackageId))
@@ -4364,8 +4423,7 @@ namespace Deucarian.PackageInstaller.Editor
                     groupElement,
                     _searchState.IsDirectCategoryMatch(groupNode.GroupId),
                     _searchState.IsCategoryContext(groupNode.GroupId),
-                    _searchRelationshipGroupIds.Contains(groupNode.GroupId),
-                    _searchState.HasQuery);
+                    _searchState.HasQuery && _layoutResult.Mode != PackageGraphLayoutMode.Focus);
                 SetElementRect(groupElement, groupNode.Rect);
                 _nodeLayer.Add(groupElement);
                 _groupElements[groupNode.GroupId] = groupElement;
@@ -4493,8 +4551,7 @@ namespace Deucarian.PackageInstaller.Editor
                 nodeElement,
                 _searchState.IsDirectPackageMatch(node.PackageId),
                 _searchState.IsPackageContext(node.PackageId),
-                _searchRelationshipPackageIds.Contains(node.PackageId),
-                _searchState.HasQuery);
+                _searchState.HasQuery && layout.Mode != PackageGraphLayoutMode.Focus);
             return nodeElement;
         }
 
@@ -4552,7 +4609,6 @@ namespace Deucarian.PackageInstaller.Editor
             VisualElement element,
             bool directMatch,
             bool contextMatch,
-            bool relationshipContext,
             bool searchActive)
         {
             if (element == null)
@@ -4564,11 +4620,8 @@ namespace Deucarian.PackageInstaller.Editor
             element.EnableInClassList("dpi-graph-search--match", searchActive && directMatch);
             element.EnableInClassList("dpi-graph-search--context", searchActive && !directMatch && contextMatch);
             element.EnableInClassList(
-                "dpi-graph-search--relationship-context",
-                searchActive && !directMatch && !contextMatch && relationshipContext);
-            element.EnableInClassList(
                 "dpi-graph-search--dimmed",
-                searchActive && !directMatch && !contextMatch && !relationshipContext);
+                searchActive && !directMatch && !contextMatch);
         }
 
         private void SetPreviewPackage(string packageId)
@@ -4585,6 +4638,11 @@ namespace Deucarian.PackageInstaller.Editor
 
             _hoveredPackageId = packageId ?? string.Empty;
             NotifyActiveHoverGroupChanged();
+            if (IsStructuralSearchProjectionActive())
+            {
+                return;
+            }
+
             Rebuild();
         }
 
@@ -4602,7 +4660,20 @@ namespace Deucarian.PackageInstaller.Editor
 
             _hoveredPackageId = string.Empty;
             NotifyActiveHoverGroupChanged();
+            if (IsStructuralSearchProjectionActive())
+            {
+                return;
+            }
+
             Rebuild();
+        }
+
+        private bool IsStructuralSearchProjectionActive()
+        {
+            return _searchState != null &&
+                   _searchState.HasQuery &&
+                   _layoutResult != null &&
+                   _layoutResult.Mode != PackageGraphLayoutMode.Focus;
         }
 
         private void SetPreviewGroup(string groupId)

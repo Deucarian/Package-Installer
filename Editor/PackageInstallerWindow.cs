@@ -20,7 +20,7 @@ namespace Deucarian.PackageInstaller.Editor
     {
         private const string WindowTitle = "Package Installer";
         private const string PackageId = "com.deucarian.package-installer";
-        private const string PackageVersion = "1.1.52";
+        private const string PackageVersion = "1.1.53";
         private const float MinWindowWidth = 820f;
         private const float MinWindowHeight = 650f;
         private const float CompactLayoutWidth = 1180f;
@@ -319,17 +319,14 @@ namespace Deucarian.PackageInstaller.Editor
             string focusedPackageId,
             ISet<string> visiblePackageIds)
         {
-            if (visiblePackageIds == null)
+            if (visiblePackageIds == null || !string.IsNullOrWhiteSpace(focusedPackageId))
             {
                 return false;
             }
 
             bool selectionHidden = !string.IsNullOrWhiteSpace(selectedPackageId) &&
                                    !visiblePackageIds.Contains(selectedPackageId);
-            bool focusHidden = !string.IsNullOrWhiteSpace(focusedPackageId) &&
-                               !visiblePackageIds.Contains(focusedPackageId);
-
-            return selectionHidden || focusHidden;
+            return selectionHidden;
         }
 
         private void OnEnable()
@@ -1215,6 +1212,11 @@ namespace Deucarian.PackageInstaller.Editor
         private void ClearGraphSelectionIfHidden(ISet<string> visiblePackageIds)
         {
             if (_viewMode != InstallerViewMode.EcosystemGraph || visiblePackageIds == null)
+            {
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(_graphFocusedPackageId))
             {
                 return;
             }

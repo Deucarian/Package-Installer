@@ -959,6 +959,15 @@
     border-bottom-color: rgba(59, 209, 191, 0.42);
 }
 
+.dpi-category-rail__item--search-match {
+    border-left-width: 2px;
+    border-left-color: rgba(92, 213, 203, 0.74);
+}
+
+.dpi-category-rail__item--search-dimmed {
+    opacity: 0.48;
+}
+
 .dpi-category-rail__symbol {
     min-width: 30px;
     min-height: 30px;
@@ -1244,15 +1253,6 @@
     border-top-color: rgba(82, 171, 205, 0.32);
     border-bottom-color: rgba(82, 171, 205, 0.32);
     opacity: 0.78;
-}
-
-.dpi-graph-node.dpi-graph-search--relationship-context {
-    border-left-color: rgba(94, 149, 178, 0.50);
-    border-right-color: rgba(94, 149, 178, 0.34);
-    border-top-color: rgba(94, 149, 178, 0.34);
-    border-bottom-color: rgba(94, 149, 178, 0.34);
-    background-color: rgba(17, 31, 42, 0.82);
-    opacity: 0.70;
 }
 
 .dpi-graph-node.dpi-graph-search--dimmed {
@@ -1635,20 +1635,8 @@
     border-bottom-color: rgba(82, 171, 205, 0.36);
 }
 
-.dpi-graph-group.dpi-graph-search--relationship-context .dpi-graph-group__symbol {
-    border-left-color: rgba(94, 149, 178, 0.48);
-    border-right-color: rgba(94, 149, 178, 0.32);
-    border-top-color: rgba(94, 149, 178, 0.32);
-    border-bottom-color: rgba(94, 149, 178, 0.32);
-    background-color: rgba(18, 38, 49, 0.78);
-}
-
 .dpi-graph-group.dpi-graph-search--context {
     opacity: 0.78;
-}
-
-.dpi-graph-group.dpi-graph-search--relationship-context {
-    opacity: 0.66;
 }
 
 .dpi-graph-group.dpi-graph-search--dimmed {

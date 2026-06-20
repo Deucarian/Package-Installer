@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.53 - 2026-06-20
+
+- Suspended structural search/status projection while PackageEgo is active so focused package layouts always use the full ecosystem graph.
+- Kept the left category rail global during search while highlighting or dimming categories by structural match context.
+- Scoped filtered category focus to the active category and removed relationship expansion from structural search hover.
+
 ## 1.1.52 - 2026-06-20
 
 - Replaced dim-only Ecosystem Graph search with a structurally pruned filtered graph mode.

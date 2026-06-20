@@ -433,7 +433,7 @@ namespace Deucarian.PackageInstaller.Editor
             PackageGraphModel graph,
             PackageGraphSearchState searchState,
             ISet<string> statusVisiblePackageIds,
-            IEnumerable<string> relationshipContextPackageIds = null)
+            IEnumerable<string> requiredCategoryIds = null)
         {
             if (graph == null || searchState == null || !searchState.HasQuery)
             {
@@ -452,18 +452,6 @@ namespace Deucarian.PackageInstaller.Editor
             HashSet<string> visiblePackageIds = new HashSet<string>(
                 searchState.ContextPackageIds.Where(statusVisibleIds.Contains),
                 StringComparer.OrdinalIgnoreCase);
-
-            if (relationshipContextPackageIds != null)
-            {
-                foreach (string packageId in relationshipContextPackageIds)
-                {
-                    if (!string.IsNullOrWhiteSpace(packageId) && statusVisibleIds.Contains(packageId))
-                    {
-                        visiblePackageIds.Add(packageId);
-                    }
-                }
-            }
-
             HashSet<string> visibleGroupIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             foreach (PackageGraphNode node in graph.Nodes)
@@ -471,6 +459,14 @@ namespace Deucarian.PackageInstaller.Editor
                 if (node != null && visiblePackageIds.Contains(node.PackageId))
                 {
                     AddAncestorGroups(graph, node.GroupId, visibleGroupIds);
+                }
+            }
+
+            if (requiredCategoryIds != null)
+            {
+                foreach (string groupId in requiredCategoryIds)
+                {
+                    AddAncestorGroups(graph, groupId, visibleGroupIds);
                 }
             }
 
@@ -498,35 +494,6 @@ namespace Deucarian.PackageInstaller.Editor
                 visibleEdges,
                 visibleSuiteRegions,
                 visibleGroups);
-        }
-
-        public static HashSet<string> CreateDirectRelationshipContextPackageIdSet(
-            PackageGraphModel graph,
-            string packageId)
-        {
-            HashSet<string> relatedPackageIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-            if (graph == null || string.IsNullOrWhiteSpace(packageId))
-            {
-                return relatedPackageIds;
-            }
-
-            foreach (PackageGraphEdge edge in graph.Edges)
-            {
-                if (edge == null || !edge.ConnectsPackage(packageId))
-                {
-                    continue;
-                }
-
-                string otherPackageId = edge.GetOtherPackageId(packageId);
-
-                if (!string.IsNullOrWhiteSpace(otherPackageId))
-                {
-                    relatedPackageIds.Add(otherPackageId);
-                }
-            }
-
-            return relatedPackageIds;
         }
     }
 }
