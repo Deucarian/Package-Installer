@@ -200,7 +200,7 @@ The Package Installer now shows only the Integration package IDs. Remove or repl
 - `com.deucarian.ui-binding.core-state-bridge` -> `com.deucarian.ui-binding.core-state-integration`
 - `com.deucarian.object-selection.core-state-bridge` -> `com.deucarian.object-selection.core-state-integration`
 
-The Git repository URLs still use their existing `Bridge.git` names until those GitHub repositories are manually renamed.
+Current Integration repository URLs use Integration repository names. The old Bridge package IDs above remain listed only for manifest migration.
 
 When removing a package, the installer warns and disables removal if another installed registered package depends on it. Remove the dependent integration package first to avoid silently breaking the project.
 
@@ -253,7 +253,7 @@ Keeping the installer editor-only ensures:
 
 ## Versioning
 
-Current package version: `1.1.44`.
+Current package version: `1.1.55`.
 
 Branch strategy:
 

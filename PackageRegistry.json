@@ -308,8 +308,8 @@
                          "groupId":  "integrations",
                          "overviewOrder":  10,
                          "description":  "Integration package connecting Session authentication to API.",
-                         "stableUrl":  "https://github.com/Deucarian/Session-API-Bridge.git#main",
-                         "developmentUrl":  "https://github.com/Deucarian/Session-API-Bridge.git#develop",
+                         "stableUrl":  "https://github.com/Deucarian/Session-API-Integration.git#main",
+                         "developmentUrl":  "https://github.com/Deucarian/Session-API-Integration.git#develop",
                          "dependencies":  [
                                               "com.deucarian.session",
                                               "com.deucarian.api"
@@ -328,8 +328,8 @@
                          "groupId":  "integrations",
                          "overviewOrder":  20,
                          "description":  "Optional integration package that provides optimized API-backed UnityWebRequestAssetBundle transport for Object Loading.",
-                         "stableUrl":  "https://github.com/Deucarian/Object-Loading-API-Bridge.git#main",
-                         "developmentUrl":  "https://github.com/Deucarian/Object-Loading-API-Bridge.git#develop",
+                         "stableUrl":  "https://github.com/Deucarian/ObjectLoading-API-Integration.git#main",
+                         "developmentUrl":  "https://github.com/Deucarian/ObjectLoading-API-Integration.git#develop",
                          "dependencies":  [
                                               "com.deucarian.api",
                                               "com.deucarian.object-loading"
@@ -348,8 +348,8 @@
                          "groupId":  "integrations",
                          "overviewOrder":  30,
                          "description":  "Integration package connecting UI Binding containers to Core State repositories and selection services.",
-                         "stableUrl":  "https://github.com/Deucarian/UI-Binding-CoreState-Bridge.git#main",
-                         "developmentUrl":  "https://github.com/Deucarian/UI-Binding-CoreState-Bridge.git#develop",
+                         "stableUrl":  "https://github.com/Deucarian/UIBinding-CoreState-Integration.git#main",
+                         "developmentUrl":  "https://github.com/Deucarian/UIBinding-CoreState-Integration.git#develop",
                          "dependencies":  [
                                               "com.deucarian.ui-binding",
                                               "com.deucarian.core-state"
@@ -368,8 +368,8 @@
                          "groupId":  "integrations",
                          "overviewOrder":  40,
                          "description":  "Integration package synchronizing Object Selection and Core State selections through shared keys.",
-                         "stableUrl":  "https://github.com/Deucarian/Object-Selection-Bridge.git#main",
-                         "developmentUrl":  "https://github.com/Deucarian/Object-Selection-Bridge.git#develop",
+                         "stableUrl":  "https://github.com/Deucarian/ObjectSelection-CoreState-Integration.git#main",
+                         "developmentUrl":  "https://github.com/Deucarian/ObjectSelection-CoreState-Integration.git#develop",
                          "dependencies":  [
                                               "com.deucarian.object-selection",
                                               "com.deucarian.core-state",
