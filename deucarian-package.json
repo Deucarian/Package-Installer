@@ -1,0 +1,23 @@
+{
+  "packageId": "com.deucarian.package-installer",
+  "displayName": "Deucarian Package Installer",
+  "ownedCapabilities": [
+    "package-management"
+  ],
+  "runtimeAssemblies": [],
+  "editorAssemblies": [
+    "Deucarian.PackageInstaller.Editor"
+  ],
+  "sampleAssemblies": [],
+  "testAssemblies": [
+    "Deucarian.PackageInstaller.Editor.Tests"
+  ],
+  "requiredDependencies": [
+    "com.deucarian.editor",
+    "com.deucarian.logging"
+  ],
+  "optionalVersionDefinedDependencies": [],
+  "allowedDirectDebugCalls": [],
+  "allowedDirectUnityObjectLifetimeCalls": [],
+  "expectedSamplesRoot": ""
+}

@@ -7,6 +7,10 @@
   "author": {
     "name": "Deucarian"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Deucarian/Package-Installer.git"
+  },
   "keywords": [
     "upm",
     "editor",
