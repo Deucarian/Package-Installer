@@ -1,6 +1,6 @@
 ﻿{
     "schemaVersion":  1,
-    "updatedAt":  "2026-06-19",
+    "updatedAt":  "2026-06-22",
     "groups":  [
                    {
                        "id":  "infrastructure",
@@ -86,6 +86,21 @@
                ],
     "packages":  [
                      {
+                         "id":  "com.deucarian.common",
+                         "displayName":  "Deucarian Common",
+                         "category":  "Core",
+                         "type":  "Core",
+                         "ecosystemGroup":  "Infrastructure",
+                         "groupId":  "infrastructure",
+                         "overviewOrder":  5,
+                         "description":  "Tiny dependency-free runtime primitives shared across Deucarian packages.",
+                         "stableUrl":  "https://github.com/Deucarian/Common.git#main",
+                         "developmentUrl":  "https://github.com/Deucarian/Common.git#develop",
+                         "dependencies":  [
+
+                                          ]
+                     },
+                     {
                          "id":  "com.deucarian.editor",
                          "displayName":  "Deucarian Editor",
                          "category":  "Editor",
@@ -168,6 +183,7 @@
                          "stableUrl":  "https://github.com/Deucarian/Object-Loading.git#main",
                          "developmentUrl":  "https://github.com/Deucarian/Object-Loading.git#develop",
                          "dependencies":  [
+                                              "com.deucarian.common",
                                               "com.deucarian.logging"
                                           ],
                          "optionalCompanions":  [
@@ -208,7 +224,7 @@
                          "stableUrl":  "https://github.com/Deucarian/UI-Binding.git#main",
                          "developmentUrl":  "https://github.com/Deucarian/UI-Binding.git#develop",
                          "dependencies":  [
-
+                                              "com.deucarian.common"
                                           ],
                          "optionalIntegrations":  [
                                                       "com.deucarian.ui-binding.core-state-integration"
@@ -229,6 +245,7 @@
                          "stableUrl":  "https://github.com/Deucarian/UI-FLow.git#main",
                          "developmentUrl":  "https://github.com/Deucarian/UI-FLow.git#develop",
                          "dependencies":  [
+                                             "com.deucarian.common",
                                              "com.deucarian.logging"
                                          ]
                      },

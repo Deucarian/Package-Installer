@@ -425,6 +425,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             CollectionAssert.AreEqual(
                 new[]
                 {
+                    "com.deucarian.common",
                     "com.deucarian.logging"
                 },
                 objectLoading.dependencies);
@@ -447,6 +448,32 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                     "com.deucarian.object-loading"
                 },
                 integration.dependencies);
+        }
+
+        [Test]
+        public void BundledRegistryIncludesCommonInfrastructurePackage()
+        {
+            string registryJson = File.ReadAllText(GetBundledRegistryPath());
+            PackageRegistryLoadResult result = new PackageRegistryLoader()
+                .LoadFromJson(registryJson, PackageRegistrySource.Bundled);
+
+            Assert.IsTrue(result.IsValid, result.ErrorMessage);
+
+            PackageRegistryEntry common = result.Registry.packages
+                .Single(package => package.id == "com.deucarian.common");
+
+            Assert.AreEqual("Deucarian Common", common.displayName);
+            Assert.AreEqual("Core", common.category);
+            Assert.AreEqual("Core", common.type);
+            Assert.AreEqual("Infrastructure", common.ecosystemGroup);
+            Assert.AreEqual("infrastructure", common.groupId);
+            Assert.AreEqual(5, common.overviewOrder);
+            CollectionAssert.IsEmpty(common.dependencies);
+
+            PackageDefinition commonDefinition = PackageRegistryProvider
+                .CreatePackageDefinitions(result.Registry)
+                .Single(package => package.PackageId == "com.deucarian.common");
+            Assert.AreEqual(PackageType.Core, commonDefinition.PackageType);
         }
 
         [Test]
@@ -508,7 +535,34 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual("ui-presentation", uiFlow.groupId);
             StringAssert.Contains("UI-FLow.git#main", uiFlow.stableUrl);
             StringAssert.Contains("UI-FLow.git#develop", uiFlow.developmentUrl);
-            CollectionAssert.IsEmpty(uiFlow.dependencies);
+            CollectionAssert.AreEqual(
+                new[]
+                {
+                    "com.deucarian.common",
+                    "com.deucarian.logging"
+                },
+                uiFlow.dependencies);
+        }
+
+        [Test]
+        public void BundledRegistryAddsCommonToRuntimeConsumers()
+        {
+            string registryJson = File.ReadAllText(GetBundledRegistryPath());
+            PackageRegistryLoadResult result = new PackageRegistryLoader()
+                .LoadFromJson(registryJson, PackageRegistrySource.Bundled);
+
+            Assert.IsTrue(result.IsValid, result.ErrorMessage);
+
+            PackageRegistryEntry objectLoading = result.Registry.packages
+                .Single(package => package.id == "com.deucarian.object-loading");
+            PackageRegistryEntry uiBinding = result.Registry.packages
+                .Single(package => package.id == "com.deucarian.ui-binding");
+            PackageRegistryEntry uiFlow = result.Registry.packages
+                .Single(package => package.id == "com.deucarian.ui-flow");
+
+            CollectionAssert.Contains(objectLoading.dependencies, "com.deucarian.common");
+            CollectionAssert.Contains(uiBinding.dependencies, "com.deucarian.common");
+            CollectionAssert.Contains(uiFlow.dependencies, "com.deucarian.common");
         }
 
         [Test]

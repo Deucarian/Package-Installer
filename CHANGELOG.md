@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.57 - 2026-06-22
+
+- Added Deucarian Common to the bundled fallback registry.
+- Updated bundled Object Loading, UI Binding, and UI Flow dependencies to include Common.
+
 ## 1.1.56 - 2026-06-22
 
 - Updated the bundled fallback registry so UI Flow declares its direct Deucarian Logging dependency.

@@ -185,6 +185,33 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             }
         }
 
+        [Test]
+        public void CommonIsInstalledBeforeRuntimeConsumers()
+        {
+            PackageDefinition common = CreatePackage(
+                "Deucarian Common",
+                "com.deucarian.common",
+                "Common package.");
+            PackageDefinition uiBinding = CreatePackage(
+                "Deucarian UI Binding",
+                "com.deucarian.ui-binding",
+                "UI Binding package.",
+                new[] { common.PackageId });
+
+            using (PlanFixture fixture = new PlanFixture(common, uiBinding))
+            {
+                PackageDependencyInstallPlan plan = fixture.Installer.CreateInstallPlan(
+                    new[] { uiBinding },
+                    _ => PackageChannel.Stable,
+                    includeInstalledRequestedPackages: false);
+
+                Assert.IsTrue(plan.IsValid, plan.ErrorMessage);
+                CollectionAssert.AreEqual(
+                    new[] { common.PackageId, uiBinding.PackageId },
+                    plan.Packages.Select(package => package.PackageId).ToArray());
+            }
+        }
+
         private static string JoinMessages(PackageDependencyInstallPlan plan)
         {
             return string.Join("\n", plan.Messages.ToArray());
