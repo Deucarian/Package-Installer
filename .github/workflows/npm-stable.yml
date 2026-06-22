@@ -1,11 +1,7 @@
 name: Publish stable package to npmjs
 
 on:
-  push:
-    branches:
-      - main
-    paths-ignore:
-      - ".github/workflows/**"
+  # Stable publication is manual-only; branch promotion must not publish.
   workflow_dispatch:
     inputs:
       mode:
