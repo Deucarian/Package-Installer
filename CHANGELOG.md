@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.56 - 2026-06-22
+
+- Updated the bundled fallback registry so UI Flow declares its direct Deucarian Logging dependency.
+
 ## 1.1.55 - 2026-06-22
 
 - Replaced package graph card zoom states with explicit IconOnly, Micro, Compact, and Full semantic presentation levels.
