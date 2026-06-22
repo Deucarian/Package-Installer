@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.58 - 2026-06-22
+
+- Updated the exact `com.deucarian.logging` dependency to `1.0.1`.
+
 ## 1.1.57 - 2026-06-22
 
 - Added Deucarian Common to the bundled fallback registry.
