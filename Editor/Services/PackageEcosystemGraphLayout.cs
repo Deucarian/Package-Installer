@@ -23,9 +23,9 @@ namespace Deucarian.PackageInstaller.Editor
 
     internal enum PackageGraphNodePresentationLevel
     {
-        OverviewMicro,
-        OverviewCompact,
-        Standard,
+        IconOnly,
+        Micro,
+        Compact,
         Full
     }
 
@@ -46,25 +46,36 @@ namespace Deucarian.PackageInstaller.Editor
 
     internal static class PackageGraphPresentationPolicy
     {
-        private const float OverviewMicroToCompactZoom = 0.82f;
-        private const float OverviewCompactToMicroZoom = 0.70f;
-        private const float OverviewCompactToStandardZoom = 1.36f;
-        private const float OverviewStandardToCompactZoom = 1.18f;
-        private const float GroupCompactToStandardZoom = 0.92f;
-        private const float GroupStandardToCompactZoom = 0.78f;
+        private const float OverviewIconToMicroZoom = 0.44f;
+        private const float OverviewMicroToIconZoom = 0.32f;
+        private const float OverviewMicroToCompactZoom = 1.18f;
+        private const float OverviewCompactToMicroZoom = 1.08f;
+
+        private const float GroupIconToMicroZoom = 0.42f;
+        private const float GroupMicroToIconZoom = 0.30f;
+        private const float GroupMicroToCompactZoom = 0.78f;
+        private const float GroupCompactToMicroZoom = 0.62f;
+
+        private const float FocusIconToMicroZoom = 0.36f;
+        private const float FocusMicroToIconZoom = 0.24f;
+        private const float FocusMicroToCompactZoom = 0.64f;
+        private const float FocusCompactToMicroZoom = 0.50f;
+        private const float FocusCompactToFullZoom = 0.98f;
+        private const float FocusFullToCompactZoom = 0.84f;
+        private const string RedundantGraphTitlePrefix = "Deucarian ";
 
         public static PackageGraphNodeMetrics GetMetrics(PackageGraphNodePresentationLevel level)
         {
             switch (level)
             {
-                case PackageGraphNodePresentationLevel.OverviewMicro:
-                    return new PackageGraphNodeMetrics(112f, 52f);
-                case PackageGraphNodePresentationLevel.OverviewCompact:
-                    return new PackageGraphNodeMetrics(150f, 70f);
-                case PackageGraphNodePresentationLevel.Standard:
-                    return new PackageGraphNodeMetrics(218f, 150f);
+                case PackageGraphNodePresentationLevel.IconOnly:
+                    return new PackageGraphNodeMetrics(38f, 38f);
+                case PackageGraphNodePresentationLevel.Micro:
+                    return new PackageGraphNodeMetrics(116f, 44f);
+                case PackageGraphNodePresentationLevel.Compact:
+                    return new PackageGraphNodeMetrics(164f, 76f);
                 default:
-                    return new PackageGraphNodeMetrics(PackageGraphLayout.NodeWidth, PackageGraphLayout.NodeHeight);
+                    return new PackageGraphNodeMetrics(220f, 132f);
             }
         }
 
@@ -74,11 +85,11 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 case PackageGraphLayoutMode.Overview:
                 case PackageGraphLayoutMode.Filtered:
-                    return PackageGraphNodePresentationLevel.OverviewMicro;
+                    return PackageGraphNodePresentationLevel.Micro;
                 case PackageGraphLayoutMode.GroupFocus:
-                    return PackageGraphNodePresentationLevel.OverviewCompact;
+                    return PackageGraphNodePresentationLevel.Compact;
                 default:
-                    return PackageGraphNodePresentationLevel.Standard;
+                    return PackageGraphNodePresentationLevel.Full;
             }
         }
 
@@ -89,50 +100,157 @@ namespace Deucarian.PackageInstaller.Editor
         {
             if (mode == PackageGraphLayoutMode.Overview || mode == PackageGraphLayoutMode.Filtered)
             {
-                switch (current)
-                {
-                    case PackageGraphNodePresentationLevel.OverviewMicro:
-                        return zoom >= OverviewMicroToCompactZoom
-                            ? PackageGraphNodePresentationLevel.OverviewCompact
-                            : PackageGraphNodePresentationLevel.OverviewMicro;
-                    case PackageGraphNodePresentationLevel.Standard:
-                        return zoom <= OverviewStandardToCompactZoom
-                            ? PackageGraphNodePresentationLevel.OverviewCompact
-                            : PackageGraphNodePresentationLevel.Standard;
-                    default:
-                        if (zoom <= OverviewCompactToMicroZoom)
-                        {
-                            return PackageGraphNodePresentationLevel.OverviewMicro;
-                        }
-
-                        return zoom >= OverviewCompactToStandardZoom
-                            ? PackageGraphNodePresentationLevel.Standard
-                            : PackageGraphNodePresentationLevel.OverviewCompact;
-                }
+                return ResolveOverview(zoom, current);
             }
 
             if (mode == PackageGraphLayoutMode.GroupFocus)
             {
-                if (current == PackageGraphNodePresentationLevel.OverviewCompact)
-                {
-                    return zoom >= GroupCompactToStandardZoom
-                        ? PackageGraphNodePresentationLevel.Standard
-                        : PackageGraphNodePresentationLevel.OverviewCompact;
-                }
-
-                return zoom <= GroupStandardToCompactZoom
-                    ? PackageGraphNodePresentationLevel.OverviewCompact
-                    : PackageGraphNodePresentationLevel.Standard;
+                return ResolveGroupFocus(zoom, current);
             }
 
-            return PackageGraphNodePresentationLevel.Standard;
+            return ResolvePackageFocus(zoom, current);
         }
 
         public static PackageGraphNodePresentationLevel GetFocusPresentation(bool selected)
         {
             return selected
                 ? PackageGraphNodePresentationLevel.Full
-                : PackageGraphNodePresentationLevel.Standard;
+                : PackageGraphNodePresentationLevel.Compact;
+        }
+
+        public static PackageGraphNodePresentationLevel GetFocusSelectedPresentation(
+            PackageGraphNodePresentationLevel resolvedLevel)
+        {
+            return resolvedLevel == PackageGraphNodePresentationLevel.Full
+                ? PackageGraphNodePresentationLevel.Full
+                : PackageGraphNodePresentationLevel.Compact;
+        }
+
+        public static PackageGraphNodePresentationLevel GetFocusRelatedPresentation(
+            PackageGraphNodePresentationLevel resolvedLevel)
+        {
+            switch (resolvedLevel)
+            {
+                case PackageGraphNodePresentationLevel.IconOnly:
+                case PackageGraphNodePresentationLevel.Micro:
+                    return resolvedLevel;
+                default:
+                    return PackageGraphNodePresentationLevel.Compact;
+            }
+        }
+
+        public static string GetGraphTitle(string displayName, PackageGraphNodePresentationLevel level)
+        {
+            string title = string.IsNullOrWhiteSpace(displayName) ? string.Empty : displayName.Trim();
+
+            if (level == PackageGraphNodePresentationLevel.Full ||
+                !title.StartsWith(RedundantGraphTitlePrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                return title;
+            }
+
+            return title.Substring(RedundantGraphTitlePrefix.Length).Trim();
+        }
+
+        private static PackageGraphNodePresentationLevel ResolveOverview(
+            float zoom,
+            PackageGraphNodePresentationLevel current)
+        {
+            switch (current)
+            {
+                case PackageGraphNodePresentationLevel.IconOnly:
+                    return zoom >= OverviewIconToMicroZoom
+                        ? PackageGraphNodePresentationLevel.Micro
+                        : PackageGraphNodePresentationLevel.IconOnly;
+                case PackageGraphNodePresentationLevel.Compact:
+                case PackageGraphNodePresentationLevel.Full:
+                    return zoom <= OverviewCompactToMicroZoom
+                        ? PackageGraphNodePresentationLevel.Micro
+                        : PackageGraphNodePresentationLevel.Compact;
+                default:
+                    if (zoom <= OverviewMicroToIconZoom)
+                    {
+                        return PackageGraphNodePresentationLevel.IconOnly;
+                    }
+
+                    return zoom >= OverviewMicroToCompactZoom
+                        ? PackageGraphNodePresentationLevel.Compact
+                        : PackageGraphNodePresentationLevel.Micro;
+            }
+        }
+
+        private static PackageGraphNodePresentationLevel ResolveGroupFocus(
+            float zoom,
+            PackageGraphNodePresentationLevel current)
+        {
+            switch (current)
+            {
+                case PackageGraphNodePresentationLevel.IconOnly:
+                    return zoom >= GroupIconToMicroZoom
+                        ? PackageGraphNodePresentationLevel.Micro
+                        : PackageGraphNodePresentationLevel.IconOnly;
+                case PackageGraphNodePresentationLevel.Micro:
+                    if (zoom <= GroupMicroToIconZoom)
+                    {
+                        return PackageGraphNodePresentationLevel.IconOnly;
+                    }
+
+                    return zoom >= GroupMicroToCompactZoom
+                        ? PackageGraphNodePresentationLevel.Compact
+                        : PackageGraphNodePresentationLevel.Micro;
+                case PackageGraphNodePresentationLevel.Full:
+                case PackageGraphNodePresentationLevel.Compact:
+                    return zoom <= GroupCompactToMicroZoom
+                        ? PackageGraphNodePresentationLevel.Micro
+                        : PackageGraphNodePresentationLevel.Compact;
+                default:
+                    return PackageGraphNodePresentationLevel.Compact;
+            }
+        }
+
+        private static PackageGraphNodePresentationLevel ResolvePackageFocus(
+            float zoom,
+            PackageGraphNodePresentationLevel current)
+        {
+            switch (current)
+            {
+                case PackageGraphNodePresentationLevel.IconOnly:
+                    if (zoom < FocusIconToMicroZoom)
+                    {
+                        return PackageGraphNodePresentationLevel.IconOnly;
+                    }
+
+                    return zoom >= FocusCompactToFullZoom
+                        ? PackageGraphNodePresentationLevel.Full
+                        : PackageGraphNodePresentationLevel.Micro;
+                case PackageGraphNodePresentationLevel.Micro:
+                    if (zoom <= FocusMicroToIconZoom)
+                    {
+                        return PackageGraphNodePresentationLevel.IconOnly;
+                    }
+
+                    if (zoom >= FocusCompactToFullZoom)
+                    {
+                        return PackageGraphNodePresentationLevel.Full;
+                    }
+
+                    return zoom >= FocusMicroToCompactZoom
+                        ? PackageGraphNodePresentationLevel.Compact
+                        : PackageGraphNodePresentationLevel.Micro;
+                case PackageGraphNodePresentationLevel.Full:
+                    return zoom <= FocusFullToCompactZoom
+                        ? PackageGraphNodePresentationLevel.Compact
+                        : PackageGraphNodePresentationLevel.Full;
+                default:
+                    if (zoom <= FocusCompactToMicroZoom)
+                    {
+                        return PackageGraphNodePresentationLevel.Micro;
+                    }
+
+                    return zoom >= FocusCompactToFullZoom
+                        ? PackageGraphNodePresentationLevel.Full
+                        : PackageGraphNodePresentationLevel.Compact;
+            }
         }
     }
 
@@ -540,7 +658,7 @@ namespace Deucarian.PackageInstaller.Editor
             if (mode == PackageGraphLayoutMode.Focus &&
                 TryGetPackage(safeGraph, focusPackageId, out PackageGraphNode focusedPackage))
             {
-                return CalculatePackageFocus(safeGraph, focusedPackage);
+                return CalculatePackageFocus(safeGraph, focusedPackage, presentationLevel);
             }
 
             return CalculateRootOverview(safeGraph, presentationLevel);
@@ -770,7 +888,8 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static PackageGraphLayoutResult CalculatePackageFocus(
             PackageGraphModel graph,
-            PackageGraphNode focusNode)
+            PackageGraphNode focusNode,
+            PackageGraphNodePresentationLevel presentationLevel)
         {
             Dictionary<string, Rect> nodeRects = CreateNodeRingDictionary(graph, out Dictionary<string, PackageGraphLayoutRing> nodeRings);
             Dictionary<string, PackageGraphNodePresentationLevel> nodePresentations =
@@ -780,10 +899,14 @@ namespace Deucarian.PackageInstaller.Editor
                 .GroupBy(node => node.PackageId, StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
             HashSet<string> placed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            PackageGraphNodePresentationLevel selectedPresentationLevel =
+                PackageGraphPresentationPolicy.GetFocusSelectedPresentation(presentationLevel);
+            PackageGraphNodePresentationLevel relatedPresentationLevel =
+                PackageGraphPresentationPolicy.GetFocusRelatedPresentation(presentationLevel);
             PackageGraphNodeMetrics selectedMetrics =
-                PackageGraphPresentationPolicy.GetMetrics(PackageGraphNodePresentationLevel.Full);
+                PackageGraphPresentationPolicy.GetMetrics(selectedPresentationLevel);
             PackageGraphNodeMetrics relatedMetrics =
-                PackageGraphPresentationPolicy.GetMetrics(PackageGraphNodePresentationLevel.Standard);
+                PackageGraphPresentationPolicy.GetMetrics(relatedPresentationLevel);
             PackageGraphEgoLayoutMetrics metrics = PackageGraphEgoLayoutMetrics.Create(
                 GraphCenter,
                 selectedMetrics,
@@ -792,7 +915,7 @@ namespace Deucarian.PackageInstaller.Editor
             nodeRects[focusNode.PackageId] = CenteredRect(
                 metrics.SelectedNodeCenter,
                 selectedMetrics);
-            nodePresentations[focusNode.PackageId] = PackageGraphNodePresentationLevel.Full;
+            nodePresentations[focusNode.PackageId] = selectedPresentationLevel;
             placed.Add(focusNode.PackageId);
 
             string focusPackageId = focusNode.PackageId;
@@ -817,6 +940,7 @@ namespace Deucarian.PackageInstaller.Editor
                 metrics,
                 nodeRects,
                 nodePresentations,
+                relatedPresentationLevel,
                 placed,
                 contextGroups,
                 placedGroupIds);
@@ -827,6 +951,7 @@ namespace Deucarian.PackageInstaller.Editor
                 metrics,
                 nodeRects,
                 nodePresentations,
+                relatedPresentationLevel,
                 placed,
                 contextGroups,
                 placedGroupIds);
@@ -837,6 +962,7 @@ namespace Deucarian.PackageInstaller.Editor
                 metrics,
                 nodeRects,
                 nodePresentations,
+                relatedPresentationLevel,
                 placed,
                 contextGroups,
                 placedGroupIds);
@@ -847,6 +973,7 @@ namespace Deucarian.PackageInstaller.Editor
                 metrics,
                 nodeRects,
                 nodePresentations,
+                relatedPresentationLevel,
                 placed,
                 contextGroups,
                 placedGroupIds);
@@ -912,6 +1039,7 @@ namespace Deucarian.PackageInstaller.Editor
             PackageGraphEgoLayoutMetrics metrics,
             IDictionary<string, Rect> nodeRects,
             IDictionary<string, PackageGraphNodePresentationLevel> nodePresentations,
+            PackageGraphNodePresentationLevel relatedPresentationLevel,
             ISet<string> placedPackageIds,
             ICollection<PackageGraphGroupLayoutNode> groupNodes,
             ISet<string> placedGroupIds)
@@ -933,6 +1061,7 @@ namespace Deucarian.PackageInstaller.Editor
                     metrics,
                     nodeRects,
                     nodePresentations,
+                    relatedPresentationLevel,
                     placedPackageIds,
                     groupNodes,
                     placedGroupIds);
@@ -946,6 +1075,7 @@ namespace Deucarian.PackageInstaller.Editor
                 metrics,
                 nodeRects,
                 nodePresentations,
+                relatedPresentationLevel,
                 placedPackageIds,
                 groupNodes,
                 placedGroupIds);
@@ -1012,6 +1142,7 @@ namespace Deucarian.PackageInstaller.Editor
             PackageGraphEgoLayoutMetrics metrics,
             IDictionary<string, Rect> nodeRects,
             IDictionary<string, PackageGraphNodePresentationLevel> nodePresentations,
+            PackageGraphNodePresentationLevel relatedPresentationLevel,
             ISet<string> placedPackageIds,
             ICollection<PackageGraphGroupLayoutNode> groupNodes,
             ISet<string> placedGroupIds)
@@ -1039,7 +1170,7 @@ namespace Deucarian.PackageInstaller.Editor
                         cursorY + metrics.RelatedPackageMetrics.Height * 0.5f +
                         index * (metrics.RelatedPackageMetrics.Height + metrics.PackageCardGap));
                     nodeRects[node.PackageId] = ClampToCanvas(CenteredRect(nodeCenter, metrics.RelatedPackageMetrics));
-                    nodePresentations[node.PackageId] = PackageGraphNodePresentationLevel.Standard;
+                    nodePresentations[node.PackageId] = relatedPresentationLevel;
                     placedPackageIds.Add(node.PackageId);
                 }
 
@@ -1060,6 +1191,7 @@ namespace Deucarian.PackageInstaller.Editor
             PackageGraphEgoLayoutMetrics metrics,
             IDictionary<string, Rect> nodeRects,
             IDictionary<string, PackageGraphNodePresentationLevel> nodePresentations,
+            PackageGraphNodePresentationLevel relatedPresentationLevel,
             ISet<string> placedPackageIds,
             ICollection<PackageGraphGroupLayoutNode> groupNodes,
             ISet<string> placedGroupIds)
@@ -1087,7 +1219,7 @@ namespace Deucarian.PackageInstaller.Editor
                         index * (metrics.RelatedPackageMetrics.Width + FocusGridGapX),
                         packageY);
                     nodeRects[node.PackageId] = ClampToCanvas(CenteredRect(nodeCenter, metrics.RelatedPackageMetrics));
-                    nodePresentations[node.PackageId] = PackageGraphNodePresentationLevel.Standard;
+                    nodePresentations[node.PackageId] = relatedPresentationLevel;
                     placedPackageIds.Add(node.PackageId);
                 }
 

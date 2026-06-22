@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.55 - 2026-06-22
+
+- Replaced package graph card zoom states with explicit IconOnly, Micro, Compact, and Full semantic presentation levels.
+- Recalculated graph layout, collision, Fit bounds, and package ego rectangles from active presentation metrics instead of hidden full-size rows.
+- Shortened graph-only titles by removing redundant Deucarian prefixes while preserving full names in details and tooltips.
+
 ## 1.1.54 - 2026-06-22
 
 - Added Ambient Glass v1 shell layers with fixed subtle glow, grain, vignette, and readability overlay support.

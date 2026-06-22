@@ -3233,7 +3233,7 @@ namespace Deucarian.PackageInstaller.Editor
         private PackageGraphFocus _currentFocus = PackageGraphFocus.Create(null, string.Empty);
         private PackageGraphFocus _actionFocus = PackageGraphFocus.Create(null, string.Empty);
         private PackageGraphNodePresentationLevel _layoutPresentationLevel =
-            PackageGraphNodePresentationLevel.OverviewCompact;
+            PackageGraphNodePresentationLevel.Micro;
         private Vector2 _viewportSize;
         private float _viewportZoom = 1f;
         private IVisualElementScheduledItem _layoutAnimationItem;
@@ -4543,7 +4543,7 @@ namespace Deucarian.PackageInstaller.Editor
                        packageId,
                        out PackageGraphNodePresentationLevel presentationLevel)
                 ? presentationLevel
-                : PackageGraphNodePresentationLevel.Standard;
+                : PackageGraphNodePresentationLevel.Compact;
         }
 
         private static float EvaluateEnteringOpacity(float progress)
@@ -8465,6 +8465,18 @@ namespace Deucarian.PackageInstaller.Editor
             Action<string> clearPreviewPackage)
         {
             _node = node ?? throw new ArgumentNullException(nameof(node));
+            bool isIconOnly = presentationLevel == PackageGraphNodePresentationLevel.IconOnly;
+            bool isCompact = presentationLevel == PackageGraphNodePresentationLevel.Compact;
+            bool isFull = presentationLevel == PackageGraphNodePresentationLevel.Full;
+            bool showTitle = !isIconOnly;
+            bool showHierarchy = isCompact || isFull;
+            bool showBadges = isCompact || isFull;
+            bool showTypeBadge = isFull;
+            bool showPackageId = isFull;
+            bool showActionShortcut = (isCompact || isFull) &&
+                                      showActions &&
+                                      IsGraphShortcutAction(node.PrimaryAction);
+            bool showFooter = isFull || showActionShortcut;
 
             name = node.PackageId;
             AddToClassList("dpi-graph-node");
@@ -8474,7 +8486,7 @@ namespace Deucarian.PackageInstaller.Editor
             AddToClassList("dpi-graph-node--status-" + GetStatusClass(node.Status));
             AddToClassList("dpi-graph-node--ring-" + GetRingClass(ring));
             EnableInClassList("dpi-graph-node--installed", node.IsInstalled);
-            EnableInClassList("dpi-graph-node--actionable", showActions && IsGraphShortcutAction(node.PrimaryAction));
+            EnableInClassList("dpi-graph-node--actionable", showActionShortcut);
             EnableInClassList("dpi-graph-node--selected", selected);
             EnableInClassList("dpi-graph-node--related", related && !selected);
             EnableInClassList("dpi-graph-node--dimmed", dimmed);
@@ -8558,30 +8570,25 @@ namespace Deucarian.PackageInstaller.Editor
             icon.AddToClassList("dpi-graph-node__icon");
             header.Add(icon);
 
-            VisualElement titleBlock = new VisualElement();
-            titleBlock.AddToClassList("dpi-graph-node__title-block");
-            header.Add(titleBlock);
+            VisualElement titleBlock = null;
 
-            Label title = new Label(node.DisplayName);
-            title.AddToClassList("dpi-graph-node__title");
-            titleBlock.Add(title);
+            if (showTitle)
+            {
+                titleBlock = new VisualElement();
+                titleBlock.AddToClassList("dpi-graph-node__title-block");
+                header.Add(titleBlock);
+
+                Label title = new Label(PackageGraphPresentationPolicy.GetGraphTitle(node.DisplayName, presentationLevel));
+                title.AddToClassList("dpi-graph-node__title");
+                titleBlock.Add(title);
+            }
 
             Label statusMarker = new Label(GetStatusMarker(node.Status));
             statusMarker.AddToClassList("dpi-graph-node__status-icon");
             statusMarker.AddToClassList("dpi-graph-node__status-icon--" + GetStatusClass(node.Status));
             header.Add(statusMarker);
 
-            bool showHierarchy = presentationLevel == PackageGraphNodePresentationLevel.OverviewCompact ||
-                                 presentationLevel == PackageGraphNodePresentationLevel.Standard ||
-                                 presentationLevel == PackageGraphNodePresentationLevel.Full;
-            bool showBadges = presentationLevel != PackageGraphNodePresentationLevel.OverviewMicro;
-            bool showTypeBadge = presentationLevel == PackageGraphNodePresentationLevel.Standard ||
-                                 presentationLevel == PackageGraphNodePresentationLevel.Full;
-            bool showPackageId = presentationLevel == PackageGraphNodePresentationLevel.Full;
-            bool showFooter = presentationLevel == PackageGraphNodePresentationLevel.Standard ||
-                              presentationLevel == PackageGraphNodePresentationLevel.Full;
-
-            if (showPackageId)
+            if (showPackageId && titleBlock != null)
             {
                 Label packageId = new Label(node.PackageId);
                 packageId.AddToClassList("dpi-graph-node__package-id");
@@ -8617,11 +8624,15 @@ namespace Deucarian.PackageInstaller.Editor
             VisualElement footer = new VisualElement();
             footer.AddToClassList("dpi-graph-node__footer");
             Add(footer);
-            Label channel = new Label(node.SelectedChannel.ToString());
-            channel.AddToClassList("dpi-graph-node__channel");
-            footer.Add(channel);
 
-            if (showActions && IsGraphShortcutAction(node.PrimaryAction))
+            if (isFull)
+            {
+                Label channel = new Label(node.SelectedChannel.ToString());
+                channel.AddToClassList("dpi-graph-node__channel");
+                footer.Add(channel);
+            }
+
+            if (showActionShortcut)
             {
                 Button actionButton = new Button(() =>
                 {
@@ -8657,12 +8668,12 @@ namespace Deucarian.PackageInstaller.Editor
         {
             switch (presentationLevel)
             {
-                case PackageGraphNodePresentationLevel.OverviewMicro:
+                case PackageGraphNodePresentationLevel.IconOnly:
+                    return "icon-only";
+                case PackageGraphNodePresentationLevel.Micro:
                     return "micro";
-                case PackageGraphNodePresentationLevel.OverviewCompact:
+                case PackageGraphNodePresentationLevel.Compact:
                     return "compact";
-                case PackageGraphNodePresentationLevel.Standard:
-                    return "standard";
                 default:
                     return "full";
             }
