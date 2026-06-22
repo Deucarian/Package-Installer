@@ -20,7 +20,7 @@ namespace Deucarian.PackageInstaller.Editor
     {
         private const string WindowTitle = "Package Installer";
         private const string PackageId = "com.deucarian.package-installer";
-        private const string PackageVersion = "1.1.53";
+        private const string PackageVersion = "1.1.54";
         private const float MinWindowWidth = 820f;
         private const float MinWindowHeight = 650f;
         private const float CompactLayoutWidth = 1180f;
@@ -549,6 +549,8 @@ namespace Deucarian.PackageInstaller.Editor
 
             ConfigureFixedLayer(background, "dpi-fixed-wallpaper-layer");
             ConfigureFixedLayer(overlay, "dpi-fixed-wallpaper-overlay");
+            overlay?.AddToClassList("dpi-readability-overlay");
+            PackageInstallerAmbientGlass.Install(host);
             EnsureWallpaperTopSafeFade(host);
         }
 
@@ -588,7 +590,7 @@ namespace Deucarian.PackageInstaller.Editor
             fade.style.right = 0f;
             fade.style.top = 0f;
             fade.style.height = 86f;
-            host.Insert(Mathf.Min(2, host.childCount), fade);
+            host.Insert(host.childCount, fade);
         }
 
         private static void ConfigureFixedLayer(VisualElement element, string className)

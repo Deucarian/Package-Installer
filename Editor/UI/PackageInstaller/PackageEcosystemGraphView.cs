@@ -41,6 +41,9 @@ namespace Deucarian.PackageInstaller.Editor
         private PackageGraphSearchState _searchState = PackageGraphSearchState.Empty;
         private string _activeTopLevelGroupId = string.Empty;
         private string _hoveredTopLevelGroupId = string.Empty;
+        private string _currentFocusedPackageId = string.Empty;
+        private string _currentFocusedGroupId = string.Empty;
+        private PackageGraphSpotlightKind _currentSpotlightKind = PackageGraphSpotlightKind.None;
         private int _hiddenRelatedCount;
         private bool _hasAppliedGraphFrame;
         private bool _wasSearchActive;
@@ -122,6 +125,7 @@ namespace Deucarian.PackageInstaller.Editor
             _viewport.CameraTransitionCompleted += zoom => _canvas.SetViewportZoom(zoom);
             _viewport.ContextMenuRequested += ShowContextMenu;
             _viewport.SetContent(_canvas);
+            _canvas.ActiveVisualCenterChanged += UpdateGraphSpotlightCenter;
 
             VisualElement header = new VisualElement();
             header.AddToClassList("dpi-ecosystem-graph__header");
@@ -388,6 +392,8 @@ namespace Deucarian.PackageInstaller.Editor
                     pair => pair.Key,
                     pair => _viewport.WorldToViewport(pair.Value));
             _currentGraph = graph;
+            _currentFocusedPackageId = focusedPackageId ?? string.Empty;
+            _currentFocusedGroupId = focusedGroupId ?? string.Empty;
             _currentVisiblePackageIds = visiblePackageIds == null
                 ? (IReadOnlyCollection<string>)(graph != null
                     ? graph.Nodes.Select(node => node.PackageId).ToArray()
@@ -420,6 +426,7 @@ namespace Deucarian.PackageInstaller.Editor
             _viewport.SetContentSize(_canvas.ContentSize.x, _canvas.ContentSize.y, !layoutTargetChanged);
             _viewport.SetActiveBounds(_canvas.GetContentBounds());
             _viewport.EnsureInitialFrame(_canvas.GetContentBounds(), shouldForceInitialFrame);
+            UpdateGraphSpotlight(graph, focusedPackageId, focusedGroupId);
             UpdateLegend(_canvas.LayoutMode);
             _hasAppliedGraphFrame = _hasAppliedGraphFrame || shouldForceInitialFrame;
             _filterCounts = filterCounts ?? PackageVisibilityFilter.CalculateCounts(graph, _filterState);
@@ -607,6 +614,60 @@ namespace Deucarian.PackageInstaller.Editor
                 !_viewport.IsCameraTransitionActive);
             _viewport.SetActiveBounds(_canvas.GetContentBounds());
             _viewport.EnsureInitialFrame(_canvas.GetContentBounds(), force: !_hasAppliedGraphFrame);
+            UpdateGraphSpotlight(_currentGraph, _currentFocusedPackageId, _currentFocusedGroupId);
+        }
+
+        private void UpdateGraphSpotlight(
+            PackageGraphModel graph,
+            string focusedPackageId,
+            string focusedGroupId)
+        {
+            PackageGraphSpotlightKind kind = ResolveSpotlightKind(graph, focusedPackageId, focusedGroupId);
+            _currentSpotlightKind = kind;
+
+            if (!_canvas.TryGetActiveVisualCenter(out Vector2 center))
+            {
+                _viewport.SetSpotlightWorldCenter(Vector2.zero, PackageGraphSpotlightKind.None);
+                return;
+            }
+
+            _viewport.SetSpotlightWorldCenter(center, kind);
+        }
+
+        private void UpdateGraphSpotlightCenter(Vector2 center)
+        {
+            _viewport.SetSpotlightWorldCenter(center, _currentSpotlightKind);
+        }
+
+        private static PackageGraphSpotlightKind ResolveSpotlightKind(
+            PackageGraphModel graph,
+            string focusedPackageId,
+            string focusedGroupId)
+        {
+            if (graph != null &&
+                !string.IsNullOrWhiteSpace(focusedPackageId) &&
+                graph.TryGetNode(focusedPackageId, out PackageGraphNode node))
+            {
+                return IsAttentionStatus(node.Status)
+                    ? PackageGraphSpotlightKind.Attention
+                    : PackageGraphSpotlightKind.Package;
+            }
+
+            if (graph != null &&
+                !string.IsNullOrWhiteSpace(focusedGroupId) &&
+                graph.TryGetGroup(focusedGroupId, out _))
+            {
+                return PackageGraphSpotlightKind.Category;
+            }
+
+            return PackageGraphSpotlightKind.Root;
+        }
+
+        private static bool IsAttentionStatus(PackageGraphNodeStatus status)
+        {
+            return status == PackageGraphNodeStatus.UpdateAvailable ||
+                   status == PackageGraphNodeStatus.Missing ||
+                   status == PackageGraphNodeStatus.Warning;
         }
 
         private void FitCurrentContext()
@@ -1786,6 +1847,146 @@ namespace Deucarian.PackageInstaller.Editor
         public Vector2 WorldPosition { get; }
     }
 
+    internal enum PackageGraphSpotlightKind
+    {
+        None,
+        Root,
+        Category,
+        Package,
+        Attention
+    }
+
+    internal sealed class PackageGraphSpotlightLayer : VisualElement
+    {
+        public const string LayerName = "ecosystem-graph-spotlight-layer";
+        private const string SpotlightName = "ecosystem-graph-spotlight";
+
+        private static Texture2D _rootTexture;
+        private static Texture2D _categoryTexture;
+        private static Texture2D _packageTexture;
+        private static Texture2D _attentionTexture;
+
+        private readonly VisualElement _spotlight;
+
+        public PackageGraphSpotlightLayer()
+        {
+            name = LayerName;
+            AddToClassList("dpi-graph-spotlight-layer");
+            pickingMode = PickingMode.Ignore;
+            style.position = Position.Absolute;
+            style.left = 0f;
+            style.right = 0f;
+            style.top = 0f;
+            style.bottom = 0f;
+            style.overflow = Overflow.Hidden;
+
+            _spotlight = new VisualElement { name = SpotlightName };
+            _spotlight.AddToClassList("dpi-graph-spotlight");
+            _spotlight.pickingMode = PickingMode.Ignore;
+            _spotlight.style.position = Position.Absolute;
+            _spotlight.style.display = DisplayStyle.None;
+            Add(_spotlight);
+        }
+
+        internal VisualElement SpotlightForTests => _spotlight;
+
+        public void SetSpotlight(
+            Vector2 viewportCenter,
+            float radius,
+            PackageGraphSpotlightKind kind,
+            bool visible)
+        {
+            if (!visible || kind == PackageGraphSpotlightKind.None || radius <= 1f)
+            {
+                _spotlight.style.display = DisplayStyle.None;
+                return;
+            }
+
+            float diameter = radius * 2f;
+            _spotlight.style.display = DisplayStyle.Flex;
+            _spotlight.style.left = viewportCenter.x - radius;
+            _spotlight.style.top = viewportCenter.y - radius;
+            _spotlight.style.width = diameter;
+            _spotlight.style.height = diameter;
+            _spotlight.style.backgroundImage = new StyleBackground(GetTexture(kind));
+            _spotlight.style.opacity = GetOpacity(kind);
+            _spotlight.EnableInClassList("dpi-graph-spotlight--root", kind == PackageGraphSpotlightKind.Root);
+            _spotlight.EnableInClassList("dpi-graph-spotlight--category", kind == PackageGraphSpotlightKind.Category);
+            _spotlight.EnableInClassList("dpi-graph-spotlight--package", kind == PackageGraphSpotlightKind.Package);
+            _spotlight.EnableInClassList("dpi-graph-spotlight--attention", kind == PackageGraphSpotlightKind.Attention);
+            MarkDirtyRepaint();
+        }
+
+        private static float GetOpacity(PackageGraphSpotlightKind kind)
+        {
+            switch (kind)
+            {
+                case PackageGraphSpotlightKind.Root:
+                    return 0.28f;
+                case PackageGraphSpotlightKind.Category:
+                    return 0.38f;
+                case PackageGraphSpotlightKind.Attention:
+                    return 0.44f;
+                case PackageGraphSpotlightKind.Package:
+                    return 0.42f;
+                default:
+                    return 0f;
+            }
+        }
+
+        private static Texture2D GetTexture(PackageGraphSpotlightKind kind)
+        {
+            switch (kind)
+            {
+                case PackageGraphSpotlightKind.Root:
+                    return _rootTexture ?? (_rootTexture = CreateSpotlightTexture(
+                        new Color(0.10f, 0.45f, 0.82f, 0.30f),
+                        new Color(0.02f, 0.08f, 0.12f, 0f)));
+                case PackageGraphSpotlightKind.Category:
+                    return _categoryTexture ?? (_categoryTexture = CreateSpotlightTexture(
+                        new Color(0.12f, 0.68f, 0.62f, 0.34f),
+                        new Color(0.02f, 0.07f, 0.10f, 0f)));
+                case PackageGraphSpotlightKind.Attention:
+                    return _attentionTexture ?? (_attentionTexture = CreateSpotlightTexture(
+                        new Color(0.86f, 0.56f, 0.15f, 0.30f),
+                        new Color(0.08f, 0.05f, 0.02f, 0f)));
+                case PackageGraphSpotlightKind.Package:
+                default:
+                    return _packageTexture ?? (_packageTexture = CreateSpotlightTexture(
+                        new Color(0.12f, 0.78f, 0.72f, 0.36f),
+                        new Color(0.01f, 0.07f, 0.10f, 0f)));
+            }
+        }
+
+        private static Texture2D CreateSpotlightTexture(Color center, Color edge)
+        {
+            const int size = 96;
+            Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                name = "PackageGraphSpotlight",
+                hideFlags = HideFlags.HideAndDontSave,
+                wrapMode = TextureWrapMode.Clamp,
+                filterMode = FilterMode.Bilinear
+            };
+
+            Vector2 midpoint = new Vector2((size - 1) * 0.5f, (size - 1) * 0.5f);
+            float maxDistance = Mathf.Max(1f, midpoint.magnitude);
+
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float distance = Vector2.Distance(new Vector2(x, y), midpoint) / maxDistance;
+                    float t = Mathf.SmoothStep(0f, 1f, distance);
+                    texture.SetPixel(x, y, Color.Lerp(center, edge, t));
+                }
+            }
+
+            texture.Apply(false, true);
+            return texture;
+        }
+    }
+
     internal sealed class PackageGraphViewport : VisualElement
     {
         private const float OverviewMinZoom = 0.28f;
@@ -1799,6 +2000,7 @@ namespace Deucarian.PackageInstaller.Editor
         private const float PanDragThreshold = 5f;
         private const float PanDragThresholdSqr = PanDragThreshold * PanDragThreshold;
 
+        private readonly PackageGraphSpotlightLayer _spotlightLayer;
         private readonly VisualElement _contentRoot;
         private readonly Action _selectionCleared;
         private Vector2 _pan;
@@ -1830,6 +2032,9 @@ namespace Deucarian.PackageInstaller.Editor
         private Vector2 _cameraTransitionSourceAnchorScreen;
         private Vector2 _cameraTransitionTargetAnchorScreen;
         private bool _cameraTransitionUsesDirectTarget;
+        private Vector2 _spotlightWorldCenter;
+        private PackageGraphSpotlightKind _spotlightKind = PackageGraphSpotlightKind.None;
+        private bool _spotlightActive;
 
         public PackageGraphViewport(Action selectionCleared)
         {
@@ -1837,6 +2042,9 @@ namespace Deucarian.PackageInstaller.Editor
             name = "ecosystem-graph-viewport";
             AddToClassList("dpi-ecosystem-graph__viewport");
             focusable = true;
+
+            _spotlightLayer = new PackageGraphSpotlightLayer();
+            Add(_spotlightLayer);
 
             _contentRoot = new VisualElement { name = "ecosystem-graph-content" };
             _contentRoot.AddToClassList("dpi-ecosystem-graph__content");
@@ -1895,6 +2103,10 @@ namespace Deucarian.PackageInstaller.Editor
 
         internal float RequiredFitZoomForTests => _requiredFitZoom;
 
+        internal PackageGraphSpotlightLayer SpotlightLayerForTests => _spotlightLayer;
+
+        internal VisualElement ContentRootForTests => _contentRoot;
+
         public void SetLayoutMode(PackageGraphLayoutMode layoutMode, bool clampZoom = true)
         {
             _layoutMode = layoutMode;
@@ -1915,6 +2127,14 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 _contentRoot.Add(content);
             }
+        }
+
+        public void SetSpotlightWorldCenter(Vector2 worldCenter, PackageGraphSpotlightKind kind)
+        {
+            _spotlightWorldCenter = worldCenter;
+            _spotlightKind = kind;
+            _spotlightActive = kind != PackageGraphSpotlightKind.None;
+            UpdateSpotlight();
         }
 
         public void SetContentSize(float width, float height, bool clamp = true)
@@ -2312,8 +2532,46 @@ namespace Deucarian.PackageInstaller.Editor
             _contentRoot.EnableInClassList("dpi-ecosystem-graph__content--low-zoom", _zoom < 0.58f);
             _contentRoot.EnableInClassList("dpi-ecosystem-graph__content--medium-zoom", _zoom >= 0.58f && _zoom < 1.05f);
             _contentRoot.EnableInClassList("dpi-ecosystem-graph__content--high-zoom", _zoom >= 1.05f);
+            UpdateSpotlight();
             MarkDirtyRepaint();
             _contentRoot.MarkDirtyRepaint();
+        }
+
+        private void UpdateSpotlight()
+        {
+            if (_spotlightLayer == null)
+            {
+                return;
+            }
+
+            if (!_spotlightActive || !HasViewportSize())
+            {
+                _spotlightLayer.SetSpotlight(Vector2.zero, 0f, PackageGraphSpotlightKind.None, false);
+                return;
+            }
+
+            _spotlightLayer.SetSpotlight(
+                WorldToViewport(_spotlightWorldCenter),
+                GetSpotlightRadius(_spotlightKind),
+                _spotlightKind,
+                true);
+        }
+
+        private static float GetSpotlightRadius(PackageGraphSpotlightKind kind)
+        {
+            switch (kind)
+            {
+                case PackageGraphSpotlightKind.Root:
+                    return 360f;
+                case PackageGraphSpotlightKind.Category:
+                    return 300f;
+                case PackageGraphSpotlightKind.Attention:
+                    return 220f;
+                case PackageGraphSpotlightKind.Package:
+                    return 205f;
+                default:
+                    return 0f;
+            }
         }
 
         private void ClampPan()
@@ -3086,6 +3344,8 @@ namespace Deucarian.PackageInstaller.Editor
 
         public event Action<string> ActiveHoverGroupChanged;
 
+        public event Action<Vector2> ActiveVisualCenterChanged;
+
         internal IReadOnlyDictionary<string, Rect> NodeRectsForTests => _layoutResult != null
             ? _layoutResult.NodeRects
             : new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
@@ -3222,6 +3482,32 @@ namespace Deucarian.PackageInstaller.Editor
 
             center = default(Vector2);
             return false;
+        }
+
+        public bool TryGetActiveVisualCenter(out Vector2 center)
+        {
+            if (!string.IsNullOrWhiteSpace(_focusedPackageId) &&
+                TryGetTransitionAnchorCenter(
+                    new PackageGraphTransitionAnchor(
+                        PackageGraphTransitionAnchorKind.Package,
+                        _focusedPackageId),
+                    out center))
+            {
+                return true;
+            }
+
+            if (!string.IsNullOrWhiteSpace(_focusedGroupId) &&
+                TryGetTransitionAnchorCenter(
+                    new PackageGraphTransitionAnchor(
+                        PackageGraphTransitionAnchorKind.Group,
+                        _focusedGroupId),
+                    out center))
+            {
+                return true;
+            }
+
+            center = GetActiveCenter();
+            return true;
         }
 
         public void SetExternalHoverGroup(string groupId)
@@ -4005,6 +4291,8 @@ namespace Deucarian.PackageInstaller.Editor
                     _animatedGroupOrbitRadii[target.GroupId] = target.OrbitRadius;
                 }
             }
+
+            NotifyActiveVisualCenterChanged();
         }
 
         private void ApplyInteractionState()
@@ -4339,6 +4627,17 @@ namespace Deucarian.PackageInstaller.Editor
                 _animatedGroupOrbitRadii);
             _edgeLayer.MarkDirtyRepaint();
             _membershipLayer.MarkDirtyRepaint();
+            NotifyActiveVisualCenterChanged();
+        }
+
+        private void NotifyActiveVisualCenterChanged()
+        {
+            if (ActiveVisualCenterChanged == null || !TryGetActiveVisualCenter(out Vector2 center))
+            {
+                return;
+            }
+
+            ActiveVisualCenterChanged(center);
         }
 
         private void DrawGuides()
@@ -6552,6 +6851,8 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
+            DrawRouteUnderlay(painter, route.Points, edge.Kind, width, emphasized, focusMode);
+
             if (edge.Kind == PackageGraphEdgeKind.IntegrationConnection)
             {
                 DrawIntegrationCableRoute(
@@ -7417,6 +7718,14 @@ namespace Deucarian.PackageInstaller.Editor
             return ShouldAnimate(kind);
         }
 
+        internal static bool UsesTwoPassStrokeForTests(PackageGraphEdgeKind kind)
+        {
+            return kind == PackageGraphEdgeKind.HardDependency ||
+                   kind == PackageGraphEdgeKind.IntegrationConnection ||
+                   kind == PackageGraphEdgeKind.OptionalCompanion ||
+                   kind == PackageGraphEdgeKind.SuiteMembership;
+        }
+
         private static bool SupportsDirectionalFlowMarkers(PackageGraphEdgeKind kind)
         {
             return kind == PackageGraphEdgeKind.HardDependency ||
@@ -7523,6 +7832,30 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             painter.Stroke();
+        }
+
+        private static void DrawRouteUnderlay(
+            Painter2D painter,
+            IReadOnlyList<Vector2> points,
+            PackageGraphEdgeKind kind,
+            float semanticWidth,
+            bool emphasized,
+            bool focusMode)
+        {
+            if (points == null || points.Count < 2 || !UsesTwoPassStrokeForTests(kind))
+            {
+                return;
+            }
+
+            float alpha = emphasized
+                ? 0.34f
+                : focusMode
+                    ? 0.16f
+                    : 0.12f;
+            float extraWidth = emphasized ? 2.15f : 1.45f;
+            painter.strokeColor = new Color(0.01f, 0.03f, 0.05f, alpha);
+            painter.lineWidth = Mathf.Max(1.2f, semanticWidth + extraWidth);
+            DrawPolylineStroke(painter, points);
         }
 
         private static void DrawIntegrationCableRoute(
@@ -7992,6 +8325,19 @@ namespace Deucarian.PackageInstaller.Editor
             symbol.style.height = symbolSize;
             Add(symbol);
 
+            VisualElement symbolHighlight = new VisualElement();
+            symbolHighlight.AddToClassList("dpi-graph-group__glass-highlight");
+            symbolHighlight.pickingMode = PickingMode.Ignore;
+            symbol.Add(symbolHighlight);
+
+            VisualElement symbolSheen = PackageInstallerGlassSheen.Create();
+            symbol.Add(symbolSheen);
+
+            if (interactionsEnabled)
+            {
+                RegisterCallback<MouseEnterEvent>(_ => PackageInstallerGlassSheen.Play(symbolSheen));
+            }
+
             Image icon = new Image
             {
                 image = DeucarianEditorIcons.GetPackageIcon(groupNode.Group.IconKey),
@@ -8146,9 +8492,21 @@ namespace Deucarian.PackageInstaller.Editor
             statusRail.AddToClassList("dpi-graph-node__status-rail--" + GetStatusClass(node.Status));
             Add(statusRail);
 
+            VisualElement glassHighlight = new VisualElement();
+            glassHighlight.AddToClassList("dpi-graph-node__glass-highlight");
+            glassHighlight.pickingMode = PickingMode.Ignore;
+            Add(glassHighlight);
+
+            VisualElement glassSheen = PackageInstallerGlassSheen.Create();
+            Add(glassSheen);
+
             if (interactionsEnabled)
             {
-                RegisterCallback<MouseEnterEvent>(_ => previewPackage?.Invoke(node.PackageId));
+                RegisterCallback<MouseEnterEvent>(_ =>
+                {
+                    previewPackage?.Invoke(node.PackageId);
+                    PackageInstallerGlassSheen.Play(glassSheen);
+                });
                 RegisterCallback<MouseLeaveEvent>(_ => clearPreviewPackage?.Invoke(node.PackageId));
             }
 

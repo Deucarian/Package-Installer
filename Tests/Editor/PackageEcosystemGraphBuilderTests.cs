@@ -75,6 +75,54 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void Window_AmbientGlassLayersAreFixedDecorativeAndOutsideGraphTransform()
+        {
+            VisualElement root = new VisualElement();
+            VisualElement shell = new VisualElement { name = "deucarian-application-shell" };
+            VisualElement background = new VisualElement { name = "deucarian-window-background" };
+            VisualElement overlay = new VisualElement { name = "deucarian-window-overlay" };
+            root.Add(background);
+            root.Add(overlay);
+            root.Add(shell);
+
+            PackageInstallerWindow.ConfigureFixedWallpaperForTests(root, shell);
+
+            VisualElement ambient = shell.Q<VisualElement>(PackageInstallerAmbientGlass.AmbientLayerName);
+            VisualElement grain = shell.Q<VisualElement>(PackageInstallerAmbientGlass.GrainLayerName);
+            VisualElement vignette = shell.Q<VisualElement>(PackageInstallerAmbientGlass.VignetteLayerName);
+
+            AssertFixedDecorativeLayer(ambient, "dpi-ambient-lighting-layer");
+            AssertFixedDecorativeLayer(grain, "dpi-grain-layer");
+            AssertFixedDecorativeLayer(vignette, "dpi-vignette-layer");
+            Assert.IsTrue(overlay.ClassListContains("dpi-readability-overlay"));
+
+            VisualElement[] children = shell.Children().ToArray();
+            Assert.Less(Array.IndexOf(children, background), Array.IndexOf(children, ambient));
+            Assert.Less(Array.IndexOf(children, vignette), Array.IndexOf(children, overlay));
+            Assert.IsFalse(ambient.ClassListContains("dpi-ecosystem-graph__content"));
+        }
+
+        [Test]
+        public void Window_AmbientMotionModesExposeStableMotionScale()
+        {
+            try
+            {
+                PackageInstallerAmbientMotionSettings.SetModeForTests(PackageInstallerAmbientMotionMode.On);
+                Assert.AreEqual(1f, PackageInstallerAmbientMotionSettings.MotionScale);
+
+                PackageInstallerAmbientMotionSettings.SetModeForTests(PackageInstallerAmbientMotionMode.Reduced);
+                Assert.That(PackageInstallerAmbientMotionSettings.MotionScale, Is.GreaterThan(0f).And.LessThan(1f));
+
+                PackageInstallerAmbientMotionSettings.SetModeForTests(PackageInstallerAmbientMotionMode.Off);
+                Assert.AreEqual(0f, PackageInstallerAmbientMotionSettings.MotionScale);
+            }
+            finally
+            {
+                PackageInstallerAmbientMotionSettings.SetModeForTests(null);
+            }
+        }
+
+        [Test]
         public void Window_OperationFooterBuildsStableVisibleHierarchy()
         {
             VisualElement footer = PackageInstallerWindow.CreateOperationFooterForTests();
@@ -1715,6 +1763,29 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void GraphView_GlassDecorationsDoNotChangeGraphGeometry()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+            PackageGraphView view = new PackageGraphView(_ => { }, (_, __) => { });
+
+            view.SetGraph(graph, "com.deucarian.session", actionsEnabled: true);
+
+            PackageGraphCanvas canvas = GetCanvas(view);
+            VisualElement session = FindGraphNode(view, "com.deucarian.session");
+            VisualElement runtimeGroup = FindGraphGroup(view, "runtime-services");
+
+            Assert.AreEqual(1, FindByClass(session, "dpi-graph-node__glass-highlight").Count);
+            Assert.AreEqual(1, FindByClass(session, "dpi-glass-sheen").Count);
+            Assert.AreEqual(1, FindByClass(runtimeGroup, "dpi-graph-group__glass-highlight").Count);
+            Assert.AreEqual(1, FindByClass(runtimeGroup, "dpi-glass-sheen").Count);
+            AssertRectsEqual(
+                canvas.NodeRectsForTests["com.deucarian.session"],
+                canvas.NodeVisualStatesForTests["com.deucarian.session"].Rect,
+                0.001f);
+        }
+
+        [Test]
         public void GraphViewport_SemanticZoomClassesTrackZoomThresholds()
         {
             PackageGraphViewport viewport = new PackageGraphViewport(null);
@@ -1740,6 +1811,29 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             applyTransform.Invoke(viewport, null);
 
             Assert.IsTrue(contentRoot.ClassListContains("dpi-ecosystem-graph__content--high-zoom"));
+        }
+
+        [Test]
+        public void GraphViewport_SpotlightLayerStaysBehindPanZoomContent()
+        {
+            PackageGraphViewport viewport = new PackageGraphViewport(null);
+            PackageGraphSpotlightLayer spotlight = viewport.SpotlightLayerForTests;
+            VisualElement contentRoot = viewport.ContentRootForTests;
+
+            Assert.NotNull(spotlight);
+            Assert.NotNull(contentRoot);
+            Assert.AreSame(viewport, spotlight.parent);
+            Assert.AreSame(viewport, contentRoot.parent);
+            Assert.Less(
+                viewport.Children().ToList().IndexOf(spotlight),
+                viewport.Children().ToList().IndexOf(contentRoot));
+            Assert.AreEqual(PickingMode.Ignore, spotlight.pickingMode);
+            Assert.AreEqual(Position.Absolute, spotlight.style.position.value);
+
+            viewport.SetSpotlightWorldCenter(new Vector2(42f, 80f), PackageGraphSpotlightKind.Category);
+
+            Assert.AreSame(spotlight, viewport.SpotlightLayerForTests);
+            Assert.AreSame(contentRoot, viewport.ContentRootForTests);
         }
 
         [Test]
@@ -2502,10 +2596,14 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual("Optional companion", optionalEdge.Label);
             Assert.IsFalse(PackageGraphEdgeLayer.AnimatesEdgeForTests(PackageGraphEdgeKind.OptionalCompanion));
             Assert.IsFalse(PackageGraphEdgeLayer.UsesDirectionalFlowMarkersForTests(PackageGraphEdgeKind.OptionalCompanion));
+            Assert.IsTrue(PackageGraphEdgeLayer.UsesTwoPassStrokeForTests(PackageGraphEdgeKind.OptionalCompanion));
             Assert.IsTrue(PackageGraphEdgeLayer.AnimatesEdgeForTests(PackageGraphEdgeKind.HardDependency));
             Assert.IsTrue(PackageGraphEdgeLayer.UsesDirectionalFlowMarkersForTests(PackageGraphEdgeKind.HardDependency));
+            Assert.IsTrue(PackageGraphEdgeLayer.UsesTwoPassStrokeForTests(PackageGraphEdgeKind.HardDependency));
             Assert.IsTrue(PackageGraphEdgeLayer.AnimatesEdgeForTests(PackageGraphEdgeKind.IntegrationConnection));
             Assert.IsTrue(PackageGraphEdgeLayer.UsesDirectionalFlowMarkersForTests(PackageGraphEdgeKind.IntegrationConnection));
+            Assert.IsTrue(PackageGraphEdgeLayer.UsesTwoPassStrokeForTests(PackageGraphEdgeKind.IntegrationConnection));
+            Assert.IsTrue(PackageGraphEdgeLayer.UsesTwoPassStrokeForTests(PackageGraphEdgeKind.SuiteMembership));
         }
 
         [Test]
@@ -3825,6 +3923,18 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.NotNull(element);
             Assert.AreNotEqual(DisplayStyle.None, element.style.display.value);
             Assert.That(element.style.opacity.value, Is.GreaterThan(0.01f));
+        }
+
+        private static void AssertFixedDecorativeLayer(VisualElement element, string className)
+        {
+            Assert.NotNull(element);
+            Assert.IsTrue(element.ClassListContains(className));
+            Assert.AreEqual(PickingMode.Ignore, element.pickingMode);
+            Assert.AreEqual(Position.Absolute, element.style.position.value);
+            Assert.AreEqual(0f, element.style.left.value.value);
+            Assert.AreEqual(0f, element.style.right.value.value);
+            Assert.AreEqual(0f, element.style.top.value.value);
+            Assert.AreEqual(0f, element.style.bottom.value.value);
         }
 
         private static void AssertRectsEqual(Rect expected, Rect actual, float tolerance)

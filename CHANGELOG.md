@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.54 - 2026-06-22
+
+- Added Ambient Glass v1 shell layers with fixed subtle glow, grain, vignette, and readability overlay support.
+- Added a viewport-fixed reactive graph spotlight for root, category, package, and attention contexts.
+- Refined graph/panel glass styling and two-pass relationship edge rendering without changing graph geometry.
+
 ## 1.1.53 - 2026-06-20
 
 - Suspended structural search/status projection while PackageEgo is active so focused package layouts always use the full ecosystem graph.
