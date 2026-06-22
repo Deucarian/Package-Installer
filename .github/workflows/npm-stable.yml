@@ -1,7 +1,9 @@
 name: Publish stable package to npmjs
 
 on:
+  # Git-only stable distribution is active for now; npm release is deferred.
   # Stable publication is manual-only; branch promotion must not publish.
+  # Do not trigger publish mode without a dedicated release wave.
   workflow_dispatch:
     inputs:
       mode:
@@ -12,6 +14,11 @@ on:
           - dry-run
           - publish
         default: dry-run
+      confirm_release:
+        description: "Type exactly: I understand this publishes a Deucarian package"
+        required: true
+        type: string
+        default: ""
       target_branch:
         description: "Optional branch/ref to check out for manual runs. Leave empty to use the selected run branch."
         required: false
@@ -65,6 +72,7 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           INPUT_MODE: ${{ inputs.mode }}
+          INPUT_CONFIRM_RELEASE: ${{ inputs.confirm_release }}
           INPUT_TARGET_BRANCH: ${{ inputs.target_branch }}
         run: |
           effective_branch="${GITHUB_REF_NAME}"
@@ -81,6 +89,14 @@ jobs:
             should_publish=true
           fi
 
+          if [ "$should_publish" = "true" ]; then
+            if [ "$INPUT_CONFIRM_RELEASE" != "I understand this publishes a Deucarian package" ]; then
+              echo "::error::Publishing requires exact confirm_release acknowledgement."
+              exit 1
+            fi
+            echo "::error::Git-only stable distribution is active for now; npm publication is deferred to a dedicated release wave."
+            exit 1
+          fi
           if [ "$should_publish" = "true" ] && [ "$effective_branch" != "main" ]; then
             echo "::error::Stable publishes must run from main; effective branch is ${effective_branch}."
             exit 1

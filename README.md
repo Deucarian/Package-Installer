@@ -44,6 +44,8 @@ For development builds, use:
 "com.deucarian.package-installer": "https://github.com/Deucarian/Package-Installer.git#develop"
 ```
 
+npm/scoped-registry distribution is deferred for now. Use Git URLs until the manual release process is finalized.
+
 You can also use Unity's Package Manager window:
 
 1. Open `Window > Package Manager`.
@@ -72,6 +74,8 @@ The installer loads the bundled `PackageRegistry.json` first so it works offline
 `https://raw.githubusercontent.com/Deucarian/Package-Registry/main/packages.json`
 
 If the remote registry succeeds and validates, the window uses it. If it fails, the bundled registry stays active and the header shows that the remote registry failed.
+
+The registry is the source of truth for stable Git `#main` URLs and development Git `#develop` URLs. Git tags, GitHub releases, and npm/scoped-registry publication are deferred until a separate deliberate release wave.
 
 Opening the Package Installer window and using the header `Refresh` or `Check Updates` buttons refetch the remote registry, so newly registered packages and package reference changes can appear without restarting Unity.
 
