@@ -287,6 +287,12 @@ After installing, updating, or removing a package, the installer refreshes insta
 - The installer cannot know download-byte progress for Git packages.
 - Sample import avoids silent overwrite; there is no overwrite UI in this version.
 
+## Architecture / Contributor Notes
+
+- [AGENTS.md](AGENTS.md) contains repository-specific ownership and Codex guidance.
+- Deucarian architecture rules live in [Package Registry](https://github.com/Deucarian/Package-Registry/blob/develop/ARCHITECTURE.md).
+- Capability ownership is tracked in [CAPABILITY_OWNERSHIP.md](https://github.com/Deucarian/Package-Registry/blob/develop/CAPABILITY_OWNERSHIP.md).
+
 ## License
 
 See [LICENSE.md](LICENSE.md).
