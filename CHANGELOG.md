@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.59 - 2026-06-23
+
+- Synced the bundled fallback registry with the Phase 2B Idle Auto Defense template entry and template group hierarchy.
+- Added template package classification so template entries stay visible and individually installable while `Install All` skips them.
+- Added registry coverage for template group parsing, template entry parsing, suite dependency mapping, and template install-all filtering.
+
 ## 1.1.58 - 2026-06-22
 
 - Updated the exact `com.deucarian.logging` dependency to `1.0.1`.

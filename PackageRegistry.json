@@ -127,6 +127,33 @@
       "description": "Higher-level genre composition packages built on gameplay foundations and systems.",
       "iconKey": "auto-defense",
       "styleKey": "gameplay"
+    },
+    {
+      "id": "templates",
+      "displayName": "Templates",
+      "parentGroupId": "",
+      "sortOrder": 80,
+      "description": "Starter project templates and sample game foundations.",
+      "iconKey": "selection",
+      "styleKey": "template"
+    },
+    {
+      "id": "templates-games",
+      "displayName": "Games",
+      "parentGroupId": "templates",
+      "sortOrder": 81,
+      "description": "Playable starter game templates.",
+      "iconKey": "auto-defense",
+      "styleKey": "template"
+    },
+    {
+      "id": "templates-games-idle-auto-defense",
+      "displayName": "Idle Auto Defense",
+      "parentGroupId": "templates-games",
+      "sortOrder": 82,
+      "description": "Idle auto-defense starter game templates.",
+      "iconKey": "auto-defense",
+      "styleKey": "template"
     }
   ],
   "packages": [
@@ -745,6 +772,31 @@
         "com.deucarian.auto-defense",
         "com.deucarian.run-upgrades",
         "com.deucarian.idle-progression"
+      ]
+    },
+    {
+      "id": "com.deucarian.template.game.idle-auto-defense",
+      "displayName": "Deucarian Template Game - Idle Auto Defense",
+      "category": "Templates",
+      "type": "Template",
+      "ecosystemGroup": "Templates",
+      "groupId": "templates-games-idle-auto-defense",
+      "overviewOrder": 10,
+      "description": "Starter Unity game template for an idle auto-defense loop built on the Deucarian Auto Defense Suite.",
+      "stableUrl": "https://github.com/Deucarian/Template-Game-Idle-Auto-Defense.git#codex/game-template-phase-2b-template-remote-registry",
+      "developmentUrl": "https://github.com/Deucarian/Template-Game-Idle-Auto-Defense.git#codex/game-template-phase-2b-template-remote-registry",
+      "dependencies": [
+        "com.deucarian.auto-defense-suite"
+      ],
+      "searchAliases": [
+        "idle auto defense template",
+        "auto defense game template"
+      ],
+      "searchTags": [
+        "template",
+        "game",
+        "idle",
+        "auto-defense"
       ]
     }
   ]

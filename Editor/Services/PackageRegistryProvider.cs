@@ -342,7 +342,12 @@ namespace Deucarian.PackageInstaller.Editor
                 return 5;
             }
 
-            return 6;
+            if (string.Equals(category, "Templates", StringComparison.OrdinalIgnoreCase))
+            {
+                return 6;
+            }
+
+            return 7;
         }
     }
 }

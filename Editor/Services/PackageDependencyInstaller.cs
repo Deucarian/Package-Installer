@@ -158,11 +158,16 @@ namespace Deucarian.PackageInstaller.Editor
         public void InstallAll(Func<PackageDefinition, PackageChannel> channelSelector)
         {
             StartDependencyAwareOperation(
-                GetRegisteredPackages(),
+                GetInstallAllRootPackages(),
                 channelSelector,
                 "Install All Packages",
                 includeInstalledRequestedPackages: false,
                 alreadyInstalledMessage: "All registered packages are already installed.");
+        }
+
+        internal PackageDefinition[] GetInstallAllRootPackagesForTests()
+        {
+            return GetInstallAllRootPackages().ToArray();
         }
 
         public void UpdateAll(
@@ -528,6 +533,11 @@ namespace Deucarian.PackageInstaller.Editor
         private IEnumerable<PackageDefinition> GetRegisteredPackages()
         {
             return _registeredPackagesProvider() ?? Array.Empty<PackageDefinition>();
+        }
+
+        private IEnumerable<PackageDefinition> GetInstallAllRootPackages()
+        {
+            return GetRegisteredPackages().Where(package => package == null || !package.IsTemplate);
         }
 
         private bool TryGetRegisteredPackage(string packageId, out PackageDefinition packageDefinition)

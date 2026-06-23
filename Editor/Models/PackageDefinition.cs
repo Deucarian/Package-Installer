@@ -125,6 +125,11 @@ namespace Deucarian.PackageInstaller.Editor
             string.Equals(Category, "Suite", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(MetadataType, "Suite", StringComparison.OrdinalIgnoreCase);
 
+        public bool IsTemplate =>
+            string.Equals(Category, "Templates", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(Category, "Template", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(MetadataType, "Template", StringComparison.OrdinalIgnoreCase);
+
         public bool HasPackageReference => !string.IsNullOrWhiteSpace(GetUrl(PackageChannel.Stable));
 
         public bool HasDisplayVersion => !string.IsNullOrWhiteSpace(DisplayVersion);

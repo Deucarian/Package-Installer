@@ -14,6 +14,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             "{ \"id\": \"com.deucarian.core-state\", \"displayName\": \"Deucarian Core State\", \"category\": \"Core\", \"description\": \"Core package.\", \"stableUrl\": \"https://github.com/Deucarian/Core-State.git#main\", \"developmentUrl\": \"https://github.com/Deucarian/Core-State.git#develop\", \"dependencies\": [] }," +
             "{ \"id\": \"com.deucarian.core-state.integration\", \"displayName\": \"Core Integration\", \"category\": \"Integration\", \"description\": \"Integration package.\", \"stableUrl\": \"https://github.com/Deucarian/Core-State-Integration.git#main\", \"developmentUrl\": \"https://github.com/Deucarian/Core-State-Integration.git#develop\", \"dependencies\": [\"com.deucarian.core-state\"] }" +
             "] }";
+        private const string TemplatePackageId = "com.deucarian.template.game.idle-auto-defense";
+        private const string TemplateBranch = "codex/game-template-phase-2b-template-remote-registry";
 
         private static readonly string[] Phase1ZPackageIds =
         {
@@ -694,9 +696,56 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             CollectionAssert.AreEqual(AutoDefenseSuiteMembers, suite.dependencies);
             CollectionAssert.AreEqual(AutoDefenseSuiteMembers, suite.suiteMembers);
             CollectionAssert.DoesNotContain(suite.dependencies, "com.deucarian.test-automation");
+        }
 
-            Assert.IsFalse(result.Registry.packages.Any(package =>
-                package.id.StartsWith("com.deucarian.template.", StringComparison.Ordinal)));
+        [Test]
+        public void BundledRegistryIncludesPhase2BTemplateGroupsAndEntry()
+        {
+            string registryJson = File.ReadAllText(GetBundledRegistryPath());
+            PackageRegistryLoadResult result = new PackageRegistryLoader()
+                .LoadFromJson(registryJson, PackageRegistrySource.Bundled);
+
+            Assert.IsTrue(result.IsValid, result.ErrorMessage);
+            CollectionAssert.IsSubsetOf(
+                new[]
+                {
+                    "templates",
+                    "templates-games",
+                    "templates-games-idle-auto-defense"
+                },
+                result.Registry.groups.Select(group => group.id).ToArray());
+            Assert.AreEqual(
+                string.Empty,
+                result.Registry.groups.Single(group => group.id == "templates").parentGroupId);
+            Assert.AreEqual(
+                "templates",
+                result.Registry.groups.Single(group => group.id == "templates-games").parentGroupId);
+            Assert.AreEqual(
+                "templates-games",
+                result.Registry.groups.Single(group => group.id == "templates-games-idle-auto-defense").parentGroupId);
+
+            PackageRegistryEntry template = result.Registry.packages
+                .Single(package => package.id == TemplatePackageId);
+            Assert.AreEqual("Templates", template.category);
+            Assert.AreEqual("Template", template.type);
+            Assert.AreEqual("Templates", template.ecosystemGroup);
+            Assert.AreEqual("templates-games-idle-auto-defense", template.groupId);
+            CollectionAssert.AreEqual(
+                new[] { "com.deucarian.auto-defense-suite" },
+                template.dependencies);
+            Assert.AreEqual(template.developmentUrl, template.stableUrl);
+            StringAssert.Contains(
+                "Template-Game-Idle-Auto-Defense.git#" + TemplateBranch,
+                template.stableUrl);
+
+            PackageDefinition definition = PackageRegistryProvider
+                .CreatePackageDefinitions(result.Registry)
+                .Single(package => package.PackageId == TemplatePackageId);
+            Assert.IsTrue(definition.IsTemplate);
+            Assert.IsFalse(definition.IsSuite);
+            Assert.IsFalse(definition.IsIntegration);
+            Assert.AreEqual("Templates", definition.Category);
+            Assert.AreEqual("Template", definition.MetadataType);
         }
 
         [Test]
@@ -728,8 +777,33 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                     AutoDefenseSuiteMembers,
                     plan.Packages.Select(package => package.PackageId).ToArray());
                 Assert.AreEqual("com.deucarian.auto-defense-suite", plan.Packages.Last().PackageId);
+                Assert.IsFalse(plan.Packages.Any(package => package.PackageId == TemplatePackageId));
                 Assert.IsFalse(plan.Packages.Any(package =>
                     package.PackageId == "com.deucarian.test-automation"));
+            }
+        }
+
+        [Test]
+        public void BundledRegistryInstallAllRootsSkipTemplates()
+        {
+            string registryJson = File.ReadAllText(GetBundledRegistryPath());
+            PackageRegistryLoadResult result = new PackageRegistryLoader()
+                .LoadFromJson(registryJson, PackageRegistrySource.Bundled);
+            PackageDefinition[] packages = PackageRegistryProvider
+                .CreatePackageDefinitions(result.Registry)
+                .ToArray();
+
+            using (PackageInstallService installService = new PackageInstallService())
+            using (PackageDetectionService detectionService = new PackageDetectionService())
+            {
+                PackageDependencyInstaller installer = new PackageDependencyInstaller(
+                    installService,
+                    detectionService,
+                    () => packages);
+                PackageDefinition[] roots = installer.GetInstallAllRootPackagesForTests();
+
+                Assert.IsTrue(packages.Single(package => package.PackageId == TemplatePackageId).IsTemplate);
+                Assert.IsFalse(roots.Any(package => package.PackageId == TemplatePackageId));
             }
         }
 
@@ -747,7 +821,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 StringAssert.StartsWith("https://github.com/Deucarian/", package.stableUrl, package.id);
                 StringAssert.StartsWith("https://github.com/Deucarian/", package.developmentUrl, package.id);
 
-                if (Phase1ZPackageIds.Contains(package.id))
+                if (Phase1ZPackageIds.Contains(package.id) ||
+                    string.Equals(package.id, TemplatePackageId, StringComparison.Ordinal))
                 {
                     Assert.AreEqual(package.developmentUrl, package.stableUrl, package.id);
                     StringAssert.Contains(".git#codex/game-template-phase-", package.developmentUrl, package.id);
