@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.60 - 2026-06-23
+
+- Updated bundled fallback registry URLs for the promoted gameplay, suite, and template packages so stable installs use `#main` and development installs use `#develop`.
+
 ## 1.1.59 - 2026-06-23
 
 - Synced the bundled fallback registry with the Phase 2B Idle Auto Defense template entry and template group hierarchy.

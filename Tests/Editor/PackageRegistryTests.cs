@@ -15,7 +15,6 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             "{ \"id\": \"com.deucarian.core-state.integration\", \"displayName\": \"Core Integration\", \"category\": \"Integration\", \"description\": \"Integration package.\", \"stableUrl\": \"https://github.com/Deucarian/Core-State-Integration.git#main\", \"developmentUrl\": \"https://github.com/Deucarian/Core-State-Integration.git#develop\", \"dependencies\": [\"com.deucarian.core-state\"] }" +
             "] }";
         private const string TemplatePackageId = "com.deucarian.template.game.idle-auto-defense";
-        private const string TemplateBranch = "codex/game-template-phase-2b-template-remote-registry";
 
         private static readonly string[] Phase1ZPackageIds =
         {
@@ -733,10 +732,13 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             CollectionAssert.AreEqual(
                 new[] { "com.deucarian.auto-defense-suite" },
                 template.dependencies);
-            Assert.AreEqual(template.developmentUrl, template.stableUrl);
             StringAssert.Contains(
-                "Template-Game-Idle-Auto-Defense.git#" + TemplateBranch,
+                "Template-Game-Idle-Auto-Defense.git#main",
                 template.stableUrl);
+            StringAssert.Contains(
+                "Template-Game-Idle-Auto-Defense.git#develop",
+                template.developmentUrl);
+            Assert.AreNotEqual(template.developmentUrl, template.stableUrl);
 
             PackageDefinition definition = PackageRegistryProvider
                 .CreatePackageDefinitions(result.Registry)
@@ -820,18 +822,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             {
                 StringAssert.StartsWith("https://github.com/Deucarian/", package.stableUrl, package.id);
                 StringAssert.StartsWith("https://github.com/Deucarian/", package.developmentUrl, package.id);
-
-                if (Phase1ZPackageIds.Contains(package.id) ||
-                    string.Equals(package.id, TemplatePackageId, StringComparison.Ordinal))
-                {
-                    Assert.AreEqual(package.developmentUrl, package.stableUrl, package.id);
-                    StringAssert.Contains(".git#codex/game-template-phase-", package.developmentUrl, package.id);
-                }
-                else
-                {
-                    StringAssert.EndsWith(".git#main", package.stableUrl, package.id);
-                    StringAssert.EndsWith(".git#develop", package.developmentUrl, package.id);
-                }
+                StringAssert.EndsWith(".git#main", package.stableUrl, package.id);
+                StringAssert.EndsWith(".git#develop", package.developmentUrl, package.id);
             }
         }
 

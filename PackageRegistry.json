@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-06-22",
+  "updatedAt": "2026-06-23",
   "groups": [
     {
       "id": "infrastructure",
@@ -499,8 +499,8 @@
       "groupId": "gameplay-foundations",
       "overviewOrder": 10,
       "description": "Pure C# gameplay identifiers, deterministic random, clocks, ticks, tags, stats, modifiers, and generic timing primitives.",
-      "stableUrl": "https://github.com/Deucarian/Gameplay-Foundation.git#codex/game-template-phase-1-gameplay-foundation",
-      "developmentUrl": "https://github.com/Deucarian/Gameplay-Foundation.git#codex/game-template-phase-1-gameplay-foundation",
+      "stableUrl": "https://github.com/Deucarian/Gameplay-Foundation.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Gameplay-Foundation.git#develop",
       "dependencies": []
     },
     {
@@ -512,8 +512,8 @@
       "groupId": "gameplay-systems",
       "overviewOrder": 10,
       "description": "Versioned local document persistence with migrations, validation, atomic file writes, backups, and recovery.",
-      "stableUrl": "https://github.com/Deucarian/Persistence.git#codex/game-template-phase-1-persistence",
-      "developmentUrl": "https://github.com/Deucarian/Persistence.git#codex/game-template-phase-1-persistence",
+      "stableUrl": "https://github.com/Deucarian/Persistence.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Persistence.git#develop",
       "dependencies": []
     },
     {
@@ -525,8 +525,8 @@
       "groupId": "gameplay-systems",
       "overviewOrder": 20,
       "description": "Pure C# progression foundations for currencies, tracks, rewards, unlocks, research graphs, milestones, snapshots, and deterministic result deltas.",
-      "stableUrl": "https://github.com/Deucarian/Progression.git#codex/game-template-phase-1-progression",
-      "developmentUrl": "https://github.com/Deucarian/Progression.git#codex/game-template-phase-1-progression",
+      "stableUrl": "https://github.com/Deucarian/Progression.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Progression.git#develop",
       "dependencies": [
         "com.deucarian.gameplay-foundation"
       ]
@@ -540,8 +540,8 @@
       "groupId": "gameplay-systems",
       "overviewOrder": 30,
       "description": "Pure C# roguelite run upgrade definitions, deterministic drafts, choices, locks, rerolls, banish, prerequisites, exclusions, and snapshots.",
-      "stableUrl": "https://github.com/Deucarian/Run-Upgrades.git#codex/game-template-phase-1r-run-upgrades",
-      "developmentUrl": "https://github.com/Deucarian/Run-Upgrades.git#codex/game-template-phase-1r-run-upgrades",
+      "stableUrl": "https://github.com/Deucarian/Run-Upgrades.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Run-Upgrades.git#develop",
       "dependencies": [
         "com.deucarian.gameplay-foundation"
       ]
@@ -555,8 +555,8 @@
       "groupId": "gameplay-systems",
       "overviewOrder": 40,
       "description": "Pure C# idle/offline progression elapsed-time, capped catch-up, cycle rewards, and Progression reward-bundle calculation.",
-      "stableUrl": "https://github.com/Deucarian/Idle-Progression.git#codex/game-template-phase-1s-idle-progression",
-      "developmentUrl": "https://github.com/Deucarian/Idle-Progression.git#codex/game-template-phase-1s-idle-progression",
+      "stableUrl": "https://github.com/Deucarian/Idle-Progression.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Idle-Progression.git#develop",
       "dependencies": [
         "com.deucarian.gameplay-foundation",
         "com.deucarian.progression"
@@ -571,8 +571,8 @@
       "groupId": "gameplay-simulation",
       "overviewOrder": 10,
       "description": "Pure C# combat rules for health, shields, damage, mitigation, critical hits, statuses, targeting, snapshots, and deterministic results.",
-      "stableUrl": "https://github.com/Deucarian/Combat.git#codex/game-template-phase-1i-combat-resolver-closeout",
-      "developmentUrl": "https://github.com/Deucarian/Combat.git#codex/game-template-phase-1i-combat-resolver-closeout",
+      "stableUrl": "https://github.com/Deucarian/Combat.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Combat.git#develop",
       "dependencies": [
         "com.deucarian.gameplay-foundation"
       ]
@@ -586,8 +586,8 @@
       "groupId": "gameplay-simulation",
       "overviewOrder": 20,
       "description": "Pure C# encounter foundations for stages, waves, spawn request scheduling, weighted selection, objective state, reward references, scaling descriptors, and snapshots.",
-      "stableUrl": "https://github.com/Deucarian/Encounters.git#codex/game-template-phase-1-encounters",
-      "developmentUrl": "https://github.com/Deucarian/Encounters.git#codex/game-template-phase-1-encounters",
+      "stableUrl": "https://github.com/Deucarian/Encounters.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Encounters.git#develop",
       "dependencies": [
         "com.deucarian.gameplay-foundation"
       ]
@@ -601,8 +601,8 @@
       "groupId": "gameplay-simulation",
       "overviewOrder": 30,
       "description": "Generic Unity GameObject spawning for world spawn requests, prefab providers, pose resolvers, pooling, lifecycle, and diagnostics snapshots.",
-      "stableUrl": "https://github.com/Deucarian/World-Spawning.git#codex/game-template-phase-1v-package-manifest-alignment",
-      "developmentUrl": "https://github.com/Deucarian/World-Spawning.git#codex/game-template-phase-1v-package-manifest-alignment",
+      "stableUrl": "https://github.com/Deucarian/World-Spawning.git#main",
+      "developmentUrl": "https://github.com/Deucarian/World-Spawning.git#develop",
       "dependencies": [
         "com.deucarian.gameplay-foundation"
       ]
@@ -616,8 +616,8 @@
       "groupId": "gameplay-simulation",
       "overviewOrder": 40,
       "description": "Unity-side centralized navigation for registered movement agents, destination movement, supplied waypoint paths, speed adapters, pose adapters, and diagnostics snapshots.",
-      "stableUrl": "https://github.com/Deucarian/World-Navigation.git#codex/game-template-phase-1m-world-navigation-spawn-compatibility",
-      "developmentUrl": "https://github.com/Deucarian/World-Navigation.git#codex/game-template-phase-1m-world-navigation-spawn-compatibility",
+      "stableUrl": "https://github.com/Deucarian/World-Navigation.git#main",
+      "developmentUrl": "https://github.com/Deucarian/World-Navigation.git#develop",
       "dependencies": [
         "com.deucarian.gameplay-foundation",
         "com.deucarian.world-spawning"
@@ -632,8 +632,8 @@
       "groupId": "gameplay-simulation",
       "overviewOrder": 50,
       "description": "Pure C# attack orchestration for cooldowns, caller-supplied target selection, attack intents, and Combat damage request creation.",
-      "stableUrl": "https://github.com/Deucarian/Attacks.git#codex/game-template-phase-1-attacks",
-      "developmentUrl": "https://github.com/Deucarian/Attacks.git#codex/game-template-phase-1-attacks",
+      "stableUrl": "https://github.com/Deucarian/Attacks.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Attacks.git#develop",
       "dependencies": [
         "com.deucarian.gameplay-foundation",
         "com.deucarian.combat"
@@ -648,8 +648,8 @@
       "groupId": "gameplay-simulation",
       "overviewOrder": 60,
       "description": "Generic projectile launch, movement, lifetime, impact, and cleanup foundations for Deucarian games.",
-      "stableUrl": "https://github.com/Deucarian/Projectiles.git#codex/game-template-phase-1l-generic-world-spawn-request",
-      "developmentUrl": "https://github.com/Deucarian/Projectiles.git#codex/game-template-phase-1l-generic-world-spawn-request",
+      "stableUrl": "https://github.com/Deucarian/Projectiles.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Projectiles.git#develop",
       "dependencies": [
         "com.deucarian.gameplay-foundation",
         "com.deucarian.combat",
@@ -667,8 +667,8 @@
       "groupId": "gameplay-simulation",
       "overviewOrder": 70,
       "description": "Reusable weapon orchestration for active weapon slots, fire cadence, direct/projectile modes, and deterministic weapon intents.",
-      "stableUrl": "https://github.com/Deucarian/Weapon-Systems.git#codex/game-template-phase-1-weapon-systems",
-      "developmentUrl": "https://github.com/Deucarian/Weapon-Systems.git#codex/game-template-phase-1-weapon-systems",
+      "stableUrl": "https://github.com/Deucarian/Weapon-Systems.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Weapon-Systems.git#develop",
       "dependencies": [
         "com.deucarian.gameplay-foundation",
         "com.deucarian.attacks",
@@ -684,8 +684,8 @@
       "groupId": "gameplay-frameworks",
       "overviewOrder": 10,
       "description": "Shared defense-game orchestration for encounter spawn requests, world spawning, world navigation, combat-backed objectives, agents, signals, metrics, and snapshots.",
-      "stableUrl": "https://github.com/Deucarian/Defense-Games.git#codex/game-template-phase-1v-package-manifest-alignment",
-      "developmentUrl": "https://github.com/Deucarian/Defense-Games.git#codex/game-template-phase-1v-package-manifest-alignment",
+      "stableUrl": "https://github.com/Deucarian/Defense-Games.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Defense-Games.git#develop",
       "dependencies": [
         "com.deucarian.gameplay-foundation",
         "com.deucarian.encounters",
@@ -703,8 +703,8 @@
       "groupId": "gameplay-frameworks",
       "overviewOrder": 20,
       "description": "Idle Auto Defense and Auto Tower Defense orchestration for central objectives, perimeter spawning, mounted weapons, targeting, and lower-package composition.",
-      "stableUrl": "https://github.com/Deucarian/Auto-Defense.git#codex/game-template-phase-1t-auto-defense-save-progression-composition",
-      "developmentUrl": "https://github.com/Deucarian/Auto-Defense.git#codex/game-template-phase-1t-auto-defense-save-progression-composition",
+      "stableUrl": "https://github.com/Deucarian/Auto-Defense.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Auto-Defense.git#develop",
       "dependencies": [
         "com.deucarian.gameplay-foundation",
         "com.deucarian.encounters",
@@ -726,8 +726,8 @@
       "groupId": "tools-quality",
       "overviewOrder": 40,
       "description": "Editor-only Unity batch test runner helpers for durable EditMode and PlayMode validation results.",
-      "stableUrl": "https://github.com/Deucarian/Test-Automation.git#codex/game-template-phase-1p-test-automation",
-      "developmentUrl": "https://github.com/Deucarian/Test-Automation.git#codex/game-template-phase-1p-test-automation",
+      "stableUrl": "https://github.com/Deucarian/Test-Automation.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Test-Automation.git#develop",
       "dependencies": []
     },
     {
@@ -739,8 +739,8 @@
       "groupId": "suites",
       "overviewOrder": 20,
       "description": "Lean dependency bundle that installs the Deucarian Auto Defense gameplay stack without starter-game content.",
-      "stableUrl": "https://github.com/Deucarian/Auto-Defense-Suite.git#codex/game-template-phase-1x-auto-defense-suite",
-      "developmentUrl": "https://github.com/Deucarian/Auto-Defense-Suite.git#codex/game-template-phase-1x-auto-defense-suite",
+      "stableUrl": "https://github.com/Deucarian/Auto-Defense-Suite.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Auto-Defense-Suite.git#develop",
       "dependencies": [
         "com.deucarian.gameplay-foundation",
         "com.deucarian.persistence",
@@ -783,8 +783,8 @@
       "groupId": "templates-games-idle-auto-defense",
       "overviewOrder": 10,
       "description": "Starter Unity game template for an idle auto-defense loop built on the Deucarian Auto Defense Suite.",
-      "stableUrl": "https://github.com/Deucarian/Template-Game-Idle-Auto-Defense.git#codex/game-template-phase-2b-template-remote-registry",
-      "developmentUrl": "https://github.com/Deucarian/Template-Game-Idle-Auto-Defense.git#codex/game-template-phase-2b-template-remote-registry",
+      "stableUrl": "https://github.com/Deucarian/Template-Game-Idle-Auto-Defense.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Template-Game-Idle-Auto-Defense.git#develop",
       "dependencies": [
         "com.deucarian.auto-defense-suite"
       ],
