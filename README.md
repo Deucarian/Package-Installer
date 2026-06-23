@@ -89,7 +89,8 @@ The current bundled fallback registry includes these Ecosystem Graph groups:
 - Experience & Interaction: UI Binding, UI Flow, Theming, Object Selection
 - Tools & Quality: Package Installer, Diagnostics
 - Integrations: UI Binding + Core State Integration, Object Loading API Integration, Object Selection + Core State Integration, Session + API Integration
-- Suites: Selection Suite
+- Gameplay: Gameplay Foundation, Persistence, Progression, Combat, Encounters, World Spawning, World Navigation, Defense Games, Attacks, Projectiles, Weapon Systems, Auto Defense, Run Upgrades, Idle Progression
+- Suites: Selection Suite, Auto Defense Suite
 
 Registered packages are first-class UPM packages with their own package IDs:
 
@@ -110,6 +111,22 @@ Registered packages are first-class UPM packages with their own package IDs:
 - `com.deucarian.selection-suite`
 - `com.deucarian.diagnostics`
 - `com.deucarian.package-installer`
+- `com.deucarian.gameplay-foundation`
+- `com.deucarian.persistence`
+- `com.deucarian.progression`
+- `com.deucarian.combat`
+- `com.deucarian.encounters`
+- `com.deucarian.world-spawning`
+- `com.deucarian.world-navigation`
+- `com.deucarian.defense-games`
+- `com.deucarian.attacks`
+- `com.deucarian.projectiles`
+- `com.deucarian.weapon-systems`
+- `com.deucarian.auto-defense`
+- `com.deucarian.run-upgrades`
+- `com.deucarian.idle-progression`
+- `com.deucarian.test-automation`
+- `com.deucarian.auto-defense-suite`
 
 `Install All` installs all missing registered packages in dependency order. Single install, reinstall, single update, and update-all operations install missing registered Deucarian dependencies first, then install the requested package.
 
@@ -136,13 +153,15 @@ The registry schema uses `schemaVersion` 1 and contains:
 - `developmentUrl`: optional development-channel Git URL or UPM identifier. If this is empty, the Development channel is disabled for that package.
 - `dependencies`: package IDs that should be installed before this package is installed, reinstalled, or updated. Integration packages are regular packages with the `Integration` package role and hard dependencies.
 - `optionalCompanions`: package IDs shown as optional integrations that should not be installed as required dependencies.
-- `groupId`: optional structural Ecosystem Graph group ID. Supported top-level IDs are `infrastructure`, `state-data`, `runtime-services`, `experience-interaction`, `tools-quality`, `integrations`, and `suites`. If omitted, the graph falls back to `ecosystemGroup`, category, package type, and known package IDs.
+- `groupId`: optional structural Ecosystem Graph group ID. Supported top-level IDs are `infrastructure`, `state-data`, `runtime-services`, `experience-interaction`, `tools-quality`, `integrations`, `gameplay`, and `suites`. Registry-provided child groups such as `gameplay-foundations`, `gameplay-systems`, `gameplay-simulation`, and `gameplay-frameworks` are supported through `parentGroupId`. If omitted, the graph falls back to `ecosystemGroup`, category, package type, and known package IDs.
 - `ecosystemGroup`: legacy optional overview-wheel sector override retained for older registries. Old values are normalized to the current group IDs without creating duplicate visible groups.
 - `overviewOrder`: optional positive integer used to order packages within their structural group orbit.
 - `integrationTargets`: optional package IDs used to place Integration nodes near the systems they connect.
 - `suiteMembers`: optional package IDs used to place Suite nodes near the packages they compose.
 
 Set `stableUrl` and, when available, `developmentUrl` to the UPM identifier or Git URL. Integration packages should also list their dependency package IDs in `dependencies`.
+
+For pre-stable bootstrap packages whose GitHub repository does not yet have `main`, the bundled registry may intentionally set `stableUrl` equal to the verified `developmentUrl`. The Phase 1Z gameplay packages use this policy so both installer channels resolve honestly until those repositories are promoted to `main`.
 
 When an installed Git package can be matched to `#main` or `#develop`, including common forms such as `#refs/heads/main`, the installer infers the visible channel from the installed package reference. If the installed reference does not match a known channel, the row shows a Custom channel until the user selects Stable or Development.
 

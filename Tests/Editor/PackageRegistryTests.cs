@@ -15,6 +15,44 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             "{ \"id\": \"com.deucarian.core-state.integration\", \"displayName\": \"Core Integration\", \"category\": \"Integration\", \"description\": \"Integration package.\", \"stableUrl\": \"https://github.com/Deucarian/Core-State-Integration.git#main\", \"developmentUrl\": \"https://github.com/Deucarian/Core-State-Integration.git#develop\", \"dependencies\": [\"com.deucarian.core-state\"] }" +
             "] }";
 
+        private static readonly string[] Phase1ZPackageIds =
+        {
+            "com.deucarian.gameplay-foundation",
+            "com.deucarian.persistence",
+            "com.deucarian.progression",
+            "com.deucarian.combat",
+            "com.deucarian.encounters",
+            "com.deucarian.world-spawning",
+            "com.deucarian.world-navigation",
+            "com.deucarian.defense-games",
+            "com.deucarian.attacks",
+            "com.deucarian.projectiles",
+            "com.deucarian.weapon-systems",
+            "com.deucarian.auto-defense",
+            "com.deucarian.run-upgrades",
+            "com.deucarian.idle-progression",
+            "com.deucarian.test-automation",
+            "com.deucarian.auto-defense-suite"
+        };
+
+        private static readonly string[] AutoDefenseSuiteMembers =
+        {
+            "com.deucarian.gameplay-foundation",
+            "com.deucarian.persistence",
+            "com.deucarian.progression",
+            "com.deucarian.combat",
+            "com.deucarian.encounters",
+            "com.deucarian.world-spawning",
+            "com.deucarian.world-navigation",
+            "com.deucarian.defense-games",
+            "com.deucarian.attacks",
+            "com.deucarian.projectiles",
+            "com.deucarian.weapon-systems",
+            "com.deucarian.auto-defense",
+            "com.deucarian.run-upgrades",
+            "com.deucarian.idle-progression"
+        };
+
         [Test]
         public void ValidRegistryParses()
         {
@@ -592,6 +630,110 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void BundledRegistryIncludesPhase1ZGameplayGroupsAndPackages()
+        {
+            string registryJson = File.ReadAllText(GetBundledRegistryPath());
+            PackageRegistryLoadResult result = new PackageRegistryLoader()
+                .LoadFromJson(registryJson, PackageRegistrySource.Bundled);
+
+            Assert.IsTrue(result.IsValid, result.ErrorMessage);
+            CollectionAssert.IsSubsetOf(
+                new[]
+                {
+                    "gameplay",
+                    "gameplay-foundations",
+                    "gameplay-systems",
+                    "gameplay-simulation",
+                    "gameplay-frameworks",
+                    "tools-quality",
+                    "suites"
+                },
+                result.Registry.groups.Select(group => group.id).ToArray());
+            Assert.AreEqual(
+                string.Empty,
+                result.Registry.groups.Single(group => group.id == "gameplay").parentGroupId);
+            Assert.IsTrue(result.Registry.groups
+                .Where(group => group.id.StartsWith("gameplay-", StringComparison.Ordinal))
+                .All(group => group.parentGroupId == "gameplay"));
+
+            foreach (string packageId in Phase1ZPackageIds)
+            {
+                Assert.IsTrue(result.Registry.packages.Any(package => package.id == packageId), packageId);
+            }
+
+            PackageRegistryEntry persistence = result.Registry.packages
+                .Single(package => package.id == "com.deucarian.persistence");
+            Assert.AreEqual("gameplay-systems", persistence.groupId);
+            CollectionAssert.IsEmpty(persistence.dependencies);
+
+            PackageRegistryEntry defenseGames = result.Registry.packages
+                .Single(package => package.id == "com.deucarian.defense-games");
+            Assert.AreEqual("gameplay-frameworks", defenseGames.groupId);
+            CollectionAssert.AreEqual(
+                new[]
+                {
+                    "com.deucarian.gameplay-foundation",
+                    "com.deucarian.encounters",
+                    "com.deucarian.combat",
+                    "com.deucarian.world-spawning",
+                    "com.deucarian.world-navigation"
+                },
+                defenseGames.dependencies);
+
+            PackageRegistryEntry testAutomation = result.Registry.packages
+                .Single(package => package.id == "com.deucarian.test-automation");
+            Assert.AreEqual("Tools", testAutomation.category);
+            Assert.AreEqual("tools-quality", testAutomation.groupId);
+            CollectionAssert.IsEmpty(testAutomation.dependencies);
+
+            PackageRegistryEntry suite = result.Registry.packages
+                .Single(package => package.id == "com.deucarian.auto-defense-suite");
+            Assert.AreEqual("Suites", suite.category);
+            Assert.AreEqual("Suite", suite.type);
+            Assert.AreEqual("suites", suite.groupId);
+            CollectionAssert.AreEqual(AutoDefenseSuiteMembers, suite.dependencies);
+            CollectionAssert.AreEqual(AutoDefenseSuiteMembers, suite.suiteMembers);
+            CollectionAssert.DoesNotContain(suite.dependencies, "com.deucarian.test-automation");
+
+            Assert.IsFalse(result.Registry.packages.Any(package =>
+                package.id.StartsWith("com.deucarian.template.", StringComparison.Ordinal)));
+        }
+
+        [Test]
+        public void BundledRegistryCreatesValidAutoDefenseSuiteInstallPlan()
+        {
+            string registryJson = File.ReadAllText(GetBundledRegistryPath());
+            PackageRegistryLoadResult result = new PackageRegistryLoader()
+                .LoadFromJson(registryJson, PackageRegistrySource.Bundled);
+            PackageDefinition[] packages = PackageRegistryProvider
+                .CreatePackageDefinitions(result.Registry)
+                .ToArray();
+            PackageDefinition suite = packages
+                .Single(package => package.PackageId == "com.deucarian.auto-defense-suite");
+
+            using (PackageInstallService installService = new PackageInstallService())
+            using (PackageDetectionService detectionService = new PackageDetectionService())
+            {
+                PackageDependencyInstaller installer = new PackageDependencyInstaller(
+                    installService,
+                    detectionService,
+                    () => packages);
+                PackageDependencyInstallPlan plan = installer.CreateInstallPlan(
+                    new[] { suite },
+                    _ => PackageChannel.Stable,
+                    includeInstalledRequestedPackages: false);
+
+                Assert.IsTrue(plan.IsValid, plan.ErrorMessage);
+                CollectionAssert.IsSubsetOf(
+                    AutoDefenseSuiteMembers,
+                    plan.Packages.Select(package => package.PackageId).ToArray());
+                Assert.AreEqual("com.deucarian.auto-defense-suite", plan.Packages.Last().PackageId);
+                Assert.IsFalse(plan.Packages.Any(package =>
+                    package.PackageId == "com.deucarian.test-automation"));
+            }
+        }
+
+        [Test]
         public void BundledRegistryProvidesStableAndDevelopmentChannels()
         {
             string registryJson = File.ReadAllText(GetBundledRegistryPath());
@@ -603,9 +745,18 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             foreach (PackageRegistryEntry package in result.Registry.packages)
             {
                 StringAssert.StartsWith("https://github.com/Deucarian/", package.stableUrl, package.id);
-                StringAssert.EndsWith(".git#main", package.stableUrl, package.id);
                 StringAssert.StartsWith("https://github.com/Deucarian/", package.developmentUrl, package.id);
-                StringAssert.EndsWith(".git#develop", package.developmentUrl, package.id);
+
+                if (Phase1ZPackageIds.Contains(package.id))
+                {
+                    Assert.AreEqual(package.developmentUrl, package.stableUrl, package.id);
+                    StringAssert.Contains(".git#codex/game-template-phase-", package.developmentUrl, package.id);
+                }
+                else
+                {
+                    StringAssert.EndsWith(".git#main", package.stableUrl, package.id);
+                    StringAssert.EndsWith(".git#develop", package.developmentUrl, package.id);
+                }
             }
         }
 
