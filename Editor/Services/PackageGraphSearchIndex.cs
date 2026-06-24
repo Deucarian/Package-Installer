@@ -412,9 +412,7 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            foreach (PackageGraphGroup childGroup in graph.Groups.Where(group =>
-                         group != null &&
-                         string.Equals(group.ParentGroupId, groupId, StringComparison.OrdinalIgnoreCase)))
+            foreach (PackageGraphGroup childGroup in graph.GetChildGroups(groupId))
             {
                 AddDescendantGroups(graph, childGroup.Id, groupIds);
             }
@@ -424,9 +422,7 @@ namespace Deucarian.PackageInstaller.Editor
             PackageGraphModel graph,
             string groupId)
         {
-            HashSet<string> groupIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            AddDescendantGroups(graph, groupId, groupIds);
-            return graph.Nodes.Where(node => node != null && groupIds.Contains(node.GroupId));
+            return graph.GetDescendantPackages(groupId);
         }
 
         public static PackageGraphModel CreateFilteredGraph(

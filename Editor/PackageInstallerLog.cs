@@ -13,6 +13,7 @@ namespace Deucarian.PackageInstaller.Editor
         public static readonly PackageInstallerLogCategory Install = new PackageInstallerLogCategory("PackageInstaller.Install");
         public static readonly PackageInstallerLogCategory Samples = new PackageInstallerLogCategory("PackageInstaller.Samples");
         public static readonly PackageInstallerLogCategory UpdateChecks = new PackageInstallerLogCategory("PackageInstaller.UpdateChecks");
+        public static readonly PackageInstallerLogCategory Graph = new PackageInstallerLogCategory("PackageInstaller.Graph");
     }
 
     internal sealed class PackageInstallerLogCategory
@@ -32,6 +33,11 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 _log.Info(message, context);
             }
+        }
+
+        public void DiagnosticInfo(string message, Object context = null)
+        {
+            _log.Info(message, context);
         }
 
         public void Warning(string message, Object context = null)

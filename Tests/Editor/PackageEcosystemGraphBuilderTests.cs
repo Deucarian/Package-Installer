@@ -3548,6 +3548,76 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.IsTrue(focused.IsEdgeEmphasized(dependencyEdge));
         }
 
+        [Test]
+        public void LargeGraph_CentralPackageFocusUsesPrecomputedDirectRelationships()
+        {
+            const int providerCount = 120;
+            const int dependentCount = 240;
+            const int integrationCount = 80;
+            const int optionalCompanionCount = 80;
+
+            List<PackageDefinition> packages = new List<PackageDefinition>();
+            string centralPackageId = "com.example.logging";
+            string[] providerIds = Enumerable.Range(0, providerCount)
+                .Select(index => "com.example.provider-" + index)
+                .ToArray();
+            string[] optionalCompanionIds = Enumerable.Range(0, optionalCompanionCount)
+                .Select(index => "com.example.optional-" + index)
+                .ToArray();
+
+            packages.Add(CreatePackage(
+                "Logging",
+                centralPackageId,
+                "Core",
+                dependencies: providerIds,
+                optionalCompanions: optionalCompanionIds));
+
+            foreach (string providerId in providerIds)
+            {
+                packages.Add(CreatePackage("Provider " + providerId, providerId, "Core"));
+            }
+
+            foreach (int index in Enumerable.Range(0, dependentCount))
+            {
+                packages.Add(CreatePackage(
+                    "Dependent " + index,
+                    "com.example.dependent-" + index,
+                    "Core",
+                    dependencies: new[] { centralPackageId }));
+            }
+
+            foreach (int index in Enumerable.Range(0, integrationCount))
+            {
+                packages.Add(CreatePackage(
+                    "Integration " + index,
+                    "com.example.integration-" + index,
+                    "Integration",
+                    "Integration",
+                    integrationTargets: new[] { centralPackageId }));
+            }
+
+            foreach (string optionalCompanionId in optionalCompanionIds)
+            {
+                packages.Add(CreatePackage("Optional " + optionalCompanionId, optionalCompanionId, "UI"));
+            }
+
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false).Build(packages);
+            PackageGraphFocus focus = PackageGraphFocus.Create(graph, centralPackageId);
+            PackageGraphLayoutResult layout = new PackageGraphLayout().Calculate(
+                graph,
+                PackageGraphLayoutMode.Focus,
+                centralPackageId);
+
+            Assert.AreEqual(providerCount, graph.GetHardDependencyProviderEdges(centralPackageId).Count);
+            Assert.AreEqual(dependentCount, graph.GetHardDependencyDependentEdges(centralPackageId).Count);
+            Assert.AreEqual(integrationCount, graph.GetIntegrationEdges(centralPackageId).Count);
+            Assert.AreEqual(optionalCompanionCount, graph.GetOptionalCompanionEdges(centralPackageId).Count);
+            Assert.AreEqual(
+                1 + providerCount + dependentCount + integrationCount + optionalCompanionCount,
+                focus.RelatedPackageIds.Count);
+            Assert.AreEqual(focus.RelatedPackageIds.Count, layout.NodeRects.Count);
+        }
+
         private static PackageDefinition CreatePackage(
             string displayName,
             string packageId,

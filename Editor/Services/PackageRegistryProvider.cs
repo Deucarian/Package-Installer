@@ -14,6 +14,8 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static PackageRegistryLoadResult _currentLoadResult;
         private static IReadOnlyList<PackageDefinition> _allPackages = EmptyPackages;
+        private static IReadOnlyDictionary<string, PackageDefinition> _packageById =
+            new Dictionary<string, PackageDefinition>(StringComparer.OrdinalIgnoreCase);
         private static IReadOnlyList<PackageGraphGroup> _ecosystemGroups =
             PackageGraphHierarchyBuilder.CreateGroups((IEnumerable<PackageGraphGroup>)null);
         private static Task<PackageRegistryLoadResult> _remoteRefreshTask;
@@ -117,10 +119,10 @@ namespace Deucarian.PackageInstaller.Editor
         {
             EnsureLoaded();
 
-            packageDefinition = _allPackages.FirstOrDefault(definition =>
-                string.Equals(definition.PackageId, packageId, StringComparison.OrdinalIgnoreCase));
+            packageDefinition = null;
 
-            return packageDefinition != null;
+            return !string.IsNullOrWhiteSpace(packageId) &&
+                   _packageById.TryGetValue(packageId.Trim(), out packageDefinition);
         }
 
         public static IEnumerable<PackageDefinition> GetInstallableDependencies(PackageDefinition packageDefinition)
@@ -290,11 +292,14 @@ namespace Deucarian.PackageInstaller.Editor
             if (result.IsValid && result.Registry != null)
             {
                 _allPackages = CreatePackageDefinitions(result.Registry);
+                // Registry reloads are the invalidation point for package ID lookup and graph structure caches.
+                _packageById = CreatePackageById(_allPackages);
                 _ecosystemGroups = PackageGraphHierarchyBuilder.CreateGroups(result.Registry.groups);
             }
             else if (_allPackages == null)
             {
                 _allPackages = EmptyPackages;
+                _packageById = CreatePackageById(_allPackages);
                 _ecosystemGroups = PackageGraphHierarchyBuilder.CreateGroups((IEnumerable<PackageGraphGroup>)null);
             }
 
@@ -308,6 +313,23 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             RegistryChanged?.Invoke();
+        }
+
+        private static IReadOnlyDictionary<string, PackageDefinition> CreatePackageById(
+            IEnumerable<PackageDefinition> packages)
+        {
+            Dictionary<string, PackageDefinition> packageById =
+                new Dictionary<string, PackageDefinition>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (PackageDefinition packageDefinition in packages ?? EmptyPackages)
+            {
+                if (packageDefinition != null && !string.IsNullOrWhiteSpace(packageDefinition.PackageId))
+                {
+                    packageById[packageDefinition.PackageId.Trim()] = packageDefinition;
+                }
+            }
+
+            return packageById;
         }
 
         private static int GetCategorySortIndex(string category)

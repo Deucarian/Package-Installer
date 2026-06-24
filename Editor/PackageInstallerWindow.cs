@@ -59,6 +59,8 @@ namespace Deucarian.PackageInstaller.Editor
         private const string OperationDrawerPreferencePrefix = "Deucarian.PackageInstaller.OperationDrawer.";
         private const string GraphStyleSheetPath =
             "Packages/com.deucarian.package-installer/Editor/UI/PackageInstaller/PackageInstallerGraph.uss";
+        private const string GraphOpenTimingMenuPath =
+            "Tools/Deucarian/Package Installer/Diagnostics/Log Graph Open Timing";
         private const string InstalledStatusMarker = "\u2713";
         private const string NotInstalledStatusMarker = "\u25CB";
         private const string AttentionStatusMarker = "!";
@@ -151,7 +153,10 @@ namespace Deucarian.PackageInstaller.Editor
         private string _selectedPackageId = string.Empty;
         private string _graphFocusedPackageId = string.Empty;
         private string _graphFocusedGroupId = string.Empty;
+        private PackageGraphModel _cachedPackageGraph;
         private PackageGraphModel _lastPackageGraph;
+        private bool _graphModelCacheDirty = true;
+        private string _graphModelCacheInvalidationReason = "initial load";
         private readonly PackageVisibilityFilterState _visibilityFilterState =
             new PackageVisibilityFilterState();
         private bool _checkUpdatesAfterDetectionRefresh;
@@ -231,6 +236,22 @@ namespace Deucarian.PackageInstaller.Editor
             window.titleContent = new GUIContent(WindowTitle);
             window.minSize = new Vector2(MinWindowWidth, MinWindowHeight);
             window.Show();
+        }
+
+        [MenuItem(GraphOpenTimingMenuPath)]
+        private static void ToggleGraphOpenTimingDiagnostics()
+        {
+            PackageInstallerLoggingPreferences.GraphOpenDiagnosticsLogging =
+                !PackageInstallerLoggingPreferences.GraphOpenDiagnosticsLogging;
+        }
+
+        [MenuItem(GraphOpenTimingMenuPath, true)]
+        private static bool ValidateGraphOpenTimingDiagnostics()
+        {
+            Menu.SetChecked(
+                GraphOpenTimingMenuPath,
+                PackageInstallerLoggingPreferences.GraphOpenDiagnosticsLogging);
+            return true;
         }
 
         internal static bool DefaultsToEcosystemGraphForTests => DefaultInstallerViewMode == InstallerViewMode.EcosystemGraph;
@@ -358,11 +379,11 @@ namespace Deucarian.PackageInstaller.Editor
             _packageInstallService.StateChanged += UpdateOperationFooter;
             _packageInstallService.QueueCompleted += HandlePackageOperationCompleted;
             _packageDetectionService.StateChanged += Repaint;
-            _packageDetectionService.StateChanged += RefreshGraphView;
+            _packageDetectionService.StateChanged += HandlePackageDetectionGraphStateChanged;
             _packageDetectionService.StateChanged += UpdateOperationFooter;
             _packageDetectionService.RefreshCompleted += HandlePackageDetectionRefreshCompleted;
             _packageUpdateCheckService.StateChanged += Repaint;
-            _packageUpdateCheckService.StateChanged += RefreshGraphView;
+            _packageUpdateCheckService.StateChanged += HandlePackageUpdateGraphStateChanged;
             _packageUpdateCheckService.StateChanged += UpdateOperationFooter;
             _packageSampleImportService.StateChanged += Repaint;
             _packageSampleImportService.StateChanged += RefreshGraphView;
@@ -396,7 +417,7 @@ namespace Deucarian.PackageInstaller.Editor
             if (_packageDetectionService != null)
             {
                 _packageDetectionService.StateChanged -= Repaint;
-                _packageDetectionService.StateChanged -= RefreshGraphView;
+                _packageDetectionService.StateChanged -= HandlePackageDetectionGraphStateChanged;
                 _packageDetectionService.StateChanged -= UpdateOperationFooter;
                 _packageDetectionService.RefreshCompleted -= HandlePackageDetectionRefreshCompleted;
                 _packageDetectionService.Dispose();
@@ -405,7 +426,7 @@ namespace Deucarian.PackageInstaller.Editor
             if (_packageUpdateCheckService != null)
             {
                 _packageUpdateCheckService.StateChanged -= Repaint;
-                _packageUpdateCheckService.StateChanged -= RefreshGraphView;
+                _packageUpdateCheckService.StateChanged -= HandlePackageUpdateGraphStateChanged;
                 _packageUpdateCheckService.StateChanged -= UpdateOperationFooter;
                 _packageUpdateCheckService.Dispose();
             }
@@ -491,7 +512,7 @@ namespace Deucarian.PackageInstaller.Editor
             SetViewMode(_viewMode);
             ApplyResponsiveLayout(position.width);
             UpdateOperationFooter();
-            RefreshGraphView();
+            RefreshGraphView("window initialized");
         }
 
         private void ApplyResponsiveLayout(float contentWidth)
@@ -654,7 +675,6 @@ namespace Deucarian.PackageInstaller.Editor
             Button button = new Button(() =>
             {
                 action?.Invoke();
-                RefreshGraphView();
             })
             {
                 text = text
@@ -1076,7 +1096,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (_viewMode == InstallerViewMode.EcosystemGraph)
             {
-                RefreshGraphView();
+                RefreshGraphView("view mode changed");
             }
 
             Repaint();
@@ -1158,56 +1178,125 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void RefreshGraphView()
         {
+            RefreshGraphView("refresh");
+        }
+
+        private void RefreshGraphView(string reason)
+        {
             if (_graphView == null)
             {
                 return;
             }
 
-            PackageGraphModel graph = (_packageGraphBuilder ?? new PackageGraphBuilder(
+            bool graphCacheDirty = _graphModelCacheDirty || _cachedPackageGraph == null;
+            string diagnosticReason = graphCacheDirty
+                ? (string.IsNullOrWhiteSpace(reason) ? "refresh" : reason) +
+                  " / " + _graphModelCacheInvalidationReason
+                : reason;
+
+            using (PackageGraphOpenProfiler.Begin(
+                       diagnosticReason,
+                       _graphFocusedPackageId,
+                       _graphFocusedGroupId,
+                       graphCacheDirty))
+            {
+                PackageGraphModel graph = GetOrBuildPackageGraphModel();
+                PackageGraphOpenProfiler.Current?.SetGraphCounts(graph);
+
+                HashSet<string> visiblePackageIds;
+                PackageGraphSearchState searchState;
+                PackageVisibilityFilterCounts filterCounts;
+                int hiddenRelatedCount;
+
+                using (PackageGraphOpenProfiler.Measure(PackageGraphOpenTiming.VisibilitySearch))
+                {
+                    visiblePackageIds = PackageVisibilityFilter.CreateStatusVisiblePackageIdSet(
+                        graph,
+                        _visibilityFilterState);
+                    searchState = PackageGraphSearchIndex.Create(
+                        graph,
+                        _visibilityFilterState,
+                        visiblePackageIds);
+
+                    ClearGraphSelectionIfHidden(visiblePackageIds);
+
+                    filterCounts = PackageVisibilityFilter.CalculateCounts(
+                        graph,
+                        _visibilityFilterState);
+                    hiddenRelatedCount = PackageVisibilityFilter.CountHiddenRelatedPackages(
+                        graph,
+                        _graphFocusedPackageId,
+                        visiblePackageIds);
+                }
+
+                _graphView.SetGraph(
+                    graph,
+                    _selectedPackageId,
+                    _graphFocusedPackageId,
+                    _graphFocusedGroupId,
+                    !IsAnyOperationBusy(),
+                    visiblePackageIds,
+                    searchState,
+                    filterCounts,
+                    hiddenRelatedCount);
+
+                using (PackageGraphOpenProfiler.Measure(PackageGraphOpenTiming.LayoutRepaintScheduling))
+                {
+                    _graphDetailsContainer?.MarkDirtyRepaint();
+                    _operationDrawerContainer?.MarkDirtyRepaint();
+                    UpdateOperationFooter();
+                    UpdateViewVisibility();
+                }
+            }
+        }
+
+        private PackageGraphModel GetOrBuildPackageGraphModel()
+        {
+            if (!_graphModelCacheDirty && _cachedPackageGraph != null)
+            {
+                _lastPackageGraph = _cachedPackageGraph;
+                return _cachedPackageGraph;
+            }
+
+            IReadOnlyList<PackageDefinition> packages;
+            IReadOnlyList<PackageGraphGroup> groups;
+
+            using (PackageGraphOpenProfiler.Measure(PackageGraphOpenTiming.RegistryLookup))
+            {
+                packages = PackageRegistryProvider.All;
+                groups = PackageRegistryProvider.EcosystemGroups;
+            }
+
+            using (PackageGraphOpenProfiler.Measure(PackageGraphOpenTiming.GraphRebuild))
+            {
+                PackageGraphBuilder builder = _packageGraphBuilder ?? new PackageGraphBuilder(
                     packageId => _packageDetectionService != null && _packageDetectionService.IsInstalled(packageId),
                     GetSelectedChannel,
                     packageDefinition => _packageUpdateCheckService != null
                         ? _packageUpdateCheckService.GetStatus(packageDefinition, GetSelectedChannel(packageDefinition))
-                        : null))
-                .Build(PackageRegistryProvider.All, PackageRegistryProvider.EcosystemGroups);
-            _lastPackageGraph = graph;
-            HashSet<string> visiblePackageIds = PackageVisibilityFilter.CreateStatusVisiblePackageIdSet(
-                graph,
-                _visibilityFilterState);
-            PackageGraphSearchState searchState = PackageGraphSearchIndex.Create(
-                graph,
-                _visibilityFilterState,
-                visiblePackageIds);
+                        : null);
+                _cachedPackageGraph = builder.Build(packages, groups);
+                _lastPackageGraph = _cachedPackageGraph;
+                _graphModelCacheDirty = false;
+                PackageGraphOpenProfiler.Current?.MarkGraphRebuilt();
+            }
 
-            ClearGraphSelectionIfHidden(visiblePackageIds);
+            return _cachedPackageGraph;
+        }
 
-            PackageVisibilityFilterCounts filterCounts = PackageVisibilityFilter.CalculateCounts(
-                graph,
-                _visibilityFilterState);
-            int hiddenRelatedCount = PackageVisibilityFilter.CountHiddenRelatedPackages(
-                graph,
-                _graphFocusedPackageId,
-                visiblePackageIds);
-
-            _graphView.SetGraph(
-                graph,
-                _selectedPackageId,
-                _graphFocusedPackageId,
-                _graphFocusedGroupId,
-                !IsAnyOperationBusy(),
-                visiblePackageIds,
-                searchState,
-                filterCounts,
-                hiddenRelatedCount);
-            _graphDetailsContainer?.MarkDirtyRepaint();
-            _operationDrawerContainer?.MarkDirtyRepaint();
-            UpdateOperationFooter();
-            UpdateViewVisibility();
+        private void InvalidateGraphModelCache(string reason)
+        {
+            // Registry, manifest/install state, update status, and channel changes alter graph node state.
+            // Focus-only navigation intentionally does not invalidate this cache.
+            _graphModelCacheDirty = true;
+            _graphModelCacheInvalidationReason = string.IsNullOrWhiteSpace(reason)
+                ? "graph data changed"
+                : reason.Trim();
         }
 
         private void HandleVisibilityFilterChanged()
         {
-            RefreshGraphView();
+            RefreshGraphView("visibility filter changed");
             Repaint();
         }
 
@@ -1255,10 +1344,11 @@ namespace Deucarian.PackageInstaller.Editor
 
             SelectDefinition(
                 packageDefinition,
-                selectionKind);
+                selectionKind,
+                refreshGraph: false);
             _graphFocusedPackageId = packageDefinition.PackageId;
             _graphFocusedGroupId = GetGraphPackageGroupId(packageDefinition.PackageId);
-            RefreshGraphView();
+            RefreshGraphView("package focus");
         }
 
         private void ClearGraphSelection()
@@ -1337,7 +1427,7 @@ namespace Deucarian.PackageInstaller.Editor
             _graphFocusedPackageId = string.Empty;
             _graphFocusedGroupId = groupId;
             _detailsScrollPosition = Vector2.zero;
-            RefreshGraphView();
+            RefreshGraphView("group focus");
             Repaint();
         }
 
@@ -1348,7 +1438,7 @@ namespace Deucarian.PackageInstaller.Editor
             _graphFocusedPackageId = string.Empty;
             _graphFocusedGroupId = string.Empty;
             _detailsScrollPosition = Vector2.zero;
-            RefreshGraphView();
+            RefreshGraphView("root focus");
             Repaint();
         }
 
@@ -1372,7 +1462,8 @@ namespace Deucarian.PackageInstaller.Editor
 
             SelectDefinition(
                 packageDefinition,
-                packageDefinition.IsIntegration ? SelectionKind.Integration : SelectionKind.Package);
+                packageDefinition.IsIntegration ? SelectionKind.Integration : SelectionKind.Package,
+                refreshGraph: false);
             _graphFocusedPackageId = packageDefinition.PackageId;
             _graphFocusedGroupId = GetGraphPackageGroupId(packageDefinition.PackageId);
 
@@ -1389,7 +1480,7 @@ namespace Deucarian.PackageInstaller.Editor
                     break;
             }
 
-            RefreshGraphView();
+            RefreshGraphView("package action");
         }
 
         private void DrawGraphDetailsGui()
@@ -1667,13 +1758,16 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void RefreshPackages()
         {
+            InvalidateGraphModelCache("manual refresh");
             PackageRegistryProvider.RefreshRemote();
             _packageDetectionService.Refresh();
             _packageUpdateCheckService.InvalidateAll();
+            RefreshGraphView("manual refresh");
         }
 
         private void CheckForUpdates()
         {
+            InvalidateGraphModelCache("manual update check");
             _checkUpdatesAfterDetectionRefresh = true;
             PackageRegistryProvider.RefreshRemote();
             _packageUpdateCheckService.InvalidateAll();
@@ -1748,7 +1842,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (EditorGUI.EndChangeCheck() && _visibilityFilterState.SetSearchText(nextSearchText))
             {
-                RefreshGraphView();
+                RefreshGraphView("search changed");
                 Repaint();
             }
 
@@ -1770,7 +1864,7 @@ namespace Deucarian.PackageInstaller.Editor
                         nextShowInstalled,
                         nextShowNotInstalled))
                 {
-                    RefreshGraphView();
+                    RefreshGraphView("visibility filter changed");
                     Repaint();
                 }
             }
@@ -4015,6 +4109,7 @@ namespace Deucarian.PackageInstaller.Editor
             _selectedChannels[packageDefinition.PackageId] = channel;
             _autoSelectedChannelPackageIds.Remove(packageDefinition.PackageId);
             EditorPrefs.SetInt(GetChannelPreferenceKey(packageDefinition.PackageId), (int)channel);
+            InvalidateGraphModelCache("selected channel changed");
 
             if (_packageDetectionService.IsInstalled(packageDefinition.PackageId))
             {
@@ -4024,6 +4119,8 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 _packageUpdateCheckService.Invalidate(packageDefinition.PackageId);
             }
+
+            RefreshGraphView("selected channel changed");
         }
 
         private void SetAutoSelectedChannel(PackageDefinition packageDefinition, PackageChannel channel)
@@ -4035,6 +4132,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             _selectedChannels[packageDefinition.PackageId] = channel;
             _autoSelectedChannelPackageIds.Add(packageDefinition.PackageId);
+            InvalidateGraphModelCache("installed channel sync");
             _packageUpdateCheckService.Invalidate(packageDefinition.PackageId);
         }
 
@@ -4231,7 +4329,10 @@ namespace Deucarian.PackageInstaller.Editor
                    string.Equals(_selectedPackageId, packageDefinition.PackageId, StringComparison.OrdinalIgnoreCase);
         }
 
-        private void SelectDefinition(PackageDefinition packageDefinition, SelectionKind selectionKind)
+        private void SelectDefinition(
+            PackageDefinition packageDefinition,
+            SelectionKind selectionKind,
+            bool refreshGraph = true)
         {
             if (packageDefinition == null || IsSelected(packageDefinition, selectionKind))
             {
@@ -4241,7 +4342,12 @@ namespace Deucarian.PackageInstaller.Editor
             _selectionKind = selectionKind;
             _selectedPackageId = packageDefinition.PackageId;
             _detailsScrollPosition = Vector2.zero;
-            RefreshGraphView();
+
+            if (refreshGraph)
+            {
+                RefreshGraphView("selection");
+            }
+
             Repaint();
         }
 
@@ -4297,11 +4403,7 @@ namespace Deucarian.PackageInstaller.Editor
         {
             return _lastPackageGraph == null
                 ? Enumerable.Empty<PackageGraphGroup>()
-                : _lastPackageGraph.Groups
-                    .Where(group => group != null &&
-                                    string.Equals(group.ParentGroupId, groupId, StringComparison.OrdinalIgnoreCase))
-                    .OrderBy(group => group.SortOrder)
-                    .ThenBy(group => group.DisplayName, StringComparer.OrdinalIgnoreCase);
+                : _lastPackageGraph.GetChildGroups(groupId);
         }
 
         private IEnumerable<PackageGraphNode> GetGraphGroupDescendantPackages(string groupId)
@@ -4311,25 +4413,8 @@ namespace Deucarian.PackageInstaller.Editor
                 return Enumerable.Empty<PackageGraphNode>();
             }
 
-            HashSet<string> groupIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            CollectGraphDescendantGroupIds(groupId, groupIds);
-
-            return _lastPackageGraph.Nodes
-                .Where(node => node != null && groupIds.Contains(node.GroupId))
+            return _lastPackageGraph.GetDescendantPackages(groupId)
                 .OrderBy(node => node.DisplayName, StringComparer.OrdinalIgnoreCase);
-        }
-
-        private void CollectGraphDescendantGroupIds(string groupId, ISet<string> groupIds)
-        {
-            if (string.IsNullOrWhiteSpace(groupId) || !groupIds.Add(groupId))
-            {
-                return;
-            }
-
-            foreach (PackageGraphGroup childGroup in GetGraphChildGroups(groupId))
-            {
-                CollectGraphDescendantGroupIds(childGroup.Id, groupIds);
-            }
         }
 
         private PackageDefinition[] GetPackagesWithUpdates()
@@ -4498,9 +4583,10 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void HandleRegistryChanged()
         {
+            InvalidateGraphModelCache("registry changed");
             _packageUpdateCheckService?.InvalidateAll();
             EnsureValidSelection();
-            RefreshGraphView();
+            RefreshGraphView("registry changed");
 
             if (_checkUpdatesAfterDetectionRefresh &&
                 !_packageDetectionService.IsRefreshing &&
@@ -4510,6 +4596,20 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             Repaint();
+        }
+
+        private void HandlePackageUpdateGraphStateChanged()
+        {
+            InvalidateGraphModelCache("update status changed");
+            RefreshGraphView("update status changed");
+        }
+
+        private void HandlePackageDetectionGraphStateChanged()
+        {
+            if (_packageDetectionService != null && _packageDetectionService.IsRefreshing)
+            {
+                RefreshGraphView("installed package refresh started");
+            }
         }
 
         private void HandlePackageOperationCompleted()
@@ -4524,8 +4624,10 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void HandlePackageDetectionRefreshCompleted()
         {
+            InvalidateGraphModelCache("installed package manifest changed");
             _packageSampleDiscoveryService?.ClearCache();
             SynchronizeSelectedChannelsFromInstalledPackages();
+            RefreshGraphView("installed package refresh completed");
 
             if (!_checkUpdatesAfterDetectionRefresh)
             {

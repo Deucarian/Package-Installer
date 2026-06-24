@@ -3652,19 +3652,120 @@ namespace Deucarian.PackageInstaller.Editor
             IReadOnlyCollection<string> visiblePackageIds,
             PackageGraphSearchState searchState)
         {
-            _graph = graph ?? new PackageGraphModel(
+            PackageGraphModel nextGraph = graph ?? new PackageGraphModel(
                 Array.Empty<PackageGraphNode>(),
                 Array.Empty<PackageGraphEdge>(),
                 Array.Empty<PackageGraphSuiteRegion>());
+            PackageGraphSearchState nextSearchState = searchState ?? PackageGraphSearchState.Empty;
+            string nextSelectedPackageId = selectedPackageId ?? string.Empty;
+            string nextFocusedPackageId = focusedPackageId ?? string.Empty;
+            string nextFocusedGroupId = focusedGroupId ?? string.Empty;
+
+            if (CanSkipRebuild(
+                    nextGraph,
+                    nextSelectedPackageId,
+                    nextFocusedPackageId,
+                    nextFocusedGroupId,
+                    actionsEnabled,
+                    visiblePackageIds,
+                    nextSearchState))
+            {
+                _actionsEnabled = actionsEnabled;
+                ApplyInteractionState();
+                return;
+            }
+
+            _graph = nextGraph;
             _visiblePackageIds = visiblePackageIds == null
                 ? new HashSet<string>(_graph.Nodes.Select(node => node.PackageId), StringComparer.OrdinalIgnoreCase)
                 : new HashSet<string>(visiblePackageIds, StringComparer.OrdinalIgnoreCase);
-            _selectedPackageId = selectedPackageId ?? string.Empty;
-            _focusedPackageId = focusedPackageId ?? string.Empty;
-            _focusedGroupId = focusedGroupId ?? string.Empty;
+            _selectedPackageId = nextSelectedPackageId;
+            _focusedPackageId = nextFocusedPackageId;
+            _focusedGroupId = nextFocusedGroupId;
             _actionsEnabled = actionsEnabled;
-            _searchState = searchState ?? PackageGraphSearchState.Empty;
+            _searchState = nextSearchState;
             Rebuild();
+        }
+
+        private bool CanSkipRebuild(
+            PackageGraphModel graph,
+            string selectedPackageId,
+            string focusedPackageId,
+            string focusedGroupId,
+            bool actionsEnabled,
+            IReadOnlyCollection<string> visiblePackageIds,
+            PackageGraphSearchState searchState)
+        {
+            return ReferenceEquals(_graph, graph) &&
+                   string.Equals(_selectedPackageId, selectedPackageId, StringComparison.OrdinalIgnoreCase) &&
+                   string.Equals(_focusedPackageId, focusedPackageId, StringComparison.OrdinalIgnoreCase) &&
+                   string.Equals(_focusedGroupId, focusedGroupId, StringComparison.OrdinalIgnoreCase) &&
+                   _actionsEnabled == actionsEnabled &&
+                   SearchStatesMatch(_searchState, searchState) &&
+                   VisiblePackageIdsMatch(graph, visiblePackageIds);
+        }
+
+        private bool VisiblePackageIdsMatch(
+            PackageGraphModel graph,
+            IReadOnlyCollection<string> visiblePackageIds)
+        {
+            if (_visiblePackageIds == null)
+            {
+                return false;
+            }
+
+            if (visiblePackageIds == null)
+            {
+                if (graph == null || _visiblePackageIds.Count != graph.Nodes.Count)
+                {
+                    return false;
+                }
+
+                foreach (PackageGraphNode node in graph.Nodes)
+                {
+                    if (node == null || !_visiblePackageIds.Contains(node.PackageId))
+                    {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+
+            if (_visiblePackageIds.Count != visiblePackageIds.Count)
+            {
+                return false;
+            }
+
+            foreach (string packageId in visiblePackageIds)
+            {
+                if (string.IsNullOrWhiteSpace(packageId) || !_visiblePackageIds.Contains(packageId))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool SearchStatesMatch(
+            PackageGraphSearchState current,
+            PackageGraphSearchState next)
+        {
+            if (ReferenceEquals(current, next))
+            {
+                return true;
+            }
+
+            if (current == null || next == null)
+            {
+                return false;
+            }
+
+            return string.Equals(current.Query, next.Query, StringComparison.OrdinalIgnoreCase) &&
+                   current.DirectCategoryMatchCount == next.DirectCategoryMatchCount &&
+                   current.DirectPackageMatchCount == next.DirectPackageMatchCount &&
+                   current.ContextPackageCount == next.ContextPackageCount;
         }
 
         private void Rebuild()
@@ -3695,62 +3796,77 @@ namespace Deucarian.PackageInstaller.Editor
                 layoutMode,
                 _viewportZoom,
                 _layoutPresentationLevel);
-            PackageGraphLayoutResult fullLayoutResult = _layout.Calculate(
-                _visibleGraph,
-                layoutMode,
-                _layoutFocusPackageId,
-                _layoutFocusGroupId,
-                _viewportSize,
-                _layoutPresentationLevel);
-            _currentFocus = PackageGraphFocus.Create(
-                _visibleGraph,
-                _layoutFocusPackageId);
-            _actionFocus = PackageGraphFocus.Create(
-                _visibleGraph,
-                _layoutFocusPackageId);
-            PackageGraphFocus edgeFocus = PackageGraphFocus.Create(
-                _visibleGraph,
-                _layoutFocusPackageId);
-            _layoutResult = CreateVisibleLayoutResult(fullLayoutResult, _currentFocus);
-            style.width = _layoutResult.CanvasWidth;
-            style.height = _layoutResult.CanvasHeight;
-            _guideLayer.style.width = _layoutResult.CanvasWidth;
-            _guideLayer.style.height = _layoutResult.CanvasHeight;
-            _membershipLayer.style.width = _layoutResult.CanvasWidth;
-            _membershipLayer.style.height = _layoutResult.CanvasHeight;
-            _edgeLayer.style.width = _layoutResult.CanvasWidth;
-            _edgeLayer.style.height = _layoutResult.CanvasHeight;
-            _nodeLayer.style.width = _layoutResult.CanvasWidth;
-            _nodeLayer.style.height = _layoutResult.CanvasHeight;
+            PackageGraphLayoutResult fullLayoutResult;
+            PackageGraphFocus edgeFocus;
 
-            DrawGuides();
-            _membershipLayer.SetLayout(
-                _visibleGraph,
-                _layoutResult,
-                PackageGraphCategoryStatusSummary.Create(_visibleGraph.Nodes),
-                _animatedNodeRects,
-                _animatedGroupRects,
-                _animatedGroupCenters,
-                _animatedGroupOrbitRadii,
-                GetActiveHoverGroupId(),
-                _interactionsLocked);
-            StartLayoutTransition(
-                previousRects,
-                previousNodeVisualStates,
-                previousGroupRects,
-                previousGroupCenters,
-                previousGroupOrbitRadii);
-            DrawGroups();
+            using (PackageGraphOpenProfiler.Measure(PackageGraphOpenTiming.Layout))
+            {
+                fullLayoutResult = _layout.Calculate(
+                    _visibleGraph,
+                    layoutMode,
+                    _layoutFocusPackageId,
+                    _layoutFocusGroupId,
+                    _viewportSize,
+                    _layoutPresentationLevel);
+                _currentFocus = PackageGraphFocus.Create(
+                    _visibleGraph,
+                    _layoutFocusPackageId);
+                _actionFocus = PackageGraphFocus.Create(
+                    _visibleGraph,
+                    _layoutFocusPackageId);
+                edgeFocus = PackageGraphFocus.Create(
+                    _visibleGraph,
+                    _layoutFocusPackageId);
+                _layoutResult = CreateVisibleLayoutResult(fullLayoutResult, _currentFocus);
+            }
+
+            using (PackageGraphOpenProfiler.Measure(PackageGraphOpenTiming.LayoutRepaintScheduling))
+            {
+                style.width = _layoutResult.CanvasWidth;
+                style.height = _layoutResult.CanvasHeight;
+                _guideLayer.style.width = _layoutResult.CanvasWidth;
+                _guideLayer.style.height = _layoutResult.CanvasHeight;
+                _membershipLayer.style.width = _layoutResult.CanvasWidth;
+                _membershipLayer.style.height = _layoutResult.CanvasHeight;
+                _edgeLayer.style.width = _layoutResult.CanvasWidth;
+                _edgeLayer.style.height = _layoutResult.CanvasHeight;
+                _nodeLayer.style.width = _layoutResult.CanvasWidth;
+                _nodeLayer.style.height = _layoutResult.CanvasHeight;
+
+                DrawGuides();
+                _membershipLayer.SetLayout(
+                    _visibleGraph,
+                    _layoutResult,
+                    PackageGraphCategoryStatusSummary.Create(_visibleGraph.Nodes),
+                    _animatedNodeRects,
+                    _animatedGroupRects,
+                    _animatedGroupCenters,
+                    _animatedGroupOrbitRadii,
+                    GetActiveHoverGroupId(),
+                    _interactionsLocked);
+                StartLayoutTransition(
+                    previousRects,
+                    previousNodeVisualStates,
+                    previousGroupRects,
+                    previousGroupCenters,
+                    previousGroupOrbitRadii);
+                DrawGroups();
+            }
+
             DrawNodes(_currentFocus);
-            DrawUnrelatedSummary();
-            ApplyAnimatedLayout();
-            _edgeLayer.SetGraph(
-                _visibleGraph,
-                _animatedNodeRects,
-                _animatedGroupRects,
-                _layoutResult.CanvasHeight,
-                edgeFocus);
-            ApplyInteractionState();
+
+            using (PackageGraphOpenProfiler.Measure(PackageGraphOpenTiming.LayoutRepaintScheduling))
+            {
+                DrawUnrelatedSummary();
+                ApplyAnimatedLayout();
+                _edgeLayer.SetGraph(
+                    _visibleGraph,
+                    _animatedNodeRects,
+                    _animatedGroupRects,
+                    _layoutResult.CanvasHeight,
+                    edgeFocus);
+                ApplyInteractionState();
+            }
         }
 
         private PackageGraphModel CreateRenderedGraph()
@@ -4758,26 +4874,31 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void DrawNodes(PackageGraphFocus focus)
         {
-            foreach (PackageGraphNode node in _graph.Nodes)
+            using (PackageGraphOpenProfiler.Measure(PackageGraphOpenTiming.VisualNodeCreation))
             {
-                if (!_animatedNodeRects.TryGetValue(node.PackageId, out Rect rect))
+                foreach (PackageGraphNode node in _graph.Nodes)
                 {
-                    continue;
-                }
+                    if (!_animatedNodeRects.TryGetValue(node.PackageId, out Rect rect))
+                    {
+                        continue;
+                    }
 
-                PackageGraphNodeElement nodeElement = CreateNodeElement(node, focus, _layoutResult);
-                if (_nodeVisualStates.TryGetValue(node.PackageId, out PackageGraphNodeVisualState visualState))
-                {
-                    SetElementVisualState(nodeElement, visualState);
-                }
-                else
-                {
-                    SetElementRect(nodeElement, rect);
-                }
+                    PackageGraphNodeElement nodeElement = CreateNodeElement(node, focus, _layoutResult);
+                    if (_nodeVisualStates.TryGetValue(node.PackageId, out PackageGraphNodeVisualState visualState))
+                    {
+                        SetElementVisualState(nodeElement, visualState);
+                    }
+                    else
+                    {
+                        SetElementRect(nodeElement, rect);
+                    }
 
-                _nodeLayer.Add(nodeElement);
-                _nodeElements[node.PackageId] = nodeElement;
+                    _nodeLayer.Add(nodeElement);
+                    _nodeElements[node.PackageId] = nodeElement;
+                }
             }
+
+            PackageGraphOpenProfiler.Current?.SetRenderCounts(_nodeElements.Count, 0);
         }
 
         private PackageGraphNodeElement CreateNodeElement(
@@ -6483,6 +6604,7 @@ namespace Deucarian.PackageInstaller.Editor
                 Array.Empty<PackageGraphEdge>(),
                 Array.Empty<PackageGraphSuiteRegion>());
         private PackageGraphFocus _focus = PackageGraphFocus.Create(null, string.Empty);
+        private IReadOnlyList<PackageGraphEdgeRoute> _routes = Array.Empty<PackageGraphEdgeRoute>();
         private IVisualElementScheduledItem _animationItem;
         private float _animationPhase;
         private bool _animationEnabled;
@@ -6509,6 +6631,7 @@ namespace Deucarian.PackageInstaller.Editor
             CopyNodeRects(nodeRects);
             CopyGroupRects(groupRects);
             style.height = canvasHeight;
+            RebuildRoutes();
             _animationEnabled = HasAnimatedEdges();
             UpdateAnimationSchedule();
             MarkDirtyRepaint();
@@ -6520,6 +6643,7 @@ namespace Deucarian.PackageInstaller.Editor
         {
             CopyNodeRects(nodeRects);
             CopyGroupRects(groupRects);
+            RebuildRoutes();
             MarkDirtyRepaint();
         }
 
@@ -6616,7 +6740,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             Painter2D painter = context.painter2D;
 
-            foreach (PackageGraphEdgeRoute route in BuildRoutes())
+            foreach (PackageGraphEdgeRoute route in _routes)
             {
                 DrawEdge(
                     painter,
@@ -6644,12 +6768,22 @@ namespace Deucarian.PackageInstaller.Editor
 
         private IReadOnlyList<PackageGraphEdgeRoute> BuildRoutes()
         {
-            return BuildRoutes(_graph, _nodeRects, _groupRects, _focus);
+            return _routes;
         }
 
         internal IReadOnlyList<PackageGraphEdgeRoute> BuildRoutesSnapshotForTests()
         {
             return BuildRoutes();
+        }
+
+        private void RebuildRoutes()
+        {
+            using (PackageGraphOpenProfiler.Measure(PackageGraphOpenTiming.EdgeCreation))
+            {
+                _routes = BuildRoutes(_graph, _nodeRects, _groupRects, _focus);
+            }
+
+            PackageGraphOpenProfiler.Current?.SetRenderCounts(0, _routes.Count);
         }
 
         internal static IReadOnlyList<PackageGraphEdgeRoute> BuildRoutesForTests(
