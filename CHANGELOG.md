@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Moved generic ambient glass, wallpaper, and glass sheen styling to `com.deucarian.editor` while keeping Package Installer graph-specific styling local.
 - Simplified Ecosystem Overview group rows and added left-edge attention styling for graph group cards.
 - Removed the user-facing graph timing diagnostics menu so the only Package Installer menu item is `Tools/Deucarian/Package Installer`.
 - Centralized selected stable/development channel state behind a project-scoped package-management preference shared with Bootstrap.

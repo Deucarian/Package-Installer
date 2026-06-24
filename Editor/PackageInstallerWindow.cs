@@ -550,28 +550,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static void ConfigureFixedWallpaper(VisualElement root, VisualElement wallpaperHost)
         {
-            if (root == null)
-            {
-                return;
-            }
-
-            VisualElement host = wallpaperHost ?? root;
-            host.AddToClassList("dpi-wallpaper-safe-shell");
-            host.style.overflow = Overflow.Hidden;
-
-            VisualElement background = root.Q<VisualElement>("deucarian-window-background") ??
-                                       host.Q<VisualElement>("deucarian-window-background");
-            VisualElement overlay = root.Q<VisualElement>("deucarian-window-overlay") ??
-                                    host.Q<VisualElement>("deucarian-window-overlay");
-
-            ReparentWallpaperLayer(host, background, 0);
-            ReparentWallpaperLayer(host, overlay, background != null ? 1 : 0);
-
-            ConfigureFixedLayer(background, "dpi-fixed-wallpaper-layer");
-            ConfigureFixedLayer(overlay, "dpi-fixed-wallpaper-overlay");
-            overlay?.AddToClassList("dpi-readability-overlay");
-            PackageInstallerAmbientGlass.Install(host);
-            EnsureWallpaperTopSafeFade(host);
+            DeucarianEditorWindowChrome.ConfigureFixedWallpaper(root, wallpaperHost, WallpaperTopSafeFadeName);
         }
 
         internal static void ConfigureFixedWallpaperForTests(VisualElement root)
@@ -582,54 +561,6 @@ namespace Deucarian.PackageInstaller.Editor
         internal static void ConfigureFixedWallpaperForTests(VisualElement root, VisualElement wallpaperHost)
         {
             ConfigureFixedWallpaper(root, wallpaperHost);
-        }
-
-        private static void ReparentWallpaperLayer(VisualElement host, VisualElement layer, int index)
-        {
-            if (host == null || layer == null || layer.parent == host)
-            {
-                return;
-            }
-
-            layer.RemoveFromHierarchy();
-            host.Insert(Mathf.Clamp(index, 0, host.childCount), layer);
-        }
-
-        private static void EnsureWallpaperTopSafeFade(VisualElement host)
-        {
-            if (host == null || host.Q<VisualElement>(WallpaperTopSafeFadeName) != null)
-            {
-                return;
-            }
-
-            VisualElement fade = new VisualElement { name = WallpaperTopSafeFadeName };
-            fade.AddToClassList("dpi-wallpaper-top-safe-fade");
-            fade.pickingMode = PickingMode.Ignore;
-            fade.style.position = Position.Absolute;
-            fade.style.left = 0f;
-            fade.style.right = 0f;
-            fade.style.top = 0f;
-            fade.style.height = 86f;
-            host.Insert(host.childCount, fade);
-        }
-
-        private static void ConfigureFixedLayer(VisualElement element, string className)
-        {
-            if (element == null)
-            {
-                return;
-            }
-
-            element.AddToClassList(className);
-            element.pickingMode = PickingMode.Ignore;
-            element.style.position = Position.Absolute;
-            element.style.left = 0f;
-            element.style.right = 0f;
-            element.style.top = 0f;
-            element.style.bottom = 0f;
-            element.style.translate = new Translate(0f, 0f, 0f);
-            element.style.scale = new Scale(Vector3.one);
-            element.style.unityBackgroundScaleMode = ScaleMode.ScaleAndCrop;
         }
 
         private void BuildViewToolbar(VisualElement content)
