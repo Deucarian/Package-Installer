@@ -240,6 +240,13 @@ namespace Deucarian.PackageInstaller.Editor
 
         internal static IReadOnlyList<string> UserFacingMenuPathsForTests => new[] { InstallerMenuPath };
 
+        internal static string FormatEcosystemOverviewGroupInstalledSummaryForTests(
+            int installedCount,
+            int packageCount)
+        {
+            return FormatEcosystemOverviewGroupInstalledSummary(installedCount, packageCount);
+        }
+
         internal static IReadOnlyList<string> ViewToggleOrderForTests => new[] { "Ecosystem Graph", "List View" };
 
         internal static Vector2 MinWindowSizeForTests => new Vector2(MinWindowWidth, MinWindowHeight);
@@ -2354,10 +2361,6 @@ namespace Deucarian.PackageInstaller.Editor
         {
             PackageGraphNode[] descendants = GetGraphGroupDescendantPackages(group.Id).ToArray();
             int installedCount = descendants.Count(node => node.IsInstalled);
-            int updateCount = descendants.Count(node => node.Status == PackageGraphNodeStatus.UpdateAvailable);
-            int attentionCount = descendants.Count(node =>
-                node.Status == PackageGraphNodeStatus.Missing ||
-                node.Status == PackageGraphNodeStatus.Warning);
             Rect rowRect = GUILayoutUtility.GetRect(1f, 30f, GUILayout.ExpandWidth(true));
             bool hover = rowRect.Contains(Event.current.mousePosition);
 
@@ -2378,31 +2381,50 @@ namespace Deucarian.PackageInstaller.Editor
 
             EditorGUIUtility.AddCursorRect(rowRect, MouseCursor.Link);
 
-            Rect nameRect = new Rect(rowRect.x + 8f, rowRect.y + 6f, rowRect.width * 0.44f, 18f);
-            GUI.Label(nameRect, new GUIContent(group.DisplayName, group.Description), _miniLabelStyle);
+            string summary = FormatEcosystemOverviewGroupInstalledSummary(installedCount, descendants.Length);
+            GUIContent nameContent = new GUIContent(group.DisplayName, group.Description);
+            GUIContent summaryContent = new GUIContent(summary);
+            Rect contentRect = new Rect(rowRect.x + 8f, rowRect.y + 6f, rowRect.width - 16f, 18f);
+            float gap = 10f;
+            float summaryWidth = Mathf.Min(
+                _mutedMiniLabelStyle.CalcSize(summaryContent).x + 2f,
+                Mathf.Max(84f, contentRect.width * 0.45f));
+            float availableNameWidth = Mathf.Max(40f, contentRect.width - summaryWidth - gap);
+            float nameWidth = Mathf.Min(_miniLabelStyle.CalcSize(nameContent).x + 2f, availableNameWidth);
+            Rect nameRect = new Rect(contentRect.x, contentRect.y, nameWidth, contentRect.height);
+            Rect summaryRect = new Rect(nameRect.xMax + gap, contentRect.y, summaryWidth, contentRect.height);
 
-            Rect countRect = new Rect(nameRect.xMax + 4f, rowRect.y + 6f, 74f, 18f);
-            GUI.Label(
-                countRect,
-                descendants.Length == 1 ? "1 package" : descendants.Length + " packages",
-                _mutedMiniLabelStyle);
+            DrawSingleLineLabel(nameRect, nameContent, _miniLabelStyle);
+            DrawSingleLineLabel(summaryRect, summaryContent, _mutedMiniLabelStyle);
+        }
 
-            Rect statusRect = new Rect(rowRect.xMax - 172f, rowRect.y + 6f, 160f, 18f);
-            string summary = installedCount + " / " + descendants.Length + " installed";
-            if (updateCount > 0)
+        private static string FormatEcosystemOverviewGroupInstalledSummary(int installedCount, int packageCount)
+        {
+            return Math.Max(0, installedCount) + " / " + Math.Max(0, packageCount) + " installed";
+        }
+
+        private static void DrawSingleLineLabel(Rect rect, GUIContent content, GUIStyle style)
+        {
+            if (style == null)
             {
-                summary += "  " + updateCount + " updates";
-            }
-            else if (attentionCount > 0)
-            {
-                summary += "  " + attentionCount + " attention";
+                GUI.Label(rect, content);
+                return;
             }
 
-            DrawStatusBadge(
-                statusRect,
-                summary,
-                updateCount > 0 || attentionCount > 0 ? VisualStatusKind.UpdateAvailable : VisualStatusKind.Installed,
-                _rowStatusStyle);
+            bool previousWordWrap = style.wordWrap;
+            TextClipping previousClipping = style.clipping;
+
+            try
+            {
+                style.wordWrap = false;
+                style.clipping = TextClipping.Clip;
+                GUI.Label(rect, content, style);
+            }
+            finally
+            {
+                style.wordWrap = previousWordWrap;
+                style.clipping = previousClipping;
+            }
         }
 
         private string GetActiveFilterSummary()

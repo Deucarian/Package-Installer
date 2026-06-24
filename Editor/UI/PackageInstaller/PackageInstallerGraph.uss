@@ -1811,17 +1811,26 @@
     opacity: 0.72;
 }
 
-.dpi-graph-group--attention .dpi-graph-group__symbol {
-    border-bottom-width: 2px;
-    border-bottom-color: rgba(224, 178, 72, 0.74);
-}
-
 .dpi-graph-group--integration .dpi-graph-group__symbol {
     border-left-color: rgba(59, 209, 191, 0.54);
 }
 
 .dpi-graph-group--suite .dpi-graph-group__symbol {
     border-left-color: rgba(141, 123, 204, 0.52);
+}
+
+.dpi-graph-group--attention .dpi-graph-group__symbol {
+    border-left-color: rgba(217, 157, 72, 0.86);
+}
+
+.dpi-graph-group--attention:hover .dpi-graph-group__symbol {
+    border-left-color: rgba(255, 226, 184, 0.96);
+}
+
+.dpi-graph-group--focused.dpi-graph-group--attention .dpi-graph-group__symbol,
+.dpi-graph-group--hover-context.dpi-graph-group--attention .dpi-graph-group__symbol,
+.dpi-graph-group.dpi-graph-search--match.dpi-graph-group--attention .dpi-graph-group__symbol {
+    border-left-color: rgba(255, 226, 184, 0.96);
 }
 
 .dpi-graph-group__icon {
