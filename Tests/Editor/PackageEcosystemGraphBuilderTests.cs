@@ -38,6 +38,17 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void Window_FormatsEcosystemOverviewGroupRowsWithInstalledSummaryOnly()
+        {
+            Assert.AreEqual(
+                "2 / 3 installed",
+                PackageInstallerWindow.FormatEcosystemOverviewGroupInstalledSummaryForTests(2, 3));
+            Assert.AreEqual(
+                "1 / 1 installed",
+                PackageInstallerWindow.FormatEcosystemOverviewGroupInstalledSummaryForTests(1, 1));
+        }
+
+        [Test]
         public void StateRepository_UsesSharedProjectChannelPreference()
         {
             string projectRoot = CreateTempProjectRoot();
@@ -654,6 +665,39 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 .Single();
             Assert.AreEqual("Update", selectedAction.text);
             Assert.IsTrue(selectedAction.enabledSelf);
+        }
+
+        [Test]
+        public void GraphView_UsesExistingAttentionStateForGroupCards()
+        {
+            PackageDefinition update = CreatePackage(
+                "Infrastructure Update",
+                "com.example.infrastructure-update",
+                "Core",
+                groupId: "infrastructure");
+            PackageDefinition normal = CreatePackage(
+                "Runtime Service",
+                "com.example.runtime-service",
+                "Core",
+                groupId: "runtime-services");
+            PackageGraphModel graph = new PackageGraphBuilder(
+                    packageId => packageId == update.PackageId,
+                    _ => PackageChannel.Stable,
+                    package => package.PackageId == update.PackageId
+                        ? PackageUpdateStatus.UpdateAvailable(
+                            package,
+                            PackageChannel.Stable,
+                            package.GetUrl(PackageChannel.Stable),
+                            "1111111",
+                            "2222222")
+                        : null)
+                .Build(new[] { update, normal });
+            PackageGraphView view = new PackageGraphView(_ => { }, (_, __) => { });
+
+            view.SetGraph(graph, string.Empty, actionsEnabled: true);
+
+            Assert.IsTrue(FindGraphGroup(view, "infrastructure").ClassListContains("dpi-graph-group--attention"));
+            Assert.IsFalse(FindGraphGroup(view, "runtime-services").ClassListContains("dpi-graph-group--attention"));
         }
 
         [Test]
