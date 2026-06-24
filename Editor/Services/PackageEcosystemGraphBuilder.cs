@@ -44,13 +44,18 @@ namespace Deucarian.PackageInstaller.Editor
                 PackageGraphHierarchyBuilder.CreateGroups(groups);
             _groups = graphGroups;
 
-            PackageDefinition[] definitions = packages == null
-                ? Array.Empty<PackageDefinition>()
-                : packages
-                    .Where(package => package != null)
-                    .OrderBy(GetNodeTypeSortIndex)
-                    .ThenBy(package => package.DisplayName, StringComparer.OrdinalIgnoreCase)
-                    .ToArray();
+            PackageDefinition[] definitions;
+
+            using (PackageGraphOpenProfiler.Measure(PackageGraphOpenTiming.PackageLookup))
+            {
+                definitions = packages == null
+                    ? Array.Empty<PackageDefinition>()
+                    : packages
+                        .Where(package => package != null)
+                        .OrderBy(GetNodeTypeSortIndex)
+                        .ThenBy(package => package.DisplayName, StringComparer.OrdinalIgnoreCase)
+                        .ToArray();
+            }
 
             foreach (PackageDefinition package in definitions)
             {
@@ -61,117 +66,120 @@ namespace Deucarian.PackageInstaller.Editor
             List<PackageGraphSuiteRegion> suiteRegions = new List<PackageGraphSuiteRegion>();
             HashSet<string> edgeKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            foreach (PackageDefinition package in definitions)
+            using (PackageGraphOpenProfiler.Measure(PackageGraphOpenTiming.DependencyResolution))
             {
-                if (package.IsSuite)
+                foreach (PackageDefinition package in definitions)
                 {
-                    string[] suiteMembers = GetSuiteMembers(package).ToArray();
-                    suiteRegions.Add(new PackageGraphSuiteRegion(package.PackageId, suiteMembers));
+                    if (package.IsSuite)
+                    {
+                        string[] suiteMembers = GetSuiteMembers(package).ToArray();
+                        suiteRegions.Add(new PackageGraphSuiteRegion(package.PackageId, suiteMembers));
 
-                    foreach (string memberId in suiteMembers)
+                        foreach (string memberId in suiteMembers)
+                        {
+                            AddRelationshipEdge(
+                                edges,
+                                edgeKeys,
+                                package.PackageId,
+                                memberId,
+                                PackageGraphEdgeKind.SuiteMembership,
+                                GetOwnedRelationshipState(package.PackageId, memberId),
+                                "Suite member");
+                        }
+
+                        continue;
+                    }
+
+                    foreach (string dependencyId in package.Dependencies)
+                    {
+                        AddRelationshipEdge(
+                            edges,
+                            edgeKeys,
+                            dependencyId,
+                            package.PackageId,
+                            PackageGraphEdgeKind.HardDependency,
+                            GetOwnedRelationshipState(package.PackageId, dependencyId),
+                            GetDependencyRelationshipLabel(package, dependencyId));
+                    }
+
+                    if (package.IsIntegration)
+                    {
+                        foreach (string targetId in GetIntegrationTargets(package))
+                        {
+                            AddRelationshipEdge(
+                                edges,
+                                edgeKeys,
+                                package.PackageId,
+                                targetId,
+                                PackageGraphEdgeKind.IntegrationConnection,
+                                GetPeerRelationshipState(package.PackageId, targetId),
+                                GetIntegrationRelationshipLabel(package, targetId));
+                        }
+                    }
+
+                    foreach (string integrationId in package.OptionalIntegrations)
+                    {
+                        PackageGraphEdgeKind edgeKind = GetOptionalIntegrationEdgeKind(integrationId);
+                        PackageGraphNode integrationNode = EnsureNode(integrationId, null);
+                        bool integrationConnectionAlreadyDeclared =
+                            edgeKind == PackageGraphEdgeKind.IntegrationConnection &&
+                            integrationNode.PackageDefinition != null &&
+                            GetIntegrationTargets(integrationNode.PackageDefinition)
+                                .Any(targetId => string.Equals(
+                                    targetId,
+                                    package.PackageId,
+                                    StringComparison.OrdinalIgnoreCase));
+
+                        if (integrationConnectionAlreadyDeclared)
+                        {
+                            continue;
+                        }
+
+                        AddRelationshipEdge(
+                            edges,
+                            edgeKeys,
+                            edgeKind == PackageGraphEdgeKind.IntegrationConnection ? integrationId : package.PackageId,
+                            edgeKind == PackageGraphEdgeKind.IntegrationConnection ? package.PackageId : integrationId,
+                            edgeKind,
+                            GetPeerRelationshipState(package.PackageId, integrationId),
+                            edgeKind == PackageGraphEdgeKind.IntegrationConnection
+                                ? GetIntegrationRelationshipLabel(integrationNode.PackageDefinition, package.PackageId)
+                                : "Optional companion");
+                    }
+
+                    foreach (string companionId in package.OptionalCompanions)
                     {
                         AddRelationshipEdge(
                             edges,
                             edgeKeys,
                             package.PackageId,
-                            memberId,
+                            companionId,
+                            PackageGraphEdgeKind.OptionalCompanion,
+                            GetPeerRelationshipState(package.PackageId, companionId),
+                            "Optional companion");
+                    }
+
+                    foreach (string recommendedId in package.RecommendedWith)
+                    {
+                        if (!IsSuitePackage(recommendedId) ||
+                            IsDeclaredSuiteMember(recommendedId, package.PackageId))
+                        {
+                            continue;
+                        }
+
+                        AddRelationshipEdge(
+                            edges,
+                            edgeKeys,
+                            recommendedId,
+                            package.PackageId,
                             PackageGraphEdgeKind.SuiteMembership,
-                            GetOwnedRelationshipState(package.PackageId, memberId),
+                            GetPeerRelationshipState(package.PackageId, recommendedId),
                             "Suite member");
                     }
-
-                    continue;
                 }
 
-                foreach (string dependencyId in package.Dependencies)
-                {
-                    AddRelationshipEdge(
-                        edges,
-                        edgeKeys,
-                        dependencyId,
-                        package.PackageId,
-                        PackageGraphEdgeKind.HardDependency,
-                        GetOwnedRelationshipState(package.PackageId, dependencyId),
-                        GetDependencyRelationshipLabel(package, dependencyId));
-                }
-
-                if (package.IsIntegration)
-                {
-                    foreach (string targetId in GetIntegrationTargets(package))
-                    {
-                        AddRelationshipEdge(
-                            edges,
-                            edgeKeys,
-                            package.PackageId,
-                            targetId,
-                            PackageGraphEdgeKind.IntegrationConnection,
-                            GetPeerRelationshipState(package.PackageId, targetId),
-                            GetIntegrationRelationshipLabel(package, targetId));
-                    }
-                }
-
-                foreach (string integrationId in package.OptionalIntegrations)
-                {
-                    PackageGraphEdgeKind edgeKind = GetOptionalIntegrationEdgeKind(integrationId);
-                    PackageGraphNode integrationNode = EnsureNode(integrationId, null);
-                    bool integrationConnectionAlreadyDeclared =
-                        edgeKind == PackageGraphEdgeKind.IntegrationConnection &&
-                        integrationNode.PackageDefinition != null &&
-                        GetIntegrationTargets(integrationNode.PackageDefinition)
-                            .Any(targetId => string.Equals(
-                                targetId,
-                                package.PackageId,
-                                StringComparison.OrdinalIgnoreCase));
-
-                    if (integrationConnectionAlreadyDeclared)
-                    {
-                        continue;
-                    }
-
-                    AddRelationshipEdge(
-                        edges,
-                        edgeKeys,
-                        edgeKind == PackageGraphEdgeKind.IntegrationConnection ? integrationId : package.PackageId,
-                        edgeKind == PackageGraphEdgeKind.IntegrationConnection ? package.PackageId : integrationId,
-                        edgeKind,
-                        GetPeerRelationshipState(package.PackageId, integrationId),
-                        edgeKind == PackageGraphEdgeKind.IntegrationConnection
-                            ? GetIntegrationRelationshipLabel(integrationNode.PackageDefinition, package.PackageId)
-                            : "Optional companion");
-                }
-
-                foreach (string companionId in package.OptionalCompanions)
-                {
-                    AddRelationshipEdge(
-                        edges,
-                        edgeKeys,
-                        package.PackageId,
-                        companionId,
-                        PackageGraphEdgeKind.OptionalCompanion,
-                        GetPeerRelationshipState(package.PackageId, companionId),
-                        "Optional companion");
-                }
-
-                foreach (string recommendedId in package.RecommendedWith)
-                {
-                    if (!IsSuitePackage(recommendedId) ||
-                        IsDeclaredSuiteMember(recommendedId, package.PackageId))
-                    {
-                        continue;
-                    }
-
-                    AddRelationshipEdge(
-                        edges,
-                        edgeKeys,
-                        recommendedId,
-                        package.PackageId,
-                        PackageGraphEdgeKind.SuiteMembership,
-                        GetPeerRelationshipState(package.PackageId, recommendedId),
-                        "Suite member");
-                }
+                ApplyRequiredByInstalledPackageWarnings(edges);
             }
-
-            ApplyRequiredByInstalledPackageWarnings(edges);
 
             return new PackageGraphModel(
                 _nodes.Values
@@ -252,11 +260,21 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (package != null)
             {
-                bool installed = _isInstalled(package.PackageId);
-                PackageChannel selectedChannel = _selectChannel(package);
-                PackageUpdateStatus updateStatus = _getUpdateStatus != null
-                    ? _getUpdateStatus(package)
-                    : null;
+                bool installed;
+                using (PackageGraphOpenProfiler.Measure(PackageGraphOpenTiming.InstalledPackageLookup))
+                {
+                    installed = _isInstalled(package.PackageId);
+                }
+
+                PackageChannel selectedChannel;
+                PackageUpdateStatus updateStatus;
+                using (PackageGraphOpenProfiler.Measure(PackageGraphOpenTiming.PackageLookup))
+                {
+                    selectedChannel = _selectChannel(package);
+                    updateStatus = _getUpdateStatus != null
+                        ? _getUpdateStatus(package)
+                        : null;
+                }
 
                 node = new PackageGraphNode(
                     package.PackageId,

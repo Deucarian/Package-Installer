@@ -20,13 +20,19 @@ namespace Deucarian.PackageInstaller.Editor
         private readonly Dictionary<string, string> _installedPackageVersions =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private readonly IReadOnlyList<string> _packageLockPaths;
+        private readonly PackageInstallerStateRepository _stateRepository;
 
         private ListRequest _listRequest;
         private bool _refreshRetryScheduled;
+        private bool _manifestRefreshCheckScheduled;
+        private string _lastManifestStateSignature;
 
         public PackageDetectionService()
         {
             _packageLockPaths = GetPackageLockPaths();
+            _stateRepository = new PackageInstallerStateRepository();
+            _lastManifestStateSignature = _stateRepository.GetManifestStateSignature();
+            EditorApplication.projectChanged += HandleProjectChanged;
         }
 
         public event Action StateChanged;
@@ -56,6 +62,22 @@ namespace Deucarian.PackageInstaller.Editor
                 ScheduleRefreshRetry();
                 NotifyStateChanged();
             }
+        }
+
+        public bool RefreshIfManifestStateChanged()
+        {
+            // Unity package state is owned by the project manifest and package lock files.
+            // Their signature is the cheap invalidation gate before we ask UPM for a fresh list.
+            string currentSignature = _stateRepository.GetManifestStateSignature();
+
+            if (!HasManifestStateChanged(_lastManifestStateSignature, currentSignature))
+            {
+                return false;
+            }
+
+            _lastManifestStateSignature = currentSignature;
+            Refresh();
+            return true;
         }
 
         public bool IsInstalled(string packageId)
@@ -271,6 +293,8 @@ namespace Deucarian.PackageInstaller.Editor
         {
             EditorApplication.update -= Update;
             EditorApplication.delayCall -= RetryRefresh;
+            EditorApplication.delayCall -= CheckManifestRefresh;
+            EditorApplication.projectChanged -= HandleProjectChanged;
         }
 
         private void Update()
@@ -326,6 +350,8 @@ namespace Deucarian.PackageInstaller.Editor
                         }
                     }
                 }
+
+                _lastManifestStateSignature = _stateRepository.GetManifestStateSignature();
             }
             else
             {
@@ -363,6 +389,37 @@ namespace Deucarian.PackageInstaller.Editor
             EditorApplication.delayCall -= RetryRefresh;
             _refreshRetryScheduled = false;
             Refresh();
+        }
+
+        private void HandleProjectChanged()
+        {
+            if (_manifestRefreshCheckScheduled)
+            {
+                return;
+            }
+
+            _manifestRefreshCheckScheduled = true;
+            EditorApplication.delayCall += CheckManifestRefresh;
+        }
+
+        private void CheckManifestRefresh()
+        {
+            EditorApplication.delayCall -= CheckManifestRefresh;
+            _manifestRefreshCheckScheduled = false;
+            RefreshIfManifestStateChanged();
+        }
+
+        internal static bool HasManifestStateChangedForTests(string previousSignature, string currentSignature)
+        {
+            return HasManifestStateChanged(previousSignature, currentSignature);
+        }
+
+        private static bool HasManifestStateChanged(string previousSignature, string currentSignature)
+        {
+            return !string.Equals(
+                previousSignature ?? string.Empty,
+                currentSignature ?? string.Empty,
+                StringComparison.Ordinal);
         }
 
         private bool TryReadPackageLockReference(string packageId, out string packageReference)

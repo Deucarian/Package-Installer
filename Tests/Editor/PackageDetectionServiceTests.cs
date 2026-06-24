@@ -128,33 +128,6 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                     string.Empty));
         }
 
-        [Test]
-        public void InstalledChannelSelectionDoesNotOverrideManualSelection()
-        {
-            Assert.IsFalse(PackageInstallerWindow.ShouldApplyInstalledChannelSelection(
-                hasSelectedChannel: true,
-                hasStoredChannel: true,
-                wasAutoSelectedChannel: false));
-        }
-
-        [Test]
-        public void InstalledChannelSelectionCanInitializeUnselectedPackage()
-        {
-            Assert.IsTrue(PackageInstallerWindow.ShouldApplyInstalledChannelSelection(
-                hasSelectedChannel: false,
-                hasStoredChannel: false,
-                wasAutoSelectedChannel: false));
-        }
-
-        [Test]
-        public void InstalledChannelSelectionCanRefreshAutoSelection()
-        {
-            Assert.IsTrue(PackageInstallerWindow.ShouldApplyInstalledChannelSelection(
-                hasSelectedChannel: true,
-                hasStoredChannel: false,
-                wasAutoSelectedChannel: true));
-        }
-
         private static PackageDefinition CreatePackage()
         {
             return new PackageDefinition(

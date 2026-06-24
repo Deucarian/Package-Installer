@@ -1006,10 +1006,8 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            PackageGraphGroup owningGroup = graph.Groups.FirstOrDefault(group =>
-                string.Equals(group.Id, focusNode.GroupId, StringComparison.OrdinalIgnoreCase));
-
-            if (owningGroup == null || !placedGroupIds.Add(owningGroup.Id))
+            if (!graph.TryGetGroup(focusNode.GroupId, out PackageGraphGroup owningGroup) ||
+                !placedGroupIds.Add(owningGroup.Id))
             {
                 return;
             }
@@ -1115,9 +1113,7 @@ namespace Deucarian.PackageInstaller.Editor
             return packagesByGroup
                 .Select(pair =>
                 {
-                    PackageGraphGroup group = graph.Groups.FirstOrDefault(candidate =>
-                        string.Equals(candidate.Id, pair.Key, StringComparison.OrdinalIgnoreCase));
-                    return group == null
+                    return !graph.TryGetGroup(pair.Key, out PackageGraphGroup group)
                         ? null
                         : new EgoCategoryCluster(
                             group,
@@ -1580,9 +1576,7 @@ namespace Deucarian.PackageInstaller.Editor
             string focusPackageId,
             ISet<string> placed)
         {
-            return graph.Edges
-                .Where(edge => edge.Kind == PackageGraphEdgeKind.HardDependency &&
-                               string.Equals(edge.ToPackageId, focusPackageId, StringComparison.OrdinalIgnoreCase))
+            return graph.GetHardDependencyProviderEdges(focusPackageId)
                 .Select(edge => GetNode(nodeById, edge.FromPackageId))
                 .Where(node => node != null && !placed.Contains(node.PackageId))
                 .OrderBy(GetRelationshipSortIndex)
@@ -1596,9 +1590,7 @@ namespace Deucarian.PackageInstaller.Editor
             string focusPackageId,
             ISet<string> placed)
         {
-            return graph.Edges
-                .Where(edge => edge.Kind == PackageGraphEdgeKind.HardDependency &&
-                               string.Equals(edge.FromPackageId, focusPackageId, StringComparison.OrdinalIgnoreCase))
+            return graph.GetHardDependencyDependentEdges(focusPackageId)
                 .Select(edge => GetNode(nodeById, edge.ToPackageId))
                 .Where(node => node != null &&
                                node.NodeType != PackageGraphNodeType.Integration &&
@@ -1614,15 +1606,23 @@ namespace Deucarian.PackageInstaller.Editor
             string focusPackageId,
             ISet<string> placed)
         {
-            return graph.Edges
-                .Where(edge =>
-                    (edge.Kind == PackageGraphEdgeKind.IntegrationConnection ||
-                     edge.Kind == PackageGraphEdgeKind.HardDependency) &&
-                    edge.ConnectsPackage(focusPackageId))
-                .Select(edge => GetOtherNode(nodeById, edge, focusPackageId))
-                .Where(node => node != null &&
-                               node.NodeType == PackageGraphNodeType.Integration &&
-                               !placed.Contains(node.PackageId))
+            List<PackageGraphNode> integrationNodes = new List<PackageGraphNode>();
+            AddOtherIntegrationNodes(
+                integrationNodes,
+                graph.GetIntegrationEdges(focusPackageId),
+                nodeById,
+                focusPackageId,
+                placed);
+
+            foreach (PackageGraphEdge edge in graph.GetEdgesForPackage(focusPackageId))
+            {
+                if (edge.Kind == PackageGraphEdgeKind.HardDependency)
+                {
+                    AddOtherIntegrationNode(integrationNodes, edge, nodeById, focusPackageId, placed);
+                }
+            }
+
+            return integrationNodes
                 .Distinct(PackageGraphNodePackageIdComparer.Instance)
                 .OrderBy(GetRelationshipSortIndex)
                 .ThenBy(node => node.DisplayName, StringComparer.OrdinalIgnoreCase)
@@ -1635,9 +1635,7 @@ namespace Deucarian.PackageInstaller.Editor
             string focusPackageId,
             ISet<string> placed)
         {
-            return graph.Edges
-                .Where(edge => edge.Kind == PackageGraphEdgeKind.OptionalCompanion &&
-                               edge.ConnectsPackage(focusPackageId))
+            return graph.GetOptionalCompanionEdges(focusPackageId)
                 .Select(edge => GetOtherNode(nodeById, edge, focusPackageId))
                 .Where(node => node != null && !placed.Contains(node.PackageId))
                 .Distinct(PackageGraphNodePackageIdComparer.Instance)
@@ -1654,7 +1652,7 @@ namespace Deucarian.PackageInstaller.Editor
         {
             HashSet<string> packageIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            foreach (PackageGraphSuiteRegion region in graph.SuiteRegions)
+            foreach (PackageGraphSuiteRegion region in graph.GetSuiteRegionsForPackage(focusPackageId))
             {
                 bool focusIsSuite = string.Equals(region.SuitePackageId, focusPackageId, StringComparison.OrdinalIgnoreCase);
                 bool focusIsMember = region.MemberPackageIds.Any(memberPackageId =>
@@ -1716,32 +1714,50 @@ namespace Deucarian.PackageInstaller.Editor
             return edge == null ? null : GetNode(nodeById, edge.GetOtherPackageId(packageId));
         }
 
+        private static void AddOtherIntegrationNodes(
+            ICollection<PackageGraphNode> integrationNodes,
+            IEnumerable<PackageGraphEdge> edges,
+            IReadOnlyDictionary<string, PackageGraphNode> nodeById,
+            string focusPackageId,
+            ISet<string> placed)
+        {
+            foreach (PackageGraphEdge edge in edges ?? Array.Empty<PackageGraphEdge>())
+            {
+                AddOtherIntegrationNode(integrationNodes, edge, nodeById, focusPackageId, placed);
+            }
+        }
+
+        private static void AddOtherIntegrationNode(
+            ICollection<PackageGraphNode> integrationNodes,
+            PackageGraphEdge edge,
+            IReadOnlyDictionary<string, PackageGraphNode> nodeById,
+            string focusPackageId,
+            ISet<string> placed)
+        {
+            PackageGraphNode node = GetOtherNode(nodeById, edge, focusPackageId);
+
+            if (node != null &&
+                node.NodeType == PackageGraphNodeType.Integration &&
+                !placed.Contains(node.PackageId))
+            {
+                integrationNodes.Add(node);
+            }
+        }
+
         private static IReadOnlyList<PackageGraphGroup> GetTopLevelGroups(PackageGraphModel graph)
         {
-            return graph.Groups
-                .Where(group => group != null && string.IsNullOrWhiteSpace(group.ParentGroupId))
-                .OrderBy(group => group.SortOrder)
-                .ThenBy(group => group.DisplayName, StringComparer.OrdinalIgnoreCase)
-                .ThenBy(group => group.Id, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
+            return graph.GetRootGroups();
         }
 
         private static IReadOnlyList<PackageGraphGroup> GetChildGroups(PackageGraphModel graph, string parentGroupId)
         {
-            return graph.Groups
-                .Where(group => group != null &&
-                                string.Equals(group.ParentGroupId, parentGroupId, StringComparison.OrdinalIgnoreCase))
-                .OrderBy(group => group.SortOrder)
-                .ThenBy(group => group.DisplayName, StringComparer.OrdinalIgnoreCase)
-                .ThenBy(group => group.Id, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
+            return graph.GetChildGroups(parentGroupId);
         }
 
         private static IReadOnlyList<PackageGraphNode> GetDirectPackages(PackageGraphModel graph, string groupId)
         {
-            return graph.Nodes
-                .Where(node => node != null &&
-                               string.Equals(node.GroupId, groupId, StringComparison.OrdinalIgnoreCase))
+            return graph.GetDirectPackages(groupId)
+                .Where(node => node != null)
                 .OrderBy(GetRelationshipSortIndex)
                 .ThenBy(node => node.DisplayName, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(node => node.PackageId, StringComparer.OrdinalIgnoreCase)
@@ -1750,27 +1766,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static IReadOnlyList<PackageGraphNode> GetDescendantPackages(PackageGraphModel graph, string groupId)
         {
-            HashSet<string> descendantGroupIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            CollectDescendantGroupIds(graph, groupId, descendantGroupIds);
-            return graph.Nodes
-                .Where(node => node != null && descendantGroupIds.Contains(node.GroupId))
-                .ToArray();
-        }
-
-        private static void CollectDescendantGroupIds(
-            PackageGraphModel graph,
-            string groupId,
-            ISet<string> result)
-        {
-            if (string.IsNullOrWhiteSpace(groupId) || !result.Add(groupId))
-            {
-                return;
-            }
-
-            foreach (PackageGraphGroup childGroup in GetChildGroups(graph, groupId))
-            {
-                CollectDescendantGroupIds(graph, childGroup.Id, result);
-            }
+            return graph.GetDescendantPackages(groupId);
         }
 
         private static PackageGraphGroup GetTopLevelGroupForPackage(PackageGraphModel graph, PackageGraphNode node)
@@ -1791,18 +1787,12 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static bool TryGetPackage(PackageGraphModel graph, string packageId, out PackageGraphNode node)
         {
-            node = graph.Nodes.FirstOrDefault(candidate =>
-                candidate != null &&
-                string.Equals(candidate.PackageId, packageId, StringComparison.OrdinalIgnoreCase));
-            return node != null;
+            return graph.TryGetNode(packageId, out node);
         }
 
         private static bool TryGetGroup(PackageGraphModel graph, string groupId, out PackageGraphGroup group)
         {
-            group = graph.Groups.FirstOrDefault(candidate =>
-                candidate != null &&
-                string.Equals(candidate.Id, groupId, StringComparison.OrdinalIgnoreCase));
-            return group != null;
+            return graph.TryGetGroup(groupId, out group);
         }
 
         private static float[] CreateEvenCircleAngles(int count, float startAngleDegrees)

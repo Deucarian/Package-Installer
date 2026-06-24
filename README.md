@@ -14,14 +14,6 @@ Tools > Deucarian > Package Installer
 
 The installer keeps its Unity Editor entry point at `Tools > Deucarian > Package Installer`. This package does not own the Theming, Logging, Object Loading, Session, or Selection menu groups; those packages provide their own package-local menu items under the shared `Tools > Deucarian` menu.
 
-The UI Toolkit preview base is a development-only window available from:
-
-```text
-Tools > Deucarian > Development > Package Installer Preview
-```
-
-The preview is separate from the real installer and does not replace the existing production entry point.
-
 The installer can install standalone packages, integration packages, and explicitly declared package samples without making this package a runtime dependency of any other package.
 
 Package ID: `com.deucarian.package-installer`
@@ -236,13 +228,13 @@ This package is editor-only and exposes no runtime API for game code.
 The user-facing entry point is the Unity menu item:
 
 ```text
-Deucarian/Package Installer
+Tools/Deucarian/Package Installer
 ```
 
 The implementation is split into internal editor classes:
 
 - `PackageInstallerWindow`: IMGUI window and coordination.
-- `PackageInstallerPreviewWindow`: UI Toolkit preview window for the future ecosystem browser direction.
+- `PackageInstallerStateRepository`: project-scoped selected-channel state shared with Bootstrap and manifest/package-lock invalidation signatures.
 - `PackageRegistryProvider`, `PackageRegistryLoader`, and `PackageRegistryValidator`: bundled and remote registry loading.
 - `PackageDefinition`, `PackageChannel`, and `PackageExtraDefinition`: installer data models.
 - `PackageInstallService`: Unity Package Manager install, update, and remove operations.
@@ -250,21 +242,6 @@ The implementation is split into internal editor classes:
 - `PackageDetectionService`: installed package detection through `Client.List`.
 - `PackageUpdateCheckService`: Git revision comparison for installed Git packages.
 - `PackageSampleImportService`: explicit sample import through Unity sample APIs or a safe copy fallback.
-
-## UI Toolkit Preview Assets
-
-Package-specific UI Toolkit files for the preview live in:
-
-- `Editor/UI/PackageInstaller/PackageInstallerPreviewWindow.uxml`
-- `Editor/UI/PackageInstaller/PackageInstallerPreviewWindow.uss`
-
-Shared Deucarian UI assets live in `com.deucarian.editor`, not in this package:
-
-- Logo: `com.deucarian.editor/Editor/Assets/Logos/DeucarianPlaceholderLogo.png`
-- Package Installer hero: `com.deucarian.editor/Editor/Assets/Images/DeucarianPackageInstallerPlaceholderHero.png`
-- Default package icon: `com.deucarian.editor/Editor/Assets/Icons/DeucarianPackagePlaceholderIcon.png`
-
-Package Installer loads those shared assets through `DeucarianEditorUIResources` and keeps only package-specific UXML/USS in this package.
 
 ## Why Editor-Only
 

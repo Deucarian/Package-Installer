@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
+using System.Text;
 using Deucarian.Editor;
 using UnityEditor;
 using UnityEngine;
@@ -3652,19 +3654,120 @@ namespace Deucarian.PackageInstaller.Editor
             IReadOnlyCollection<string> visiblePackageIds,
             PackageGraphSearchState searchState)
         {
-            _graph = graph ?? new PackageGraphModel(
+            PackageGraphModel nextGraph = graph ?? new PackageGraphModel(
                 Array.Empty<PackageGraphNode>(),
                 Array.Empty<PackageGraphEdge>(),
                 Array.Empty<PackageGraphSuiteRegion>());
+            PackageGraphSearchState nextSearchState = searchState ?? PackageGraphSearchState.Empty;
+            string nextSelectedPackageId = selectedPackageId ?? string.Empty;
+            string nextFocusedPackageId = focusedPackageId ?? string.Empty;
+            string nextFocusedGroupId = focusedGroupId ?? string.Empty;
+
+            if (CanSkipRebuild(
+                    nextGraph,
+                    nextSelectedPackageId,
+                    nextFocusedPackageId,
+                    nextFocusedGroupId,
+                    actionsEnabled,
+                    visiblePackageIds,
+                    nextSearchState))
+            {
+                _actionsEnabled = actionsEnabled;
+                ApplyInteractionState();
+                return;
+            }
+
+            _graph = nextGraph;
             _visiblePackageIds = visiblePackageIds == null
                 ? new HashSet<string>(_graph.Nodes.Select(node => node.PackageId), StringComparer.OrdinalIgnoreCase)
                 : new HashSet<string>(visiblePackageIds, StringComparer.OrdinalIgnoreCase);
-            _selectedPackageId = selectedPackageId ?? string.Empty;
-            _focusedPackageId = focusedPackageId ?? string.Empty;
-            _focusedGroupId = focusedGroupId ?? string.Empty;
+            _selectedPackageId = nextSelectedPackageId;
+            _focusedPackageId = nextFocusedPackageId;
+            _focusedGroupId = nextFocusedGroupId;
             _actionsEnabled = actionsEnabled;
-            _searchState = searchState ?? PackageGraphSearchState.Empty;
+            _searchState = nextSearchState;
             Rebuild();
+        }
+
+        private bool CanSkipRebuild(
+            PackageGraphModel graph,
+            string selectedPackageId,
+            string focusedPackageId,
+            string focusedGroupId,
+            bool actionsEnabled,
+            IReadOnlyCollection<string> visiblePackageIds,
+            PackageGraphSearchState searchState)
+        {
+            return ReferenceEquals(_graph, graph) &&
+                   string.Equals(_selectedPackageId, selectedPackageId, StringComparison.OrdinalIgnoreCase) &&
+                   string.Equals(_focusedPackageId, focusedPackageId, StringComparison.OrdinalIgnoreCase) &&
+                   string.Equals(_focusedGroupId, focusedGroupId, StringComparison.OrdinalIgnoreCase) &&
+                   _actionsEnabled == actionsEnabled &&
+                   SearchStatesMatch(_searchState, searchState) &&
+                   VisiblePackageIdsMatch(graph, visiblePackageIds);
+        }
+
+        private bool VisiblePackageIdsMatch(
+            PackageGraphModel graph,
+            IReadOnlyCollection<string> visiblePackageIds)
+        {
+            if (_visiblePackageIds == null)
+            {
+                return false;
+            }
+
+            if (visiblePackageIds == null)
+            {
+                if (graph == null || _visiblePackageIds.Count != graph.Nodes.Count)
+                {
+                    return false;
+                }
+
+                foreach (PackageGraphNode node in graph.Nodes)
+                {
+                    if (node == null || !_visiblePackageIds.Contains(node.PackageId))
+                    {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+
+            if (_visiblePackageIds.Count != visiblePackageIds.Count)
+            {
+                return false;
+            }
+
+            foreach (string packageId in visiblePackageIds)
+            {
+                if (string.IsNullOrWhiteSpace(packageId) || !_visiblePackageIds.Contains(packageId))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool SearchStatesMatch(
+            PackageGraphSearchState current,
+            PackageGraphSearchState next)
+        {
+            if (ReferenceEquals(current, next))
+            {
+                return true;
+            }
+
+            if (current == null || next == null)
+            {
+                return false;
+            }
+
+            return string.Equals(current.Query, next.Query, StringComparison.OrdinalIgnoreCase) &&
+                   current.DirectCategoryMatchCount == next.DirectCategoryMatchCount &&
+                   current.DirectPackageMatchCount == next.DirectPackageMatchCount &&
+                   current.ContextPackageCount == next.ContextPackageCount;
         }
 
         private void Rebuild()
@@ -3695,62 +3798,77 @@ namespace Deucarian.PackageInstaller.Editor
                 layoutMode,
                 _viewportZoom,
                 _layoutPresentationLevel);
-            PackageGraphLayoutResult fullLayoutResult = _layout.Calculate(
-                _visibleGraph,
-                layoutMode,
-                _layoutFocusPackageId,
-                _layoutFocusGroupId,
-                _viewportSize,
-                _layoutPresentationLevel);
-            _currentFocus = PackageGraphFocus.Create(
-                _visibleGraph,
-                _layoutFocusPackageId);
-            _actionFocus = PackageGraphFocus.Create(
-                _visibleGraph,
-                _layoutFocusPackageId);
-            PackageGraphFocus edgeFocus = PackageGraphFocus.Create(
-                _visibleGraph,
-                _layoutFocusPackageId);
-            _layoutResult = CreateVisibleLayoutResult(fullLayoutResult, _currentFocus);
-            style.width = _layoutResult.CanvasWidth;
-            style.height = _layoutResult.CanvasHeight;
-            _guideLayer.style.width = _layoutResult.CanvasWidth;
-            _guideLayer.style.height = _layoutResult.CanvasHeight;
-            _membershipLayer.style.width = _layoutResult.CanvasWidth;
-            _membershipLayer.style.height = _layoutResult.CanvasHeight;
-            _edgeLayer.style.width = _layoutResult.CanvasWidth;
-            _edgeLayer.style.height = _layoutResult.CanvasHeight;
-            _nodeLayer.style.width = _layoutResult.CanvasWidth;
-            _nodeLayer.style.height = _layoutResult.CanvasHeight;
+            PackageGraphLayoutResult fullLayoutResult;
+            PackageGraphFocus edgeFocus;
 
-            DrawGuides();
-            _membershipLayer.SetLayout(
-                _visibleGraph,
-                _layoutResult,
-                PackageGraphCategoryStatusSummary.Create(_visibleGraph.Nodes),
-                _animatedNodeRects,
-                _animatedGroupRects,
-                _animatedGroupCenters,
-                _animatedGroupOrbitRadii,
-                GetActiveHoverGroupId(),
-                _interactionsLocked);
-            StartLayoutTransition(
-                previousRects,
-                previousNodeVisualStates,
-                previousGroupRects,
-                previousGroupCenters,
-                previousGroupOrbitRadii);
-            DrawGroups();
+            using (PackageGraphOpenProfiler.Measure(PackageGraphOpenTiming.Layout))
+            {
+                fullLayoutResult = _layout.Calculate(
+                    _visibleGraph,
+                    layoutMode,
+                    _layoutFocusPackageId,
+                    _layoutFocusGroupId,
+                    _viewportSize,
+                    _layoutPresentationLevel);
+                _currentFocus = PackageGraphFocus.Create(
+                    _visibleGraph,
+                    _layoutFocusPackageId);
+                _actionFocus = PackageGraphFocus.Create(
+                    _visibleGraph,
+                    _layoutFocusPackageId);
+                edgeFocus = PackageGraphFocus.Create(
+                    _visibleGraph,
+                    _layoutFocusPackageId);
+                _layoutResult = CreateVisibleLayoutResult(fullLayoutResult, _currentFocus);
+            }
+
+            using (PackageGraphOpenProfiler.Measure(PackageGraphOpenTiming.LayoutRepaintScheduling))
+            {
+                style.width = _layoutResult.CanvasWidth;
+                style.height = _layoutResult.CanvasHeight;
+                _guideLayer.style.width = _layoutResult.CanvasWidth;
+                _guideLayer.style.height = _layoutResult.CanvasHeight;
+                _membershipLayer.style.width = _layoutResult.CanvasWidth;
+                _membershipLayer.style.height = _layoutResult.CanvasHeight;
+                _edgeLayer.style.width = _layoutResult.CanvasWidth;
+                _edgeLayer.style.height = _layoutResult.CanvasHeight;
+                _nodeLayer.style.width = _layoutResult.CanvasWidth;
+                _nodeLayer.style.height = _layoutResult.CanvasHeight;
+
+                DrawGuides();
+                _membershipLayer.SetLayout(
+                    _visibleGraph,
+                    _layoutResult,
+                    PackageGraphCategoryStatusSummary.Create(_visibleGraph.Nodes),
+                    _animatedNodeRects,
+                    _animatedGroupRects,
+                    _animatedGroupCenters,
+                    _animatedGroupOrbitRadii,
+                    GetActiveHoverGroupId(),
+                    _interactionsLocked);
+                StartLayoutTransition(
+                    previousRects,
+                    previousNodeVisualStates,
+                    previousGroupRects,
+                    previousGroupCenters,
+                    previousGroupOrbitRadii);
+                DrawGroups();
+            }
+
             DrawNodes(_currentFocus);
-            DrawUnrelatedSummary();
-            ApplyAnimatedLayout();
-            _edgeLayer.SetGraph(
-                _visibleGraph,
-                _animatedNodeRects,
-                _animatedGroupRects,
-                _layoutResult.CanvasHeight,
-                edgeFocus);
-            ApplyInteractionState();
+
+            using (PackageGraphOpenProfiler.Measure(PackageGraphOpenTiming.LayoutRepaintScheduling))
+            {
+                DrawUnrelatedSummary();
+                ApplyAnimatedLayout(updateEdgeLayer: false);
+                _edgeLayer.SetGraph(
+                    _visibleGraph,
+                    _layoutResult.NodeRects,
+                    CreateTargetGroupRectSnapshot(),
+                    _layoutResult.CanvasHeight,
+                    edgeFocus);
+                ApplyInteractionState();
+            }
         }
 
         private PackageGraphModel CreateRenderedGraph()
@@ -4295,6 +4413,26 @@ namespace Deucarian.PackageInstaller.Editor
             NotifyActiveVisualCenterChanged();
         }
 
+        private IReadOnlyDictionary<string, Rect> CreateTargetGroupRectSnapshot()
+        {
+            Dictionary<string, Rect> groupRects = new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
+
+            if (_layoutResult == null || _layoutResult.GroupNodes == null)
+            {
+                return groupRects;
+            }
+
+            foreach (PackageGraphGroupLayoutNode groupNode in _layoutResult.GroupNodes)
+            {
+                if (groupNode != null && !string.IsNullOrWhiteSpace(groupNode.GroupId))
+                {
+                    groupRects[groupNode.GroupId] = groupNode.Rect;
+                }
+            }
+
+            return groupRects;
+        }
+
         private void ApplyInteractionState()
         {
             _guideLayer.style.opacity = 1f;
@@ -4580,7 +4718,7 @@ namespace Deucarian.PackageInstaller.Editor
             return Mathf.Lerp(0.85f, 1f, (t - 0.65f) / 0.35f);
         }
 
-        private void ApplyAnimatedLayout()
+        private void ApplyAnimatedLayout(bool updateEdgeLayer = true)
         {
             ProjectOrbitalChildren(
                 _visibleGraph,
@@ -4619,13 +4757,24 @@ namespace Deucarian.PackageInstaller.Editor
                 }
             }
 
-            _edgeLayer.UpdateRects(_animatedNodeRects, _animatedGroupRects);
+            if (updateEdgeLayer)
+            {
+                if (!_layoutAnimationActive)
+                {
+                    IReadOnlyDictionary<string, Rect> routeNodeRects = _layoutResult != null
+                        ? _layoutResult.NodeRects
+                        : _animatedNodeRects;
+                    _edgeLayer.UpdateRects(routeNodeRects, CreateTargetGroupRectSnapshot());
+                }
+
+                _edgeLayer.MarkDirtyRepaint();
+            }
+
             _membershipLayer.UpdateRects(
                 _animatedNodeRects,
                 _animatedGroupRects,
                 _animatedGroupCenters,
                 _animatedGroupOrbitRadii);
-            _edgeLayer.MarkDirtyRepaint();
             _membershipLayer.MarkDirtyRepaint();
             NotifyActiveVisualCenterChanged();
         }
@@ -4758,26 +4907,31 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void DrawNodes(PackageGraphFocus focus)
         {
-            foreach (PackageGraphNode node in _graph.Nodes)
+            using (PackageGraphOpenProfiler.Measure(PackageGraphOpenTiming.VisualNodeCreation))
             {
-                if (!_animatedNodeRects.TryGetValue(node.PackageId, out Rect rect))
+                foreach (PackageGraphNode node in _graph.Nodes)
                 {
-                    continue;
-                }
+                    if (!_animatedNodeRects.TryGetValue(node.PackageId, out Rect rect))
+                    {
+                        continue;
+                    }
 
-                PackageGraphNodeElement nodeElement = CreateNodeElement(node, focus, _layoutResult);
-                if (_nodeVisualStates.TryGetValue(node.PackageId, out PackageGraphNodeVisualState visualState))
-                {
-                    SetElementVisualState(nodeElement, visualState);
-                }
-                else
-                {
-                    SetElementRect(nodeElement, rect);
-                }
+                    PackageGraphNodeElement nodeElement = CreateNodeElement(node, focus, _layoutResult);
+                    if (_nodeVisualStates.TryGetValue(node.PackageId, out PackageGraphNodeVisualState visualState))
+                    {
+                        SetElementVisualState(nodeElement, visualState);
+                    }
+                    else
+                    {
+                        SetElementRect(nodeElement, rect);
+                    }
 
-                _nodeLayer.Add(nodeElement);
-                _nodeElements[node.PackageId] = nodeElement;
+                    _nodeLayer.Add(nodeElement);
+                    _nodeElements[node.PackageId] = nodeElement;
+                }
             }
+
+            PackageGraphOpenProfiler.Current?.SetRenderCounts(_nodeElements.Count, 0);
         }
 
         private PackageGraphNodeElement CreateNodeElement(
@@ -6460,6 +6614,242 @@ namespace Deucarian.PackageInstaller.Editor
         }
     }
 
+    internal struct PackageGraphEdgeRouteBuildDiagnostics
+    {
+        public int RouteCount;
+        public int RouteCacheHits;
+        public int RouteCacheMisses;
+        public int RouteCacheNoEntryMisses;
+        public int RouteCacheLayoutMisses;
+        public int RouteCacheEndpointMisses;
+        public int RouteCacheFocusGraphMisses;
+        public int RouteCacheStyleMisses;
+        public long RouteCacheLookupTicks;
+        public long RouteCalculationTicks;
+        public long GeometryLayoutReadTicks;
+        public long VisualElementReuseTicks;
+        public long StyleClassUpdateTicks;
+        public long PainterPassTicks;
+
+        public void AddRouteCacheLookupTicks(long ticks)
+        {
+            RouteCacheLookupTicks += Math.Max(0L, ticks);
+        }
+
+        public void AddRouteCacheMiss(PackageGraphEdgeRouteCacheMissReason reason)
+        {
+            RouteCacheMisses++;
+
+            switch (reason)
+            {
+                case PackageGraphEdgeRouteCacheMissReason.LayoutSignatureChanged:
+                    RouteCacheLayoutMisses++;
+                    break;
+                case PackageGraphEdgeRouteCacheMissReason.EndpointGeometryChanged:
+                    RouteCacheEndpointMisses++;
+                    break;
+                case PackageGraphEdgeRouteCacheMissReason.FocusGraphChanged:
+                    RouteCacheFocusGraphMisses++;
+                    break;
+                case PackageGraphEdgeRouteCacheMissReason.RouteStyleOptionsChanged:
+                    RouteCacheStyleMisses++;
+                    break;
+                default:
+                    RouteCacheNoEntryMisses++;
+                    break;
+            }
+        }
+
+        public void AddRouteCalculationTicks(long ticks)
+        {
+            RouteCalculationTicks += Math.Max(0L, ticks);
+        }
+
+        public void AddGeometryLayoutReadTicks(long ticks)
+        {
+            GeometryLayoutReadTicks += Math.Max(0L, ticks);
+        }
+
+        public void AddVisualElementReuseTicks(long ticks)
+        {
+            VisualElementReuseTicks += Math.Max(0L, ticks);
+        }
+
+        public void AddStyleClassUpdateTicks(long ticks)
+        {
+            StyleClassUpdateTicks += Math.Max(0L, ticks);
+        }
+
+        public void AddPainterPassTicks(long ticks)
+        {
+            PainterPassTicks += Math.Max(0L, ticks);
+        }
+    }
+
+    internal enum PackageGraphEdgeRouteCacheMissReason
+    {
+        None,
+        NoExistingEntry,
+        LayoutSignatureChanged,
+        EndpointGeometryChanged,
+        FocusGraphChanged,
+        RouteStyleOptionsChanged
+    }
+
+    internal readonly struct PackageGraphEdgeRouteCacheKey
+    {
+        public PackageGraphEdgeRouteCacheKey(
+            string identityKey,
+            string focusGraphKey,
+            string layoutSignature,
+            string endpointGeometryKey,
+            string routeStyleKey)
+        {
+            IdentityKey = identityKey ?? string.Empty;
+            FocusGraphKey = focusGraphKey ?? string.Empty;
+            LayoutSignature = layoutSignature ?? string.Empty;
+            EndpointGeometryKey = endpointGeometryKey ?? string.Empty;
+            RouteStyleKey = routeStyleKey ?? string.Empty;
+            FullKey =
+                IdentityKey +
+                "|fg=" + FocusGraphKey +
+                "|layout=" + LayoutSignature +
+                "|endpoints=" + EndpointGeometryKey +
+                "|style=" + RouteStyleKey;
+        }
+
+        public string FullKey { get; }
+
+        public string IdentityKey { get; }
+
+        public string FocusGraphKey { get; }
+
+        public string LayoutSignature { get; }
+
+        public string EndpointGeometryKey { get; }
+
+        public string RouteStyleKey { get; }
+    }
+
+    internal sealed class PackageGraphEdgeRouteCache
+    {
+        private const int MaxCachedRoutes = 512;
+
+        private readonly Dictionary<string, CachedPackageGraphEdgeRoute> _routes =
+            new Dictionary<string, CachedPackageGraphEdgeRoute>(StringComparer.Ordinal);
+        private readonly Dictionary<string, PackageGraphEdgeRouteCacheKey> _lastKeyByIdentity =
+            new Dictionary<string, PackageGraphEdgeRouteCacheKey>(StringComparer.Ordinal);
+
+        public int Count => _routes.Count;
+
+        public bool TryGet(
+            PackageGraphEdgeRouteCacheKey key,
+            PackageGraphConnectionBundle bundle,
+            out PackageGraphEdgeRoute route,
+            out PackageGraphEdgeRouteCacheMissReason missReason)
+        {
+            if (!string.IsNullOrEmpty(key.FullKey) &&
+                _routes.TryGetValue(key.FullKey, out CachedPackageGraphEdgeRoute cachedRoute))
+            {
+                route = cachedRoute.CreateRoute(bundle);
+                missReason = PackageGraphEdgeRouteCacheMissReason.None;
+                return true;
+            }
+
+            route = default(PackageGraphEdgeRoute);
+            missReason = GetMissReason(key);
+            return false;
+        }
+
+        public void Store(PackageGraphEdgeRouteCacheKey key, PackageGraphEdgeRoute route)
+        {
+            if (string.IsNullOrEmpty(key.FullKey) ||
+                string.IsNullOrEmpty(key.IdentityKey) ||
+                route.Points == null ||
+                route.Points.Count < 2)
+            {
+                return;
+            }
+
+            // Cache invalidation is encoded in the stable key parts: focus graph, target layout,
+            // endpoint geometry, and route style. Transient animation state intentionally stays out.
+            if (_routes.Count >= MaxCachedRoutes)
+            {
+                _routes.Clear();
+                _lastKeyByIdentity.Clear();
+            }
+
+            _routes[key.FullKey] = new CachedPackageGraphEdgeRoute(route);
+            _lastKeyByIdentity[key.IdentityKey] = key;
+        }
+
+        private PackageGraphEdgeRouteCacheMissReason GetMissReason(PackageGraphEdgeRouteCacheKey key)
+        {
+            if (string.IsNullOrEmpty(key.IdentityKey) ||
+                !_lastKeyByIdentity.TryGetValue(key.IdentityKey, out PackageGraphEdgeRouteCacheKey previousKey))
+            {
+                return PackageGraphEdgeRouteCacheMissReason.NoExistingEntry;
+            }
+
+            if (!string.Equals(previousKey.FocusGraphKey, key.FocusGraphKey, StringComparison.Ordinal))
+            {
+                return PackageGraphEdgeRouteCacheMissReason.FocusGraphChanged;
+            }
+
+            if (!string.Equals(previousKey.LayoutSignature, key.LayoutSignature, StringComparison.Ordinal))
+            {
+                return PackageGraphEdgeRouteCacheMissReason.LayoutSignatureChanged;
+            }
+
+            if (!string.Equals(previousKey.EndpointGeometryKey, key.EndpointGeometryKey, StringComparison.Ordinal))
+            {
+                return PackageGraphEdgeRouteCacheMissReason.EndpointGeometryChanged;
+            }
+
+            if (!string.Equals(previousKey.RouteStyleKey, key.RouteStyleKey, StringComparison.Ordinal))
+            {
+                return PackageGraphEdgeRouteCacheMissReason.RouteStyleOptionsChanged;
+            }
+
+            return PackageGraphEdgeRouteCacheMissReason.NoExistingEntry;
+        }
+
+        private readonly struct CachedPackageGraphEdgeRoute
+        {
+            private readonly PackageGraphEdgeRoutePort _sourcePort;
+            private readonly PackageGraphEdgeRoutePort _targetPort;
+            private readonly PackageGraphEdgeRouteZone _zone;
+            private readonly string _sharedTrunkId;
+            private readonly int _branchIndex;
+            private readonly int _branchCount;
+            private readonly Vector2[] _points;
+
+            public CachedPackageGraphEdgeRoute(PackageGraphEdgeRoute route)
+            {
+                _sourcePort = route.SourcePort;
+                _targetPort = route.TargetPort;
+                _zone = route.Zone;
+                _sharedTrunkId = route.SharedTrunkId;
+                _branchIndex = route.BranchIndex;
+                _branchCount = route.BranchCount;
+                _points = route.Points.ToArray();
+            }
+
+            public PackageGraphEdgeRoute CreateRoute(PackageGraphConnectionBundle bundle)
+            {
+                return new PackageGraphEdgeRoute(
+                    bundle,
+                    _sourcePort,
+                    _targetPort,
+                    _zone,
+                    _sharedTrunkId,
+                    _branchIndex,
+                    _branchCount,
+                    _points);
+            }
+        }
+    }
+
     internal sealed class PackageGraphEdgeLayer : VisualElement
     {
         private const float AnimationFrameMs = 40f;
@@ -6467,6 +6857,9 @@ namespace Deucarian.PackageInstaller.Editor
         private const float AnimatedDashGap = 12f;
         private const float EdgeEndpointPadding = 6f;
         private const float RouteObstacleMargin = 16f;
+        private const float RouteSearchBoundsPadding = 520f;
+        private const int MaxRouteChannelCount = 12;
+        private const int MaxRouteCandidateCount = 320;
         private const float RouteBendPenalty = 32f;
         private const float RouteDetourPenalty = 18f;
         private const float MarkerTravelStart = 0.045f;
@@ -6483,6 +6876,8 @@ namespace Deucarian.PackageInstaller.Editor
                 Array.Empty<PackageGraphEdge>(),
                 Array.Empty<PackageGraphSuiteRegion>());
         private PackageGraphFocus _focus = PackageGraphFocus.Create(null, string.Empty);
+        private readonly PackageGraphEdgeRouteCache _routeCache = new PackageGraphEdgeRouteCache();
+        private IReadOnlyList<PackageGraphEdgeRoute> _routes = Array.Empty<PackageGraphEdgeRoute>();
         private IVisualElementScheduledItem _animationItem;
         private float _animationPhase;
         private bool _animationEnabled;
@@ -6508,10 +6903,17 @@ namespace Deucarian.PackageInstaller.Editor
             _focus = focus ?? PackageGraphFocus.Create(_graph, string.Empty);
             CopyNodeRects(nodeRects);
             CopyGroupRects(groupRects);
+            long styleStartTicks = Stopwatch.GetTimestamp();
             style.height = canvasHeight;
+            long styleTicks = Stopwatch.GetTimestamp() - styleStartTicks;
+            PackageGraphEdgeRouteBuildDiagnostics diagnostics = RebuildRoutes();
+            diagnostics.AddStyleClassUpdateTicks(styleTicks);
+            long visualReuseStartTicks = Stopwatch.GetTimestamp();
+            diagnostics.AddVisualElementReuseTicks(Stopwatch.GetTimestamp() - visualReuseStartTicks);
             _animationEnabled = HasAnimatedEdges();
             UpdateAnimationSchedule();
             MarkDirtyRepaint();
+            PackageGraphOpenProfiler.Current?.AddEdgeRouteDiagnostics(diagnostics);
         }
 
         public void UpdateRects(
@@ -6520,7 +6922,9 @@ namespace Deucarian.PackageInstaller.Editor
         {
             CopyNodeRects(nodeRects);
             CopyGroupRects(groupRects);
+            PackageGraphEdgeRouteBuildDiagnostics diagnostics = RebuildRoutes();
             MarkDirtyRepaint();
+            PackageGraphOpenProfiler.Current?.AddEdgeRouteDiagnostics(diagnostics);
         }
 
         private void CopyNodeRects(IReadOnlyDictionary<string, Rect> nodeRects)
@@ -6614,9 +7018,10 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
+            long painterStartTicks = Stopwatch.GetTimestamp();
             Painter2D painter = context.painter2D;
 
-            foreach (PackageGraphEdgeRoute route in BuildRoutes())
+            foreach (PackageGraphEdgeRoute route in _routes)
             {
                 DrawEdge(
                     painter,
@@ -6625,6 +7030,12 @@ namespace Deucarian.PackageInstaller.Editor
                     _focus.HasFocus,
                     _animationPhase);
             }
+
+            PackageGraphOpenProfiler.Current?.AddEdgeRouteDiagnostics(
+                new PackageGraphEdgeRouteBuildDiagnostics
+                {
+                    PainterPassTicks = Stopwatch.GetTimestamp() - painterStartTicks
+                });
         }
 
         private void CopyGroupRects(IReadOnlyDictionary<string, Rect> groupRects)
@@ -6644,12 +7055,37 @@ namespace Deucarian.PackageInstaller.Editor
 
         private IReadOnlyList<PackageGraphEdgeRoute> BuildRoutes()
         {
-            return BuildRoutes(_graph, _nodeRects, _groupRects, _focus);
+            return _routes;
         }
 
         internal IReadOnlyList<PackageGraphEdgeRoute> BuildRoutesSnapshotForTests()
         {
             return BuildRoutes();
+        }
+
+        private PackageGraphEdgeRouteBuildDiagnostics RebuildRoutes()
+        {
+            PackageGraphEdgeRouteBuildDiagnostics diagnostics = new PackageGraphEdgeRouteBuildDiagnostics();
+
+            using (PackageGraphOpenProfiler.Measure(PackageGraphOpenTiming.EdgeCreation))
+            {
+                long geometryStartTicks = Stopwatch.GetTimestamp();
+                string layoutSignature = BuildRouteLayoutSignature(_nodeRects, _groupRects);
+                diagnostics.AddGeometryLayoutReadTicks(Stopwatch.GetTimestamp() - geometryStartTicks);
+
+                _routes = BuildRoutes(
+                    _graph,
+                    _nodeRects,
+                    _groupRects,
+                    _focus,
+                    _routeCache,
+                    layoutSignature,
+                    ref diagnostics);
+            }
+
+            PackageGraphOpenProfiler.Current?.SetRenderCounts(0, _routes.Count);
+            diagnostics.RouteCount = _routes.Count;
+            return diagnostics;
         }
 
         internal static IReadOnlyList<PackageGraphEdgeRoute> BuildRoutesForTests(
@@ -6669,11 +7105,48 @@ namespace Deucarian.PackageInstaller.Editor
             return BuildRoutes(graph, nodeRects, groupRects, focus);
         }
 
+        internal static IReadOnlyList<PackageGraphEdgeRoute> BuildRoutesWithCacheForTests(
+            PackageGraphModel graph,
+            IReadOnlyDictionary<string, Rect> nodeRects,
+            IReadOnlyDictionary<string, Rect> groupRects,
+            PackageGraphFocus focus,
+            PackageGraphEdgeRouteCache routeCache,
+            out PackageGraphEdgeRouteBuildDiagnostics diagnostics)
+        {
+            diagnostics = new PackageGraphEdgeRouteBuildDiagnostics();
+            long geometryStartTicks = Stopwatch.GetTimestamp();
+            string layoutSignature = BuildRouteLayoutSignature(nodeRects, groupRects);
+            diagnostics.AddGeometryLayoutReadTicks(Stopwatch.GetTimestamp() - geometryStartTicks);
+            IReadOnlyList<PackageGraphEdgeRoute> routes = BuildRoutes(
+                graph,
+                nodeRects,
+                groupRects,
+                focus,
+                routeCache,
+                layoutSignature,
+                ref diagnostics);
+            diagnostics.RouteCount = routes.Count;
+            return routes;
+        }
+
         private static IReadOnlyList<PackageGraphEdgeRoute> BuildRoutes(
             PackageGraphModel graph,
             IReadOnlyDictionary<string, Rect> nodeRects,
             IReadOnlyDictionary<string, Rect> groupRects,
             PackageGraphFocus focus)
+        {
+            PackageGraphEdgeRouteBuildDiagnostics diagnostics = new PackageGraphEdgeRouteBuildDiagnostics();
+            return BuildRoutes(graph, nodeRects, groupRects, focus, null, string.Empty, ref diagnostics);
+        }
+
+        private static IReadOnlyList<PackageGraphEdgeRoute> BuildRoutes(
+            PackageGraphModel graph,
+            IReadOnlyDictionary<string, Rect> nodeRects,
+            IReadOnlyDictionary<string, Rect> groupRects,
+            PackageGraphFocus focus,
+            PackageGraphEdgeRouteCache routeCache,
+            string layoutSignature,
+            ref PackageGraphEdgeRouteBuildDiagnostics diagnostics)
         {
             if (graph == null || nodeRects == null || graph.Edges.Count == 0)
             {
@@ -6681,18 +7154,28 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             PackageGraphFocus safeFocus = focus ?? PackageGraphFocus.Create(graph, string.Empty);
-            List<PackageGraphEdge> visibleEdges = graph.Edges
-                .Where(edge => edge != null &&
-                               safeFocus.IsEdgeVisible(edge) &&
-                               nodeRects.ContainsKey(edge.FromPackageId) &&
-                               nodeRects.ContainsKey(edge.ToPackageId))
-                .ToList();
+            string focusGraphSignature = BuildRouteFocusGraphSignature(graph, safeFocus);
+            long routeCalculationStartTicks = Stopwatch.GetTimestamp();
+            List<PackageGraphEdge> visibleEdges = new List<PackageGraphEdge>();
+
+            foreach (PackageGraphEdge edge in graph.Edges)
+            {
+                if (edge != null &&
+                    safeFocus.IsEdgeVisible(edge) &&
+                    nodeRects.ContainsKey(edge.FromPackageId) &&
+                    nodeRects.ContainsKey(edge.ToPackageId))
+                {
+                    visibleEdges.Add(edge);
+                }
+            }
 
             if (visibleEdges.Count == 0)
             {
+                diagnostics.AddRouteCalculationTicks(Stopwatch.GetTimestamp() - routeCalculationStartTicks);
                 return Array.Empty<PackageGraphEdgeRoute>();
             }
 
+            IReadOnlyList<PackageGraphRouteObstacle> obstacles = BuildRouteObstacles(nodeRects, groupRects);
             List<PackageGraphEdgeRouteContext> visibleBundles = BuildConnectionBundleContexts(
                 graph,
                 visibleEdges,
@@ -6700,26 +7183,41 @@ namespace Deucarian.PackageInstaller.Editor
                 safeFocus);
             List<PackageGraphEdgeRoute> routes = new List<PackageGraphEdgeRoute>(visibleBundles.Count);
             HashSet<string> routedEdgeKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            diagnostics.AddRouteCalculationTicks(Stopwatch.GetTimestamp() - routeCalculationStartTicks);
 
             if (safeFocus.HasFocus &&
                 !string.IsNullOrWhiteSpace(safeFocus.FocusPackageId) &&
                 nodeRects.TryGetValue(safeFocus.FocusPackageId, out Rect focusRect))
             {
-                foreach (IGrouping<string, PackageGraphEdgeRouteContext> group in visibleBundles
-                             .Where(context => context.Zone != PackageGraphEdgeRouteZone.Direct)
-                             .GroupBy(
-                                 context => GetRouteGroupKey(context.Bundle, context.Zone, safeFocus.FocusPackageId),
-                                 StringComparer.OrdinalIgnoreCase))
-                {
-                    PackageGraphEdgeRouteContext[] contexts = group
-                        .OrderBy(context => GetRouteSortValue(context, safeFocus.FocusPackageId))
-                        .ThenBy(context => GetOtherNodeDisplayName(graph, context.Bundle, safeFocus.FocusPackageId), StringComparer.OrdinalIgnoreCase)
-                        .ThenBy(context => context.Bundle.Key, StringComparer.OrdinalIgnoreCase)
-                        .ToArray();
+                Dictionary<string, List<PackageGraphEdgeRouteContext>> fanOutGroups =
+                    new Dictionary<string, List<PackageGraphEdgeRouteContext>>(StringComparer.OrdinalIgnoreCase);
 
-                    if (contexts.Length > 1)
+                foreach (PackageGraphEdgeRouteContext context in visibleBundles)
+                {
+                    if (context.Zone == PackageGraphEdgeRouteZone.Direct)
                     {
-                        for (int index = 0; index < contexts.Length; index++)
+                        continue;
+                    }
+
+                    string groupKey = GetRouteGroupKey(context.Bundle, context.Zone, safeFocus.FocusPackageId);
+
+                    if (!fanOutGroups.TryGetValue(groupKey, out List<PackageGraphEdgeRouteContext> contexts))
+                    {
+                        contexts = new List<PackageGraphEdgeRouteContext>();
+                        fanOutGroups[groupKey] = contexts;
+                    }
+
+                    contexts.Add(context);
+                }
+
+                foreach (KeyValuePair<string, List<PackageGraphEdgeRouteContext>> group in fanOutGroups)
+                {
+                    List<PackageGraphEdgeRouteContext> contexts = group.Value;
+                    if (contexts.Count > 1)
+                    {
+                        contexts.Sort((first, second) => CompareRouteContexts(first, second, graph, safeFocus.FocusPackageId));
+
+                        for (int index = 0; index < contexts.Count; index++)
                         {
                             routes.Add(CreateFanOutRoute(
                                 contexts[index],
@@ -6727,9 +7225,14 @@ namespace Deucarian.PackageInstaller.Editor
                                 safeFocus.FocusPackageId,
                                 group.Key,
                                 index,
-                                contexts.Length,
+                                contexts.Count,
                                 nodeRects,
-                                groupRects));
+                                groupRects,
+                                obstacles,
+                                routeCache,
+                                layoutSignature,
+                                focusGraphSignature,
+                                ref diagnostics));
                             routedEdgeKeys.Add(contexts[index].Bundle.Key);
                         }
                     }
@@ -6743,7 +7246,16 @@ namespace Deucarian.PackageInstaller.Editor
                     continue;
                 }
 
-                routes.Add(CreateDirectRoute(context, safeFocus.FocusPackageId, nodeRects, groupRects));
+                routes.Add(CreateDirectRoute(
+                    context,
+                    safeFocus.FocusPackageId,
+                    nodeRects,
+                    groupRects,
+                    obstacles,
+                    routeCache,
+                    layoutSignature,
+                    focusGraphSignature,
+                    ref diagnostics));
             }
 
             return routes;
@@ -6756,10 +7268,23 @@ namespace Deucarian.PackageInstaller.Editor
             PackageGraphFocus focus)
         {
             List<PackageGraphEdgeRouteContext> contexts = new List<PackageGraphEdgeRouteContext>();
+            Dictionary<string, List<PackageGraphEdge>> groupedEdges =
+                new Dictionary<string, List<PackageGraphEdge>>(StringComparer.OrdinalIgnoreCase);
 
-            foreach (IGrouping<string, PackageGraphEdge> group in visibleEdges.GroupBy(
-                         GetConnectionBundleKey,
-                         StringComparer.OrdinalIgnoreCase))
+            foreach (PackageGraphEdge edge in visibleEdges)
+            {
+                string bundleKey = GetConnectionBundleKey(edge);
+
+                if (!groupedEdges.TryGetValue(bundleKey, out List<PackageGraphEdge> edges))
+                {
+                    edges = new List<PackageGraphEdge>();
+                    groupedEdges[bundleKey] = edges;
+                }
+
+                edges.Add(edge);
+            }
+
+            foreach (List<PackageGraphEdge> group in groupedEdges.Values)
             {
                 PackageGraphConnectionBundle bundle = CreateConnectionBundle(group);
 
@@ -6778,6 +7303,30 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             return contexts;
+        }
+
+        private static int CompareRouteContexts(
+            PackageGraphEdgeRouteContext first,
+            PackageGraphEdgeRouteContext second,
+            PackageGraphModel graph,
+            string focusPackageId)
+        {
+            int comparison = GetRouteSortValue(first, focusPackageId)
+                .CompareTo(GetRouteSortValue(second, focusPackageId));
+
+            if (comparison != 0)
+            {
+                return comparison;
+            }
+
+            comparison = string.Compare(
+                GetOtherNodeDisplayName(graph, first.Bundle, focusPackageId),
+                GetOtherNodeDisplayName(graph, second.Bundle, focusPackageId),
+                StringComparison.OrdinalIgnoreCase);
+
+            return comparison != 0
+                ? comparison
+                : string.Compare(first.Bundle.Key, second.Bundle.Key, StringComparison.OrdinalIgnoreCase);
         }
 
         private static string GetConnectionBundleKey(PackageGraphEdge edge)
@@ -7017,7 +7566,12 @@ namespace Deucarian.PackageInstaller.Editor
             int branchIndex,
             int branchCount,
             IReadOnlyDictionary<string, Rect> nodeRects,
-            IReadOnlyDictionary<string, Rect> groupRects)
+            IReadOnlyDictionary<string, Rect> groupRects,
+            IReadOnlyList<PackageGraphRouteObstacle> obstacles,
+            PackageGraphEdgeRouteCache routeCache,
+            string layoutSignature,
+            string focusGraphSignature,
+            ref PackageGraphEdgeRouteBuildDiagnostics diagnostics)
         {
             bool focusIsSource = string.Equals(
                 context.Bundle.SourcePackageId,
@@ -7050,15 +7604,23 @@ namespace Deucarian.PackageInstaller.Editor
                 branchIndex,
                 branchCount,
                 routePoints,
-                nodeRects,
-                groupRects);
+                obstacles,
+                routeCache,
+                layoutSignature,
+                focusGraphSignature,
+                ref diagnostics);
         }
 
         private static PackageGraphEdgeRoute CreateDirectRoute(
             PackageGraphEdgeRouteContext context,
             string focusPackageId,
             IReadOnlyDictionary<string, Rect> nodeRects,
-            IReadOnlyDictionary<string, Rect> groupRects)
+            IReadOnlyDictionary<string, Rect> groupRects,
+            IReadOnlyList<PackageGraphRouteObstacle> obstacles,
+            PackageGraphEdgeRouteCache routeCache,
+            string layoutSignature,
+            string focusGraphSignature,
+            ref PackageGraphEdgeRouteBuildDiagnostics diagnostics)
         {
             PackageGraphEdgeRouteZone zone = context.Zone;
             bool focusIsSource = !string.IsNullOrWhiteSpace(focusPackageId) &&
@@ -7094,8 +7656,11 @@ namespace Deucarian.PackageInstaller.Editor
                 0,
                 1,
                 new[] { from, to },
-                nodeRects,
-                groupRects);
+                obstacles,
+                routeCache,
+                layoutSignature,
+                focusGraphSignature,
+                ref diagnostics);
         }
 
         private static PackageGraphEdgeRoute CreateValidatedRoute(
@@ -7107,21 +7672,56 @@ namespace Deucarian.PackageInstaller.Editor
             int branchIndex,
             int branchCount,
             IReadOnlyList<Vector2> preferredPoints,
-            IReadOnlyDictionary<string, Rect> nodeRects,
-            IReadOnlyDictionary<string, Rect> groupRects)
+            IReadOnlyList<PackageGraphRouteObstacle> obstacles,
+            PackageGraphEdgeRouteCache routeCache,
+            string layoutSignature,
+            string focusGraphSignature,
+            ref PackageGraphEdgeRouteBuildDiagnostics diagnostics)
         {
-            IReadOnlyList<PackageGraphRouteObstacle> obstacles = BuildRouteObstacles(bundle, nodeRects, groupRects);
+            PackageGraphEdgeRouteCacheKey cacheKey = default(PackageGraphEdgeRouteCacheKey);
+
+            if (routeCache != null)
+            {
+                cacheKey = CreateRouteCacheKey(
+                    layoutSignature,
+                    focusGraphSignature,
+                    bundle,
+                    sourcePort,
+                    targetPort,
+                    zone,
+                    sharedTrunkId,
+                    branchIndex,
+                    branchCount,
+                    preferredPoints);
+                long lookupStartTicks = Stopwatch.GetTimestamp();
+
+                if (routeCache.TryGet(
+                    cacheKey,
+                    bundle,
+                    out PackageGraphEdgeRoute cachedRoute,
+                    out PackageGraphEdgeRouteCacheMissReason missReason))
+                {
+                    diagnostics.RouteCacheHits++;
+                    diagnostics.AddRouteCacheLookupTicks(Stopwatch.GetTimestamp() - lookupStartTicks);
+                    return cachedRoute;
+                }
+
+                diagnostics.AddRouteCacheMiss(missReason);
+                diagnostics.AddRouteCacheLookupTicks(Stopwatch.GetTimestamp() - lookupStartTicks);
+            }
+
+            long calculationStartTicks = Stopwatch.GetTimestamp();
             Vector2 from = preferredPoints != null && preferredPoints.Count > 0
                 ? preferredPoints[0]
                 : Vector2.zero;
             Vector2 to = preferredPoints != null && preferredPoints.Count > 0
                 ? preferredPoints[preferredPoints.Count - 1]
                 : Vector2.zero;
-            IReadOnlyList<Vector2> routePoints = IsRoutePathValid(preferredPoints, obstacles)
+            IReadOnlyList<Vector2> routePoints = IsRoutePathValid(preferredPoints, obstacles, bundle)
                 ? SimplifyRoutePoints(preferredPoints)
-                : FindObstacleAwarePath(from, to, zone, obstacles, preferredPoints);
+                : FindObstacleAwarePath(from, to, zone, obstacles, preferredPoints, bundle);
 
-            return new PackageGraphEdgeRoute(
+            PackageGraphEdgeRoute route = new PackageGraphEdgeRoute(
                 bundle,
                 sourcePort,
                 targetPort,
@@ -7130,10 +7730,152 @@ namespace Deucarian.PackageInstaller.Editor
                 branchIndex,
                 branchCount,
                 routePoints);
+            diagnostics.AddRouteCalculationTicks(Stopwatch.GetTimestamp() - calculationStartTicks);
+            routeCache?.Store(cacheKey, route);
+            return route;
+        }
+
+        private static string BuildRouteLayoutSignature(
+            IReadOnlyDictionary<string, Rect> nodeRects,
+            IReadOnlyDictionary<string, Rect> groupRects)
+        {
+            StringBuilder builder = new StringBuilder(512);
+            AppendRectDictionarySignature(builder, "n", nodeRects);
+            AppendRectDictionarySignature(builder, "g", groupRects);
+            return builder.ToString();
+        }
+
+        private static void AppendRectDictionarySignature(
+            StringBuilder builder,
+            string prefix,
+            IReadOnlyDictionary<string, Rect> rects)
+        {
+            if (rects == null || rects.Count == 0)
+            {
+                builder.Append(prefix);
+                builder.Append(":0|");
+                return;
+            }
+
+            List<string> keys = new List<string>(rects.Keys);
+            keys.Sort(StringComparer.OrdinalIgnoreCase);
+            builder.Append(prefix);
+            builder.Append(':');
+            builder.Append(keys.Count);
+            builder.Append('|');
+
+            foreach (string key in keys)
+            {
+                if (!rects.TryGetValue(key, out Rect rect))
+                {
+                    continue;
+                }
+
+                builder.Append(key);
+                builder.Append('=');
+                AppendRectKey(builder, rect);
+                builder.Append(';');
+            }
+        }
+
+        private static string BuildRouteFocusGraphSignature(
+            PackageGraphModel graph,
+            PackageGraphFocus focus)
+        {
+            StringBuilder builder = new StringBuilder(128);
+            builder.Append("hasFocus=");
+            builder.Append(focus != null && focus.HasFocus ? '1' : '0');
+            builder.Append("|focus=");
+            builder.Append(focus != null ? focus.FocusPackageId ?? string.Empty : string.Empty);
+            builder.Append("|nodes=");
+            builder.Append(graph != null ? graph.Nodes.Count : 0);
+            builder.Append("|edges=");
+            builder.Append(graph != null ? graph.Edges.Count : 0);
+            builder.Append("|visibleEdges=");
+            builder.Append(focus != null && focus.VisibleEdgeKeys != null ? focus.VisibleEdgeKeys.Count : 0);
+            return builder.ToString();
+        }
+
+        private static PackageGraphEdgeRouteCacheKey CreateRouteCacheKey(
+            string layoutSignature,
+            string focusGraphSignature,
+            PackageGraphConnectionBundle bundle,
+            PackageGraphEdgeRoutePort sourcePort,
+            PackageGraphEdgeRoutePort targetPort,
+            PackageGraphEdgeRouteZone zone,
+            string sharedTrunkId,
+            int branchIndex,
+            int branchCount,
+            IReadOnlyList<Vector2> preferredPoints)
+        {
+            string identityKey = bundle.Key;
+            StringBuilder styleBuilder = new StringBuilder(96);
+            styleBuilder.Append("sp=");
+            styleBuilder.Append((int)sourcePort);
+            styleBuilder.Append("|tp=");
+            styleBuilder.Append((int)targetPort);
+            styleBuilder.Append("|z=");
+            styleBuilder.Append((int)zone);
+            styleBuilder.Append("|tr=");
+            styleBuilder.Append(sharedTrunkId ?? string.Empty);
+            styleBuilder.Append("|bi=");
+            styleBuilder.Append(branchIndex);
+            styleBuilder.Append("|bc=");
+            styleBuilder.Append(branchCount);
+
+            StringBuilder endpointBuilder = new StringBuilder(128);
+
+            if (preferredPoints != null)
+            {
+                foreach (Vector2 point in preferredPoints)
+                {
+                    AppendPointKey(endpointBuilder, point);
+                    endpointBuilder.Append(';');
+                }
+            }
+
+            return new PackageGraphEdgeRouteCacheKey(
+                identityKey,
+                focusGraphSignature,
+                layoutSignature,
+                endpointBuilder.ToString(),
+                styleBuilder.ToString());
+        }
+
+        private static void AppendRectKey(StringBuilder builder, Rect rect)
+        {
+            AppendRoundedFloat(builder, rect.x);
+            builder.Append(',');
+            AppendRoundedFloat(builder, rect.y);
+            builder.Append(',');
+            AppendRoundedFloat(builder, rect.width);
+            builder.Append(',');
+            AppendRoundedFloat(builder, rect.height);
+        }
+
+        private static void AppendPointKey(StringBuilder builder, Vector2 point)
+        {
+            AppendRoundedFloat(builder, point.x);
+            builder.Append(',');
+            AppendRoundedFloat(builder, point.y);
+        }
+
+        private static void AppendRoundedFloat(StringBuilder builder, float value)
+        {
+            builder.Append(Mathf.RoundToInt(value));
         }
 
         private static IReadOnlyList<PackageGraphRouteObstacle> BuildRouteObstacles(
             PackageGraphConnectionBundle bundle,
+            IReadOnlyDictionary<string, Rect> nodeRects,
+            IReadOnlyDictionary<string, Rect> groupRects)
+        {
+            return BuildRouteObstacles(nodeRects, groupRects)
+                .Where(obstacle => !ShouldIgnoreObstacleForBundle(obstacle, bundle))
+                .ToArray();
+        }
+
+        private static IReadOnlyList<PackageGraphRouteObstacle> BuildRouteObstacles(
             IReadOnlyDictionary<string, Rect> nodeRects,
             IReadOnlyDictionary<string, Rect> groupRects)
         {
@@ -7143,12 +7885,6 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 foreach (KeyValuePair<string, Rect> nodeRect in nodeRects)
                 {
-                    if (string.Equals(nodeRect.Key, bundle.SourcePackageId, StringComparison.OrdinalIgnoreCase) ||
-                        string.Equals(nodeRect.Key, bundle.TargetPackageId, StringComparison.OrdinalIgnoreCase))
-                    {
-                        continue;
-                    }
-
                     obstacles.Add(new PackageGraphRouteObstacle(
                         "package:" + nodeRect.Key,
                         InflateRect(nodeRect.Value, RouteObstacleMargin)));
@@ -7168,24 +7904,68 @@ namespace Deucarian.PackageInstaller.Editor
             return obstacles;
         }
 
+        private static bool ShouldIgnoreObstacleForBundle(
+            PackageGraphRouteObstacle obstacle,
+            PackageGraphConnectionBundle bundle)
+        {
+            if (string.IsNullOrWhiteSpace(obstacle.Id) ||
+                !obstacle.Id.StartsWith("package:", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            string packageId = obstacle.Id.Substring("package:".Length);
+            return string.Equals(packageId, bundle.SourcePackageId, StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(packageId, bundle.TargetPackageId, StringComparison.OrdinalIgnoreCase);
+        }
+
         private static IReadOnlyList<Vector2> FindObstacleAwarePath(
             Vector2 from,
             Vector2 to,
             PackageGraphEdgeRouteZone zone,
             IReadOnlyList<PackageGraphRouteObstacle> obstacles,
-            IReadOnlyList<Vector2> preferredPoints)
+            IReadOnlyList<Vector2> preferredPoints,
+            PackageGraphConnectionBundle bundle)
         {
-            List<IReadOnlyList<Vector2>> candidates = new List<IReadOnlyList<Vector2>>();
+            List<IReadOnlyList<Vector2>> simpleCandidates = new List<IReadOnlyList<Vector2>>(4);
+            AddRouteCandidate(simpleCandidates, preferredPoints);
+            AddRouteCandidate(simpleCandidates, new[] { from, to });
+            AddRouteCandidate(simpleCandidates, new[] { from, new Vector2(to.x, from.y), to });
+            AddRouteCandidate(simpleCandidates, new[] { from, new Vector2(from.x, to.y), to });
+
+            IReadOnlyList<Vector2> simpleRoute = FindBestValidRoute(simpleCandidates, obstacles, bundle, zone);
+
+            if (simpleRoute != null)
+            {
+                return simpleRoute;
+            }
+
+            List<IReadOnlyList<Vector2>> candidates = new List<IReadOnlyList<Vector2>>(MaxRouteCandidateCount);
             AddRouteCandidate(candidates, preferredPoints);
             AddRouteCandidate(candidates, new[] { from, to });
             AddRouteCandidate(candidates, new[] { from, new Vector2(to.x, from.y), to });
             AddRouteCandidate(candidates, new[] { from, new Vector2(from.x, to.y), to });
 
-            float[] xChannels = GetCandidateXChannels(from, to, obstacles).ToArray();
-            float[] yChannels = GetCandidateYChannels(from, to, obstacles).ToArray();
+            IReadOnlyList<PackageGraphRouteObstacle> channelObstacles = GetRelevantRouteObstacles(
+                from,
+                to,
+                preferredPoints,
+                obstacles,
+                bundle);
+            float[] xChannels = LimitRouteChannels(
+                GetCandidateXChannels(from, to, channelObstacles, bundle),
+                (from.x + to.x) * 0.5f);
+            float[] yChannels = LimitRouteChannels(
+                GetCandidateYChannels(from, to, channelObstacles, bundle),
+                (from.y + to.y) * 0.5f);
 
             foreach (float x in xChannels)
             {
+                if (candidates.Count >= MaxRouteCandidateCount)
+                {
+                    break;
+                }
+
                 AddRouteCandidate(candidates, new[]
                 {
                     from,
@@ -7197,6 +7977,11 @@ namespace Deucarian.PackageInstaller.Editor
 
             foreach (float y in yChannels)
             {
+                if (candidates.Count >= MaxRouteCandidateCount)
+                {
+                    break;
+                }
+
                 AddRouteCandidate(candidates, new[]
                 {
                     from,
@@ -7210,6 +7995,11 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 foreach (float y in yChannels)
                 {
+                    if (candidates.Count >= MaxRouteCandidateCount)
+                    {
+                        break;
+                    }
+
                     AddRouteCandidate(candidates, new[]
                     {
                         from,
@@ -7227,6 +8017,96 @@ namespace Deucarian.PackageInstaller.Editor
                         to
                     });
                 }
+
+                if (candidates.Count >= MaxRouteCandidateCount)
+                {
+                    break;
+                }
+            }
+
+            IReadOnlyList<Vector2> cappedRoute = FindBestValidRoute(candidates, obstacles, bundle, zone);
+
+            if (cappedRoute != null)
+            {
+                return cappedRoute;
+            }
+
+            float[] allXChannels = GetCandidateXChannels(from, to, obstacles, bundle);
+            float[] allYChannels = GetCandidateYChannels(from, to, obstacles, bundle);
+
+            if (allXChannels.Length != xChannels.Length || allYChannels.Length != yChannels.Length)
+            {
+                List<IReadOnlyList<Vector2>> fallbackCandidates = new List<IReadOnlyList<Vector2>>();
+
+                foreach (float x in allXChannels)
+                {
+                    AddRouteCandidate(fallbackCandidates, new[]
+                    {
+                        from,
+                        new Vector2(x, from.y),
+                        new Vector2(x, to.y),
+                        to
+                    });
+                }
+
+                foreach (float y in allYChannels)
+                {
+                    AddRouteCandidate(fallbackCandidates, new[]
+                    {
+                        from,
+                        new Vector2(from.x, y),
+                        new Vector2(to.x, y),
+                        to
+                    });
+                }
+
+                foreach (float x in allXChannels)
+                {
+                    foreach (float y in allYChannels)
+                    {
+                        AddRouteCandidate(fallbackCandidates, new[]
+                        {
+                            from,
+                            new Vector2(x, from.y),
+                            new Vector2(x, y),
+                            new Vector2(to.x, y),
+                            to
+                        });
+                        AddRouteCandidate(fallbackCandidates, new[]
+                        {
+                            from,
+                            new Vector2(from.x, y),
+                            new Vector2(x, y),
+                            new Vector2(x, to.y),
+                            to
+                        });
+                    }
+                }
+
+                IReadOnlyList<Vector2> fallbackRoute = FindBestValidRoute(
+                    fallbackCandidates,
+                    obstacles,
+                    bundle,
+                    zone);
+
+                if (fallbackRoute != null)
+                {
+                    return fallbackRoute;
+                }
+            }
+
+            return SimplifyRoutePoints(preferredPoints ?? new[] { from, to });
+        }
+
+        private static IReadOnlyList<Vector2> FindBestValidRoute(
+            IEnumerable<IReadOnlyList<Vector2>> candidates,
+            IReadOnlyList<PackageGraphRouteObstacle> obstacles,
+            PackageGraphConnectionBundle bundle,
+            PackageGraphEdgeRouteZone zone)
+        {
+            if (candidates == null)
+            {
+                return null;
             }
 
             IReadOnlyList<Vector2> best = null;
@@ -7236,7 +8116,7 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 IReadOnlyList<Vector2> simplified = SimplifyRoutePoints(candidate);
 
-                if (!IsRoutePathValid(simplified, obstacles))
+                if (!IsRoutePathValid(simplified, obstacles, bundle))
                 {
                     continue;
                 }
@@ -7250,13 +8130,97 @@ namespace Deucarian.PackageInstaller.Editor
                 }
             }
 
-            return best ?? SimplifyRoutePoints(preferredPoints ?? new[] { from, to });
+            return best;
+        }
+
+        private static IReadOnlyList<PackageGraphRouteObstacle> GetRelevantRouteObstacles(
+            Vector2 from,
+            Vector2 to,
+            IReadOnlyList<Vector2> preferredPoints,
+            IReadOnlyList<PackageGraphRouteObstacle> obstacles,
+            PackageGraphConnectionBundle bundle)
+        {
+            if (obstacles == null || obstacles.Count == 0)
+            {
+                return Array.Empty<PackageGraphRouteObstacle>();
+            }
+
+            Rect routeBounds = BuildRouteSearchBounds(from, to, preferredPoints);
+            List<PackageGraphRouteObstacle> relevant = new List<PackageGraphRouteObstacle>();
+
+            foreach (PackageGraphRouteObstacle obstacle in obstacles)
+            {
+                if (ShouldIgnoreObstacleForBundle(obstacle, bundle) ||
+                    !RectsOverlap(routeBounds, obstacle.Rect))
+                {
+                    continue;
+                }
+
+                relevant.Add(obstacle);
+            }
+
+            return relevant;
+        }
+
+        private static Rect BuildRouteSearchBounds(
+            Vector2 from,
+            Vector2 to,
+            IReadOnlyList<Vector2> preferredPoints)
+        {
+            float minX = Mathf.Min(from.x, to.x);
+            float maxX = Mathf.Max(from.x, to.x);
+            float minY = Mathf.Min(from.y, to.y);
+            float maxY = Mathf.Max(from.y, to.y);
+
+            if (preferredPoints != null)
+            {
+                foreach (Vector2 point in preferredPoints)
+                {
+                    minX = Mathf.Min(minX, point.x);
+                    maxX = Mathf.Max(maxX, point.x);
+                    minY = Mathf.Min(minY, point.y);
+                    maxY = Mathf.Max(maxY, point.y);
+                }
+            }
+
+            return Rect.MinMaxRect(
+                minX - RouteSearchBoundsPadding,
+                minY - RouteSearchBoundsPadding,
+                maxX + RouteSearchBoundsPadding,
+                maxY + RouteSearchBoundsPadding);
+        }
+
+        private static float[] LimitRouteChannels(float[] channels, float pivot)
+        {
+            if (channels == null || channels.Length <= MaxRouteChannelCount)
+            {
+                return channels ?? Array.Empty<float>();
+            }
+
+            List<float> limited = new List<float>(channels);
+            limited.Sort((first, second) =>
+            {
+                int comparison = Mathf.Abs(first - pivot).CompareTo(Mathf.Abs(second - pivot));
+                return comparison != 0 ? comparison : first.CompareTo(second);
+            });
+            limited.RemoveRange(MaxRouteChannelCount, limited.Count - MaxRouteChannelCount);
+            limited.Sort();
+            return limited.ToArray();
         }
 
         private static IEnumerable<float> GetCandidateXChannels(
             Vector2 from,
             Vector2 to,
             IReadOnlyList<PackageGraphRouteObstacle> obstacles)
+        {
+            return GetCandidateXChannels(from, to, obstacles, default(PackageGraphConnectionBundle));
+        }
+
+        private static float[] GetCandidateXChannels(
+            Vector2 from,
+            Vector2 to,
+            IReadOnlyList<PackageGraphRouteObstacle> obstacles,
+            PackageGraphConnectionBundle bundle)
         {
             List<float> channels = new List<float>
             {
@@ -7277,28 +8241,47 @@ namespace Deucarian.PackageInstaller.Editor
 
             foreach (PackageGraphRouteObstacle obstacle in obstacles ?? Array.Empty<PackageGraphRouteObstacle>())
             {
+                if (ShouldIgnoreObstacleForBundle(obstacle, bundle))
+                {
+                    continue;
+                }
+
                 channels.Add(obstacle.Rect.xMin - RouteObstacleMargin);
                 channels.Add(obstacle.Rect.xMax + RouteObstacleMargin);
             }
 
-            return channels
-                .Where(value => value >= min && value <= max)
-                .OrderBy(value => value)
-                .Aggregate(new List<float>(), (unique, value) =>
-                {
-                    if (unique.Count == 0 || Mathf.Abs(unique[unique.Count - 1] - value) > 1f)
-                    {
-                        unique.Add(value);
-                    }
+            channels.Sort();
+            List<float> unique = new List<float>(channels.Count);
 
-                    return unique;
-                });
+            foreach (float value in channels)
+            {
+                if (value < min || value > max)
+                {
+                    continue;
+                }
+
+                if (unique.Count == 0 || Mathf.Abs(unique[unique.Count - 1] - value) > 1f)
+                {
+                    unique.Add(value);
+                }
+            }
+
+            return unique.ToArray();
         }
 
         private static IEnumerable<float> GetCandidateYChannels(
             Vector2 from,
             Vector2 to,
             IReadOnlyList<PackageGraphRouteObstacle> obstacles)
+        {
+            return GetCandidateYChannels(from, to, obstacles, default(PackageGraphConnectionBundle));
+        }
+
+        private static float[] GetCandidateYChannels(
+            Vector2 from,
+            Vector2 to,
+            IReadOnlyList<PackageGraphRouteObstacle> obstacles,
+            PackageGraphConnectionBundle bundle)
         {
             List<float> channels = new List<float>
             {
@@ -7319,22 +8302,32 @@ namespace Deucarian.PackageInstaller.Editor
 
             foreach (PackageGraphRouteObstacle obstacle in obstacles ?? Array.Empty<PackageGraphRouteObstacle>())
             {
+                if (ShouldIgnoreObstacleForBundle(obstacle, bundle))
+                {
+                    continue;
+                }
+
                 channels.Add(obstacle.Rect.yMin - RouteObstacleMargin);
                 channels.Add(obstacle.Rect.yMax + RouteObstacleMargin);
             }
 
-            return channels
-                .Where(value => value >= min && value <= max)
-                .OrderBy(value => value)
-                .Aggregate(new List<float>(), (unique, value) =>
-                {
-                    if (unique.Count == 0 || Mathf.Abs(unique[unique.Count - 1] - value) > 1f)
-                    {
-                        unique.Add(value);
-                    }
+            channels.Sort();
+            List<float> unique = new List<float>(channels.Count);
 
-                    return unique;
-                });
+            foreach (float value in channels)
+            {
+                if (value < min || value > max)
+                {
+                    continue;
+                }
+
+                if (unique.Count == 0 || Mathf.Abs(unique[unique.Count - 1] - value) > 1f)
+                {
+                    unique.Add(value);
+                }
+            }
+
+            return unique.ToArray();
         }
 
         private static void AddRouteCandidate(
@@ -7353,6 +8346,14 @@ namespace Deucarian.PackageInstaller.Editor
             IReadOnlyList<Vector2> points,
             IReadOnlyList<PackageGraphRouteObstacle> obstacles)
         {
+            return IsRoutePathValid(points, obstacles, default(PackageGraphConnectionBundle));
+        }
+
+        private static bool IsRoutePathValid(
+            IReadOnlyList<Vector2> points,
+            IReadOnlyList<PackageGraphRouteObstacle> obstacles,
+            PackageGraphConnectionBundle bundle)
+        {
             if (points == null || points.Count < 2)
             {
                 return false;
@@ -7360,9 +8361,25 @@ namespace Deucarian.PackageInstaller.Editor
 
             for (int index = 0; index < points.Count - 1; index++)
             {
+                bool isFirstSegment = index == 0;
+                bool isLastSegment = index == points.Count - 2;
+                Rect segmentBounds = BuildSegmentBounds(points[index], points[index + 1]);
+
                 foreach (PackageGraphRouteObstacle obstacle in obstacles ?? Array.Empty<PackageGraphRouteObstacle>())
                 {
-                    if (LineIntersectsRectInterior(points[index], points[index + 1], obstacle.Rect))
+                    if (ShouldIgnoreObstacleForSegment(
+                            obstacle,
+                            bundle,
+                            points[0],
+                            points[points.Count - 1],
+                            isFirstSegment,
+                            isLastSegment))
+                    {
+                        continue;
+                    }
+
+                    if (RectsOverlap(segmentBounds, obstacle.Rect) &&
+                        LineIntersectsRectInterior(points[index], points[index + 1], obstacle.Rect))
                     {
                         return false;
                     }
@@ -7370,6 +8387,59 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             return true;
+        }
+
+        private static bool ShouldIgnoreObstacleForSegment(
+            PackageGraphRouteObstacle obstacle,
+            PackageGraphConnectionBundle bundle,
+            Vector2 routeStart,
+            Vector2 routeEnd,
+            bool isFirstSegment,
+            bool isLastSegment)
+        {
+            if (ShouldIgnoreObstacleForBundle(obstacle, bundle))
+            {
+                return true;
+            }
+
+            if (!IsCategoryObstacle(obstacle))
+            {
+                return false;
+            }
+
+            return (isFirstSegment && RectContainsPointInclusive(obstacle.Rect, routeStart)) ||
+                   (isLastSegment && RectContainsPointInclusive(obstacle.Rect, routeEnd));
+        }
+
+        private static bool IsCategoryObstacle(PackageGraphRouteObstacle obstacle)
+        {
+            return !string.IsNullOrWhiteSpace(obstacle.Id) &&
+                   obstacle.Id.StartsWith("category:", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool RectContainsPointInclusive(Rect rect, Vector2 point)
+        {
+            return point.x >= rect.xMin &&
+                   point.x <= rect.xMax &&
+                   point.y >= rect.yMin &&
+                   point.y <= rect.yMax;
+        }
+
+        private static Rect BuildSegmentBounds(Vector2 start, Vector2 end)
+        {
+            return Rect.MinMaxRect(
+                Mathf.Min(start.x, end.x) - 0.01f,
+                Mathf.Min(start.y, end.y) - 0.01f,
+                Mathf.Max(start.x, end.x) + 0.01f,
+                Mathf.Max(start.y, end.y) + 0.01f);
+        }
+
+        private static bool RectsOverlap(Rect first, Rect second)
+        {
+            return first.xMin <= second.xMax &&
+                   first.xMax >= second.xMin &&
+                   first.yMin <= second.yMax &&
+                   first.yMax >= second.yMin;
         }
 
         private static float ScoreRoutePath(
@@ -8227,19 +9297,72 @@ namespace Deucarian.PackageInstaller.Editor
                 return false;
             }
 
-            const int Samples = 24;
-
-            for (int index = 1; index < Samples; index++)
+            if (Mathf.Max(start.x, end.x) < rect.xMin ||
+                Mathf.Min(start.x, end.x) > rect.xMax ||
+                Mathf.Max(start.y, end.y) < rect.yMin ||
+                Mathf.Min(start.y, end.y) > rect.yMax)
             {
-                Vector2 point = Vector2.Lerp(start, end, index / (float)Samples);
-
-                if (rect.Contains(point))
-                {
-                    return true;
-                }
+                return false;
             }
 
-            return false;
+            if (rect.Contains(start) || rect.Contains(end))
+            {
+                return true;
+            }
+
+            Vector2 bottomLeft = new Vector2(rect.xMin, rect.yMin);
+            Vector2 bottomRight = new Vector2(rect.xMax, rect.yMin);
+            Vector2 topRight = new Vector2(rect.xMax, rect.yMax);
+            Vector2 topLeft = new Vector2(rect.xMin, rect.yMax);
+
+            return LineSegmentsIntersect(start, end, bottomLeft, bottomRight) ||
+                   LineSegmentsIntersect(start, end, bottomRight, topRight) ||
+                   LineSegmentsIntersect(start, end, topRight, topLeft) ||
+                   LineSegmentsIntersect(start, end, topLeft, bottomLeft);
+        }
+
+        private static bool LineSegmentsIntersect(
+            Vector2 firstStart,
+            Vector2 firstEnd,
+            Vector2 secondStart,
+            Vector2 secondEnd)
+        {
+            float firstOrientation = Cross(firstEnd - firstStart, secondStart - firstStart);
+            float secondOrientation = Cross(firstEnd - firstStart, secondEnd - firstStart);
+            float thirdOrientation = Cross(secondEnd - secondStart, firstStart - secondStart);
+            float fourthOrientation = Cross(secondEnd - secondStart, firstEnd - secondStart);
+
+            if (HasOppositeSigns(firstOrientation, secondOrientation) &&
+                HasOppositeSigns(thirdOrientation, fourthOrientation))
+            {
+                return true;
+            }
+
+            const float Epsilon = 0.001f;
+            return Mathf.Abs(firstOrientation) <= Epsilon && IsPointOnSegment(secondStart, firstStart, firstEnd) ||
+                   Mathf.Abs(secondOrientation) <= Epsilon && IsPointOnSegment(secondEnd, firstStart, firstEnd) ||
+                   Mathf.Abs(thirdOrientation) <= Epsilon && IsPointOnSegment(firstStart, secondStart, secondEnd) ||
+                   Mathf.Abs(fourthOrientation) <= Epsilon && IsPointOnSegment(firstEnd, secondStart, secondEnd);
+        }
+
+        private static bool HasOppositeSigns(float first, float second)
+        {
+            return first > 0f && second < 0f ||
+                   first < 0f && second > 0f;
+        }
+
+        private static float Cross(Vector2 first, Vector2 second)
+        {
+            return first.x * second.y - first.y * second.x;
+        }
+
+        private static bool IsPointOnSegment(Vector2 point, Vector2 segmentStart, Vector2 segmentEnd)
+        {
+            const float Epsilon = 0.001f;
+            return point.x >= Mathf.Min(segmentStart.x, segmentEnd.x) - Epsilon &&
+                   point.x <= Mathf.Max(segmentStart.x, segmentEnd.x) + Epsilon &&
+                   point.y >= Mathf.Min(segmentStart.y, segmentEnd.y) - Epsilon &&
+                   point.y <= Mathf.Max(segmentStart.y, segmentEnd.y) + Epsilon;
         }
 
         private static void DrawWarningMarker(Painter2D painter, Vector2 center)

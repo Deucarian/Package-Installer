@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using NUnit.Framework;
+using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -16,6 +18,98 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             CollectionAssert.AreEqual(
                 new[] { "Ecosystem Graph", "List View" },
                 PackageInstallerWindow.ViewToggleOrderForTests.ToArray());
+        }
+
+        [Test]
+        public void Window_RegistersProductionPackageInstallerMenuPath()
+        {
+            Assert.AreEqual("Tools/Deucarian/Package Installer", PackageInstallerWindow.MenuPathForTests);
+            CollectionAssert.AreEqual(
+                new[] { "Tools/Deucarian/Package Installer" },
+                PackageInstallerWindow.UserFacingMenuPathsForTests.ToArray());
+            Assert.IsFalse(PackageInstallerWindow.UserFacingMenuPathsForTests.Any(
+                path => path.StartsWith("Deucarian/", StringComparison.OrdinalIgnoreCase)));
+            Assert.IsFalse(PackageInstallerWindow.UserFacingMenuPathsForTests.Any(
+                path => path.IndexOf("/Diagnostics", StringComparison.OrdinalIgnoreCase) >= 0));
+            Assert.IsFalse(PackageInstallerWindow.UserFacingMenuPathsForTests.Any(
+                path => path.IndexOf("Preview", StringComparison.OrdinalIgnoreCase) >= 0));
+            Assert.IsFalse(PackageInstallerWindow.UserFacingMenuPathsForTests.Any(
+                path => path.IndexOf("Development", StringComparison.OrdinalIgnoreCase) >= 0));
+        }
+
+        [Test]
+        public void StateRepository_UsesSharedProjectChannelPreference()
+        {
+            string projectRoot = CreateTempProjectRoot();
+
+            try
+            {
+                PackageInstallerStateRepository.DeleteProjectChannelForTests(projectRoot);
+                string key = PackageInstallerStateRepository.GetProjectChannelPreferenceKeyForTests(projectRoot);
+
+                StringAssert.StartsWith(PackageInstallerStateRepository.ProjectChannelPreferencePrefix, key);
+                Assert.AreEqual(PackageChannel.Stable, PackageInstallerStateRepository.GetProjectChannelForTests(projectRoot));
+
+                PackageInstallerStateRepository.SetProjectChannelForTests(projectRoot, PackageChannel.Development);
+
+                Assert.AreEqual(PackageChannel.Development, PackageInstallerStateRepository.GetProjectChannelForTests(projectRoot));
+                Assert.AreEqual((int)PackageChannel.Development, EditorPrefs.GetInt(key, -1));
+            }
+            finally
+            {
+                PackageInstallerStateRepository.DeleteProjectChannelForTests(projectRoot);
+                DeleteTempProjectRoot(projectRoot);
+            }
+        }
+
+        [Test]
+        public void StateRepository_ReadsLegacyBootstrapChannelUntilSharedKeyExists()
+        {
+            string projectRoot = CreateTempProjectRoot();
+
+            try
+            {
+                PackageInstallerStateRepository.DeleteProjectChannelForTests(projectRoot);
+                string legacyKey = PackageInstallerStateRepository.GetLegacyBootstrapChannelPreferenceKeyForTests(projectRoot);
+                EditorPrefs.SetInt(legacyKey, (int)PackageChannel.Development);
+
+                Assert.AreEqual(PackageChannel.Development, PackageInstallerStateRepository.GetProjectChannelForTests(projectRoot));
+
+                PackageInstallerStateRepository.SetProjectChannelForTests(projectRoot, PackageChannel.Stable);
+
+                Assert.AreEqual(PackageChannel.Stable, PackageInstallerStateRepository.GetProjectChannelForTests(projectRoot));
+            }
+            finally
+            {
+                PackageInstallerStateRepository.DeleteProjectChannelForTests(projectRoot);
+                DeleteTempProjectRoot(projectRoot);
+            }
+        }
+
+        [Test]
+        public void StateRepository_ManifestSignatureChangesForPackageManifestState()
+        {
+            string projectRoot = CreateTempProjectRoot();
+            string packagesDirectory = Path.Combine(projectRoot, "Packages");
+            Directory.CreateDirectory(packagesDirectory);
+            string manifestPath = Path.Combine(packagesDirectory, "manifest.json");
+            string packageLockPath = Path.Combine(packagesDirectory, "packages-lock.json");
+
+            try
+            {
+                File.WriteAllText(manifestPath, "{\"dependencies\":{}}");
+                string firstSignature = PackageInstallerStateRepository.GetManifestStateSignatureForTests(projectRoot);
+
+                File.WriteAllText(packageLockPath, "{\"dependencies\":{\"com.deucarian.logging\":{\"version\":\"1.0.1\"}}}");
+                string secondSignature = PackageInstallerStateRepository.GetManifestStateSignatureForTests(projectRoot);
+
+                Assert.IsTrue(PackageDetectionService.HasManifestStateChangedForTests(firstSignature, secondSignature));
+                Assert.IsFalse(PackageDetectionService.HasManifestStateChangedForTests(secondSignature, secondSignature));
+            }
+            finally
+            {
+                DeleteTempProjectRoot(projectRoot);
+            }
         }
 
         [Test]
@@ -2872,6 +2966,116 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void GraphEdgeRoutes_CacheReusesLargeCentralFocusGeometry()
+        {
+            const int providerCount = 16;
+            const int dependentCount = 32;
+            const int integrationCount = 12;
+            const int optionalCompanionCount = 12;
+
+            List<PackageDefinition> packages = new List<PackageDefinition>();
+            string centralPackageId = "com.example.logging";
+            string[] providerIds = Enumerable.Range(0, providerCount)
+                .Select(index => "com.example.provider-" + index)
+                .ToArray();
+            string[] optionalCompanionIds = Enumerable.Range(0, optionalCompanionCount)
+                .Select(index => "com.example.optional-" + index)
+                .ToArray();
+
+            packages.Add(CreatePackage(
+                "Logging",
+                centralPackageId,
+                "Core",
+                dependencies: providerIds,
+                optionalCompanions: optionalCompanionIds));
+
+            foreach (string providerId in providerIds)
+            {
+                packages.Add(CreatePackage("Provider " + providerId, providerId, "Core"));
+            }
+
+            foreach (int index in Enumerable.Range(0, dependentCount))
+            {
+                packages.Add(CreatePackage(
+                    "Dependent " + index,
+                    "com.example.dependent-" + index,
+                    "Core",
+                    dependencies: new[] { centralPackageId }));
+            }
+
+            foreach (int index in Enumerable.Range(0, integrationCount))
+            {
+                packages.Add(CreatePackage(
+                    "Integration " + index,
+                    "com.example.integration-" + index,
+                    "Integration",
+                    "Integration",
+                    integrationTargets: new[] { centralPackageId }));
+            }
+
+            foreach (string optionalCompanionId in optionalCompanionIds)
+            {
+                packages.Add(CreatePackage("Optional " + optionalCompanionId, optionalCompanionId, "UI"));
+            }
+
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false).Build(packages);
+            PackageGraphLayoutResult layout = new PackageGraphLayout().Calculate(
+                graph,
+                PackageGraphLayoutMode.Focus,
+                centralPackageId);
+            PackageGraphFocus focus = PackageGraphFocus.Create(graph, centralPackageId);
+            PackageGraphEdgeRouteCache routeCache = new PackageGraphEdgeRouteCache();
+            IReadOnlyDictionary<string, Rect> groupRects = GetGroupRects(layout);
+
+            PackageGraphEdgeRoute[] warmRoutes = PackageGraphEdgeLayer.BuildRoutesWithCacheForTests(
+                    graph,
+                    layout.NodeRects,
+                    groupRects,
+                    focus,
+                    routeCache,
+                    out PackageGraphEdgeRouteBuildDiagnostics warmDiagnostics)
+                .ToArray();
+            PackageGraphLayoutResult awayLayout = new PackageGraphLayout().Calculate(
+                graph,
+                PackageGraphLayoutMode.Focus,
+                providerIds[0]);
+            PackageGraphFocus awayFocus = PackageGraphFocus.Create(graph, providerIds[0]);
+            PackageGraphEdgeRoute[] awayRoutes = PackageGraphEdgeLayer.BuildRoutesWithCacheForTests(
+                    graph,
+                    awayLayout.NodeRects,
+                    GetGroupRects(awayLayout),
+                    awayFocus,
+                    routeCache,
+                    out _)
+                .ToArray();
+            PackageGraphEdgeRoute[] cachedRoutes = PackageGraphEdgeLayer.BuildRoutesWithCacheForTests(
+                    graph,
+                    layout.NodeRects,
+                    groupRects,
+                    focus,
+                    routeCache,
+                    out PackageGraphEdgeRouteBuildDiagnostics cachedDiagnostics)
+                .ToArray();
+
+            Assert.IsNotEmpty(warmRoutes);
+            Assert.IsNotEmpty(awayRoutes);
+            Assert.AreEqual(warmRoutes.Length, cachedRoutes.Length);
+            Assert.AreEqual(warmRoutes.Length, warmDiagnostics.RouteCacheMisses);
+            Assert.AreEqual(warmRoutes.Length, warmDiagnostics.RouteCacheNoEntryMisses);
+            Assert.AreEqual(0, warmDiagnostics.RouteCacheHits);
+            Assert.AreEqual(0, warmDiagnostics.RouteCacheLayoutMisses);
+            Assert.AreEqual(0, warmDiagnostics.RouteCacheEndpointMisses);
+            Assert.AreEqual(0, warmDiagnostics.RouteCacheFocusGraphMisses);
+            Assert.AreEqual(0, warmDiagnostics.RouteCacheStyleMisses);
+            Assert.AreEqual(cachedRoutes.Length, cachedDiagnostics.RouteCacheHits);
+            Assert.AreEqual(0, cachedDiagnostics.RouteCacheMisses);
+            Assert.AreEqual(cachedRoutes.Length, cachedDiagnostics.RouteCount);
+            Assert.LessOrEqual(
+                cachedDiagnostics.RouteCalculationTicks,
+                Math.Max(1L, warmDiagnostics.RouteCalculationTicks / 2L));
+        }
+
+        [Test]
         public void Layout_CalculatesHierarchicalOverviewWithoutNodeOverlap()
         {
             PackageGraphModel graph = new PackageGraphBuilder(_ => false)
@@ -3548,6 +3752,76 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.IsTrue(focused.IsEdgeEmphasized(dependencyEdge));
         }
 
+        [Test]
+        public void LargeGraph_CentralPackageFocusUsesPrecomputedDirectRelationships()
+        {
+            const int providerCount = 120;
+            const int dependentCount = 240;
+            const int integrationCount = 80;
+            const int optionalCompanionCount = 80;
+
+            List<PackageDefinition> packages = new List<PackageDefinition>();
+            string centralPackageId = "com.example.logging";
+            string[] providerIds = Enumerable.Range(0, providerCount)
+                .Select(index => "com.example.provider-" + index)
+                .ToArray();
+            string[] optionalCompanionIds = Enumerable.Range(0, optionalCompanionCount)
+                .Select(index => "com.example.optional-" + index)
+                .ToArray();
+
+            packages.Add(CreatePackage(
+                "Logging",
+                centralPackageId,
+                "Core",
+                dependencies: providerIds,
+                optionalCompanions: optionalCompanionIds));
+
+            foreach (string providerId in providerIds)
+            {
+                packages.Add(CreatePackage("Provider " + providerId, providerId, "Core"));
+            }
+
+            foreach (int index in Enumerable.Range(0, dependentCount))
+            {
+                packages.Add(CreatePackage(
+                    "Dependent " + index,
+                    "com.example.dependent-" + index,
+                    "Core",
+                    dependencies: new[] { centralPackageId }));
+            }
+
+            foreach (int index in Enumerable.Range(0, integrationCount))
+            {
+                packages.Add(CreatePackage(
+                    "Integration " + index,
+                    "com.example.integration-" + index,
+                    "Integration",
+                    "Integration",
+                    integrationTargets: new[] { centralPackageId }));
+            }
+
+            foreach (string optionalCompanionId in optionalCompanionIds)
+            {
+                packages.Add(CreatePackage("Optional " + optionalCompanionId, optionalCompanionId, "UI"));
+            }
+
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false).Build(packages);
+            PackageGraphFocus focus = PackageGraphFocus.Create(graph, centralPackageId);
+            PackageGraphLayoutResult layout = new PackageGraphLayout().Calculate(
+                graph,
+                PackageGraphLayoutMode.Focus,
+                centralPackageId);
+
+            Assert.AreEqual(providerCount, graph.GetHardDependencyProviderEdges(centralPackageId).Count);
+            Assert.AreEqual(dependentCount, graph.GetHardDependencyDependentEdges(centralPackageId).Count);
+            Assert.AreEqual(integrationCount, graph.GetIntegrationEdges(centralPackageId).Count);
+            Assert.AreEqual(optionalCompanionCount, graph.GetOptionalCompanionEdges(centralPackageId).Count);
+            Assert.AreEqual(
+                1 + providerCount + dependentCount + integrationCount + optionalCompanionCount,
+                focus.RelatedPackageIds.Count);
+            Assert.AreEqual(focus.RelatedPackageIds.Count, layout.NodeRects.Count);
+        }
+
         private static PackageDefinition CreatePackage(
             string displayName,
             string packageId,
@@ -4144,6 +4418,25 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             {
                 CollectByClass(child, className, matches);
             }
+        }
+
+        private static string CreateTempProjectRoot()
+        {
+            string projectRoot = Path.Combine(
+                Path.GetTempPath(),
+                "dpi-state-tests-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(projectRoot);
+            return projectRoot;
+        }
+
+        private static void DeleteTempProjectRoot(string projectRoot)
+        {
+            if (string.IsNullOrWhiteSpace(projectRoot) || !Directory.Exists(projectRoot))
+            {
+                return;
+            }
+
+            Directory.Delete(projectRoot, true);
         }
 
     }
