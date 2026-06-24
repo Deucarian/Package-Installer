@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-06-23",
+  "updatedAt": "2026-06-24",
   "groups": [
     {
       "id": "infrastructure",
@@ -277,6 +277,19 @@
       "optionalIntegrations": [
         "com.deucarian.session.api-integration"
       ]
+    },
+    {
+      "id": "com.deucarian.monetization",
+      "displayName": "Deucarian Monetization",
+      "category": "Core",
+      "type": "Core",
+      "ecosystemGroup": "Runtime Services",
+      "groupId": "runtime-services",
+      "overviewOrder": 25,
+      "description": "SDK-free monetization placement abstractions, mock/no-op ad providers, pacing policies, entitlements, consent, and rewarded claim identity for Deucarian games.",
+      "stableUrl": "https://github.com/Deucarian/Monetization.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Monetization.git#develop",
+      "dependencies": []
     },
     {
       "id": "com.deucarian.ui-binding",
@@ -786,7 +799,8 @@
       "stableUrl": "https://github.com/Deucarian/Template-Game-Idle-Auto-Defense.git#main",
       "developmentUrl": "https://github.com/Deucarian/Template-Game-Idle-Auto-Defense.git#develop",
       "dependencies": [
-        "com.deucarian.auto-defense-suite"
+        "com.deucarian.auto-defense-suite",
+        "com.deucarian.monetization"
       ],
       "searchAliases": [
         "idle auto defense template",
