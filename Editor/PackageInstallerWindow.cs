@@ -59,8 +59,9 @@ namespace Deucarian.PackageInstaller.Editor
         private const string OperationDrawerPreferencePrefix = "Deucarian.PackageInstaller.OperationDrawer.";
         private const string GraphStyleSheetPath =
             "Packages/com.deucarian.package-installer/Editor/UI/PackageInstaller/PackageInstallerGraph.uss";
+        private const string InstallerMenuPath = "Deucarian/Package Installer";
         private const string GraphOpenTimingMenuPath =
-            "Tools/Deucarian/Package Installer/Diagnostics/Log Graph Open Timing";
+            InstallerMenuPath + "/Diagnostics/Log Graph Open Timing";
         private const string InstalledStatusMarker = "\u2713";
         private const string NotInstalledStatusMarker = "\u25CB";
         private const string AttentionStatusMarker = "!";
@@ -229,7 +230,7 @@ namespace Deucarian.PackageInstaller.Editor
         private GUIStyle _primaryButtonStyle;
         private GUIStyle _secondaryButtonStyle;
 
-        [MenuItem("Tools/Deucarian/Package Installer")]
+        [MenuItem(InstallerMenuPath)]
         public static void Open()
         {
             PackageInstallerWindow window = GetWindow<PackageInstallerWindow>();
@@ -255,6 +256,10 @@ namespace Deucarian.PackageInstaller.Editor
         }
 
         internal static bool DefaultsToEcosystemGraphForTests => DefaultInstallerViewMode == InstallerViewMode.EcosystemGraph;
+
+        internal static string MenuPathForTests => InstallerMenuPath;
+
+        internal static string GraphOpenTimingMenuPathForTests => GraphOpenTimingMenuPath;
 
         internal static IReadOnlyList<string> ViewToggleOrderForTests => new[] { "Ecosystem Graph", "List View" };
 

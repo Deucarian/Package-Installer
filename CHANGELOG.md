@@ -314,7 +314,7 @@
 
 ## 1.1.6 - 2026-06-15
 
-- Moved the Package Installer editor entry point under `Tools > Deucarian > Package Installer`.
+- Moved the Package Installer editor entry point under `Deucarian > Package Installer`.
 - Kept the installer self-contained with no dependency on `com.deucarian.editor`.
 
 ## 1.1.5 - 2026-06-15

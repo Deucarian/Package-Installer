@@ -19,6 +19,18 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void Window_RegistersProductionPackageInstallerMenuPath()
+        {
+            Assert.AreEqual("Deucarian/Package Installer", PackageInstallerWindow.MenuPathForTests);
+            Assert.AreEqual(
+                "Deucarian/Package Installer/Diagnostics/Log Graph Open Timing",
+                PackageInstallerWindow.GraphOpenTimingMenuPathForTests);
+            StringAssert.DoesNotContain("Tools/", PackageInstallerWindow.MenuPathForTests);
+            StringAssert.DoesNotContain("Development", PackageInstallerWindow.MenuPathForTests);
+            StringAssert.DoesNotContain("Preview", PackageInstallerWindow.MenuPathForTests);
+        }
+
+        [Test]
         public void Window_ResponsiveBreakpointsPreserveUsableMinimumWidth()
         {
             Assert.AreEqual(PackageInstallerResponsiveMode.Wide, PackageInstallerWindow.ResolveResponsiveModeForTests(1280f));

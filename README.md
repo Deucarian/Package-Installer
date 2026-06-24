@@ -7,20 +7,12 @@ Deucarian Package Installer is a small editor-only Unity Package Manager package
 Open it from:
 
 ```text
-Tools > Deucarian > Package Installer
+Deucarian > Package Installer
 ```
 
 ## Deucarian Menu
 
-The installer keeps its Unity Editor entry point at `Tools > Deucarian > Package Installer`. This package does not own the Theming, Logging, Object Loading, Session, or Selection menu groups; those packages provide their own package-local menu items under the shared `Tools > Deucarian` menu.
-
-The UI Toolkit preview base is a development-only window available from:
-
-```text
-Tools > Deucarian > Development > Package Installer Preview
-```
-
-The preview is separate from the real installer and does not replace the existing production entry point.
+The installer keeps its Unity Editor entry point at `Deucarian > Package Installer`. This package does not own the Theming, Logging, Object Loading, Session, or Selection menu groups; those packages provide their own package-local menu items under the shared Deucarian menu.
 
 The installer can install standalone packages, integration packages, and explicitly declared package samples without making this package a runtime dependency of any other package.
 
@@ -51,7 +43,7 @@ You can also use Unity's Package Manager window:
 1. Open `Window > Package Manager`.
 2. Select `+ > Add package from git URL...`.
 3. Enter the installer Git URL.
-4. Open `Tools > Deucarian > Package Installer`.
+4. Open `Deucarian > Package Installer`.
 
 The package requires Unity `2021.3` or newer and depends on `com.deucarian.editor` and `com.deucarian.logging`.
 
@@ -242,7 +234,6 @@ Deucarian/Package Installer
 The implementation is split into internal editor classes:
 
 - `PackageInstallerWindow`: IMGUI window and coordination.
-- `PackageInstallerPreviewWindow`: UI Toolkit preview window for the future ecosystem browser direction.
 - `PackageRegistryProvider`, `PackageRegistryLoader`, and `PackageRegistryValidator`: bundled and remote registry loading.
 - `PackageDefinition`, `PackageChannel`, and `PackageExtraDefinition`: installer data models.
 - `PackageInstallService`: Unity Package Manager install, update, and remove operations.
@@ -250,21 +241,6 @@ The implementation is split into internal editor classes:
 - `PackageDetectionService`: installed package detection through `Client.List`.
 - `PackageUpdateCheckService`: Git revision comparison for installed Git packages.
 - `PackageSampleImportService`: explicit sample import through Unity sample APIs or a safe copy fallback.
-
-## UI Toolkit Preview Assets
-
-Package-specific UI Toolkit files for the preview live in:
-
-- `Editor/UI/PackageInstaller/PackageInstallerPreviewWindow.uxml`
-- `Editor/UI/PackageInstaller/PackageInstallerPreviewWindow.uss`
-
-Shared Deucarian UI assets live in `com.deucarian.editor`, not in this package:
-
-- Logo: `com.deucarian.editor/Editor/Assets/Logos/DeucarianPlaceholderLogo.png`
-- Package Installer hero: `com.deucarian.editor/Editor/Assets/Images/DeucarianPackageInstallerPlaceholderHero.png`
-- Default package icon: `com.deucarian.editor/Editor/Assets/Icons/DeucarianPackagePlaceholderIcon.png`
-
-Package Installer loads those shared assets through `DeucarianEditorUIResources` and keeps only package-specific UXML/USS in this package.
 
 ## Why Editor-Only
 
