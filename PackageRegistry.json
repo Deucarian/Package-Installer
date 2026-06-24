@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-06-23",
+  "updatedAt": "2026-06-24",
   "groups": [
     {
       "id": "infrastructure",
@@ -182,6 +182,22 @@
       "stableUrl": "https://github.com/Deucarian/Editor.git#main",
       "developmentUrl": "https://github.com/Deucarian/Editor.git#develop",
       "dependencies": []
+    },
+    {
+      "id": "com.deucarian.game-content-authoring",
+      "displayName": "Deucarian Game Content Authoring",
+      "category": "Editor",
+      "type": "Tool",
+      "ecosystemGroup": "Tools & Quality",
+      "groupId": "tools-quality",
+      "overviewOrder": 30,
+      "description": "Shared Deucarian editor shell and provider API for game content authoring packages.",
+      "stableUrl": "https://github.com/Deucarian/Game-Content-Authoring.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Game-Content-Authoring.git#develop",
+      "dependencies": [
+        "com.deucarian.common",
+        "com.deucarian.editor"
+      ]
     },
     {
       "id": "com.deucarian.core-state",
@@ -636,7 +652,8 @@
       "developmentUrl": "https://github.com/Deucarian/Attacks.git#develop",
       "dependencies": [
         "com.deucarian.gameplay-foundation",
-        "com.deucarian.combat"
+        "com.deucarian.combat",
+        "com.deucarian.game-content-authoring"
       ]
     },
     {
