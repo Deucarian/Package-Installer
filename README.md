@@ -234,6 +234,7 @@ Tools/Deucarian/Package Installer
 The implementation is split into internal editor classes:
 
 - `PackageInstallerWindow`: IMGUI window and coordination.
+- `PackageInstallerStateRepository`: project-scoped selected-channel state shared with Bootstrap and manifest/package-lock invalidation signatures.
 - `PackageRegistryProvider`, `PackageRegistryLoader`, and `PackageRegistryValidator`: bundled and remote registry loading.
 - `PackageDefinition`, `PackageChannel`, and `PackageExtraDefinition`: installer data models.
 - `PackageInstallService`: Unity Package Manager install, update, and remove operations.

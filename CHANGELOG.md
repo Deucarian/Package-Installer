@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Removed the user-facing graph timing diagnostics menu so the only Package Installer menu item is `Tools/Deucarian/Package Installer`.
+- Centralized selected stable/development channel state behind a project-scoped package-management preference shared with Bootstrap.
+- Added manifest/package-lock state signatures so installed-package refreshes are invalidated when Unity Package Manager changes package state outside the installer window.
+- Tightened graph route obstacle validation so package-to-package routes can leave or enter their own category while still avoiding unrelated category obstacles.
+
 ## 1.1.60 - 2026-06-23
 
 - Updated bundled fallback registry URLs for the promoted gameplay, suite, and template packages so stable installs use `#main` and development installs use `#develop`.

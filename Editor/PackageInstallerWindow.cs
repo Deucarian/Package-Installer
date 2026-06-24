@@ -53,15 +53,12 @@ namespace Deucarian.PackageInstaller.Editor
         internal const string OperationFooterDetailsButtonName = "package-installer-operation-footer-details-toggle";
         internal const string OperationFooterVersionName = "package-installer-operation-footer-version";
         internal const string WallpaperTopSafeFadeName = "package-installer-wallpaper-top-safe-fade";
-        private const string ChannelPreferencePrefix = "Deucarian.PackageInstaller.SelectedChannel.";
         private const string AdvancedFoldoutPreferencePrefix = "Deucarian.PackageInstaller.AdvancedFoldout.";
         private const string CategoryFoldoutPreferencePrefix = "Deucarian.PackageInstaller.CategoryFoldout.";
         private const string OperationDrawerPreferencePrefix = "Deucarian.PackageInstaller.OperationDrawer.";
         private const string GraphStyleSheetPath =
             "Packages/com.deucarian.package-installer/Editor/UI/PackageInstaller/PackageInstallerGraph.uss";
         private const string InstallerMenuPath = "Tools/Deucarian/Package Installer";
-        private const string GraphOpenTimingMenuPath =
-            InstallerMenuPath + "/Diagnostics/Log Graph Open Timing";
         private const string InstalledStatusMarker = "\u2713";
         private const string NotInstalledStatusMarker = "\u25CB";
         private const string AttentionStatusMarker = "!";
@@ -138,10 +135,7 @@ namespace Deucarian.PackageInstaller.Editor
         private PackageSampleDiscoveryService _packageSampleDiscoveryService;
         private PackageDependencyInstaller _packageDependencyInstaller;
         private PackageGraphBuilder _packageGraphBuilder;
-        private readonly Dictionary<string, PackageChannel> _selectedChannels =
-            new Dictionary<string, PackageChannel>();
-        private readonly HashSet<string> _autoSelectedChannelPackageIds =
-            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private PackageInstallerStateRepository _stateRepository;
         private readonly Dictionary<string, bool> _advancedFoldouts =
             new Dictionary<string, bool>();
         private readonly Dictionary<string, bool> _categoryFoldouts =
@@ -163,6 +157,7 @@ namespace Deucarian.PackageInstaller.Editor
         private bool _checkUpdatesAfterDetectionRefresh;
         private bool _operationDetailsExpanded;
         private InstallerViewMode _viewMode = DefaultInstallerViewMode;
+        private PackageChannel _lastObservedProjectChannel = PackageChannel.Stable;
 
         private Button _listViewButton;
         private Button _graphViewButton;
@@ -239,27 +234,11 @@ namespace Deucarian.PackageInstaller.Editor
             window.Show();
         }
 
-        [MenuItem(GraphOpenTimingMenuPath)]
-        private static void ToggleGraphOpenTimingDiagnostics()
-        {
-            PackageInstallerLoggingPreferences.GraphOpenDiagnosticsLogging =
-                !PackageInstallerLoggingPreferences.GraphOpenDiagnosticsLogging;
-        }
-
-        [MenuItem(GraphOpenTimingMenuPath, true)]
-        private static bool ValidateGraphOpenTimingDiagnostics()
-        {
-            Menu.SetChecked(
-                GraphOpenTimingMenuPath,
-                PackageInstallerLoggingPreferences.GraphOpenDiagnosticsLogging);
-            return true;
-        }
-
         internal static bool DefaultsToEcosystemGraphForTests => DefaultInstallerViewMode == InstallerViewMode.EcosystemGraph;
 
         internal static string MenuPathForTests => InstallerMenuPath;
 
-        internal static string GraphOpenTimingMenuPathForTests => GraphOpenTimingMenuPath;
+        internal static IReadOnlyList<string> UserFacingMenuPathsForTests => new[] { InstallerMenuPath };
 
         internal static IReadOnlyList<string> ViewToggleOrderForTests => new[] { "Ecosystem Graph", "List View" };
 
@@ -360,6 +339,8 @@ namespace Deucarian.PackageInstaller.Editor
             titleContent = new GUIContent(WindowTitle);
             minSize = new Vector2(MinWindowWidth, MinWindowHeight);
 
+            _stateRepository = new PackageInstallerStateRepository();
+            _lastObservedProjectChannel = _stateRepository.GetProjectChannel();
             _packageInstallService = new PackageInstallService();
             _packageDetectionService = new PackageDetectionService();
             _packageUpdateCheckService = new PackageUpdateCheckService(_packageDetectionService);
@@ -408,6 +389,11 @@ namespace Deucarian.PackageInstaller.Editor
             }
         }
 
+        private void OnFocus()
+        {
+            RefreshExternalState("window focus");
+        }
+
         private void OnDisable()
         {
             if (_packageInstallService != null)
@@ -444,6 +430,7 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             PackageRegistryProvider.RegistryChanged -= HandleRegistryChanged;
+            _stateRepository = null;
         }
 
         private void CreateGUI()
@@ -1184,6 +1171,40 @@ namespace Deucarian.PackageInstaller.Editor
         private void RefreshGraphView()
         {
             RefreshGraphView("refresh");
+        }
+
+        private void RefreshExternalState(string reason)
+        {
+            if (_stateRepository == null)
+            {
+                return;
+            }
+
+            bool shouldRefreshGraph = false;
+            PackageChannel projectChannel = _stateRepository.GetProjectChannel();
+
+            if (projectChannel != _lastObservedProjectChannel)
+            {
+                _lastObservedProjectChannel = projectChannel;
+                _packageUpdateCheckService?.InvalidateAll();
+                InvalidateGraphModelCache("selected channel changed externally");
+                shouldRefreshGraph = true;
+            }
+
+            if (_packageDetectionService != null &&
+                _packageDetectionService.RefreshIfManifestStateChanged())
+            {
+                _checkUpdatesAfterDetectionRefresh = _packageUpdateCheckService != null &&
+                                                     _packageUpdateCheckService.HasStatuses;
+                InvalidateGraphModelCache("project manifest changed externally");
+                shouldRefreshGraph = true;
+            }
+
+            if (shouldRefreshGraph)
+            {
+                RefreshGraphView(reason);
+                Repaint();
+            }
         }
 
         private void RefreshGraphView(string reason)
@@ -4084,21 +4105,23 @@ namespace Deucarian.PackageInstaller.Editor
                 return PackageChannel.Stable;
             }
 
-            if (_selectedChannels.TryGetValue(packageDefinition.PackageId, out PackageChannel selectedChannel))
-            {
-                if (selectedChannel == PackageChannel.Custom &&
-                    !_packageDetectionService.IsInstalled(packageDefinition.PackageId))
-                {
-                    return PackageChannel.Stable;
-                }
+            PackageChannel projectChannel = _stateRepository != null
+                ? _stateRepository.GetProjectChannel()
+                : PackageChannel.Stable;
 
-                return selectedChannel;
+            if (projectChannel == PackageChannel.Development && packageDefinition.HasDevelopmentUrl)
+            {
+                return PackageChannel.Development;
             }
 
-            if (TryGetStoredChannel(packageDefinition, out PackageChannel storedChannel))
+            if (_packageDetectionService != null &&
+                _packageDetectionService.TryGetInstalledPackageChannel(
+                    packageDefinition,
+                    out PackageChannel installedChannel,
+                    out _) &&
+                installedChannel == PackageChannel.Custom)
             {
-                _selectedChannels[packageDefinition.PackageId] = storedChannel;
-                return storedChannel;
+                return PackageChannel.Custom;
             }
 
             return PackageChannel.Stable;
@@ -4111,79 +4134,30 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            _selectedChannels[packageDefinition.PackageId] = channel;
-            _autoSelectedChannelPackageIds.Remove(packageDefinition.PackageId);
-            EditorPrefs.SetInt(GetChannelPreferenceKey(packageDefinition.PackageId), (int)channel);
+            if (channel == PackageChannel.Custom)
+            {
+                return;
+            }
+
+            _stateRepository?.SetProjectChannel(channel);
+            _lastObservedProjectChannel = channel == PackageChannel.Development
+                ? PackageChannel.Development
+                : PackageChannel.Stable;
+            _packageUpdateCheckService?.InvalidateAll();
             InvalidateGraphModelCache("selected channel changed");
 
-            if (_packageDetectionService.IsInstalled(packageDefinition.PackageId))
+            if (_packageDetectionService != null &&
+                _packageUpdateCheckService != null &&
+                _packageDetectionService.IsInstalled(packageDefinition.PackageId))
             {
                 _packageUpdateCheckService.CheckForUpdate(packageDefinition, channel);
             }
             else
             {
-                _packageUpdateCheckService.Invalidate(packageDefinition.PackageId);
+                _packageUpdateCheckService?.Invalidate(packageDefinition.PackageId);
             }
 
             RefreshGraphView("selected channel changed");
-        }
-
-        private void SetAutoSelectedChannel(PackageDefinition packageDefinition, PackageChannel channel)
-        {
-            if (packageDefinition == null)
-            {
-                return;
-            }
-
-            _selectedChannels[packageDefinition.PackageId] = channel;
-            _autoSelectedChannelPackageIds.Add(packageDefinition.PackageId);
-            InvalidateGraphModelCache("installed channel sync");
-            _packageUpdateCheckService.Invalidate(packageDefinition.PackageId);
-        }
-
-        private bool TryGetStoredChannel(PackageDefinition packageDefinition, out PackageChannel channel)
-        {
-            channel = PackageChannel.Stable;
-
-            if (packageDefinition == null)
-            {
-                return false;
-            }
-
-            string key = GetChannelPreferenceKey(packageDefinition.PackageId);
-
-            if (!EditorPrefs.HasKey(key))
-            {
-                return false;
-            }
-
-            int storedValue = EditorPrefs.GetInt(key, (int)PackageChannel.Stable);
-
-            if (!Enum.IsDefined(typeof(PackageChannel), storedValue))
-            {
-                return false;
-            }
-
-            channel = (PackageChannel)storedValue;
-
-            if (channel == PackageChannel.Custom &&
-                !_packageDetectionService.IsInstalled(packageDefinition.PackageId))
-            {
-                channel = PackageChannel.Stable;
-            }
-
-            return true;
-        }
-
-        private bool HasStoredChannel(PackageDefinition packageDefinition)
-        {
-            return packageDefinition != null &&
-                   EditorPrefs.HasKey(GetChannelPreferenceKey(packageDefinition.PackageId));
-        }
-
-        private string GetChannelPreferenceKey(string packageId)
-        {
-            return ChannelPreferencePrefix + Application.dataPath.Replace("\\", "/") + "." + packageId;
         }
 
         private bool IsCategoryExpanded(string category)
@@ -4256,47 +4230,6 @@ namespace Deucarian.PackageInstaller.Editor
                 default:
                     return "Stable";
             }
-        }
-
-        private void SynchronizeSelectedChannelsFromInstalledPackages()
-        {
-            foreach (PackageDefinition packageDefinition in PackageRegistryProvider.All)
-            {
-                if (!_packageDetectionService.TryGetInstalledPackageChannel(
-                        packageDefinition,
-                        out PackageChannel installedChannel,
-                        out _))
-                {
-                    continue;
-                }
-
-                PackageChannel currentChannel = GetSelectedChannel(packageDefinition);
-                bool hasSelectedChannel = _selectedChannels.ContainsKey(packageDefinition.PackageId);
-                bool hasStoredChannel = HasStoredChannel(packageDefinition);
-                bool wasAutoSelectedChannel =
-                    _autoSelectedChannelPackageIds.Contains(packageDefinition.PackageId);
-
-                if (!ShouldApplyInstalledChannelSelection(
-                        hasSelectedChannel,
-                        hasStoredChannel,
-                        wasAutoSelectedChannel))
-                {
-                    continue;
-                }
-
-                if (currentChannel != installedChannel)
-                {
-                    SetAutoSelectedChannel(packageDefinition, installedChannel);
-                }
-            }
-        }
-
-        internal static bool ShouldApplyInstalledChannelSelection(
-            bool hasSelectedChannel,
-            bool hasStoredChannel,
-            bool wasAutoSelectedChannel)
-        {
-            return wasAutoSelectedChannel || (!hasSelectedChannel && !hasStoredChannel);
         }
 
         private void EnsureValidSelection()
@@ -4631,7 +4564,6 @@ namespace Deucarian.PackageInstaller.Editor
         {
             InvalidateGraphModelCache("installed package manifest changed");
             _packageSampleDiscoveryService?.ClearCache();
-            SynchronizeSelectedChannelsFromInstalledPackages();
             RefreshGraphView("installed package refresh completed");
 
             if (!_checkUpdatesAfterDetectionRefresh)

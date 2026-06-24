@@ -8361,11 +8361,19 @@ namespace Deucarian.PackageInstaller.Editor
 
             for (int index = 0; index < points.Count - 1; index++)
             {
+                bool isFirstSegment = index == 0;
+                bool isLastSegment = index == points.Count - 2;
                 Rect segmentBounds = BuildSegmentBounds(points[index], points[index + 1]);
 
                 foreach (PackageGraphRouteObstacle obstacle in obstacles ?? Array.Empty<PackageGraphRouteObstacle>())
                 {
-                    if (ShouldIgnoreObstacleForBundle(obstacle, bundle))
+                    if (ShouldIgnoreObstacleForSegment(
+                            obstacle,
+                            bundle,
+                            points[0],
+                            points[points.Count - 1],
+                            isFirstSegment,
+                            isLastSegment))
                     {
                         continue;
                     }
@@ -8379,6 +8387,42 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             return true;
+        }
+
+        private static bool ShouldIgnoreObstacleForSegment(
+            PackageGraphRouteObstacle obstacle,
+            PackageGraphConnectionBundle bundle,
+            Vector2 routeStart,
+            Vector2 routeEnd,
+            bool isFirstSegment,
+            bool isLastSegment)
+        {
+            if (ShouldIgnoreObstacleForBundle(obstacle, bundle))
+            {
+                return true;
+            }
+
+            if (!IsCategoryObstacle(obstacle))
+            {
+                return false;
+            }
+
+            return (isFirstSegment && RectContainsPointInclusive(obstacle.Rect, routeStart)) ||
+                   (isLastSegment && RectContainsPointInclusive(obstacle.Rect, routeEnd));
+        }
+
+        private static bool IsCategoryObstacle(PackageGraphRouteObstacle obstacle)
+        {
+            return !string.IsNullOrWhiteSpace(obstacle.Id) &&
+                   obstacle.Id.StartsWith("category:", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool RectContainsPointInclusive(Rect rect, Vector2 point)
+        {
+            return point.x >= rect.xMin &&
+                   point.x <= rect.xMax &&
+                   point.y >= rect.yMin &&
+                   point.y <= rect.yMax;
         }
 
         private static Rect BuildSegmentBounds(Vector2 start, Vector2 end)

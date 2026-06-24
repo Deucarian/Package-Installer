@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using NUnit.Framework;
+using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -22,15 +24,92 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         public void Window_RegistersProductionPackageInstallerMenuPath()
         {
             Assert.AreEqual("Tools/Deucarian/Package Installer", PackageInstallerWindow.MenuPathForTests);
-            Assert.AreEqual(
-                "Tools/Deucarian/Package Installer/Diagnostics/Log Graph Open Timing",
-                PackageInstallerWindow.GraphOpenTimingMenuPathForTests);
-            Assert.AreNotEqual("Deucarian/Package Installer", PackageInstallerWindow.MenuPathForTests);
-            Assert.AreNotEqual(
-                "Tools/Deucarian/Development/Preview Package Installer",
-                PackageInstallerWindow.MenuPathForTests);
-            StringAssert.DoesNotContain("Development", PackageInstallerWindow.MenuPathForTests);
-            StringAssert.DoesNotContain("Preview", PackageInstallerWindow.MenuPathForTests);
+            CollectionAssert.AreEqual(
+                new[] { "Tools/Deucarian/Package Installer" },
+                PackageInstallerWindow.UserFacingMenuPathsForTests.ToArray());
+            Assert.IsFalse(PackageInstallerWindow.UserFacingMenuPathsForTests.Any(
+                path => path.StartsWith("Deucarian/", StringComparison.OrdinalIgnoreCase)));
+            Assert.IsFalse(PackageInstallerWindow.UserFacingMenuPathsForTests.Any(
+                path => path.IndexOf("/Diagnostics", StringComparison.OrdinalIgnoreCase) >= 0));
+            Assert.IsFalse(PackageInstallerWindow.UserFacingMenuPathsForTests.Any(
+                path => path.IndexOf("Preview", StringComparison.OrdinalIgnoreCase) >= 0));
+            Assert.IsFalse(PackageInstallerWindow.UserFacingMenuPathsForTests.Any(
+                path => path.IndexOf("Development", StringComparison.OrdinalIgnoreCase) >= 0));
+        }
+
+        [Test]
+        public void StateRepository_UsesSharedProjectChannelPreference()
+        {
+            string projectRoot = CreateTempProjectRoot();
+
+            try
+            {
+                PackageInstallerStateRepository.DeleteProjectChannelForTests(projectRoot);
+                string key = PackageInstallerStateRepository.GetProjectChannelPreferenceKeyForTests(projectRoot);
+
+                StringAssert.StartsWith(PackageInstallerStateRepository.ProjectChannelPreferencePrefix, key);
+                Assert.AreEqual(PackageChannel.Stable, PackageInstallerStateRepository.GetProjectChannelForTests(projectRoot));
+
+                PackageInstallerStateRepository.SetProjectChannelForTests(projectRoot, PackageChannel.Development);
+
+                Assert.AreEqual(PackageChannel.Development, PackageInstallerStateRepository.GetProjectChannelForTests(projectRoot));
+                Assert.AreEqual((int)PackageChannel.Development, EditorPrefs.GetInt(key, -1));
+            }
+            finally
+            {
+                PackageInstallerStateRepository.DeleteProjectChannelForTests(projectRoot);
+                DeleteTempProjectRoot(projectRoot);
+            }
+        }
+
+        [Test]
+        public void StateRepository_ReadsLegacyBootstrapChannelUntilSharedKeyExists()
+        {
+            string projectRoot = CreateTempProjectRoot();
+
+            try
+            {
+                PackageInstallerStateRepository.DeleteProjectChannelForTests(projectRoot);
+                string legacyKey = PackageInstallerStateRepository.GetLegacyBootstrapChannelPreferenceKeyForTests(projectRoot);
+                EditorPrefs.SetInt(legacyKey, (int)PackageChannel.Development);
+
+                Assert.AreEqual(PackageChannel.Development, PackageInstallerStateRepository.GetProjectChannelForTests(projectRoot));
+
+                PackageInstallerStateRepository.SetProjectChannelForTests(projectRoot, PackageChannel.Stable);
+
+                Assert.AreEqual(PackageChannel.Stable, PackageInstallerStateRepository.GetProjectChannelForTests(projectRoot));
+            }
+            finally
+            {
+                PackageInstallerStateRepository.DeleteProjectChannelForTests(projectRoot);
+                DeleteTempProjectRoot(projectRoot);
+            }
+        }
+
+        [Test]
+        public void StateRepository_ManifestSignatureChangesForPackageManifestState()
+        {
+            string projectRoot = CreateTempProjectRoot();
+            string packagesDirectory = Path.Combine(projectRoot, "Packages");
+            Directory.CreateDirectory(packagesDirectory);
+            string manifestPath = Path.Combine(packagesDirectory, "manifest.json");
+            string packageLockPath = Path.Combine(packagesDirectory, "packages-lock.json");
+
+            try
+            {
+                File.WriteAllText(manifestPath, "{\"dependencies\":{}}");
+                string firstSignature = PackageInstallerStateRepository.GetManifestStateSignatureForTests(projectRoot);
+
+                File.WriteAllText(packageLockPath, "{\"dependencies\":{\"com.deucarian.logging\":{\"version\":\"1.0.1\"}}}");
+                string secondSignature = PackageInstallerStateRepository.GetManifestStateSignatureForTests(projectRoot);
+
+                Assert.IsTrue(PackageDetectionService.HasManifestStateChangedForTests(firstSignature, secondSignature));
+                Assert.IsFalse(PackageDetectionService.HasManifestStateChangedForTests(secondSignature, secondSignature));
+            }
+            finally
+            {
+                DeleteTempProjectRoot(projectRoot);
+            }
         }
 
         [Test]
@@ -4339,6 +4418,25 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             {
                 CollectByClass(child, className, matches);
             }
+        }
+
+        private static string CreateTempProjectRoot()
+        {
+            string projectRoot = Path.Combine(
+                Path.GetTempPath(),
+                "dpi-state-tests-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(projectRoot);
+            return projectRoot;
+        }
+
+        private static void DeleteTempProjectRoot(string projectRoot)
+        {
+            if (string.IsNullOrWhiteSpace(projectRoot) || !Directory.Exists(projectRoot))
+            {
+                return;
+            }
+
+            Directory.Delete(projectRoot, true);
         }
 
     }

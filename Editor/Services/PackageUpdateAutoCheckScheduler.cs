@@ -99,13 +99,13 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static PackageChannel GetAutoSelectedChannel(PackageDefinition packageDefinition)
         {
-            if (_detectionService != null &&
-                _detectionService.TryGetInstalledPackageChannel(
-                    packageDefinition,
-                    out PackageChannel channel,
-                    out _))
+            PackageChannel channel = new PackageInstallerStateRepository().GetProjectChannel();
+
+            if (channel == PackageChannel.Development &&
+                packageDefinition != null &&
+                packageDefinition.HasDevelopmentUrl)
             {
-                return channel;
+                return PackageChannel.Development;
             }
 
             return PackageChannel.Stable;
