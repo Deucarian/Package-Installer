@@ -7,12 +7,12 @@ Deucarian Package Installer is a small editor-only Unity Package Manager package
 Open it from:
 
 ```text
-Deucarian > Package Installer
+Tools > Deucarian > Package Installer
 ```
 
 ## Deucarian Menu
 
-The installer keeps its Unity Editor entry point at `Deucarian > Package Installer`. This package does not own the Theming, Logging, Object Loading, Session, or Selection menu groups; those packages provide their own package-local menu items under the shared Deucarian menu.
+The installer keeps its Unity Editor entry point at `Tools > Deucarian > Package Installer`. This package does not own the Theming, Logging, Object Loading, Session, or Selection menu groups; those packages provide their own package-local menu items under the shared `Tools > Deucarian` menu.
 
 The installer can install standalone packages, integration packages, and explicitly declared package samples without making this package a runtime dependency of any other package.
 
@@ -43,7 +43,7 @@ You can also use Unity's Package Manager window:
 1. Open `Window > Package Manager`.
 2. Select `+ > Add package from git URL...`.
 3. Enter the installer Git URL.
-4. Open `Deucarian > Package Installer`.
+4. Open `Tools > Deucarian > Package Installer`.
 
 The package requires Unity `2021.3` or newer and depends on `com.deucarian.editor` and `com.deucarian.logging`.
 
@@ -228,7 +228,7 @@ This package is editor-only and exposes no runtime API for game code.
 The user-facing entry point is the Unity menu item:
 
 ```text
-Deucarian/Package Installer
+Tools/Deucarian/Package Installer
 ```
 
 The implementation is split into internal editor classes:

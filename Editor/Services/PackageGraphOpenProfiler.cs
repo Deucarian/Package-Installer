@@ -1,5 +1,4 @@
 using System;
-using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text;
@@ -38,6 +37,14 @@ namespace Deucarian.PackageInstaller.Editor
         private int _edgeCount;
         private int _renderedNodeCount;
         private int _routeCount;
+        private int _edgeRouteCacheHits;
+        private int _edgeRouteCacheMisses;
+        private long _edgeRouteCacheLookupTicks;
+        private long _edgeRouteCalculationTicks;
+        private long _edgeVisualElementReuseTicks;
+        private long _edgeStyleClassUpdateTicks;
+        private long _edgeGeometryLayoutReadTicks;
+        private long _edgePainterPassTicks;
 
         private PackageGraphOpenProfiler(
             string reason,
@@ -96,6 +103,18 @@ namespace Deucarian.PackageInstaller.Editor
         {
             _renderedNodeCount = Math.Max(_renderedNodeCount, renderedNodeCount);
             _routeCount = Math.Max(_routeCount, routeCount);
+        }
+
+        public void AddEdgeRouteDiagnostics(PackageGraphEdgeRouteBuildDiagnostics diagnostics)
+        {
+            _edgeRouteCacheHits += diagnostics.RouteCacheHits;
+            _edgeRouteCacheMisses += diagnostics.RouteCacheMisses;
+            _edgeRouteCacheLookupTicks += diagnostics.RouteCacheLookupTicks;
+            _edgeRouteCalculationTicks += diagnostics.RouteCalculationTicks;
+            _edgeVisualElementReuseTicks += diagnostics.VisualElementReuseTicks;
+            _edgeStyleClassUpdateTicks += diagnostics.StyleClassUpdateTicks;
+            _edgeGeometryLayoutReadTicks += diagnostics.GeometryLayoutReadTicks;
+            _edgePainterPassTicks += diagnostics.PainterPassTicks;
         }
 
         public void Dispose()
@@ -171,6 +190,17 @@ namespace Deucarian.PackageInstaller.Editor
             AppendTiming(message, PackageGraphOpenTiming.Layout, " layout");
             AppendTiming(message, PackageGraphOpenTiming.VisualNodeCreation, " visualNodes");
             AppendTiming(message, PackageGraphOpenTiming.EdgeCreation, " edgeCreation");
+            message.Append(" edgeRouteCache=");
+            message.Append(_edgeRouteCacheHits);
+            message.Append("h/");
+            message.Append(_edgeRouteCacheMisses);
+            message.Append("m");
+            AppendRawTiming(message, _edgeRouteCacheLookupTicks, " routeCacheLookup");
+            AppendRawTiming(message, _edgeRouteCalculationTicks, " routeCalculation");
+            AppendRawTiming(message, _edgeGeometryLayoutReadTicks, " geometryReads");
+            AppendRawTiming(message, _edgeVisualElementReuseTicks, " edgeVisualReuse");
+            AppendRawTiming(message, _edgeStyleClassUpdateTicks, " edgeStyleClass");
+            AppendRawTiming(message, _edgePainterPassTicks, " edgePainter");
             AppendTiming(message, PackageGraphOpenTiming.LayoutRepaintScheduling, " layoutRepaint");
 
             PackageInstallerLog.Graph.DiagnosticInfo(message.ToString());
@@ -191,6 +221,16 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             message.Append("0.00ms");
+        }
+
+        private static void AppendRawTiming(
+            StringBuilder message,
+            long ticks,
+            string label)
+        {
+            message.Append(label);
+            message.Append('=');
+            AppendMilliseconds(message, ticks);
         }
 
         private static void AppendMilliseconds(StringBuilder message, long ticks)

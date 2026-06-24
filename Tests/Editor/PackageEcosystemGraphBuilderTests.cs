@@ -21,11 +21,14 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         [Test]
         public void Window_RegistersProductionPackageInstallerMenuPath()
         {
-            Assert.AreEqual("Deucarian/Package Installer", PackageInstallerWindow.MenuPathForTests);
+            Assert.AreEqual("Tools/Deucarian/Package Installer", PackageInstallerWindow.MenuPathForTests);
             Assert.AreEqual(
-                "Deucarian/Package Installer/Diagnostics/Log Graph Open Timing",
+                "Tools/Deucarian/Package Installer/Diagnostics/Log Graph Open Timing",
                 PackageInstallerWindow.GraphOpenTimingMenuPathForTests);
-            StringAssert.DoesNotContain("Tools/", PackageInstallerWindow.MenuPathForTests);
+            Assert.AreNotEqual("Deucarian/Package Installer", PackageInstallerWindow.MenuPathForTests);
+            Assert.AreNotEqual(
+                "Tools/Deucarian/Development/Preview Package Installer",
+                PackageInstallerWindow.MenuPathForTests);
             StringAssert.DoesNotContain("Development", PackageInstallerWindow.MenuPathForTests);
             StringAssert.DoesNotContain("Preview", PackageInstallerWindow.MenuPathForTests);
         }
@@ -2881,6 +2884,94 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.IsTrue(suiteRoutes.All(route =>
                 !PackageGraphEdgeLayer.RouteCrossesGraphObstacleForTests(route, layout.NodeRects, groupRects)));
             Assert.IsFalse(PackageGraphEdgeLayer.AnimatesEdgeForTests(PackageGraphEdgeKind.SuiteMembership));
+        }
+
+        [Test]
+        public void GraphEdgeRoutes_CacheReusesLargeCentralFocusGeometry()
+        {
+            const int providerCount = 16;
+            const int dependentCount = 32;
+            const int integrationCount = 12;
+            const int optionalCompanionCount = 12;
+
+            List<PackageDefinition> packages = new List<PackageDefinition>();
+            string centralPackageId = "com.example.logging";
+            string[] providerIds = Enumerable.Range(0, providerCount)
+                .Select(index => "com.example.provider-" + index)
+                .ToArray();
+            string[] optionalCompanionIds = Enumerable.Range(0, optionalCompanionCount)
+                .Select(index => "com.example.optional-" + index)
+                .ToArray();
+
+            packages.Add(CreatePackage(
+                "Logging",
+                centralPackageId,
+                "Core",
+                dependencies: providerIds,
+                optionalCompanions: optionalCompanionIds));
+
+            foreach (string providerId in providerIds)
+            {
+                packages.Add(CreatePackage("Provider " + providerId, providerId, "Core"));
+            }
+
+            foreach (int index in Enumerable.Range(0, dependentCount))
+            {
+                packages.Add(CreatePackage(
+                    "Dependent " + index,
+                    "com.example.dependent-" + index,
+                    "Core",
+                    dependencies: new[] { centralPackageId }));
+            }
+
+            foreach (int index in Enumerable.Range(0, integrationCount))
+            {
+                packages.Add(CreatePackage(
+                    "Integration " + index,
+                    "com.example.integration-" + index,
+                    "Integration",
+                    "Integration",
+                    integrationTargets: new[] { centralPackageId }));
+            }
+
+            foreach (string optionalCompanionId in optionalCompanionIds)
+            {
+                packages.Add(CreatePackage("Optional " + optionalCompanionId, optionalCompanionId, "UI"));
+            }
+
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false).Build(packages);
+            PackageGraphLayoutResult layout = new PackageGraphLayout().Calculate(
+                graph,
+                PackageGraphLayoutMode.Focus,
+                centralPackageId);
+            PackageGraphFocus focus = PackageGraphFocus.Create(graph, centralPackageId);
+            PackageGraphEdgeRouteCache routeCache = new PackageGraphEdgeRouteCache();
+            IReadOnlyDictionary<string, Rect> groupRects = GetGroupRects(layout);
+
+            PackageGraphEdgeRoute[] warmRoutes = PackageGraphEdgeLayer.BuildRoutesWithCacheForTests(
+                    graph,
+                    layout.NodeRects,
+                    groupRects,
+                    focus,
+                    routeCache,
+                    out PackageGraphEdgeRouteBuildDiagnostics warmDiagnostics)
+                .ToArray();
+            PackageGraphEdgeRoute[] cachedRoutes = PackageGraphEdgeLayer.BuildRoutesWithCacheForTests(
+                    graph,
+                    layout.NodeRects,
+                    groupRects,
+                    focus,
+                    routeCache,
+                    out PackageGraphEdgeRouteBuildDiagnostics cachedDiagnostics)
+                .ToArray();
+
+            Assert.IsNotEmpty(warmRoutes);
+            Assert.AreEqual(warmRoutes.Length, cachedRoutes.Length);
+            Assert.AreEqual(warmRoutes.Length, warmDiagnostics.RouteCacheMisses);
+            Assert.AreEqual(0, warmDiagnostics.RouteCacheHits);
+            Assert.AreEqual(cachedRoutes.Length, cachedDiagnostics.RouteCacheHits);
+            Assert.AreEqual(0, cachedDiagnostics.RouteCacheMisses);
+            Assert.AreEqual(cachedRoutes.Length, cachedDiagnostics.RouteCount);
         }
 
         [Test]

@@ -59,7 +59,7 @@ namespace Deucarian.PackageInstaller.Editor
         private const string OperationDrawerPreferencePrefix = "Deucarian.PackageInstaller.OperationDrawer.";
         private const string GraphStyleSheetPath =
             "Packages/com.deucarian.package-installer/Editor/UI/PackageInstaller/PackageInstallerGraph.uss";
-        private const string InstallerMenuPath = "Deucarian/Package Installer";
+        private const string InstallerMenuPath = "Tools/Deucarian/Package Installer";
         private const string GraphOpenTimingMenuPath =
             InstallerMenuPath + "/Diagnostics/Log Graph Open Timing";
         private const string InstalledStatusMarker = "\u2713";
