@@ -15,6 +15,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             "{ \"id\": \"com.deucarian.core-state.integration\", \"displayName\": \"Core Integration\", \"category\": \"Integration\", \"description\": \"Integration package.\", \"stableUrl\": \"https://github.com/Deucarian/Core-State-Integration.git#main\", \"developmentUrl\": \"https://github.com/Deucarian/Core-State-Integration.git#develop\", \"dependencies\": [\"com.deucarian.core-state\"] }" +
             "] }";
         private const string TemplatePackageId = "com.deucarian.template.game.idle-auto-defense";
+        private const string MonetizationPackageId = "com.deucarian.monetization";
 
         private static readonly string[] Phase1ZPackageIds =
         {
@@ -687,6 +688,16 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual("tools-quality", testAutomation.groupId);
             CollectionAssert.IsEmpty(testAutomation.dependencies);
 
+            PackageRegistryEntry monetization = result.Registry.packages
+                .Single(package => package.id == MonetizationPackageId);
+            Assert.AreEqual("Core", monetization.category);
+            Assert.AreEqual("Core", monetization.type);
+            Assert.AreEqual("Runtime Services", monetization.ecosystemGroup);
+            Assert.AreEqual("runtime-services", monetization.groupId);
+            CollectionAssert.IsEmpty(monetization.dependencies);
+            StringAssert.Contains("Monetization.git#main", monetization.stableUrl);
+            StringAssert.Contains("Monetization.git#develop", monetization.developmentUrl);
+
             PackageRegistryEntry suite = result.Registry.packages
                 .Single(package => package.id == "com.deucarian.auto-defense-suite");
             Assert.AreEqual("Suites", suite.category);
@@ -730,7 +741,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual("Templates", template.ecosystemGroup);
             Assert.AreEqual("templates-games-idle-auto-defense", template.groupId);
             CollectionAssert.AreEqual(
-                new[] { "com.deucarian.auto-defense-suite" },
+                new[] { "com.deucarian.auto-defense-suite", MonetizationPackageId },
                 template.dependencies);
             StringAssert.Contains(
                 "Template-Game-Idle-Auto-Defense.git#main",
