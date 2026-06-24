@@ -39,6 +39,11 @@ namespace Deucarian.PackageInstaller.Editor
         private int _routeCount;
         private int _edgeRouteCacheHits;
         private int _edgeRouteCacheMisses;
+        private int _edgeRouteCacheNoEntryMisses;
+        private int _edgeRouteCacheLayoutMisses;
+        private int _edgeRouteCacheEndpointMisses;
+        private int _edgeRouteCacheFocusGraphMisses;
+        private int _edgeRouteCacheStyleMisses;
         private long _edgeRouteCacheLookupTicks;
         private long _edgeRouteCalculationTicks;
         private long _edgeVisualElementReuseTicks;
@@ -109,6 +114,11 @@ namespace Deucarian.PackageInstaller.Editor
         {
             _edgeRouteCacheHits += diagnostics.RouteCacheHits;
             _edgeRouteCacheMisses += diagnostics.RouteCacheMisses;
+            _edgeRouteCacheNoEntryMisses += diagnostics.RouteCacheNoEntryMisses;
+            _edgeRouteCacheLayoutMisses += diagnostics.RouteCacheLayoutMisses;
+            _edgeRouteCacheEndpointMisses += diagnostics.RouteCacheEndpointMisses;
+            _edgeRouteCacheFocusGraphMisses += diagnostics.RouteCacheFocusGraphMisses;
+            _edgeRouteCacheStyleMisses += diagnostics.RouteCacheStyleMisses;
             _edgeRouteCacheLookupTicks += diagnostics.RouteCacheLookupTicks;
             _edgeRouteCalculationTicks += diagnostics.RouteCalculationTicks;
             _edgeVisualElementReuseTicks += diagnostics.VisualElementReuseTicks;
@@ -195,6 +205,16 @@ namespace Deucarian.PackageInstaller.Editor
             message.Append("h/");
             message.Append(_edgeRouteCacheMisses);
             message.Append("m");
+            message.Append(" routeMisses=noEntry:");
+            message.Append(_edgeRouteCacheNoEntryMisses);
+            message.Append(",layout:");
+            message.Append(_edgeRouteCacheLayoutMisses);
+            message.Append(",endpoint:");
+            message.Append(_edgeRouteCacheEndpointMisses);
+            message.Append(",focus:");
+            message.Append(_edgeRouteCacheFocusGraphMisses);
+            message.Append(",style:");
+            message.Append(_edgeRouteCacheStyleMisses);
             AppendRawTiming(message, _edgeRouteCacheLookupTicks, " routeCacheLookup");
             AppendRawTiming(message, _edgeRouteCalculationTicks, " routeCalculation");
             AppendRawTiming(message, _edgeGeometryLayoutReadTicks, " geometryReads");

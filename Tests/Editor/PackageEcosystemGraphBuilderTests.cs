@@ -2956,6 +2956,19 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                     routeCache,
                     out PackageGraphEdgeRouteBuildDiagnostics warmDiagnostics)
                 .ToArray();
+            PackageGraphLayoutResult awayLayout = new PackageGraphLayout().Calculate(
+                graph,
+                PackageGraphLayoutMode.Focus,
+                providerIds[0]);
+            PackageGraphFocus awayFocus = PackageGraphFocus.Create(graph, providerIds[0]);
+            PackageGraphEdgeRoute[] awayRoutes = PackageGraphEdgeLayer.BuildRoutesWithCacheForTests(
+                    graph,
+                    awayLayout.NodeRects,
+                    GetGroupRects(awayLayout),
+                    awayFocus,
+                    routeCache,
+                    out _)
+                .ToArray();
             PackageGraphEdgeRoute[] cachedRoutes = PackageGraphEdgeLayer.BuildRoutesWithCacheForTests(
                     graph,
                     layout.NodeRects,
@@ -2966,12 +2979,21 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 .ToArray();
 
             Assert.IsNotEmpty(warmRoutes);
+            Assert.IsNotEmpty(awayRoutes);
             Assert.AreEqual(warmRoutes.Length, cachedRoutes.Length);
             Assert.AreEqual(warmRoutes.Length, warmDiagnostics.RouteCacheMisses);
+            Assert.AreEqual(warmRoutes.Length, warmDiagnostics.RouteCacheNoEntryMisses);
             Assert.AreEqual(0, warmDiagnostics.RouteCacheHits);
+            Assert.AreEqual(0, warmDiagnostics.RouteCacheLayoutMisses);
+            Assert.AreEqual(0, warmDiagnostics.RouteCacheEndpointMisses);
+            Assert.AreEqual(0, warmDiagnostics.RouteCacheFocusGraphMisses);
+            Assert.AreEqual(0, warmDiagnostics.RouteCacheStyleMisses);
             Assert.AreEqual(cachedRoutes.Length, cachedDiagnostics.RouteCacheHits);
             Assert.AreEqual(0, cachedDiagnostics.RouteCacheMisses);
             Assert.AreEqual(cachedRoutes.Length, cachedDiagnostics.RouteCount);
+            Assert.LessOrEqual(
+                cachedDiagnostics.RouteCalculationTicks,
+                Math.Max(1L, warmDiagnostics.RouteCalculationTicks / 2L));
         }
 
         [Test]
