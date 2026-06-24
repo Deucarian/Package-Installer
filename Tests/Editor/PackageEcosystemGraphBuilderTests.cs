@@ -698,6 +698,13 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
             Assert.IsTrue(FindGraphGroup(view, "infrastructure").ClassListContains("dpi-graph-group--attention"));
             Assert.IsFalse(FindGraphGroup(view, "runtime-services").ClassListContains("dpi-graph-group--attention"));
+
+            IReadOnlyList<PackageGraphGroupNavigationRow> rows =
+                PackageInstallerWindow.CreateEcosystemOverviewGroupNavigationRowsForTests(
+                    graph,
+                    PackageGraphNavigationState.Overview());
+            Assert.IsTrue(rows.Single(row => row.Id == "infrastructure").HasAttention);
+            Assert.IsFalse(rows.Single(row => row.Id == "runtime-services").HasAttention);
         }
 
         [Test]
@@ -1482,12 +1489,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.IsFalse(HasGraphNode(searchView, "com.deucarian.logging"));
             Assert.IsTrue(FindGraphGroup(searchView, "experience-interaction").ClassListContains("dpi-graph-search--context"));
             Assert.IsTrue(FindGraphGroup(searchView, "ui-presentation").ClassListContains("dpi-graph-search--context"));
-            Assert.IsNotNull(FindCategoryRailItem(searchView, "infrastructure"));
-            Assert.IsNotNull(FindCategoryRailItem(searchView, "experience-interaction"));
-            Assert.IsTrue(FindCategoryRailItem(searchView, "experience-interaction")
-                .ClassListContains("dpi-category-rail__item--search-match"));
-            Assert.IsTrue(FindCategoryRailItem(searchView, "infrastructure")
-                .ClassListContains("dpi-category-rail__item--search-dimmed"));
+            Assert.IsEmpty(FindByClass(searchView, "dpi-category-rail"));
+            Assert.IsEmpty(FindByClass(searchView, "dpi-category-rail__item"));
             Assert.AreEqual(
                 "1 direct matches",
                 FindByClass(searchView, "dpi-ecosystem-graph__visible-count")
@@ -2516,67 +2519,58 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
-        public void GraphView_CategoryRailStaysVisibleAndHighlightsCurrentContext()
+        public void Window_GroupNavigationRowsIncludeOverviewAndUseSharedSelectionState()
         {
             PackageGraphModel graph = new PackageGraphBuilder(_ => false)
                 .Build(CreateDefaultGraphPackages());
-            PackageGraphView overview = new PackageGraphView(_ => { }, (_, __) => { });
-            PackageGraphView groupFocused = new PackageGraphView(_ => { }, (_, __) => { });
-            PackageGraphView focused = new PackageGraphView(_ => { }, (_, __) => { });
+            IReadOnlyList<PackageGraphGroupNavigationRow> overviewRows =
+                PackageInstallerWindow.CreateEcosystemOverviewGroupNavigationRowsForTests(
+                    graph,
+                    PackageGraphNavigationState.Overview());
 
-            overview.SetGraph(graph, string.Empty, actionsEnabled: true);
-            groupFocused.SetGraph(
-                graph,
-                string.Empty,
-                string.Empty,
-                "infrastructure",
-                actionsEnabled: true,
-                visiblePackageIds: null,
-                filterCounts: null,
-                hiddenRelatedCount: 0);
-            focused.SetGraph(graph, "com.deucarian.session", actionsEnabled: true);
+            Assert.AreEqual("overview", overviewRows[0].Id);
+            Assert.AreEqual("Deucarian Overview", overviewRows[0].DisplayName);
+            Assert.AreEqual("package-installer", overviewRows[0].IconKey);
+            Assert.AreEqual("0 / " + graph.Nodes.Count(node => node.IsRegistered) + " installed", overviewRows[0].Summary);
+            Assert.IsTrue(overviewRows[0].IsOverview);
+            Assert.IsTrue(overviewRows[0].IsSelected);
+            Assert.IsFalse(overviewRows[0].Summary.Contains("packages"));
 
-            Assert.AreEqual(8, FindByClass(overview, "dpi-category-rail__item").Count);
-            Assert.IsTrue(
-                FindByClass(overview, "dpi-category-rail__item")
-                    .Single(item => item.name == "category-rail-overview")
-                    .ClassListContains("dpi-category-rail__item--active"));
-            Assert.AreEqual(8, FindByClass(groupFocused, "dpi-category-rail__item").Count);
-            Assert.IsTrue(
-                FindByClass(groupFocused, "dpi-category-rail__item")
-                    .Single(item => item.name == "category-rail-infrastructure")
-                    .ClassListContains("dpi-category-rail__item--active"));
-            Assert.AreEqual(8, FindByClass(focused, "dpi-category-rail__item").Count);
-            Assert.IsTrue(
-                FindByClass(focused, "dpi-category-rail__item")
-                    .Single(item => item.name == "category-rail-runtime-services")
-                    .ClassListContains("dpi-category-rail__item--active"));
+            IReadOnlyList<PackageGraphGroupNavigationRow> groupRows =
+                PackageInstallerWindow.CreateEcosystemOverviewGroupNavigationRowsForTests(
+                    graph,
+                    PackageGraphNavigationState.Group("infrastructure"));
+            Assert.IsFalse(groupRows.Single(row => row.Id == "overview").IsSelected);
+            Assert.IsTrue(groupRows.Single(row => row.Id == "infrastructure").IsSelected);
 
-            PackageGraphView nestedFocused = new PackageGraphView(_ => { }, (_, __) => { });
-            PackageGraphView nestedPackageFocused = new PackageGraphView(_ => { }, (_, __) => { });
-            nestedFocused.SetGraph(
-                graph,
-                string.Empty,
-                string.Empty,
-                "ui-presentation",
-                actionsEnabled: true,
-                visiblePackageIds: null,
-                filterCounts: null,
-                hiddenRelatedCount: 0);
-            nestedPackageFocused.SetGraph(graph, "com.deucarian.ui-binding", actionsEnabled: true);
+            IReadOnlyList<PackageGraphGroupNavigationRow> nestedRows =
+                PackageInstallerWindow.CreateEcosystemOverviewGroupNavigationRowsForTests(
+                    graph,
+                    PackageGraphNavigationState.Group("ui-presentation"));
+            Assert.IsTrue(nestedRows.Single(row => row.Id == "experience-interaction").IsSelected);
 
-            Assert.IsTrue(
-                FindByClass(nestedFocused, "dpi-category-rail__item")
-                    .Single(item => item.name == "category-rail-experience-interaction")
-                    .ClassListContains("dpi-category-rail__item--active"));
-            Assert.IsTrue(
-                FindByClass(nestedPackageFocused, "dpi-category-rail__item")
-                    .Single(item => item.name == "category-rail-experience-interaction")
-                    .ClassListContains("dpi-category-rail__item--active"));
+            IReadOnlyList<PackageGraphGroupNavigationRow> packageRows =
+                PackageInstallerWindow.CreateEcosystemOverviewGroupNavigationRowsForTests(
+                    graph,
+                    PackageInstallerWindow.CreatePackageNavigationStateForTests(graph, "com.deucarian.session"));
+            Assert.IsTrue(packageRows.Single(row => row.Id == "runtime-services").IsSelected);
         }
 
         [Test]
-        public void GraphView_CategoryRailHoverHighlightsGraphStructuralContext()
+        public void GraphView_DoesNotRenderDuplicateCategoryRailNavigation()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+            PackageGraphView view = new PackageGraphView(_ => { }, (_, __) => { });
+
+            view.SetGraph(graph, string.Empty, actionsEnabled: true);
+
+            Assert.IsEmpty(FindByClass(view, "dpi-category-rail"));
+            Assert.IsEmpty(FindByClass(view, "dpi-category-rail__item"));
+        }
+
+        [Test]
+        public void GraphView_GroupHoverPreviewHighlightsGraphStructuralContext()
         {
             PackageGraphModel graph = new PackageGraphBuilder(_ => false)
                 .Build(CreateDefaultGraphPackages());
@@ -2585,17 +2579,13 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             view.SetGraph(graph, string.Empty, actionsEnabled: true);
             view.PreviewCategoryHoverForTests("infrastructure");
 
-            Assert.IsTrue(
-                FindByClass(view, "dpi-category-rail__item")
-                    .Single(item => item.name == "category-rail-infrastructure")
-                    .ClassListContains("dpi-category-rail__item--hover-context"));
             Assert.IsTrue(FindGraphGroup(view, "infrastructure").ClassListContains("dpi-graph-group--hover-context"));
             Assert.IsTrue(FindGraphNode(view, "com.deucarian.logging").ClassListContains("dpi-graph-node--hover-context"));
             Assert.IsTrue(FindGraphNode(view, "com.deucarian.session").ClassListContains("dpi-graph-node--hover-dimmed"));
         }
 
         [Test]
-        public void GraphView_GraphPackageHoverHighlightsTopLevelRailParent()
+        public void GraphView_GraphPackageHoverHighlightsFocusedGraphNode()
         {
             PackageGraphModel graph = new PackageGraphBuilder(_ => false)
                 .Build(CreateDefaultGraphPackages());
@@ -2604,10 +2594,6 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             nestedPackageFocused.SetGraph(graph, "com.deucarian.ui-binding", actionsEnabled: true);
             nestedPackageFocused.PreviewPackageHoverForTests("com.deucarian.ui-binding");
 
-            Assert.IsTrue(
-                FindByClass(nestedPackageFocused, "dpi-category-rail__item")
-                    .Single(item => item.name == "category-rail-experience-interaction")
-                    .ClassListContains("dpi-category-rail__item--hover-context"));
             Assert.IsTrue(
                 FindGraphNode(nestedPackageFocused, "com.deucarian.ui-binding")
                     .ClassListContains("dpi-graph-node--hover-context"));
@@ -2703,14 +2689,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 hiddenRelatedCount: 0);
             view.SetGraph(graph, string.Empty, actionsEnabled: true);
 
-            Assert.IsTrue(
-                FindByClass(view, "dpi-category-rail__item")
-                    .Single(item => item.name == "category-rail-overview")
-                    .ClassListContains("dpi-category-rail__item--active"));
-            Assert.IsFalse(
-                FindByClass(view, "dpi-category-rail__item")
-                    .Single(item => item.name == "category-rail-experience-interaction")
-                    .ClassListContains("dpi-category-rail__item--active"));
+            Assert.IsEmpty(FindByClass(view, "dpi-category-rail__item"));
             Assert.AreEqual(
                 "Deucarian",
                 FindByClass(view, "dpi-ecosystem-graph__breadcrumb-current")
@@ -4405,12 +4384,6 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         {
             return FindByClass(root, "dpi-graph-group")
                 .Single(group => string.Equals(group.name, "group-" + groupId, StringComparison.OrdinalIgnoreCase));
-        }
-
-        private static VisualElement FindCategoryRailItem(VisualElement root, string groupId)
-        {
-            return FindByClass(root, "dpi-category-rail__item")
-                .SingleOrDefault(item => string.Equals(item.name, "category-rail-" + groupId, StringComparison.OrdinalIgnoreCase));
         }
 
         private static PackageGraphCanvas GetCanvas(VisualElement root)

@@ -18,7 +18,6 @@ namespace Deucarian.PackageInstaller.Editor
         private readonly PackageGraphCanvas _canvas;
         private readonly PackageGraphViewport _viewport;
         private readonly VisualElement _graphBody;
-        private readonly VisualElement _categoryRail;
         private readonly PackageVisibilityFilterState _filterState;
         private readonly Action<PackageDefinition> _packageSelected;
         private readonly Action _filterChanged;
@@ -41,8 +40,6 @@ namespace Deucarian.PackageInstaller.Editor
         private PackageGraphModel _currentGraph;
         private IReadOnlyCollection<string> _currentVisiblePackageIds = Array.Empty<string>();
         private PackageGraphSearchState _searchState = PackageGraphSearchState.Empty;
-        private string _activeTopLevelGroupId = string.Empty;
-        private string _hoveredTopLevelGroupId = string.Empty;
         private string _currentFocusedPackageId = string.Empty;
         private string _currentFocusedGroupId = string.Empty;
         private PackageGraphSpotlightKind _currentSpotlightKind = PackageGraphSpotlightKind.None;
@@ -109,12 +106,6 @@ namespace Deucarian.PackageInstaller.Editor
             _groupFocused = groupFocused;
 
             _canvas = new PackageGraphCanvas(packageSelected, packageAction, selectionCleared, _rootFocused, _groupFocused);
-            _canvas.InteractionsLockedChanged += _ => UpdateCategoryRailState();
-            _canvas.ActiveHoverGroupChanged += groupId =>
-            {
-                _hoveredTopLevelGroupId = ResolveTopLevelGroupId(_currentGraph, groupId);
-                UpdateCategoryRailState();
-            };
             _viewport = new PackageGraphViewport(selectionCleared);
             _viewport.ViewportSizeChanged += HandleViewportSizeChanged;
             _viewport.ZoomChanged += zoom =>
@@ -218,11 +209,6 @@ namespace Deucarian.PackageInstaller.Editor
             _graphBody = new VisualElement();
             _graphBody.AddToClassList("dpi-ecosystem-graph__body");
             Add(_graphBody);
-
-            _categoryRail = new VisualElement();
-            _categoryRail.AddToClassList("dpi-category-rail");
-            _categoryRail.AddToClassList("dpi-category-rail--hidden");
-            _graphBody.Add(_categoryRail);
 
             _graphBody.Add(_viewport);
 
@@ -435,7 +421,6 @@ namespace Deucarian.PackageInstaller.Editor
             _hiddenRelatedCount = Math.Max(0, hiddenRelatedCount);
             UpdateFilterControls();
             UpdateBreadcrumbs(graph, focusedGroupId, focusedPackageId);
-            UpdateCategoryRail(graph, focusedGroupId, focusedPackageId);
 
             if (searchCleared && _hasPreSearchCameraState)
             {
@@ -987,222 +972,9 @@ namespace Deucarian.PackageInstaller.Editor
             return separator;
         }
 
-        private void UpdateCategoryRail(
-            PackageGraphModel graph,
-            string focusedGroupId,
-            string focusedPackageId)
-        {
-            if (_categoryRail == null)
-            {
-                return;
-            }
-
-            _categoryRail.Clear();
-            _categoryRail.EnableInClassList("dpi-category-rail--hidden", false);
-            _categoryRail.style.display = DisplayStyle.Flex;
-            _activeTopLevelGroupId = ResolveActiveTopLevelGroupId(graph, focusedGroupId, focusedPackageId);
-            _categoryRail.Add(CreateOverviewRailItem());
-
-            foreach (PackageGraphGroup group in GetTopLevelGroups(graph))
-            {
-                _categoryRail.Add(CreateCategoryRailItem(graph, group));
-            }
-
-            UpdateCategoryRailState();
-        }
-
-        private VisualElement CreateOverviewRailItem()
-        {
-            bool active = IsOverviewRailActive();
-            Button item = new Button(() =>
-            {
-                if (_canvas.InteractionsLocked)
-                {
-                    return;
-                }
-
-                if (IsOverviewRailActive())
-                {
-                    FitCurrentContext();
-                    return;
-                }
-
-                NavigateToRoot();
-            })
-            {
-                name = "category-rail-overview",
-                tooltip = active ? "Refit ecosystem overview" : "Navigate to ecosystem overview"
-            };
-            item.AddToClassList("dpi-category-rail__item");
-            item.AddToClassList("dpi-category-rail__item--overview");
-            item.EnableInClassList("dpi-category-rail__item--active", active);
-
-            VisualElement symbol = new VisualElement();
-            symbol.AddToClassList("dpi-category-rail__symbol");
-            symbol.style.width = 30f;
-            symbol.style.height = 30f;
-            Image icon = new Image
-            {
-                image = DeucarianEditorIcons.GetPackageIcon("package-installer"),
-                scaleMode = ScaleMode.ScaleToFit
-            };
-            icon.AddToClassList("dpi-category-rail__icon");
-            symbol.Add(icon);
-            item.Add(symbol);
-
-            VisualElement textBlock = new VisualElement();
-            textBlock.AddToClassList("dpi-category-rail__text");
-            Label title = new Label("Deucarian");
-            title.AddToClassList("dpi-category-rail__label");
-            textBlock.Add(title);
-            Label count = new Label("Overview");
-            count.AddToClassList("dpi-category-rail__count");
-            textBlock.Add(count);
-            item.Add(textBlock);
-            return item;
-        }
-
-        private VisualElement CreateCategoryRailItem(PackageGraphModel graph, PackageGraphGroup group)
-        {
-            PackageGraphNode[] descendants = GetDescendantPackageNodes(graph, group.Id).ToArray();
-            int updateCount = descendants.Count(node => node.Status == PackageGraphNodeStatus.UpdateAvailable);
-            int attentionCount = descendants.Count(node =>
-                node.Status == PackageGraphNodeStatus.Missing ||
-                node.Status == PackageGraphNodeStatus.Warning);
-            int searchMatchCount = GetCategoryRailSearchMatchCount(graph, group.Id);
-            bool searchActive = _searchState != null && _searchState.HasQuery;
-            bool containsSearchMatch = !searchActive || searchMatchCount > 0 || IsCategoryRailSearchContext(graph, group.Id);
-            bool active = string.Equals(group.Id, _activeTopLevelGroupId, StringComparison.OrdinalIgnoreCase);
-            bool hovered = string.Equals(group.Id, _hoveredTopLevelGroupId, StringComparison.OrdinalIgnoreCase);
-
-            Button item = new Button(() =>
-            {
-                if (_canvas.InteractionsLocked)
-                {
-                    return;
-                }
-
-                if (string.Equals(group.Id, _activeTopLevelGroupId, StringComparison.OrdinalIgnoreCase))
-                {
-                    FitCurrentContext();
-                    return;
-                }
-
-                NavigateToGroup(group);
-            })
-            {
-                name = "category-rail-" + group.Id,
-                tooltip = active ? "Refit " + group.DisplayName : "Navigate to " + group.DisplayName
-            };
-            item.AddToClassList("dpi-category-rail__item");
-            item.EnableInClassList("dpi-category-rail__item--active", active);
-            item.EnableInClassList("dpi-category-rail__item--hover-context", hovered);
-            item.EnableInClassList("dpi-category-rail__item--attention", updateCount > 0 || attentionCount > 0);
-            item.EnableInClassList("dpi-category-rail__item--search-match", searchActive && containsSearchMatch);
-            item.EnableInClassList("dpi-category-rail__item--search-dimmed", searchActive && !containsSearchMatch);
-            item.RegisterCallback<MouseEnterEvent>(_ => SetRailCategoryHover(group.Id));
-            item.RegisterCallback<MouseLeaveEvent>(_ => ClearRailCategoryHover(group.Id));
-            item.RegisterCallback<FocusInEvent>(_ => SetRailCategoryHover(group.Id));
-            item.RegisterCallback<FocusOutEvent>(_ => ClearRailCategoryHover(group.Id));
-
-            VisualElement symbol = new VisualElement();
-            symbol.AddToClassList("dpi-category-rail__symbol");
-            symbol.style.width = 30f;
-            symbol.style.height = 30f;
-            Image icon = new Image
-            {
-                image = DeucarianEditorIcons.GetPackageIcon(group.IconKey),
-                scaleMode = ScaleMode.ScaleToFit
-            };
-            icon.AddToClassList("dpi-category-rail__icon");
-            symbol.Add(icon);
-
-            if (updateCount > 0 || attentionCount > 0)
-            {
-                Label attention = new Label("!");
-                attention.AddToClassList("dpi-category-rail__attention");
-                symbol.Add(attention);
-            }
-
-            item.Add(symbol);
-
-            VisualElement textBlock = new VisualElement();
-            textBlock.AddToClassList("dpi-category-rail__text");
-            Label title = new Label(group.DisplayName);
-            title.AddToClassList("dpi-category-rail__label");
-            textBlock.Add(title);
-            Label count = new Label(descendants.Length + " packages");
-            if (searchActive && searchMatchCount > 0)
-            {
-                count.text += " - " + searchMatchCount + " matches";
-            }
-
-            count.AddToClassList("dpi-category-rail__count");
-            textBlock.Add(count);
-            item.Add(textBlock);
-            return item;
-        }
-
-        private int GetCategoryRailSearchMatchCount(PackageGraphModel graph, string topLevelGroupId)
-        {
-            if (graph == null ||
-                _searchState == null ||
-                !_searchState.HasQuery ||
-                string.IsNullOrWhiteSpace(topLevelGroupId))
-            {
-                return 0;
-            }
-
-            HashSet<string> descendantGroupIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            CollectDescendantGroupIds(graph, topLevelGroupId, descendantGroupIds);
-            return graph.Nodes.Count(node =>
-                node != null &&
-                descendantGroupIds.Contains(node.GroupId) &&
-                _searchState.IsPackageContext(node.PackageId));
-        }
-
-        private bool IsCategoryRailSearchContext(PackageGraphModel graph, string topLevelGroupId)
-        {
-            if (graph == null ||
-                _searchState == null ||
-                !_searchState.HasQuery ||
-                string.IsNullOrWhiteSpace(topLevelGroupId))
-            {
-                return false;
-            }
-
-            HashSet<string> descendantGroupIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            CollectDescendantGroupIds(graph, topLevelGroupId, descendantGroupIds);
-            return descendantGroupIds.Any(groupId =>
-                _searchState.IsDirectCategoryMatch(groupId) ||
-                _searchState.IsCategoryContext(groupId));
-        }
-
-        private void SetRailCategoryHover(string groupId)
-        {
-            if (_canvas.InteractionsLocked || _currentGraph == null)
-            {
-                return;
-            }
-
-            ApplyCategoryHover(groupId, respectInteractionLock: true);
-        }
-
-        private void ClearRailCategoryHover(string groupId)
-        {
-            if (_canvas.InteractionsLocked)
-            {
-                return;
-            }
-
-            _canvas.ClearExternalHoverGroup(groupId);
-            _hoveredTopLevelGroupId = string.Empty;
-            UpdateCategoryRailState();
-        }
-
         internal void PreviewCategoryHoverForTests(string groupId)
         {
-            ApplyCategoryHover(groupId, respectInteractionLock: false);
+            _canvas.SetExternalHoverGroup(groupId, respectInteractionLock: false);
         }
 
         internal void PreviewPackageHoverForTests(string packageId)
@@ -1222,162 +994,10 @@ namespace Deucarian.PackageInstaller.Editor
             _viewport.ApplyPreviewCamera(camera);
         }
 
-        private void ApplyCategoryHover(string groupId, bool respectInteractionLock)
-        {
-            if (_currentGraph == null)
-            {
-                return;
-            }
-
-            _hoveredTopLevelGroupId = ResolveTopLevelGroupId(_currentGraph, groupId);
-            _canvas.SetExternalHoverGroup(groupId, respectInteractionLock);
-            UpdateCategoryRailState();
-        }
-
-        private void UpdateCategoryRailState()
-        {
-            if (_categoryRail == null)
-            {
-                return;
-            }
-
-            bool locked = _canvas.InteractionsLocked;
-            _categoryRail.EnableInClassList("dpi-category-rail--locked", locked);
-
-            foreach (VisualElement element in _categoryRail.Children())
-            {
-                if (element is Button button)
-                {
-                    button.SetEnabled(!locked);
-                }
-
-                string groupId = GetRailGroupId(element);
-                element.EnableInClassList(
-                    "dpi-category-rail__item--active",
-                    IsRailItemActive(groupId));
-                element.EnableInClassList(
-                    "dpi-category-rail__item--hover-context",
-                    string.Equals(groupId, _hoveredTopLevelGroupId, StringComparison.OrdinalIgnoreCase));
-            }
-        }
-
-        private bool IsRailItemActive(string groupId)
-        {
-            return IsOverviewRailId(groupId)
-                ? IsOverviewRailActive()
-                : string.Equals(groupId, _activeTopLevelGroupId, StringComparison.OrdinalIgnoreCase);
-        }
-
-        private bool IsOverviewRailActive()
-        {
-            return IsOverviewLikeLayout(_canvas.LayoutMode) &&
-                   string.IsNullOrWhiteSpace(_activeTopLevelGroupId);
-        }
-
         private static bool IsOverviewLikeLayout(PackageGraphLayoutMode mode)
         {
             return mode == PackageGraphLayoutMode.Overview ||
                    mode == PackageGraphLayoutMode.Filtered;
-        }
-
-        private static bool IsOverviewRailId(string groupId)
-        {
-            return string.Equals(groupId, "overview", StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static string GetRailGroupId(VisualElement element)
-        {
-            const string prefix = "category-rail-";
-            return element != null &&
-                   !string.IsNullOrWhiteSpace(element.name) &&
-                   element.name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
-                ? element.name.Substring(prefix.Length)
-                : string.Empty;
-        }
-
-        private static string ResolveActiveTopLevelGroupId(
-            PackageGraphModel graph,
-            string focusedGroupId,
-            string focusedPackageId)
-        {
-            string groupId = focusedGroupId ?? string.Empty;
-
-            if (string.IsNullOrWhiteSpace(groupId) &&
-                graph != null &&
-                !string.IsNullOrWhiteSpace(focusedPackageId) &&
-                graph.TryGetNode(focusedPackageId, out PackageGraphNode node))
-            {
-                groupId = node.GroupId;
-            }
-
-            return ResolveTopLevelGroupId(graph, groupId);
-        }
-
-        private static string ResolveTopLevelGroupId(PackageGraphModel graph, string groupId)
-        {
-            if (graph == null || string.IsNullOrWhiteSpace(groupId))
-            {
-                return string.Empty;
-            }
-
-            string currentGroupId = groupId;
-            HashSet<string> visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-            while (!string.IsNullOrWhiteSpace(currentGroupId) &&
-                   visited.Add(currentGroupId) &&
-                   graph.TryGetGroup(currentGroupId, out PackageGraphGroup group))
-            {
-                if (string.IsNullOrWhiteSpace(group.ParentGroupId))
-                {
-                    return group.Id;
-                }
-
-                currentGroupId = group.ParentGroupId;
-            }
-
-            return string.Empty;
-        }
-
-        private static IEnumerable<PackageGraphGroup> GetTopLevelGroups(PackageGraphModel graph)
-        {
-            return graph == null
-                ? Enumerable.Empty<PackageGraphGroup>()
-                : graph.Groups
-                    .Where(group => group != null && string.IsNullOrWhiteSpace(group.ParentGroupId))
-                    .OrderBy(group => group.SortOrder)
-                    .ThenBy(group => group.DisplayName, StringComparer.OrdinalIgnoreCase);
-        }
-
-        private static IEnumerable<PackageGraphNode> GetDescendantPackageNodes(
-            PackageGraphModel graph,
-            string groupId)
-        {
-            if (graph == null || string.IsNullOrWhiteSpace(groupId))
-            {
-                return Enumerable.Empty<PackageGraphNode>();
-            }
-
-            HashSet<string> groupIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            CollectDescendantGroupIds(graph, groupId, groupIds);
-            return graph.Nodes.Where(node => node != null && groupIds.Contains(node.GroupId));
-        }
-
-        private static void CollectDescendantGroupIds(
-            PackageGraphModel graph,
-            string groupId,
-            ISet<string> groupIds)
-        {
-            if (graph == null || string.IsNullOrWhiteSpace(groupId) || !groupIds.Add(groupId))
-            {
-                return;
-            }
-
-            foreach (PackageGraphGroup childGroup in graph.Groups.Where(group =>
-                         group != null &&
-                         string.Equals(group.ParentGroupId, groupId, StringComparison.OrdinalIgnoreCase)))
-            {
-                CollectDescendantGroupIds(graph, childGroup.Id, groupIds);
-            }
         }
 
         private void ShowAllPackages()
@@ -2745,7 +2365,6 @@ namespace Deucarian.PackageInstaller.Editor
 
             return !HasAncestorClass(target, "dpi-graph-node") &&
                    !HasAncestorClass(target, "dpi-graph-group") &&
-                   !HasAncestorClass(target, "dpi-category-rail") &&
                    !HasAncestorClass(target, "dpi-ecosystem-graph__toolbar") &&
                    !HasAncestorClass(target, "dpi-ecosystem-graph__breadcrumbs") &&
                    !HasAncestorClass(target, "dpi-ecosystem-graph__legend");
