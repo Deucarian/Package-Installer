@@ -16,6 +16,99 @@ namespace Deucarian.PackageInstaller.Editor
         Narrow
     }
 
+    internal enum PackageGraphNavigationTargetKind
+    {
+        Overview,
+        Group,
+        Package
+    }
+
+    internal readonly struct PackageGraphNavigationState
+    {
+        private PackageGraphNavigationState(
+            PackageGraphNavigationTargetKind targetKind,
+            string focusedPackageId,
+            string focusedGroupId)
+        {
+            TargetKind = targetKind;
+            FocusedPackageId = focusedPackageId ?? string.Empty;
+            FocusedGroupId = focusedGroupId ?? string.Empty;
+        }
+
+        public PackageGraphNavigationTargetKind TargetKind { get; }
+
+        public string FocusedPackageId { get; }
+
+        public string FocusedGroupId { get; }
+
+        public bool IsOverview =>
+            TargetKind == PackageGraphNavigationTargetKind.Overview ||
+            (string.IsNullOrWhiteSpace(FocusedPackageId) && string.IsNullOrWhiteSpace(FocusedGroupId));
+
+        public static PackageGraphNavigationState Overview()
+        {
+            return new PackageGraphNavigationState(
+                PackageGraphNavigationTargetKind.Overview,
+                string.Empty,
+                string.Empty);
+        }
+
+        public static PackageGraphNavigationState Group(string groupId)
+        {
+            return new PackageGraphNavigationState(
+                PackageGraphNavigationTargetKind.Group,
+                string.Empty,
+                groupId);
+        }
+
+        public static PackageGraphNavigationState Package(string packageId, string groupId)
+        {
+            return new PackageGraphNavigationState(
+                PackageGraphNavigationTargetKind.Package,
+                packageId,
+                groupId);
+        }
+    }
+
+    internal readonly struct PackageGraphGroupNavigationRow
+    {
+        public PackageGraphGroupNavigationRow(
+            string id,
+            string displayName,
+            string summary,
+            string iconKey,
+            string tooltip,
+            bool isOverview,
+            bool isSelected,
+            bool hasAttention)
+        {
+            Id = id ?? string.Empty;
+            DisplayName = displayName ?? string.Empty;
+            Summary = summary ?? string.Empty;
+            IconKey = string.IsNullOrWhiteSpace(iconKey) ? "package" : iconKey.Trim();
+            Tooltip = tooltip ?? string.Empty;
+            IsOverview = isOverview;
+            IsSelected = isSelected;
+            HasAttention = hasAttention;
+        }
+
+        public string Id { get; }
+
+        public string DisplayName { get; }
+
+        public string Summary { get; }
+
+        public string IconKey { get; }
+
+        public string Tooltip { get; }
+
+        public bool IsOverview { get; }
+
+        public bool IsSelected { get; }
+
+        public bool HasAttention { get; }
+    }
+
     internal sealed class PackageInstallerWindow : EditorWindow
     {
         private const string WindowTitle = "Package Installer";
@@ -146,8 +239,7 @@ namespace Deucarian.PackageInstaller.Editor
         private Vector2 _operationDetailsScrollPosition;
         private SelectionKind _selectionKind = SelectionKind.Package;
         private string _selectedPackageId = string.Empty;
-        private string _graphFocusedPackageId = string.Empty;
-        private string _graphFocusedGroupId = string.Empty;
+        private PackageGraphNavigationState _graphNavigationState = PackageGraphNavigationState.Overview();
         private PackageGraphModel _cachedPackageGraph;
         private PackageGraphModel _lastPackageGraph;
         private bool _graphModelCacheDirty = true;
@@ -245,6 +337,20 @@ namespace Deucarian.PackageInstaller.Editor
             int packageCount)
         {
             return FormatEcosystemOverviewGroupInstalledSummary(installedCount, packageCount);
+        }
+
+        internal static IReadOnlyList<PackageGraphGroupNavigationRow> CreateEcosystemOverviewGroupNavigationRowsForTests(
+            PackageGraphModel graph,
+            PackageGraphNavigationState navigationState)
+        {
+            return CreateEcosystemOverviewGroupNavigationRows(graph, navigationState);
+        }
+
+        internal static PackageGraphNavigationState CreatePackageNavigationStateForTests(
+            PackageGraphModel graph,
+            string packageId)
+        {
+            return PackageGraphNavigationState.Package(packageId, GetGraphPackageGroupId(graph, packageId));
         }
 
         internal static IReadOnlyList<string> ViewToggleOrderForTests => new[] { "Ecosystem Graph", "List View" };
@@ -1229,8 +1335,8 @@ namespace Deucarian.PackageInstaller.Editor
 
             using (PackageGraphOpenProfiler.Begin(
                        diagnosticReason,
-                       _graphFocusedPackageId,
-                       _graphFocusedGroupId,
+                       _graphNavigationState.FocusedPackageId,
+                       _graphNavigationState.FocusedGroupId,
                        graphCacheDirty))
             {
                 PackageGraphModel graph = GetOrBuildPackageGraphModel();
@@ -1258,15 +1364,15 @@ namespace Deucarian.PackageInstaller.Editor
                         _visibilityFilterState);
                     hiddenRelatedCount = PackageVisibilityFilter.CountHiddenRelatedPackages(
                         graph,
-                        _graphFocusedPackageId,
+                        _graphNavigationState.FocusedPackageId,
                         visiblePackageIds);
                 }
 
                 _graphView.SetGraph(
                     graph,
                     _selectedPackageId,
-                    _graphFocusedPackageId,
-                    _graphFocusedGroupId,
+                    _graphNavigationState.FocusedPackageId,
+                    _graphNavigationState.FocusedGroupId,
                     !IsAnyOperationBusy(),
                     visiblePackageIds,
                     searchState,
@@ -1340,14 +1446,14 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            if (!string.IsNullOrWhiteSpace(_graphFocusedPackageId))
+            if (!string.IsNullOrWhiteSpace(_graphNavigationState.FocusedPackageId))
             {
                 return;
             }
 
             if (!ShouldClearGraphSelectionForFilters(
                     _selectedPackageId,
-                    _graphFocusedPackageId,
+                    _graphNavigationState.FocusedPackageId,
                     visiblePackageIds))
             {
                 return;
@@ -1355,8 +1461,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             _selectionKind = SelectionKind.Package;
             _selectedPackageId = string.Empty;
-            _graphFocusedPackageId = string.Empty;
-            _graphFocusedGroupId = string.Empty;
+            _graphNavigationState = PackageGraphNavigationState.Overview();
             _detailsScrollPosition = Vector2.zero;
         }
 
@@ -1379,8 +1484,9 @@ namespace Deucarian.PackageInstaller.Editor
                 packageDefinition,
                 selectionKind,
                 refreshGraph: false);
-            _graphFocusedPackageId = packageDefinition.PackageId;
-            _graphFocusedGroupId = GetGraphPackageGroupId(packageDefinition.PackageId);
+            _graphNavigationState = PackageGraphNavigationState.Package(
+                packageDefinition.PackageId,
+                GetGraphPackageGroupId(packageDefinition.PackageId));
             RefreshGraphView("package focus");
         }
 
@@ -1402,8 +1508,8 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            if (string.Equals(group.Id, _graphFocusedGroupId, StringComparison.OrdinalIgnoreCase) &&
-                string.IsNullOrWhiteSpace(_graphFocusedPackageId))
+            if (string.Equals(group.Id, _graphNavigationState.FocusedGroupId, StringComparison.OrdinalIgnoreCase) &&
+                string.IsNullOrWhiteSpace(_graphNavigationState.FocusedPackageId))
             {
                 NavigateGraphToGroupOrRoot(GetGraphParentGroupId(group.Id));
                 return;
@@ -1414,16 +1520,16 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void HandleGraphBackNavigation()
         {
-            if (!string.IsNullOrWhiteSpace(_graphFocusedPackageId))
+            if (!string.IsNullOrWhiteSpace(_graphNavigationState.FocusedPackageId))
             {
-                string parentGroupId = GetGraphPackageGroupId(_graphFocusedPackageId);
+                string parentGroupId = GetGraphPackageGroupId(_graphNavigationState.FocusedPackageId);
                 NavigateGraphToGroupOrRoot(parentGroupId);
                 return;
             }
 
-            if (!string.IsNullOrWhiteSpace(_graphFocusedGroupId))
+            if (!string.IsNullOrWhiteSpace(_graphNavigationState.FocusedGroupId))
             {
-                string parentGroupId = GetGraphParentGroupId(_graphFocusedGroupId);
+                string parentGroupId = GetGraphParentGroupId(_graphNavigationState.FocusedGroupId);
                 NavigateGraphToGroupOrRoot(parentGroupId);
                 return;
             }
@@ -1457,8 +1563,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             _selectionKind = SelectionKind.Package;
             _selectedPackageId = string.Empty;
-            _graphFocusedPackageId = string.Empty;
-            _graphFocusedGroupId = groupId;
+            _graphNavigationState = PackageGraphNavigationState.Group(groupId);
             _detailsScrollPosition = Vector2.zero;
             RefreshGraphView("group focus");
             Repaint();
@@ -1468,8 +1573,7 @@ namespace Deucarian.PackageInstaller.Editor
         {
             _selectionKind = SelectionKind.Package;
             _selectedPackageId = string.Empty;
-            _graphFocusedPackageId = string.Empty;
-            _graphFocusedGroupId = string.Empty;
+            _graphNavigationState = PackageGraphNavigationState.Overview();
             _detailsScrollPosition = Vector2.zero;
             RefreshGraphView("root focus");
             Repaint();
@@ -1497,8 +1601,9 @@ namespace Deucarian.PackageInstaller.Editor
                 packageDefinition,
                 packageDefinition.IsIntegration ? SelectionKind.Integration : SelectionKind.Package,
                 refreshGraph: false);
-            _graphFocusedPackageId = packageDefinition.PackageId;
-            _graphFocusedGroupId = GetGraphPackageGroupId(packageDefinition.PackageId);
+            _graphNavigationState = PackageGraphNavigationState.Package(
+                packageDefinition.PackageId,
+                GetGraphPackageGroupId(packageDefinition.PackageId));
 
             switch (action)
             {
@@ -2281,19 +2386,39 @@ namespace Deucarian.PackageInstaller.Editor
 
                 if (focusedGroup != null)
                 {
+                    if (_viewMode == InstallerViewMode.EcosystemGraph)
+                    {
+                        DrawEcosystemOverviewGroupsPanel();
+                    }
+
                     DrawGraphGroupDetails(focusedGroup);
                 }
                 else
                 {
                     DrawEcosystemOverviewDashboard();
+
+                    if (_viewMode == InstallerViewMode.EcosystemGraph)
+                    {
+                        DrawEcosystemOverviewGroupsPanel();
+                    }
                 }
             }
             else if (_selectionKind == SelectionKind.Integration)
             {
+                if (_viewMode == InstallerViewMode.EcosystemGraph)
+                {
+                    DrawEcosystemOverviewGroupsPanel();
+                }
+
                 DrawIntegrationDetails(selectedDefinition);
             }
             else
             {
+                if (_viewMode == InstallerViewMode.EcosystemGraph)
+                {
+                    DrawEcosystemOverviewGroupsPanel();
+                }
+
                 DrawPackageDetails(selectedDefinition);
             }
 
@@ -2307,13 +2432,6 @@ namespace Deucarian.PackageInstaller.Editor
             PackageGraphNode[] nodes = graph == null
                 ? Array.Empty<PackageGraphNode>()
                 : graph.Nodes.Where(node => node != null && node.IsRegistered).ToArray();
-            PackageGraphGroup[] groups = graph == null
-                ? Array.Empty<PackageGraphGroup>()
-                : graph.Groups
-                    .Where(group => group != null && string.IsNullOrWhiteSpace(group.ParentGroupId))
-                    .OrderBy(group => group.SortOrder)
-                    .ThenBy(group => group.DisplayName, StringComparer.OrdinalIgnoreCase)
-                    .ToArray();
             int installedCount = nodes.Count(node => node.IsInstalled);
             int updateCount = nodes.Count(node => node.Status == PackageGraphNodeStatus.UpdateAvailable);
             int attentionCount = nodes.Count(node =>
@@ -2341,50 +2459,74 @@ namespace Deucarian.PackageInstaller.Editor
                 DrawKeyValueRow("Registry", PackageRegistryProvider.StatusMessage);
                 DrawKeyValueRow("Filters", GetActiveFilterSummary());
             }, GUILayout.ExpandWidth(true));
+        }
+
+        private void DrawEcosystemOverviewGroupsPanel()
+        {
+            PackageGraphGroupNavigationRow[] groupRows = CreateEcosystemOverviewGroupNavigationRows(
+                    _lastPackageGraph,
+                    _graphNavigationState)
+                .ToArray();
 
             DrawPanel("Groups", () =>
             {
-                if (groups.Length == 0)
+                if (groupRows.Length == 0)
                 {
-                    EditorGUILayout.LabelField("No structural groups are available.", _mutedMiniLabelStyle);
+                    EditorGUILayout.LabelField("No ecosystem navigation is available.", _mutedMiniLabelStyle);
                     return;
                 }
 
-                foreach (PackageGraphGroup group in groups)
+                foreach (PackageGraphGroupNavigationRow row in groupRows)
                 {
-                    DrawEcosystemOverviewGroupRow(group);
+                    DrawEcosystemOverviewGroupRow(row);
                 }
             }, GUILayout.ExpandWidth(true));
         }
 
-        private void DrawEcosystemOverviewGroupRow(PackageGraphGroup group)
+        private void DrawEcosystemOverviewGroupRow(PackageGraphGroupNavigationRow row)
         {
-            PackageGraphNode[] descendants = GetGraphGroupDescendantPackages(group.Id).ToArray();
-            int installedCount = descendants.Count(node => node.IsInstalled);
-            Rect rowRect = GUILayoutUtility.GetRect(1f, 30f, GUILayout.ExpandWidth(true));
+            Rect rowRect = GUILayoutUtility.GetRect(1f, 34f, GUILayout.ExpandWidth(true));
             bool hover = rowRect.Contains(Event.current.mousePosition);
 
             if (Event.current.type == EventType.Repaint)
             {
+                Color background = row.IsSelected ? _rowSelectedColor : hover ? _rowHoverColor : _sampleRowBackgroundColor;
                 DeucarianEditorVisualShell.DrawInsetSurface(
                     rowRect,
-                    hover ? _rowHoverColor : _sampleRowBackgroundColor,
-                    hover ? _interactiveBorderColor : _separatorColor,
+                    background,
+                    row.IsSelected || hover ? _interactiveBorderColor : _separatorColor,
                     4f);
+
+                if (row.IsSelected || row.HasAttention)
+                {
+                    EditorGUI.DrawRect(
+                        new Rect(rowRect.x, rowRect.y, 3f, rowRect.height),
+                        row.HasAttention ? GetStatusColor(VisualStatusKind.UpdateAvailable) : _interactiveBorderColor);
+                }
             }
 
             if (Event.current.type == EventType.MouseDown && hover && Event.current.button == 0)
             {
-                HandleGraphGroupFocused(group);
+                if (row.IsOverview)
+                {
+                    NavigateGraphToRoot();
+                }
+                else
+                {
+                    NavigateGraphToGroup(row.Id);
+                }
+
                 Event.current.Use();
             }
 
             EditorGUIUtility.AddCursorRect(rowRect, MouseCursor.Link);
 
-            string summary = FormatEcosystemOverviewGroupInstalledSummary(installedCount, descendants.Length);
-            GUIContent nameContent = new GUIContent(group.DisplayName, group.Description);
-            GUIContent summaryContent = new GUIContent(summary);
-            Rect contentRect = new Rect(rowRect.x + 8f, rowRect.y + 6f, rowRect.width - 16f, 18f);
+            Rect iconRect = new Rect(rowRect.x + 9f, rowRect.y + 7f, 20f, 20f);
+            DrawGraphNavigationIcon(iconRect, row.IconKey);
+
+            GUIContent nameContent = new GUIContent(row.DisplayName, row.Tooltip);
+            GUIContent summaryContent = new GUIContent(row.Summary);
+            Rect contentRect = new Rect(rowRect.x + 38f, rowRect.y + 8f, rowRect.width - 48f, 18f);
             float gap = 10f;
             float summaryWidth = Mathf.Min(
                 _mutedMiniLabelStyle.CalcSize(summaryContent).x + 2f,
@@ -2398,9 +2540,118 @@ namespace Deucarian.PackageInstaller.Editor
             DrawSingleLineLabel(summaryRect, summaryContent, _mutedMiniLabelStyle);
         }
 
+        private void DrawGraphNavigationIcon(Rect rect, string iconKey)
+        {
+            Texture icon = DeucarianEditorIcons.GetPackageIcon(iconKey);
+
+            if (icon == null)
+            {
+                return;
+            }
+
+            GUI.DrawTexture(rect, icon, ScaleMode.ScaleToFit, true);
+        }
+
         private static string FormatEcosystemOverviewGroupInstalledSummary(int installedCount, int packageCount)
         {
             return Math.Max(0, installedCount) + " / " + Math.Max(0, packageCount) + " installed";
+        }
+
+        private static IReadOnlyList<PackageGraphGroupNavigationRow> CreateEcosystemOverviewGroupNavigationRows(
+            PackageGraphModel graph,
+            PackageGraphNavigationState navigationState)
+        {
+            List<PackageGraphGroupNavigationRow> rows = new List<PackageGraphGroupNavigationRow>();
+            PackageGraphNode[] registeredNodes = graph == null
+                ? Array.Empty<PackageGraphNode>()
+                : graph.Nodes.Where(node => node != null && node.IsRegistered).ToArray();
+            rows.Add(new PackageGraphGroupNavigationRow(
+                "overview",
+                "Deucarian Overview",
+                FormatEcosystemOverviewGroupInstalledSummary(
+                    registeredNodes.Count(node => node.IsInstalled),
+                    registeredNodes.Length),
+                "package-installer",
+                "Navigate to Deucarian Overview",
+                isOverview: true,
+                isSelected: navigationState.IsOverview,
+                hasAttention: registeredNodes.Any(HasAttentionStatus)));
+
+            if (graph == null)
+            {
+                return rows;
+            }
+
+            string activeTopLevelGroupId = ResolveTopLevelGroupId(
+                graph,
+                string.IsNullOrWhiteSpace(navigationState.FocusedGroupId)
+                    ? GetGraphPackageGroupId(graph, navigationState.FocusedPackageId)
+                    : navigationState.FocusedGroupId);
+
+            foreach (PackageGraphGroup group in graph.Groups
+                         .Where(group => group != null && string.IsNullOrWhiteSpace(group.ParentGroupId))
+                         .OrderBy(group => group.SortOrder)
+                         .ThenBy(group => group.DisplayName, StringComparer.OrdinalIgnoreCase))
+            {
+                PackageGraphNode[] descendants = graph.GetDescendantPackages(group.Id)
+                    .Where(node => node != null && node.IsRegistered)
+                    .ToArray();
+                rows.Add(new PackageGraphGroupNavigationRow(
+                    group.Id,
+                    group.DisplayName,
+                    FormatEcosystemOverviewGroupInstalledSummary(
+                        descendants.Count(node => node.IsInstalled),
+                        descendants.Length),
+                    group.IconKey,
+                    group.Description,
+                    isOverview: false,
+                    isSelected: string.Equals(group.Id, activeTopLevelGroupId, StringComparison.OrdinalIgnoreCase),
+                    hasAttention: descendants.Any(HasAttentionStatus)));
+            }
+
+            return rows;
+        }
+
+        private static bool HasAttentionStatus(PackageGraphNode node)
+        {
+            return node != null &&
+                   (node.Status == PackageGraphNodeStatus.UpdateAvailable ||
+                    node.Status == PackageGraphNodeStatus.Missing ||
+                    node.Status == PackageGraphNodeStatus.Warning);
+        }
+
+        private static string GetGraphPackageGroupId(PackageGraphModel graph, string packageId)
+        {
+            return graph != null &&
+                   !string.IsNullOrWhiteSpace(packageId) &&
+                   graph.TryGetNode(packageId, out PackageGraphNode node)
+                ? node.GroupId
+                : string.Empty;
+        }
+
+        private static string ResolveTopLevelGroupId(PackageGraphModel graph, string groupId)
+        {
+            if (graph == null || string.IsNullOrWhiteSpace(groupId))
+            {
+                return string.Empty;
+            }
+
+            string currentGroupId = groupId;
+            HashSet<string> visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            while (!string.IsNullOrWhiteSpace(currentGroupId) &&
+                   visited.Add(currentGroupId) &&
+                   graph.TryGetGroup(currentGroupId, out PackageGraphGroup group))
+            {
+                if (string.IsNullOrWhiteSpace(group.ParentGroupId))
+                {
+                    return group.Id;
+                }
+
+                currentGroupId = group.ParentGroupId;
+            }
+
+            return string.Empty;
         }
 
         private static void DrawSingleLineLabel(Rect rect, GUIContent content, GUIStyle style)
@@ -4325,8 +4576,8 @@ namespace Deucarian.PackageInstaller.Editor
         private PackageGraphGroup GetFocusedGraphGroup()
         {
             return _lastPackageGraph != null &&
-                   !string.IsNullOrWhiteSpace(_graphFocusedGroupId) &&
-                   _lastPackageGraph.TryGetGroup(_graphFocusedGroupId, out PackageGraphGroup group)
+                   !string.IsNullOrWhiteSpace(_graphNavigationState.FocusedGroupId) &&
+                   _lastPackageGraph.TryGetGroup(_graphNavigationState.FocusedGroupId, out PackageGraphGroup group)
                 ? group
                 : null;
         }
