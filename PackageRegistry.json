@@ -163,6 +163,15 @@
       "description": "Survivors-style horde roguelite starter game templates.",
       "iconKey": "combat",
       "styleKey": "template"
+    },
+    {
+      "id": "templates-games-movement-fps",
+      "displayName": "Movement FPS",
+      "parentGroupId": "templates-games",
+      "sortOrder": 84,
+      "description": "Movement-FPS horde arena starter game templates.",
+      "iconKey": "combat",
+      "styleKey": "template"
     }
   ],
   "packages": [
@@ -878,6 +887,46 @@
         "survivors",
         "horde",
         "roguelite"
+      ]
+    },
+    {
+      "id": "com.deucarian.template.game.movement-fps",
+      "displayName": "Deucarian Template Game - Movement FPS",
+      "category": "Templates",
+      "type": "Template",
+      "ecosystemGroup": "Templates",
+      "groupId": "templates-games-movement-fps",
+      "overviewOrder": 30,
+      "description": "Starter Unity game template for a Movement-FPS horde arena loop with local wallrunner movement, gunplay, horde escalation, and Deucarian combat/run-upgrade adapters.",
+      "stableUrl": "https://github.com/Deucarian/Template-Game-Movement-FPS.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Template-Game-Movement-FPS.git#develop",
+      "dependencies": [
+        "com.deucarian.attacks",
+        "com.deucarian.combat",
+        "com.deucarian.common",
+        "com.deucarian.editor",
+        "com.deucarian.encounters",
+        "com.deucarian.game-content-authoring",
+        "com.deucarian.gameplay-foundation",
+        "com.deucarian.projectiles",
+        "com.deucarian.run-upgrades",
+        "com.deucarian.weapon-systems",
+        "com.deucarian.world-navigation",
+        "com.deucarian.world-spawning"
+      ],
+      "searchAliases": [
+        "movement fps template",
+        "wallrunner template",
+        "arena shooter template",
+        "titanfall style template"
+      ],
+      "searchTags": [
+        "template",
+        "game",
+        "movement-fps",
+        "wallrun",
+        "arena",
+        "horde"
       ]
     }
   ]
