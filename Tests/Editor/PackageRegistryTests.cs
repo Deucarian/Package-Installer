@@ -15,6 +15,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             "{ \"id\": \"com.deucarian.core-state.integration\", \"displayName\": \"Core Integration\", \"category\": \"Integration\", \"description\": \"Integration package.\", \"stableUrl\": \"https://github.com/Deucarian/Core-State-Integration.git#main\", \"developmentUrl\": \"https://github.com/Deucarian/Core-State-Integration.git#develop\", \"dependencies\": [\"com.deucarian.core-state\"] }" +
             "] }";
         private const string TemplatePackageId = "com.deucarian.template.game.idle-auto-defense";
+        private const string MovementFpsTemplatePackageId = "com.deucarian.template.game.movement-fps";
+        private const string GameContentAuthoringPackageId = "com.deucarian.game-content-authoring";
         private const string MonetizationPackageId = "com.deucarian.monetization";
 
         private static readonly string[] Phase1ZPackageIds =
@@ -721,7 +723,9 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 {
                     "templates",
                     "templates-games",
-                    "templates-games-idle-auto-defense"
+                    "templates-games-idle-auto-defense",
+                    "templates-games-survivors",
+                    "templates-games-movement-fps"
                 },
                 result.Registry.groups.Select(group => group.id).ToArray());
             Assert.AreEqual(
@@ -733,6 +737,9 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual(
                 "templates-games",
                 result.Registry.groups.Single(group => group.id == "templates-games-idle-auto-defense").parentGroupId);
+            Assert.AreEqual(
+                "templates-games",
+                result.Registry.groups.Single(group => group.id == "templates-games-movement-fps").parentGroupId);
 
             PackageRegistryEntry template = result.Registry.packages
                 .Single(package => package.id == TemplatePackageId);
@@ -741,7 +748,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual("Templates", template.ecosystemGroup);
             Assert.AreEqual("templates-games-idle-auto-defense", template.groupId);
             CollectionAssert.AreEqual(
-                new[] { "com.deucarian.auto-defense-suite", MonetizationPackageId },
+                new[] { "com.deucarian.auto-defense-suite", GameContentAuthoringPackageId, MonetizationPackageId },
                 template.dependencies);
             StringAssert.Contains(
                 "Template-Game-Idle-Auto-Defense.git#main",
@@ -759,6 +766,20 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.IsFalse(definition.IsIntegration);
             Assert.AreEqual("Templates", definition.Category);
             Assert.AreEqual("Template", definition.MetadataType);
+
+            PackageRegistryEntry movementFpsTemplate = result.Registry.packages
+                .Single(package => package.id == MovementFpsTemplatePackageId);
+            Assert.AreEqual("Templates", movementFpsTemplate.category);
+            Assert.AreEqual("Template", movementFpsTemplate.type);
+            Assert.AreEqual("Templates", movementFpsTemplate.ecosystemGroup);
+            Assert.AreEqual("templates-games-movement-fps", movementFpsTemplate.groupId);
+            CollectionAssert.Contains(movementFpsTemplate.dependencies, "com.deucarian.run-upgrades");
+            StringAssert.Contains(
+                "Template-Game-Movement-FPS.git#main",
+                movementFpsTemplate.stableUrl);
+            StringAssert.Contains(
+                "Template-Game-Movement-FPS.git#develop",
+                movementFpsTemplate.developmentUrl);
         }
 
         [Test]
