@@ -577,11 +577,14 @@
       "ecosystemGroup": "Gameplay",
       "groupId": "gameplay-systems",
       "overviewOrder": 30,
-      "description": "Pure C# roguelite run upgrade definitions, deterministic drafts, choices, locks, rerolls, banish, prerequisites, exclusions, and snapshots.",
+      "description": "Pure C# roguelite run upgrade core plus Unity authoring assets/providers for definitions, drafts, choices, prerequisites, exclusions, and snapshots.",
       "stableUrl": "https://github.com/Deucarian/Run-Upgrades.git#main",
       "developmentUrl": "https://github.com/Deucarian/Run-Upgrades.git#develop",
       "dependencies": [
-        "com.deucarian.gameplay-foundation"
+        "com.deucarian.gameplay-foundation",
+        "com.deucarian.attacks",
+        "com.deucarian.weapon-systems",
+        "com.deucarian.game-content-authoring"
       ]
     },
     {
@@ -705,13 +708,14 @@
       "ecosystemGroup": "Gameplay",
       "groupId": "gameplay-simulation",
       "overviewOrder": 70,
-      "description": "Reusable weapon orchestration for active weapon slots, fire cadence, direct/projectile modes, and deterministic weapon intents.",
+      "description": "Reusable weapon orchestration plus Unity authoring assets/providers for active weapon slots, fire cadence, direct/projectile modes, and deterministic weapon intents.",
       "stableUrl": "https://github.com/Deucarian/Weapon-Systems.git#main",
       "developmentUrl": "https://github.com/Deucarian/Weapon-Systems.git#develop",
       "dependencies": [
         "com.deucarian.gameplay-foundation",
         "com.deucarian.attacks",
-        "com.deucarian.projectiles"
+        "com.deucarian.projectiles",
+        "com.deucarian.game-content-authoring"
       ]
     },
     {
