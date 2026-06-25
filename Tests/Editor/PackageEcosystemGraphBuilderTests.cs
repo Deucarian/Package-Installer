@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Deucarian.Editor;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
@@ -145,8 +146,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
             PackageInstallerWindow.ConfigureFixedWallpaperForTests(root);
 
-            Assert.IsTrue(background.ClassListContains("dpi-fixed-wallpaper-layer"));
-            Assert.IsTrue(overlay.ClassListContains("dpi-fixed-wallpaper-overlay"));
+            Assert.IsTrue(background.ClassListContains(DeucarianEditorWindowChrome.BackgroundLayerClass));
+            Assert.IsTrue(overlay.ClassListContains(DeucarianEditorWindowChrome.OverlayLayerClass));
             Assert.AreEqual(PickingMode.Ignore, background.pickingMode);
             Assert.AreEqual(PickingMode.Ignore, overlay.pickingMode);
             Assert.AreEqual(Position.Absolute, background.style.position.value);
@@ -168,12 +169,12 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
             Assert.AreSame(shell, background.parent);
             Assert.AreSame(shell, overlay.parent);
-            Assert.IsTrue(shell.ClassListContains("dpi-wallpaper-safe-shell"));
+            Assert.IsTrue(shell.ClassListContains(DeucarianEditorWindowChrome.SafeShellClass));
             Assert.AreEqual(Overflow.Hidden, shell.style.overflow.value);
 
             VisualElement fade = shell.Q<VisualElement>(PackageInstallerWindow.WallpaperTopSafeFadeName);
             Assert.NotNull(fade);
-            Assert.IsTrue(fade.ClassListContains("dpi-wallpaper-top-safe-fade"));
+            Assert.IsTrue(fade.ClassListContains(DeucarianEditorWindowChrome.TopSafeFadeClass));
             Assert.AreEqual(PickingMode.Ignore, fade.pickingMode);
             Assert.AreEqual(Position.Absolute, fade.style.position.value);
             Assert.AreEqual(86f, fade.style.height.value.value);
@@ -192,14 +193,14 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
             PackageInstallerWindow.ConfigureFixedWallpaperForTests(root, shell);
 
-            VisualElement ambient = shell.Q<VisualElement>(PackageInstallerAmbientGlass.AmbientLayerName);
-            VisualElement grain = shell.Q<VisualElement>(PackageInstallerAmbientGlass.GrainLayerName);
-            VisualElement vignette = shell.Q<VisualElement>(PackageInstallerAmbientGlass.VignetteLayerName);
+            VisualElement ambient = shell.Q<VisualElement>(DeucarianEditorAmbientGlass.AmbientLayerName);
+            VisualElement grain = shell.Q<VisualElement>(DeucarianEditorAmbientGlass.GrainLayerName);
+            VisualElement vignette = shell.Q<VisualElement>(DeucarianEditorAmbientGlass.VignetteLayerName);
 
-            AssertFixedDecorativeLayer(ambient, "dpi-ambient-lighting-layer");
-            AssertFixedDecorativeLayer(grain, "dpi-grain-layer");
-            AssertFixedDecorativeLayer(vignette, "dpi-vignette-layer");
-            Assert.IsTrue(overlay.ClassListContains("dpi-readability-overlay"));
+            AssertFixedDecorativeLayer(ambient, "deucarian-ambient-lighting-layer");
+            AssertFixedDecorativeLayer(grain, "deucarian-grain-layer");
+            AssertFixedDecorativeLayer(vignette, "deucarian-vignette-layer");
+            Assert.IsTrue(overlay.ClassListContains(DeucarianEditorWindowChrome.ReadabilityOverlayClass));
 
             VisualElement[] children = shell.Children().ToArray();
             Assert.Less(Array.IndexOf(children, background), Array.IndexOf(children, ambient));
@@ -212,18 +213,18 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         {
             try
             {
-                PackageInstallerAmbientMotionSettings.SetModeForTests(PackageInstallerAmbientMotionMode.On);
-                Assert.AreEqual(1f, PackageInstallerAmbientMotionSettings.MotionScale);
+                DeucarianEditorAmbientMotionSettings.SetModeForTests(DeucarianEditorAmbientMotionMode.On);
+                Assert.AreEqual(1f, DeucarianEditorAmbientMotionSettings.MotionScale);
 
-                PackageInstallerAmbientMotionSettings.SetModeForTests(PackageInstallerAmbientMotionMode.Reduced);
-                Assert.That(PackageInstallerAmbientMotionSettings.MotionScale, Is.GreaterThan(0f).And.LessThan(1f));
+                DeucarianEditorAmbientMotionSettings.SetModeForTests(DeucarianEditorAmbientMotionMode.Reduced);
+                Assert.That(DeucarianEditorAmbientMotionSettings.MotionScale, Is.GreaterThan(0f).And.LessThan(1f));
 
-                PackageInstallerAmbientMotionSettings.SetModeForTests(PackageInstallerAmbientMotionMode.Off);
-                Assert.AreEqual(0f, PackageInstallerAmbientMotionSettings.MotionScale);
+                DeucarianEditorAmbientMotionSettings.SetModeForTests(DeucarianEditorAmbientMotionMode.Off);
+                Assert.AreEqual(0f, DeucarianEditorAmbientMotionSettings.MotionScale);
             }
             finally
             {
-                PackageInstallerAmbientMotionSettings.SetModeForTests(null);
+                DeucarianEditorAmbientMotionSettings.SetModeForTests(null);
             }
         }
 
@@ -2024,9 +2025,9 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             VisualElement runtimeGroup = FindGraphGroup(view, "runtime-services");
 
             Assert.AreEqual(1, FindByClass(session, "dpi-graph-node__glass-highlight").Count);
-            Assert.AreEqual(1, FindByClass(session, "dpi-glass-sheen").Count);
+            Assert.AreEqual(1, FindByClass(session, "deucarian-glass-sheen").Count);
             Assert.AreEqual(1, FindByClass(runtimeGroup, "dpi-graph-group__glass-highlight").Count);
-            Assert.AreEqual(1, FindByClass(runtimeGroup, "dpi-glass-sheen").Count);
+            Assert.AreEqual(1, FindByClass(runtimeGroup, "deucarian-glass-sheen").Count);
             AssertRectsEqual(
                 canvas.NodeRectsForTests["com.deucarian.session"],
                 canvas.NodeVisualStatesForTests["com.deucarian.session"].Rect,

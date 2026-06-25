@@ -9072,12 +9072,12 @@ namespace Deucarian.PackageInstaller.Editor
             symbolHighlight.pickingMode = PickingMode.Ignore;
             symbol.Add(symbolHighlight);
 
-            VisualElement symbolSheen = PackageInstallerGlassSheen.Create();
+            VisualElement symbolSheen = DeucarianEditorGlassSheen.Create();
             symbol.Add(symbolSheen);
 
             if (interactionsEnabled)
             {
-                RegisterCallback<MouseEnterEvent>(_ => PackageInstallerGlassSheen.Play(symbolSheen));
+                RegisterCallback<MouseEnterEvent>(_ => DeucarianEditorGlassSheen.Play(symbolSheen));
             }
 
             Image icon = new Image
@@ -9251,7 +9251,7 @@ namespace Deucarian.PackageInstaller.Editor
             glassHighlight.pickingMode = PickingMode.Ignore;
             Add(glassHighlight);
 
-            VisualElement glassSheen = PackageInstallerGlassSheen.Create();
+            VisualElement glassSheen = DeucarianEditorGlassSheen.Create();
             Add(glassSheen);
 
             if (interactionsEnabled)
@@ -9259,7 +9259,7 @@ namespace Deucarian.PackageInstaller.Editor
                 RegisterCallback<MouseEnterEvent>(_ =>
                 {
                     previewPackage?.Invoke(node.PackageId);
-                    PackageInstallerGlassSheen.Play(glassSheen);
+                    DeucarianEditorGlassSheen.Play(glassSheen);
                 });
                 RegisterCallback<MouseLeaveEvent>(_ => clearPreviewPackage?.Invoke(node.PackageId));
             }
