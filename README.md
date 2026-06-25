@@ -79,11 +79,11 @@ The current bundled fallback registry includes these Ecosystem Graph groups:
 - State & Data: Core State
 - Runtime Services: API, Session, Object Loading
 - Experience & Interaction: UI Binding, UI Flow, Theming, Object Selection
-- Tools & Quality: Package Installer, Diagnostics
+- Tools & Quality: Package Installer, Diagnostics, Game Content Authoring
 - Integrations: UI Binding + Core State Integration, Object Loading API Integration, Object Selection + Core State Integration, Session + API Integration
 - Gameplay: Gameplay Foundation, Persistence, Progression, Combat, Encounters, World Spawning, World Navigation, Defense Games, Attacks, Projectiles, Weapon Systems, Auto Defense, Run Upgrades, Idle Progression
 - Suites: Selection Suite, Auto Defense Suite
-- Templates: Idle Auto Defense
+- Templates: Idle Auto Defense, Survivors
 
 Registered packages are first-class UPM packages with their own package IDs:
 
@@ -97,6 +97,7 @@ Registered packages are first-class UPM packages with their own package IDs:
 - `com.deucarian.theming`
 - `com.deucarian.object-selection`
 - `com.deucarian.editor`
+- `com.deucarian.game-content-authoring`
 - `com.deucarian.ui-binding.core-state-integration`
 - `com.deucarian.object-loading.api-integration`
 - `com.deucarian.object-selection.core-state-integration`
@@ -121,6 +122,7 @@ Registered packages are first-class UPM packages with their own package IDs:
 - `com.deucarian.test-automation`
 - `com.deucarian.auto-defense-suite`
 - `com.deucarian.template.game.idle-auto-defense`
+- `com.deucarian.template.game.survivors`
 
 `Install All` installs all missing non-template registered packages in dependency order. Template packages remain visible and individually installable, but global install-all operations skip them so starter projects are not pulled in as normal runtime or system packages. Single install, reinstall, single update, and update-all operations install missing registered Deucarian dependencies first, then install the requested package.
 

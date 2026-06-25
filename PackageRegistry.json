@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-06-24",
+  "updatedAt": "2026-06-25",
   "groups": [
     {
       "id": "infrastructure",
@@ -153,6 +153,15 @@
       "sortOrder": 82,
       "description": "Idle auto-defense starter game templates.",
       "iconKey": "auto-defense",
+      "styleKey": "template"
+    },
+    {
+      "id": "templates-games-survivors",
+      "displayName": "Survivors",
+      "parentGroupId": "templates-games",
+      "sortOrder": 83,
+      "description": "Survivors-style horde roguelite starter game templates.",
+      "iconKey": "combat",
       "styleKey": "template"
     }
   ],
@@ -828,6 +837,42 @@
         "game",
         "idle",
         "auto-defense"
+      ]
+    },
+    {
+      "id": "com.deucarian.template.game.survivors",
+      "displayName": "Deucarian Template Game - Survivors",
+      "category": "Templates",
+      "type": "Template",
+      "ecosystemGroup": "Templates",
+      "groupId": "templates-games-survivors",
+      "overviewOrder": 20,
+      "description": "Starter Unity game template for a Survivors-style horde roguelite loop built on Deucarian packages with local genre-kit adapters.",
+      "stableUrl": "https://github.com/Deucarian/Template-Game-Survivors.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Template-Game-Survivors.git#develop",
+      "dependencies": [
+        "com.deucarian.attacks",
+        "com.deucarian.combat",
+        "com.deucarian.encounters",
+        "com.deucarian.gameplay-foundation",
+        "com.deucarian.persistence",
+        "com.deucarian.progression",
+        "com.deucarian.projectiles",
+        "com.deucarian.run-upgrades",
+        "com.deucarian.weapon-systems",
+        "com.deucarian.world-spawning"
+      ],
+      "searchAliases": [
+        "survivors template",
+        "horde roguelite template",
+        "vampire survivors template"
+      ],
+      "searchTags": [
+        "template",
+        "game",
+        "survivors",
+        "horde",
+        "roguelite"
       ]
     }
   ]
