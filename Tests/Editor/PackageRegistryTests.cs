@@ -15,6 +15,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             "{ \"id\": \"com.deucarian.core-state.integration\", \"displayName\": \"Core Integration\", \"category\": \"Integration\", \"description\": \"Integration package.\", \"stableUrl\": \"https://github.com/Deucarian/Core-State-Integration.git#main\", \"developmentUrl\": \"https://github.com/Deucarian/Core-State-Integration.git#develop\", \"dependencies\": [\"com.deucarian.core-state\"] }" +
             "] }";
         private const string TemplatePackageId = "com.deucarian.template.game.idle-auto-defense";
+        private const string SurvivorsTemplatePackageId = "com.deucarian.template.game.survivors";
         private const string MovementFpsTemplatePackageId = "com.deucarian.template.game.movement-fps";
         private const string GameContentAuthoringPackageId = "com.deucarian.game-content-authoring";
         private const string MonetizationPackageId = "com.deucarian.monetization";
@@ -766,6 +767,20 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.IsFalse(definition.IsIntegration);
             Assert.AreEqual("Templates", definition.Category);
             Assert.AreEqual("Template", definition.MetadataType);
+
+            PackageRegistryEntry survivorsTemplate = result.Registry.packages
+                .Single(package => package.id == SurvivorsTemplatePackageId);
+            Assert.AreEqual("Templates", survivorsTemplate.category);
+            Assert.AreEqual("Template", survivorsTemplate.type);
+            Assert.AreEqual("Templates", survivorsTemplate.ecosystemGroup);
+            Assert.AreEqual("templates-games-survivors", survivorsTemplate.groupId);
+            CollectionAssert.Contains(survivorsTemplate.dependencies, GameContentAuthoringPackageId);
+            StringAssert.Contains(
+                "Template-Game-Survivors.git#main",
+                survivorsTemplate.stableUrl);
+            StringAssert.Contains(
+                "Template-Game-Survivors.git#develop",
+                survivorsTemplate.developmentUrl);
 
             PackageRegistryEntry movementFpsTemplate = result.Registry.packages
                 .Single(package => package.id == MovementFpsTemplatePackageId);
