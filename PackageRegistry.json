@@ -870,6 +870,7 @@
         "com.deucarian.attacks",
         "com.deucarian.combat",
         "com.deucarian.encounters",
+        "com.deucarian.game-content-authoring",
         "com.deucarian.gameplay-foundation",
         "com.deucarian.persistence",
         "com.deucarian.progression",
