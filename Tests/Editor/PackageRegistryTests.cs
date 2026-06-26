@@ -18,6 +18,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         private const string SurvivorsTemplatePackageId = "com.deucarian.template.game.survivors";
         private const string MovementFpsTemplatePackageId = "com.deucarian.template.game.movement-fps";
         private const string GameContentAuthoringPackageId = "com.deucarian.game-content-authoring";
+        private const string GameplayFoundationPackageId = "com.deucarian.gameplay-foundation";
         private const string MonetizationPackageId = "com.deucarian.monetization";
 
         private static readonly string[] Phase1ZPackageIds =
@@ -749,7 +750,13 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual("Templates", template.ecosystemGroup);
             Assert.AreEqual("templates-games-idle-auto-defense", template.groupId);
             CollectionAssert.AreEqual(
-                new[] { "com.deucarian.auto-defense-suite", GameContentAuthoringPackageId, MonetizationPackageId },
+                new[]
+                {
+                    "com.deucarian.auto-defense-suite",
+                    GameContentAuthoringPackageId,
+                    GameplayFoundationPackageId,
+                    MonetizationPackageId
+                },
                 template.dependencies);
             StringAssert.Contains(
                 "Template-Game-Idle-Auto-Defense.git#main",
