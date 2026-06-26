@@ -83,7 +83,7 @@ The current bundled fallback registry includes these Ecosystem Graph groups:
 - Integrations: UI Binding + Core State Integration, Object Loading API Integration, Object Selection + Core State Integration, Session + API Integration
 - Gameplay: Gameplay Foundation, Persistence, Progression, Combat, Encounters, World Spawning, World Navigation, Defense Games, Attacks, Projectiles, Weapon Systems, Auto Defense, Run Upgrades, Idle Progression
 - Suites: Selection Suite, Auto Defense Suite
-- Templates: Idle Auto Defense, Survivors
+- Templates: Idle Auto Defense, Survivors, Movement FPS
 
 Registered packages are first-class UPM packages with their own package IDs:
 
@@ -123,6 +123,7 @@ Registered packages are first-class UPM packages with their own package IDs:
 - `com.deucarian.auto-defense-suite`
 - `com.deucarian.template.game.idle-auto-defense`
 - `com.deucarian.template.game.survivors`
+- `com.deucarian.template.game.movement-fps`
 
 `Install All` installs all missing non-template registered packages in dependency order. Template packages remain visible and individually installable, but global install-all operations skip them so starter projects are not pulled in as normal runtime or system packages. Single install, reinstall, single update, and update-all operations install missing registered Deucarian dependencies first, then install the requested package.
 
@@ -149,7 +150,7 @@ The registry schema uses `schemaVersion` 1 and contains:
 - `developmentUrl`: optional development-channel Git URL or UPM identifier. If this is empty, the Development channel is disabled for that package.
 - `dependencies`: package IDs that should be installed before this package is installed, reinstalled, or updated. Integration packages are regular packages with the `Integration` package role and hard dependencies.
 - `optionalCompanions`: package IDs shown as optional integrations that should not be installed as required dependencies.
-- `groupId`: optional structural Ecosystem Graph group ID. Supported top-level IDs are `infrastructure`, `state-data`, `runtime-services`, `experience-interaction`, `tools-quality`, `integrations`, `gameplay`, `suites`, and `templates`. Registry-provided child groups such as `gameplay-foundations`, `gameplay-systems`, `gameplay-simulation`, `gameplay-frameworks`, `templates-games`, and `templates-games-idle-auto-defense` are supported through `parentGroupId`. If omitted, the graph falls back to `ecosystemGroup`, category, package type, and known package IDs.
+- `groupId`: optional structural Ecosystem Graph group ID. Supported top-level IDs are `infrastructure`, `state-data`, `runtime-services`, `experience-interaction`, `tools-quality`, `integrations`, `gameplay`, `suites`, and `templates`. Registry-provided child groups such as `gameplay-foundations`, `gameplay-systems`, `gameplay-simulation`, `gameplay-frameworks`, `templates-games`, `templates-games-idle-auto-defense`, `templates-games-survivors`, and `templates-games-movement-fps` are supported through `parentGroupId`. If omitted, the graph falls back to `ecosystemGroup`, category, package type, and known package IDs.
 - `ecosystemGroup`: legacy optional overview-wheel sector override retained for older registries. Old values are normalized to the current group IDs without creating duplicate visible groups.
 - `overviewOrder`: optional positive integer used to order packages within their structural group orbit.
 - `integrationTargets`: optional package IDs used to place Integration nodes near the systems they connect.
@@ -157,7 +158,7 @@ The registry schema uses `schemaVersion` 1 and contains:
 
 Set `stableUrl` and, when available, `developmentUrl` to the UPM identifier or Git URL. Integration packages should also list their dependency package IDs in `dependencies`.
 
-For pre-stable bootstrap packages whose GitHub repository does not yet have `main`, the bundled registry may intentionally set `stableUrl` equal to the verified `developmentUrl`. The Phase 1Z gameplay packages and Phase 2B Idle Auto Defense template use this policy so both installer channels resolve honestly until those repositories are promoted to `main`.
+Promoted packages in the bundled registry use stable Git `#main` URLs and development Git `#develop` URLs. For future pre-stable bootstrap packages whose GitHub repository does not yet have `main`, the bundled registry may intentionally set `stableUrl` equal to the verified `developmentUrl`.
 
 When an installed Git package can be matched to `#main` or `#develop`, including common forms such as `#refs/heads/main`, the installer infers the visible channel from the installed package reference. If the installed reference does not match a known channel, the row shows a Custom channel until the user selects Stable or Development.
 
