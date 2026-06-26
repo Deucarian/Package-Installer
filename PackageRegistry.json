@@ -214,7 +214,8 @@
       "developmentUrl": "https://github.com/Deucarian/Game-Content-Authoring.git#develop",
       "dependencies": [
         "com.deucarian.common",
-        "com.deucarian.editor"
+        "com.deucarian.editor",
+        "com.deucarian.gameplay-foundation"
       ]
     },
     {
