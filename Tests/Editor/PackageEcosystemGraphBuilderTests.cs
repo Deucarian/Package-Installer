@@ -2580,6 +2580,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             view.SetGraph(graph, string.Empty, actionsEnabled: true);
             view.PreviewCategoryHoverForTests("infrastructure");
 
+            Assert.AreEqual("infrastructure", view.ActiveHoverGroupId);
+            Assert.AreEqual("infrastructure", view.ActiveTopLevelHoverGroupId);
             Assert.IsTrue(FindGraphGroup(view, "infrastructure").ClassListContains("dpi-graph-group--hover-context"));
             Assert.IsTrue(FindGraphNode(view, "com.deucarian.logging").ClassListContains("dpi-graph-node--hover-context"));
             Assert.IsTrue(FindGraphNode(view, "com.deucarian.session").ClassListContains("dpi-graph-node--hover-dimmed"));
@@ -2595,9 +2597,33 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             nestedPackageFocused.SetGraph(graph, "com.deucarian.ui-binding", actionsEnabled: true);
             nestedPackageFocused.PreviewPackageHoverForTests("com.deucarian.ui-binding");
 
+            Assert.AreEqual("ui-presentation", nestedPackageFocused.ActiveHoverGroupId);
+            Assert.AreEqual("experience-interaction", nestedPackageFocused.ActiveTopLevelHoverGroupId);
             Assert.IsTrue(
                 FindGraphNode(nestedPackageFocused, "com.deucarian.ui-binding")
                     .ClassListContains("dpi-graph-node--hover-context"));
+        }
+
+        [Test]
+        public void GraphView_ClearHoverStateClearsSharedPackageAndCategoryHover()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+            PackageGraphView view = new PackageGraphView(_ => { }, (_, __) => { });
+
+            view.SetGraph(graph, string.Empty, actionsEnabled: true);
+            view.PreviewPackageHoverForTests("com.deucarian.logging");
+            view.ClearHoverState();
+
+            Assert.IsTrue(string.IsNullOrWhiteSpace(view.ActiveHoverGroupId));
+            Assert.IsTrue(string.IsNullOrWhiteSpace(view.ActiveTopLevelHoverGroupId));
+            Assert.IsFalse(FindGraphNode(view, "com.deucarian.logging").ClassListContains("dpi-graph-node--hover-context"));
+
+            view.PreviewCategoryHoverForTests("infrastructure");
+            view.ClearHoverState();
+
+            Assert.IsTrue(string.IsNullOrWhiteSpace(view.ActiveHoverGroupId));
+            Assert.IsFalse(FindGraphGroup(view, "infrastructure").ClassListContains("dpi-graph-group--hover-context"));
         }
 
         [Test]

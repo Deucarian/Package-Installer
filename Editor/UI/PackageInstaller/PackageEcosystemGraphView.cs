@@ -972,6 +972,50 @@ namespace Deucarian.PackageInstaller.Editor
             return separator;
         }
 
+        internal string ActiveHoverGroupId => _canvas.ActiveHoverGroupId;
+
+        internal string ActiveTopLevelHoverGroupId => ResolveTopLevelGroupId(_currentGraph, _canvas.ActiveHoverGroupId);
+
+        internal void SetExternalGroupHover(string groupId)
+        {
+            _canvas.SetExternalHoverGroup(groupId);
+        }
+
+        internal void ClearExternalGroupHover(string groupId)
+        {
+            _canvas.ClearExternalHoverGroup(groupId);
+        }
+
+        internal void ClearHoverState()
+        {
+            _canvas.ClearHoverState();
+        }
+
+        private static string ResolveTopLevelGroupId(PackageGraphModel graph, string groupId)
+        {
+            if (graph == null || string.IsNullOrWhiteSpace(groupId))
+            {
+                return string.Empty;
+            }
+
+            string currentGroupId = groupId;
+            HashSet<string> visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            while (!string.IsNullOrWhiteSpace(currentGroupId) &&
+                   visited.Add(currentGroupId) &&
+                   graph.TryGetGroup(currentGroupId, out PackageGraphGroup group))
+            {
+                if (string.IsNullOrWhiteSpace(group.ParentGroupId))
+                {
+                    return group.Id;
+                }
+
+                currentGroupId = group.ParentGroupId;
+            }
+
+            return string.Empty;
+        }
+
         internal void PreviewCategoryHoverForTests(string groupId)
         {
             _canvas.SetExternalHoverGroup(groupId, respectInteractionLock: false);
@@ -3183,6 +3227,20 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             _hoveredGroupId = string.Empty;
+            NotifyActiveHoverGroupChanged();
+            Rebuild();
+        }
+
+        public void ClearHoverState()
+        {
+            if (string.IsNullOrWhiteSpace(_hoveredGroupId) &&
+                string.IsNullOrWhiteSpace(_hoveredPackageId))
+            {
+                return;
+            }
+
+            _hoveredGroupId = string.Empty;
+            _hoveredPackageId = string.Empty;
             NotifyActiveHoverGroupChanged();
             Rebuild();
         }
