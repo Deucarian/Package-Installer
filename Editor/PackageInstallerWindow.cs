@@ -1787,19 +1787,6 @@ namespace Deucarian.PackageInstaller.Editor
                 {
                     PackageUpdateCheckPreferences.CheckOnWindowOpen = nextCheckOnOpen;
                 }
-
-                bool checkOnStartup = PackageUpdateCheckPreferences.CheckOnStartup;
-                bool nextCheckOnStartup = EditorGUILayout.ToggleLeft(
-                    new GUIContent(
-                        "Check on Startup",
-                        "Check for updates once per Unity editor session after startup."),
-                    checkOnStartup,
-                    GUILayout.Width(compact ? 136f : 142f));
-
-                if (nextCheckOnStartup != checkOnStartup)
-                {
-                    PackageUpdateCheckPreferences.CheckOnStartup = nextCheckOnStartup;
-                }
             }
         }
 

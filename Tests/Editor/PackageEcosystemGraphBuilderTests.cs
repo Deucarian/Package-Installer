@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using Deucarian.Editor;
 using NUnit.Framework;
 using UnityEditor;
@@ -36,6 +37,24 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 path => path.IndexOf("Preview", StringComparison.OrdinalIgnoreCase) >= 0));
             Assert.IsFalse(PackageInstallerWindow.UserFacingMenuPathsForTests.Any(
                 path => path.IndexOf("Development", StringComparison.OrdinalIgnoreCase) >= 0));
+        }
+
+        [Test]
+        public void Window_DoesNotRegisterEditorStartupHooks()
+        {
+            System.Reflection.Assembly packageInstallerAssembly = typeof(PackageInstallerWindow).Assembly;
+            Type[] startupHookTypes = packageInstallerAssembly
+                .GetTypes()
+                .Where(type => type.GetCustomAttributes(typeof(InitializeOnLoadAttribute), inherit: false).Length > 0)
+                .ToArray();
+            MethodInfo[] startupHookMethods = packageInstallerAssembly
+                .GetTypes()
+                .SelectMany(type => type.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
+                .Where(method => method.GetCustomAttributes(typeof(InitializeOnLoadMethodAttribute), inherit: false).Length > 0)
+                .ToArray();
+
+            Assert.IsEmpty(startupHookTypes);
+            Assert.IsEmpty(startupHookMethods);
         }
 
         [Test]
