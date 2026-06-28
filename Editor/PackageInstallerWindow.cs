@@ -240,6 +240,7 @@ namespace Deucarian.PackageInstaller.Editor
         private SelectionKind _selectionKind = SelectionKind.Package;
         private string _selectedPackageId = string.Empty;
         private PackageGraphNavigationState _graphNavigationState = PackageGraphNavigationState.Overview();
+        private string _detailsPreviewedGraphGroupId = string.Empty;
         private PackageGraphModel _cachedPackageGraph;
         private PackageGraphModel _lastPackageGraph;
         private bool _graphModelCacheDirty = true;
@@ -1492,6 +1493,7 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
+            ClearDetailsGraphHover();
             _selectionKind = SelectionKind.Package;
             _selectedPackageId = string.Empty;
             _graphNavigationState = PackageGraphNavigationState.Group(groupId);
@@ -1502,6 +1504,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void NavigateGraphToRoot()
         {
+            ClearGraphHoverState();
             _selectionKind = SelectionKind.Package;
             _selectedPackageId = string.Empty;
             _graphNavigationState = PackageGraphNavigationState.Overview();
@@ -1783,19 +1786,6 @@ namespace Deucarian.PackageInstaller.Editor
                 if (nextCheckOnOpen != checkOnOpen)
                 {
                     PackageUpdateCheckPreferences.CheckOnWindowOpen = nextCheckOnOpen;
-                }
-
-                bool checkOnStartup = PackageUpdateCheckPreferences.CheckOnStartup;
-                bool nextCheckOnStartup = EditorGUILayout.ToggleLeft(
-                    new GUIContent(
-                        "Check on Startup",
-                        "Check for updates once per Unity editor session after startup."),
-                    checkOnStartup,
-                    GUILayout.Width(compact ? 136f : 142f));
-
-                if (nextCheckOnStartup != checkOnStartup)
-                {
-                    PackageUpdateCheckPreferences.CheckOnStartup = nextCheckOnStartup;
                 }
             }
         }
@@ -2404,31 +2394,41 @@ namespace Deucarian.PackageInstaller.Editor
                 if (groupRows.Length == 0)
                 {
                     EditorGUILayout.LabelField("No ecosystem navigation is available.", _mutedMiniLabelStyle);
+                    SynchronizeDetailsGroupHover(string.Empty);
                     return;
                 }
 
+                string hoveredGroupId = string.Empty;
+
                 foreach (PackageGraphGroupNavigationRow row in groupRows)
                 {
-                    DrawEcosystemOverviewGroupRow(row);
+                    if (DrawEcosystemOverviewGroupRow(row) && !row.IsOverview)
+                    {
+                        hoveredGroupId = row.Id;
+                    }
                 }
+
+                SynchronizeDetailsGroupHover(hoveredGroupId);
             }, GUILayout.ExpandWidth(true));
         }
 
-        private void DrawEcosystemOverviewGroupRow(PackageGraphGroupNavigationRow row)
+        private bool DrawEcosystemOverviewGroupRow(PackageGraphGroupNavigationRow row)
         {
             Rect rowRect = GUILayoutUtility.GetRect(1f, 34f, GUILayout.ExpandWidth(true));
             bool hover = rowRect.Contains(Event.current.mousePosition);
+            bool graphHover = !row.IsOverview && IsGraphGroupHoverContext(row.Id);
+            bool selected = row.IsSelected;
 
             if (Event.current.type == EventType.Repaint)
             {
-                Color background = row.IsSelected ? _rowSelectedColor : hover ? _rowHoverColor : _sampleRowBackgroundColor;
+                bool highlighted = selected || hover || graphHover;
                 DeucarianEditorVisualShell.DrawInsetSurface(
                     rowRect,
-                    background,
-                    row.IsSelected || hover ? _interactiveBorderColor : _separatorColor,
+                    selected ? _rowSelectedColor : highlighted ? _rowHoverColor : _sampleRowBackgroundColor,
+                    highlighted ? _interactiveBorderColor : _separatorColor,
                     4f);
 
-                if (row.IsSelected || row.HasAttention)
+                if (selected || row.HasAttention)
                 {
                     EditorGUI.DrawRect(
                         new Rect(rowRect.x, rowRect.y, 3f, rowRect.height),
@@ -2469,6 +2469,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             DrawSingleLineLabel(nameRect, nameContent, _miniLabelStyle);
             DrawSingleLineLabel(summaryRect, summaryContent, _mutedMiniLabelStyle);
+            return hover;
         }
 
         private void DrawGraphNavigationIcon(Rect rect, string iconKey)
@@ -2607,6 +2608,61 @@ namespace Deucarian.PackageInstaller.Editor
                 style.wordWrap = previousWordWrap;
                 style.clipping = previousClipping;
             }
+        }
+
+        private void SynchronizeDetailsGroupHover(string hoveredGroupId)
+        {
+            if (_graphView == null || !ShouldSynchronizeDetailsHover(Event.current.type))
+            {
+                return;
+            }
+
+            string nextGroupId = hoveredGroupId ?? string.Empty;
+
+            if (string.Equals(
+                    _detailsPreviewedGraphGroupId,
+                    nextGroupId,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            ClearDetailsGraphHover();
+            _detailsPreviewedGraphGroupId = nextGroupId;
+
+            if (!string.IsNullOrWhiteSpace(_detailsPreviewedGraphGroupId))
+            {
+                _graphView.SetExternalGroupHover(_detailsPreviewedGraphGroupId);
+            }
+        }
+
+        private void ClearDetailsGraphHover()
+        {
+            if (_graphView == null || string.IsNullOrWhiteSpace(_detailsPreviewedGraphGroupId))
+            {
+                _detailsPreviewedGraphGroupId = string.Empty;
+                return;
+            }
+
+            string previousGroupId = _detailsPreviewedGraphGroupId;
+            _detailsPreviewedGraphGroupId = string.Empty;
+            _graphView.ClearExternalGroupHover(previousGroupId);
+        }
+
+        private void ClearGraphHoverState()
+        {
+            _detailsPreviewedGraphGroupId = string.Empty;
+            _graphView?.ClearHoverState();
+        }
+
+        private static bool ShouldSynchronizeDetailsHover(EventType eventType)
+        {
+            return eventType == EventType.Repaint ||
+                   eventType == EventType.MouseMove ||
+                   eventType == EventType.MouseDrag ||
+                   eventType == EventType.MouseDown ||
+                   eventType == EventType.MouseUp ||
+                   eventType == EventType.MouseLeaveWindow;
         }
 
         private string GetActiveFilterSummary()
@@ -4539,6 +4595,30 @@ namespace Deucarian.PackageInstaller.Editor
                    _lastPackageGraph.TryGetGroup(groupId, out PackageGraphGroup group)
                 ? group.ParentGroupId
                 : string.Empty;
+        }
+
+        private bool IsGraphGroupHoverContext(string groupId)
+        {
+            if (_graphView == null || string.IsNullOrWhiteSpace(groupId))
+            {
+                return false;
+            }
+
+            string activeHoverGroupId = _graphView.ActiveHoverGroupId;
+
+            if (string.IsNullOrWhiteSpace(activeHoverGroupId))
+            {
+                return false;
+            }
+
+            string hoverTopLevelGroupId = ResolveTopLevelGroupId(_lastPackageGraph, activeHoverGroupId);
+            string rowTopLevelGroupId = ResolveTopLevelGroupId(_lastPackageGraph, groupId);
+
+            return !string.IsNullOrWhiteSpace(hoverTopLevelGroupId) &&
+                   string.Equals(
+                       hoverTopLevelGroupId,
+                       rowTopLevelGroupId,
+                       StringComparison.OrdinalIgnoreCase);
         }
 
         private IEnumerable<PackageGraphGroup> GetGraphChildGroups(string groupId)
