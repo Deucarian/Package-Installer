@@ -586,6 +586,9 @@ namespace Deucarian.PackageInstaller.Editor
         private const float GroupChipCaptionHeight = 58f;
         private const float NodeGap = 22f;
         private const float MinimumGlobalGroupOrbitRadius = 560f;
+        private const float MinimumRootOverviewGroupOrbitRadius = 720f;
+        private const float RootOverviewClusterPadding = 40f;
+        private const float RootOverviewOrbitSearchStep = 16f;
         private const float MinimumClusterGap = 56f;
         private const float FocusOrbitRadius = 335f;
         private const float FocusGridGapX = 48f;
@@ -1475,24 +1478,8 @@ namespace Deucarian.PackageInstaller.Editor
             ICollection<PackageGraphGroupLayoutNode> groupNodes,
             PackageGraphNodePresentationLevel packagePresentationLevel)
         {
-            List<ChildPlacement> children = new List<ChildPlacement>();
             PackageGraphNodeMetrics packageMetrics = PackageGraphPresentationPolicy.GetMetrics(packagePresentationLevel);
-
-            foreach (PackageGraphGroup childGroup in directGroups)
-            {
-                children.Add(ChildPlacement.ForGroup(childGroup));
-            }
-
-            foreach (PackageGraphNode package in directPackages)
-            {
-                children.Add(ChildPlacement.ForPackage(package));
-            }
-
-            ChildPlacement[] orderedChildren = children
-                .OrderBy(child => child.SortOrder)
-                .ThenBy(child => child.DisplayName, StringComparer.OrdinalIgnoreCase)
-                .ThenBy(child => child.Id, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
+            ChildPlacement[] orderedChildren = CreateOrderedChildPlacements(directPackages, directGroups);
             float[] angles = CreateEvenCircleAngles(
                 orderedChildren.Length,
                 orderedChildren.Length > 1 ? -90f + 180f / orderedChildren.Length : -90f);
@@ -1525,6 +1512,35 @@ namespace Deucarian.PackageInstaller.Editor
                 nodeRings[child.Package.PackageId] = ResolveRing(parentGroup.Id);
                 nodePresentations[child.Package.PackageId] = packagePresentationLevel;
             }
+        }
+
+        private static ChildPlacement[] CreateOrderedChildPlacements(
+            IEnumerable<PackageGraphNode> directPackages,
+            IEnumerable<PackageGraphGroup> directGroups)
+        {
+            List<ChildPlacement> children = new List<ChildPlacement>();
+
+            foreach (PackageGraphGroup childGroup in directGroups ?? Array.Empty<PackageGraphGroup>())
+            {
+                if (childGroup != null)
+                {
+                    children.Add(ChildPlacement.ForGroup(childGroup));
+                }
+            }
+
+            foreach (PackageGraphNode package in directPackages ?? Array.Empty<PackageGraphNode>())
+            {
+                if (package != null)
+                {
+                    children.Add(ChildPlacement.ForPackage(package));
+                }
+            }
+
+            return children
+                .OrderBy(child => child.SortOrder)
+                .ThenBy(child => child.DisplayName, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(child => child.Id, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
         }
 
         private static PackageGraphGroupLayoutNode CreateGroupLayoutNode(
@@ -1870,17 +1886,23 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             float[] clusterRadii = new float[topGroups.Count];
+            float[] localRadii = new float[topGroups.Count];
+            ChildPlacement[][] childrenByGroup = new ChildPlacement[topGroups.Count][];
 
             for (int index = 0; index < topGroups.Count; index++)
             {
                 PackageGraphGroup group = topGroups[index];
-                int childCount = GetDirectPackages(graph, group.Id).Count + GetChildGroups(graph, group.Id).Count;
+                IReadOnlyList<PackageGraphNode> directPackages = GetDirectPackages(graph, group.Id);
+                IReadOnlyList<PackageGraphGroup> directGroups = GetChildGroups(graph, group.Id);
+                ChildPlacement[] children = CreateOrderedChildPlacements(directPackages, directGroups);
                 float localRadius = CalculateLocalOrbitRadius(
-                    childCount,
+                    children.Length,
                     packageMetrics,
                     GroupChipCaptionWidth,
                     GroupChipHubSize + GroupChipCaptionHeight);
-                clusterRadii[index] = CalculateClusterCollisionRadius(childCount, localRadius, packageMetrics);
+                localRadii[index] = localRadius;
+                childrenByGroup[index] = children;
+                clusterRadii[index] = CalculateClusterCollisionRadius(children.Length, localRadius, packageMetrics);
             }
 
             float largestClusterRadius = clusterRadii.Length == 0 ? 0f : clusterRadii.Max();
@@ -1889,17 +1911,22 @@ namespace Deucarian.PackageInstaller.Editor
                 GraphCenter.y - largestClusterRadius - 48f,
                 CanvasWidth - GraphCenter.x - largestClusterRadius - 48f,
                 CanvasHeight - GraphCenter.y - largestClusterRadius - 48f);
-            float candidateRadius = Mathf.Min(MinimumGlobalGroupOrbitRadius, canvasLimitedRadius);
             float[] groupAngles = CreateEvenCircleAngles(topGroups.Count, -90f);
+            float candidateRadius = Mathf.Min(MinimumRootOverviewGroupOrbitRadius, canvasLimitedRadius);
 
             while (candidateRadius < canvasLimitedRadius)
             {
-                if (ClustersAreSeparated(candidateRadius, groupAngles, clusterRadii))
+                if (RootOverviewClustersAreSeparated(
+                        candidateRadius,
+                        groupAngles,
+                        childrenByGroup,
+                        localRadii,
+                        packageMetrics))
                 {
                     return candidateRadius;
                 }
 
-                candidateRadius += 24f;
+                candidateRadius += RootOverviewOrbitSearchStep;
             }
 
             return canvasLimitedRadius;
@@ -1924,28 +1951,81 @@ namespace Deucarian.PackageInstaller.Editor
             return Mathf.Max(groupHalfExtent, localRadius + childHalfDiagonal + axisAlignedOrbitPadding);
         }
 
-        private static bool ClustersAreSeparated(
-            float radius,
+        private static bool RootOverviewClustersAreSeparated(
+            float globalRadius,
             IReadOnlyList<float> groupAngles,
-            IReadOnlyList<float> clusterRadii)
+            IReadOnlyList<ChildPlacement[]> childrenByGroup,
+            IReadOnlyList<float> localRadii,
+            PackageGraphNodeMetrics packageMetrics)
         {
-            for (int firstIndex = 0; firstIndex < groupAngles.Count; firstIndex++)
+            List<Rect> placedRects = new List<Rect> { CreateOverviewHubRect() };
+
+            for (int index = 0; index < groupAngles.Count; index++)
             {
-                Vector2 first = PointOnOrbit(GraphCenter, groupAngles[firstIndex], radius);
+                Vector2 groupCenter = PointOnOrbit(GraphCenter, groupAngles[index], globalRadius);
+                IReadOnlyList<Rect> candidateRects = CreateRootOverviewClusterRects(
+                    groupCenter,
+                    localRadii[index],
+                    childrenByGroup[index],
+                    packageMetrics);
 
-                for (int secondIndex = firstIndex + 1; secondIndex < groupAngles.Count; secondIndex++)
+                foreach (Rect candidateRect in candidateRects)
                 {
-                    Vector2 second = PointOnOrbit(GraphCenter, groupAngles[secondIndex], radius);
-                    float requiredDistance = clusterRadii[firstIndex] + clusterRadii[secondIndex] + MinimumClusterGap;
-
-                    if (Vector2.Distance(first, second) < requiredDistance)
+                    foreach (Rect placedRect in placedRects)
                     {
-                        return false;
+                        if (ExpandRect(candidateRect, RootOverviewClusterPadding * 0.5f)
+                            .Overlaps(ExpandRect(placedRect, RootOverviewClusterPadding * 0.5f)))
+                        {
+                            return false;
+                        }
                     }
+
+                    placedRects.Add(candidateRect);
                 }
             }
 
             return true;
+        }
+
+        private static IReadOnlyList<Rect> CreateRootOverviewClusterRects(
+            Vector2 groupCenter,
+            float localRadius,
+            IReadOnlyList<ChildPlacement> children,
+            PackageGraphNodeMetrics packageMetrics)
+        {
+            List<Rect> rects = new List<Rect>
+            {
+                CreateGroupElementRect(groupCenter, GroupHubSize, GroupCaptionWidth, GroupCaptionHeight)
+            };
+            ChildPlacement[] safeChildren = children == null
+                ? Array.Empty<ChildPlacement>()
+                : children.ToArray();
+            float[] childAngles = CreateEvenCircleAngles(
+                safeChildren.Length,
+                safeChildren.Length > 1 ? -90f + 180f / safeChildren.Length : -90f);
+
+            for (int index = 0; index < safeChildren.Length; index++)
+            {
+                Vector2 childCenter = PointOnOrbit(groupCenter, childAngles[index], localRadius);
+                rects.Add(safeChildren[index].Group != null
+                    ? CreateGroupElementRect(
+                        childCenter,
+                        GroupChipHubSize,
+                        GroupChipCaptionWidth,
+                        GroupChipCaptionHeight)
+                    : CenteredRect(childCenter, packageMetrics));
+            }
+
+            return rects;
+        }
+
+        private static Rect ExpandRect(Rect rect, float amount)
+        {
+            return new Rect(
+                rect.x - amount,
+                rect.y - amount,
+                rect.width + amount * 2f,
+                rect.height + amount * 2f);
         }
 
         private static float CalculateHalfDiagonal(float width, float height)

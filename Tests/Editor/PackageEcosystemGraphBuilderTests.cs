@@ -58,14 +58,17 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
-        public void Window_FormatsEcosystemOverviewGroupRowsWithInstalledSummaryOnly()
+        public void Window_FormatsEcosystemOverviewGroupRowsWithGraphStatusSummary()
         {
             Assert.AreEqual(
-                "2 / 3 installed",
-                PackageInstallerWindow.FormatEcosystemOverviewGroupInstalledSummaryForTests(2, 3));
+                "! 1 attention   \u2713 2 installed   \u25CB 3 not installed",
+                PackageInstallerWindow.FormatEcosystemOverviewGroupStatusSummaryForTests(2, 3, 1, 0));
             Assert.AreEqual(
-                "1 / 1 installed",
-                PackageInstallerWindow.FormatEcosystemOverviewGroupInstalledSummaryForTests(1, 1));
+                "\u2713 1 installed",
+                PackageInstallerWindow.FormatEcosystemOverviewGroupStatusSummaryForTests(1, 0, 0, 0));
+            Assert.AreEqual(
+                "\u25CB 2 not installed   ? 1 unknown",
+                PackageInstallerWindow.FormatEcosystemOverviewGroupStatusSummaryForTests(0, 2, 0, 1));
         }
 
         [Test]
@@ -583,6 +586,16 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.IsFalse(missingNode.IsRegistered);
             Assert.AreEqual(PackageGraphNodeStatus.Missing, missingNode.Status);
             Assert.AreEqual(PackageGraphEdgeState.Warning, warningEdge.State);
+
+            IReadOnlyList<PackageGraphGroupNavigationRow> rows =
+                PackageInstallerWindow.CreateEcosystemOverviewGroupNavigationRowsForTests(
+                    graph,
+                    PackageGraphNavigationState.Overview());
+            PackageGraphGroupNavigationRow infrastructureRow =
+                rows.Single(row => row.Id == "infrastructure");
+            Assert.IsTrue(infrastructureRow.HasAttention);
+            Assert.AreEqual(1, infrastructureRow.StatusSummary.AttentionCount);
+            StringAssert.Contains("! 1 attention", infrastructureRow.Summary);
         }
 
         [Test]
@@ -725,6 +738,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                     PackageGraphNavigationState.Overview());
             Assert.IsTrue(rows.Single(row => row.Id == "infrastructure").HasAttention);
             Assert.IsFalse(rows.Single(row => row.Id == "runtime-services").HasAttention);
+            StringAssert.Contains("! 1 attention", rows.Single(row => row.Id == "infrastructure").Summary);
         }
 
         [Test]
@@ -1024,7 +1038,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             float globalRadius = Vector2.Distance(topGroups[0].HubCenter, PackageGraphLayout.GraphCenter);
 
             Assert.AreEqual(7, topGroups.Length);
-            Assert.That(globalRadius, Is.GreaterThanOrEqualTo(560f));
+            Assert.That(globalRadius, Is.InRange(760f, 860f));
             foreach (PackageGraphGroupLayoutNode groupNode in topGroups)
             {
                 Assert.That(
@@ -2551,7 +2565,10 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual("overview", overviewRows[0].Id);
             Assert.AreEqual("Deucarian Overview", overviewRows[0].DisplayName);
             Assert.AreEqual("package-installer", overviewRows[0].IconKey);
-            Assert.AreEqual("0 / " + graph.Nodes.Count(node => node.IsRegistered) + " installed", overviewRows[0].Summary);
+            Assert.AreEqual(
+                "\u25CB " + graph.Nodes.Count + " not installed",
+                overviewRows[0].Summary);
+            Assert.AreEqual(graph.Nodes.Count, overviewRows[0].StatusSummary.NotInstalledCount);
             Assert.IsTrue(overviewRows[0].IsOverview);
             Assert.IsTrue(overviewRows[0].IsSelected);
             Assert.IsFalse(overviewRows[0].Summary.Contains("packages"));
@@ -2800,6 +2817,16 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual(PackageGraphNodeStatus.Warning, dependencyNode.Status);
             Assert.AreEqual("Required by installed package", dependencyNode.UpdateStatusLabel);
             Assert.AreEqual(PackageGraphNodeAction.Install, dependencyNode.PrimaryAction);
+
+            IReadOnlyList<PackageGraphGroupNavigationRow> rows =
+                PackageInstallerWindow.CreateEcosystemOverviewGroupNavigationRowsForTests(
+                    graph,
+                    PackageGraphNavigationState.Overview());
+            PackageGraphGroupNavigationRow infrastructureRow =
+                rows.Single(row => row.Id == "infrastructure");
+            Assert.IsTrue(infrastructureRow.HasAttention);
+            Assert.AreEqual(1, infrastructureRow.StatusSummary.AttentionCount);
+            StringAssert.Contains("! 1 attention", infrastructureRow.Summary);
         }
 
         [Test]
@@ -3201,7 +3228,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             PackageGraphGroupLayoutNode infrastructure = layout.GroupNodes.Single(groupNode => groupNode.GroupId == "infrastructure");
             PackageGraphGroupLayoutNode integrations = layout.GroupNodes.Single(groupNode => groupNode.GroupId == "integrations");
             float globalRadius = Vector2.Distance(infrastructure.HubCenter, PackageGraphLayout.GraphCenter);
-            Assert.That(globalRadius, Is.GreaterThanOrEqualTo(560f));
+            Assert.That(globalRadius, Is.InRange(760f, 860f));
             Assert.That(Vector2.Distance(integrations.HubCenter, PackageGraphLayout.GraphCenter), Is.EqualTo(globalRadius).Within(0.1f));
             Assert.That(
                 Vector2.Distance(layout.NodeRects["com.deucarian.editor"].center, infrastructure.HubCenter),
@@ -3436,6 +3463,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
             Assert.LessOrEqual(rootRadii[0], rootRadii[1]);
             Assert.LessOrEqual(rootRadii[1], rootRadii[2]);
+            Assert.That(rootRadii[1], Is.LessThan(860f));
+            Assert.That(rootRadii[2], Is.LessThan(900f));
         }
 
         [Test]
@@ -4283,6 +4312,10 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             PackageGraphLayoutResult layout,
             float minimumGap)
         {
+            Dictionary<string, PackageGraphGroupLayoutNode> groupNodeById = layout.GroupNodes
+                .Where(groupNode => groupNode != null)
+                .GroupBy(groupNode => groupNode.GroupId, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
             PackageGraphGroupLayoutNode[] topGroups = layout.GroupNodes
                 .Where(groupNode => groupNode != null && !groupNode.Collapsed)
                 .OrderBy(groupNode => groupNode.Group.SortOrder)
@@ -4294,24 +4327,29 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 {
                     PackageGraphGroupLayoutNode first = topGroups[firstIndex];
                     PackageGraphGroupLayoutNode second = topGroups[secondIndex];
-                    float firstRadius = CalculateClusterRadius(graph, layout, first);
-                    float secondRadius = CalculateClusterRadius(graph, layout, second);
-                    float distance = Vector2.Distance(first.HubCenter, second.HubCenter);
+                    Rect[] firstRects = GetTopLevelClusterRects(graph, layout, first, groupNodeById);
+                    Rect[] secondRects = GetTopLevelClusterRects(graph, layout, second, groupNodeById);
 
-                    Assert.That(
-                        distance + 1.0f,
-                        Is.GreaterThanOrEqualTo(firstRadius + secondRadius + minimumGap),
-                        first.GroupId + " overlaps cluster space for " + second.GroupId);
+                    foreach (Rect firstRect in firstRects)
+                    {
+                        foreach (Rect secondRect in secondRects)
+                        {
+                            Assert.IsFalse(
+                                Expand(firstRect, minimumGap * 0.5f).Overlaps(Expand(secondRect, minimumGap * 0.5f)),
+                                first.GroupId + " cluster element is too close to " + second.GroupId);
+                        }
+                    }
                 }
             }
         }
 
-        private static float CalculateClusterRadius(
+        private static Rect[] GetTopLevelClusterRects(
             PackageGraphModel graph,
             PackageGraphLayoutResult layout,
-            PackageGraphGroupLayoutNode groupNode)
+            PackageGraphGroupLayoutNode groupNode,
+            IReadOnlyDictionary<string, PackageGraphGroupLayoutNode> groupNodeById)
         {
-            Rect bounds = groupNode.Rect;
+            List<Rect> rects = new List<Rect> { groupNode.Rect };
 
             foreach (PackageGraphNode node in graph.Nodes)
             {
@@ -4322,25 +4360,19 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                     continue;
                 }
 
-                bounds = Union(bounds, nodeRect);
+                rects.Add(nodeRect);
             }
 
-            float radius = 0f;
-            Vector2 center = groupNode.HubCenter;
-            Vector2[] corners =
+            foreach (PackageGraphGroup childGroup in graph.GetChildGroups(groupNode.GroupId))
             {
-                new Vector2(bounds.xMin, bounds.yMin),
-                new Vector2(bounds.xMax, bounds.yMin),
-                new Vector2(bounds.xMax, bounds.yMax),
-                new Vector2(bounds.xMin, bounds.yMax)
-            };
-
-            foreach (Vector2 corner in corners)
-            {
-                radius = Mathf.Max(radius, Vector2.Distance(center, corner));
+                if (childGroup != null &&
+                    groupNodeById.TryGetValue(childGroup.Id, out PackageGraphGroupLayoutNode childGroupNode))
+                {
+                    rects.Add(childGroupNode.Rect);
+                }
             }
 
-            return radius;
+            return rects.ToArray();
         }
 
         private static Rect CreateExpectedFitBounds(PackageGraphLayoutResult layout)
@@ -4393,15 +4425,6 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.That(actual.y, Is.EqualTo(expected.y).Within(tolerance));
             Assert.That(actual.width, Is.EqualTo(expected.width).Within(tolerance));
             Assert.That(actual.height, Is.EqualTo(expected.height).Within(tolerance));
-        }
-
-        private static Rect Union(Rect first, Rect second)
-        {
-            float xMin = Mathf.Min(first.xMin, second.xMin);
-            float yMin = Mathf.Min(first.yMin, second.yMin);
-            float xMax = Mathf.Max(first.xMax, second.xMax);
-            float yMax = Mathf.Max(first.yMax, second.yMax);
-            return Rect.MinMaxRect(xMin, yMin, xMax, yMax);
         }
 
         private static Rect Expand(Rect rect, float amount)

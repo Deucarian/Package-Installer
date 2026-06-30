@@ -76,6 +76,7 @@ namespace Deucarian.PackageInstaller.Editor
             string id,
             string displayName,
             string summary,
+            PackageGraphCategoryStatusSummary statusSummary,
             string iconKey,
             string tooltip,
             bool isOverview,
@@ -85,11 +86,12 @@ namespace Deucarian.PackageInstaller.Editor
             Id = id ?? string.Empty;
             DisplayName = displayName ?? string.Empty;
             Summary = summary ?? string.Empty;
+            StatusSummary = statusSummary;
             IconKey = string.IsNullOrWhiteSpace(iconKey) ? "package" : iconKey.Trim();
             Tooltip = tooltip ?? string.Empty;
             IsOverview = isOverview;
             IsSelected = isSelected;
-            HasAttention = hasAttention;
+            HasAttention = hasAttention || statusSummary.AttentionCount > 0;
         }
 
         public string Id { get; }
@@ -97,6 +99,8 @@ namespace Deucarian.PackageInstaller.Editor
         public string DisplayName { get; }
 
         public string Summary { get; }
+
+        public PackageGraphCategoryStatusSummary StatusSummary { get; }
 
         public string IconKey { get; }
 
@@ -146,6 +150,8 @@ namespace Deucarian.PackageInstaller.Editor
         internal const string OperationFooterDetailsButtonName = "package-installer-operation-footer-details-toggle";
         internal const string OperationFooterVersionName = "package-installer-operation-footer-version";
         internal const string WallpaperTopSafeFadeName = "package-installer-wallpaper-top-safe-fade";
+        internal const string GlobalChannelOverrideButtonName = "package-installer-global-channel-override";
+        internal const string GlobalChannelOverridePopupName = "package-installer-global-channel-override-popup";
         private const string AdvancedFoldoutPreferencePrefix = "Deucarian.PackageInstaller.AdvancedFoldout.";
         private const string CategoryFoldoutPreferencePrefix = "Deucarian.PackageInstaller.CategoryFoldout.";
         private const string OperationDrawerPreferencePrefix = "Deucarian.PackageInstaller.OperationDrawer.";
@@ -155,6 +161,9 @@ namespace Deucarian.PackageInstaller.Editor
         private const string InstalledStatusMarker = "\u2713";
         private const string NotInstalledStatusMarker = "\u25CB";
         private const string AttentionStatusMarker = "!";
+        private const float GlobalChannelOverridePopupWidth = 286f;
+        private const float GlobalChannelOverridePopupMargin = 8f;
+        private static readonly string[] GlobalChannelOptionLabels = { "Development", "Stable" };
 
         private enum InstallerViewMode
         {
@@ -251,13 +260,17 @@ namespace Deucarian.PackageInstaller.Editor
         private bool _operationDetailsExpanded;
         private InstallerViewMode _viewMode = DefaultInstallerViewMode;
         private PackageChannel _lastObservedProjectChannel = PackageChannel.Stable;
+        private long _lastObservedProjectChannelChangedAtUtcTicks;
 
         private Button _listViewButton;
         private Button _graphViewButton;
+        private Button _graphGlobalChannelButton;
         private Button _graphRefreshButton;
         private Button _graphCheckUpdatesButton;
         private Button _graphUpdateAllButton;
         private Button _graphInstallAllButton;
+        private VisualElement _globalChannelPopup;
+        private DropdownField _globalChannelDropdown;
         private Label _viewSummaryLabel;
         private VisualElement _listViewContainerHost;
         private VisualElement _graphModeContainer;
@@ -333,11 +346,18 @@ namespace Deucarian.PackageInstaller.Editor
 
         internal static IReadOnlyList<string> UserFacingMenuPathsForTests => new[] { InstallerMenuPath };
 
-        internal static string FormatEcosystemOverviewGroupInstalledSummaryForTests(
+        internal static string FormatEcosystemOverviewGroupStatusSummaryForTests(
             int installedCount,
-            int packageCount)
+            int notInstalledCount,
+            int attentionCount,
+            int unknownCount)
         {
-            return FormatEcosystemOverviewGroupInstalledSummary(installedCount, packageCount);
+            return FormatEcosystemOverviewGroupStatusSummary(
+                new PackageGraphCategoryStatusSummary(
+                    installedCount,
+                    notInstalledCount,
+                    attentionCount,
+                    unknownCount));
         }
 
         internal static IReadOnlyList<PackageGraphGroupNavigationRow> CreateEcosystemOverviewGroupNavigationRowsForTests(
@@ -454,7 +474,9 @@ namespace Deucarian.PackageInstaller.Editor
             minSize = new Vector2(MinWindowWidth, MinWindowHeight);
 
             _stateRepository = new PackageInstallerStateRepository();
-            _lastObservedProjectChannel = _stateRepository.GetProjectChannel();
+            PackageChannelSelection projectChannelSelection = _stateRepository.GetProjectChannelSelection();
+            _lastObservedProjectChannel = projectChannelSelection.Channel;
+            _lastObservedProjectChannelChangedAtUtcTicks = projectChannelSelection.ChangedAtUtcTicks;
             _packageInstallService = new PackageInstallService();
             _packageDetectionService = new PackageDetectionService();
             _packageUpdateCheckService = new PackageUpdateCheckService(_packageDetectionService);
@@ -544,6 +566,7 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             PackageRegistryProvider.RegistryChanged -= HandleRegistryChanged;
+            HideGlobalChannelOverridePopup();
             _stateRepository = null;
         }
 
@@ -2456,7 +2479,7 @@ namespace Deucarian.PackageInstaller.Editor
             DrawGraphNavigationIcon(iconRect, row.IconKey);
 
             GUIContent nameContent = new GUIContent(row.DisplayName, row.Tooltip);
-            GUIContent summaryContent = new GUIContent(row.Summary);
+            GUIContent summaryContent = new GUIContent(row.Summary, row.Summary);
             Rect contentRect = new Rect(rowRect.x + 38f, rowRect.y + 8f, rowRect.width - 48f, 18f);
             float gap = 10f;
             float summaryWidth = Mathf.Min(
@@ -2484,9 +2507,38 @@ namespace Deucarian.PackageInstaller.Editor
             GUI.DrawTexture(rect, icon, ScaleMode.ScaleToFit, true);
         }
 
-        private static string FormatEcosystemOverviewGroupInstalledSummary(int installedCount, int packageCount)
+        private static string FormatEcosystemOverviewGroupStatusSummary(
+            PackageGraphCategoryStatusSummary statusSummary)
         {
-            return Math.Max(0, installedCount) + " / " + Math.Max(0, packageCount) + " installed";
+            List<string> parts = new List<string>();
+
+            if (statusSummary.AttentionCount > 0)
+            {
+                parts.Add(
+                    AttentionStatusMarker + " " +
+                    statusSummary.AttentionCount + " attention");
+            }
+
+            if (statusSummary.InstalledCount > 0)
+            {
+                parts.Add(
+                    InstalledStatusMarker + " " +
+                    statusSummary.InstalledCount + " installed");
+            }
+
+            if (statusSummary.NotInstalledCount > 0)
+            {
+                parts.Add(
+                    NotInstalledStatusMarker + " " +
+                    statusSummary.NotInstalledCount + " not installed");
+            }
+
+            if (statusSummary.UnknownCount > 0)
+            {
+                parts.Add("? " + statusSummary.UnknownCount + " unknown");
+            }
+
+            return parts.Count == 0 ? "0 packages" : string.Join("   ", parts.ToArray());
         }
 
         private static IReadOnlyList<PackageGraphGroupNavigationRow> CreateEcosystemOverviewGroupNavigationRows(
@@ -2494,20 +2546,21 @@ namespace Deucarian.PackageInstaller.Editor
             PackageGraphNavigationState navigationState)
         {
             List<PackageGraphGroupNavigationRow> rows = new List<PackageGraphGroupNavigationRow>();
-            PackageGraphNode[] registeredNodes = graph == null
+            PackageGraphNode[] graphNodes = graph == null
                 ? Array.Empty<PackageGraphNode>()
-                : graph.Nodes.Where(node => node != null && node.IsRegistered).ToArray();
+                : graph.Nodes.Where(node => node != null).ToArray();
+            PackageGraphCategoryStatusSummary overviewStatusSummary =
+                PackageGraphCategoryStatusSummary.Create(graphNodes);
             rows.Add(new PackageGraphGroupNavigationRow(
                 "overview",
                 "Deucarian Overview",
-                FormatEcosystemOverviewGroupInstalledSummary(
-                    registeredNodes.Count(node => node.IsInstalled),
-                    registeredNodes.Length),
+                FormatEcosystemOverviewGroupStatusSummary(overviewStatusSummary),
+                overviewStatusSummary,
                 "package-installer",
                 "Navigate to Deucarian Overview",
                 isOverview: true,
                 isSelected: navigationState.IsOverview,
-                hasAttention: registeredNodes.Any(HasAttentionStatus)));
+                hasAttention: overviewStatusSummary.AttentionCount > 0));
 
             if (graph == null)
             {
@@ -2526,30 +2579,23 @@ namespace Deucarian.PackageInstaller.Editor
                          .ThenBy(group => group.DisplayName, StringComparer.OrdinalIgnoreCase))
             {
                 PackageGraphNode[] descendants = graph.GetDescendantPackages(group.Id)
-                    .Where(node => node != null && node.IsRegistered)
+                    .Where(node => node != null)
                     .ToArray();
+                PackageGraphCategoryStatusSummary groupStatusSummary =
+                    PackageGraphCategoryStatusSummary.Create(descendants);
                 rows.Add(new PackageGraphGroupNavigationRow(
                     group.Id,
                     group.DisplayName,
-                    FormatEcosystemOverviewGroupInstalledSummary(
-                        descendants.Count(node => node.IsInstalled),
-                        descendants.Length),
+                    FormatEcosystemOverviewGroupStatusSummary(groupStatusSummary),
+                    groupStatusSummary,
                     group.IconKey,
                     group.Description,
                     isOverview: false,
                     isSelected: string.Equals(group.Id, activeTopLevelGroupId, StringComparison.OrdinalIgnoreCase),
-                    hasAttention: descendants.Any(HasAttentionStatus)));
+                    hasAttention: groupStatusSummary.AttentionCount > 0));
             }
 
             return rows;
-        }
-
-        private static bool HasAttentionStatus(PackageGraphNode node)
-        {
-            return node != null &&
-                   (node.Status == PackageGraphNodeStatus.UpdateAvailable ||
-                    node.Status == PackageGraphNodeStatus.Missing ||
-                    node.Status == PackageGraphNodeStatus.Warning);
         }
 
         private static string GetGraphPackageGroupId(PackageGraphModel graph, string packageId)
