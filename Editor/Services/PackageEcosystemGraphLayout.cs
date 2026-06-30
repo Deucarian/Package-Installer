@@ -587,6 +587,8 @@ namespace Deucarian.PackageInstaller.Editor
         private const float NodeGap = 22f;
         private const float MinimumGlobalGroupOrbitRadius = 560f;
         private const float MinimumRootOverviewGroupOrbitRadius = 720f;
+        private const float MinimumRootSummaryGroupOrbitRadius = 320f;
+        private const float RootSummaryGroupPadding = 40f;
         private const float RootOverviewClusterPadding = 40f;
         private const float RootOverviewOrbitSearchStep = 16f;
         private const float MinimumClusterGap = 56f;
@@ -748,16 +750,17 @@ namespace Deucarian.PackageInstaller.Editor
             PackageGraphModel graph,
             PackageGraphNodePresentationLevel presentationLevel)
         {
-            Dictionary<string, Rect> nodeRects = CreateNodeRingDictionary(graph, out Dictionary<string, PackageGraphLayoutRing> nodeRings);
+            Dictionary<string, Rect> nodeRects = new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
+            Dictionary<string, PackageGraphLayoutRing> nodeRings =
+                new Dictionary<string, PackageGraphLayoutRing>(StringComparer.OrdinalIgnoreCase);
             Dictionary<string, PackageGraphNodePresentationLevel> nodePresentations =
                 new Dictionary<string, PackageGraphNodePresentationLevel>(StringComparer.OrdinalIgnoreCase);
             List<PackageGraphGroupLayoutNode> groupNodes = new List<PackageGraphGroupLayoutNode>();
             List<PackageGraphRingGuide> ringGuides = new List<PackageGraphRingGuide>();
             Rect hubRect = CreateOverviewHubRect();
-            PackageGraphNodeMetrics packageMetrics = PackageGraphPresentationPolicy.GetMetrics(presentationLevel);
 
             PackageGraphGroup[] topGroups = GetTopLevelGroups(graph).ToArray();
-            float globalOrbitRadius = CalculateGlobalGroupOrbitRadius(graph, topGroups, packageMetrics);
+            float globalOrbitRadius = CalculateRootSummaryGroupOrbitRadius(topGroups.Length);
 
             if (topGroups.Length > 0)
             {
@@ -776,14 +779,6 @@ namespace Deucarian.PackageInstaller.Editor
                 Vector2 groupCenter = PointOnOrbit(GraphCenter, groupAngles[index], globalOrbitRadius);
                 Rect groupRect = CreateGroupElementRect(groupCenter, GroupHubSize, GroupCaptionWidth, GroupCaptionHeight);
                 Rect groupHubRect = CreateHubRect(groupCenter, GroupHubSize);
-                IReadOnlyList<PackageGraphNode> directPackages = GetDirectPackages(graph, group.Id);
-                IReadOnlyList<PackageGraphGroup> directGroups = GetChildGroups(graph, group.Id);
-                int childCount = directPackages.Count + directGroups.Count;
-                float localRadius = CalculateLocalOrbitRadius(
-                    childCount,
-                    packageMetrics,
-                    GroupChipCaptionWidth,
-                    GroupChipHubSize + GroupChipCaptionHeight);
 
                 groupNodes.Add(CreateGroupLayoutNode(
                     graph,
@@ -792,20 +787,7 @@ namespace Deucarian.PackageInstaller.Editor
                     groupHubRect,
                     focused: false,
                     collapsed: false,
-                    orbitRadius: localRadius));
-
-                PlaceDirectChildren(
-                    graph,
-                    group,
-                    groupCenter,
-                    localRadius,
-                    directPackages,
-                    directGroups,
-                    nodeRects,
-                    nodeRings,
-                    nodePresentations,
-                    groupNodes,
-                    presentationLevel);
+                    orbitRadius: 0f));
             }
 
             return new PackageGraphLayoutResult(
@@ -1930,6 +1912,31 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             return canvasLimitedRadius;
+        }
+
+        private static float CalculateRootSummaryGroupOrbitRadius(int topGroupCount)
+        {
+            if (topGroupCount <= 0)
+            {
+                return 0f;
+            }
+
+            float rootClearance = HubHeight * 0.5f +
+                                  GroupHubSize * 0.5f +
+                                  GroupCaptionHeight +
+                                  RootSummaryGroupPadding;
+
+            if (topGroupCount <= 1)
+            {
+                return Mathf.Max(MinimumRootSummaryGroupOrbitRadius, rootClearance);
+            }
+
+            float chordRadius = (GroupCaptionWidth + RootSummaryGroupPadding) /
+                                Mathf.Max(0.01f, 2f * Mathf.Sin(Mathf.PI / topGroupCount));
+            return Mathf.Clamp(
+                Mathf.Max(MinimumRootSummaryGroupOrbitRadius, rootClearance, chordRadius),
+                MinimumRootSummaryGroupOrbitRadius,
+                MinimumRootOverviewGroupOrbitRadius);
         }
 
         private static float CalculateClusterCollisionRadius(
