@@ -3015,6 +3015,10 @@ namespace Deucarian.PackageInstaller.Editor
             ? _layoutResult.NodeRects
             : new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
 
+        internal IReadOnlyList<PackageGraphGroupLayoutNode> GroupLayoutNodesForTests => _layoutResult != null
+            ? _layoutResult.GroupNodes
+            : Array.Empty<PackageGraphGroupLayoutNode>();
+
         internal IReadOnlyDictionary<string, float> AnimatedGroupOrbitRadiiForTests => _animatedGroupOrbitRadii;
 
         internal IReadOnlyDictionary<string, Vector2> AnimatedGroupCentersForTests => _animatedGroupCenters;
@@ -3794,9 +3798,11 @@ namespace Deucarian.PackageInstaller.Editor
             foreach (KeyValuePair<string, Rect> target in _layoutResult.NodeRects)
             {
                 Rect previous = default(Rect);
-                bool entering = hasPreviousNodeFrame && !previousRects.TryGetValue(target.Key, out previous);
+                bool hasPreviousNodeRect = hasPreviousNodeFrame &&
+                                           previousRects.TryGetValue(target.Key, out previous);
+                bool entering = !hasPreviousNodeRect && (hasPreviousNodeFrame || hasPreviousGroupFrame);
                 Rect start = !entering
-                    ? hasPreviousNodeFrame ? previous : target.Value
+                    ? hasPreviousNodeRect ? previous : target.Value
                     : CreateEnteringNodeStartRect(target.Key, target.Value, previousGroupRects);
                 PackageGraphNodePresentationLevel presentationLevel = GetPresentationLevel(target.Key);
                 PackageGraphNodeVisualState startState =
