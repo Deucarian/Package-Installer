@@ -9093,7 +9093,7 @@ namespace Deucarian.PackageInstaller.Editor
                 layoutMode == PackageGraphLayoutMode.Overview ||
                 layoutMode == PackageGraphLayoutMode.Filtered);
             EnableInClassList("dpi-graph-group--locked", !interactionsEnabled);
-            EnableInClassList("dpi-graph-group--attention", groupNode.UpdateCount > 0 || groupNode.MissingCount > 0);
+            EnableInClassList("dpi-graph-group--attention", groupNode.AttentionCount > 0);
             EnableInClassList("dpi-graph-group--empty", groupNode.PackageCount == 0);
             EnableInClassList("dpi-graph-group--hover-context", hoverContext);
             EnableInClassList("dpi-graph-group--hover-dimmed", hoverDimmed);
