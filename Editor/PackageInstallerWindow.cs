@@ -756,6 +756,7 @@ namespace Deucarian.PackageInstaller.Editor
                 text = text
             };
             button.AddToClassList("dpi-view-toolbar__action");
+            button.AddToClassList("dpi-view-toolbar__graph-action");
             return button;
         }
 

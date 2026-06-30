@@ -45,6 +45,24 @@
     color: var(--deucarian-text);
 }
 
+.dpi-view-toolbar__graph-action:hover {
+    border-left-color: rgba(59, 209, 191, 0.48);
+    border-right-color: rgba(59, 209, 191, 0.38);
+    border-top-color: rgba(126, 172, 202, 0.38);
+    border-bottom-color: rgba(59, 209, 191, 0.34);
+    background-color: rgba(28, 56, 64, 0.66);
+    color: rgba(230, 244, 246, 0.96);
+}
+
+.dpi-view-toolbar__graph-action:active {
+    border-left-color: rgba(59, 209, 191, 0.72);
+    border-right-color: rgba(59, 209, 191, 0.58);
+    border-top-color: rgba(126, 172, 202, 0.52);
+    border-bottom-color: rgba(59, 209, 191, 0.52);
+    background-color: rgba(19, 43, 52, 0.78);
+    color: rgba(238, 250, 251, 1.00);
+}
+
 .dpi-view-toolbar__channel-button {
     min-width: 124px;
     margin-right: 2px;
@@ -454,6 +472,14 @@
     background-color: rgba(35, 62, 66, 0.66);
 }
 
+.dpi-operation-footer__details-button:active {
+    border-left-color: rgba(59, 209, 191, 0.76);
+    border-right-color: rgba(59, 209, 191, 0.76);
+    border-top-color: rgba(59, 209, 191, 0.76);
+    border-bottom-color: rgba(59, 209, 191, 0.76);
+    background-color: rgba(25, 50, 56, 0.78);
+}
+
 .dpi-operation-footer__version {
     flex-shrink: 0;
     color: var(--deucarian-text);
@@ -604,6 +630,15 @@
     background-color: rgba(27, 52, 57, 0.68);
 }
 
+.dpi-ecosystem-graph__breadcrumb:active {
+    border-left-color: rgba(59, 209, 191, 0.72);
+    border-right-color: rgba(59, 209, 191, 0.72);
+    border-top-color: rgba(59, 209, 191, 0.72);
+    border-bottom-color: rgba(59, 209, 191, 0.72);
+    background-color: rgba(18, 43, 50, 0.82);
+    color: rgba(236, 250, 251, 0.98);
+}
+
 .dpi-ecosystem-graph__breadcrumb-current {
     height: 20px;
     padding-left: 8px;
@@ -676,6 +711,37 @@
     border-top-color: rgba(74, 86, 105, 0.32);
     border-bottom-color: rgba(74, 86, 105, 0.32);
     background-color: rgba(18, 24, 33, 0.18);
+}
+
+.dpi-ecosystem-graph__filter-toggle:hover,
+.dpi-ecosystem-graph__filter-clear:hover {
+    border-left-color: rgba(59, 209, 191, 0.56);
+    border-right-color: rgba(59, 209, 191, 0.56);
+    border-top-color: rgba(59, 209, 191, 0.56);
+    border-bottom-color: rgba(59, 209, 191, 0.56);
+    background-color: rgba(29, 57, 63, 0.58);
+    color: rgba(230, 244, 246, 0.96);
+}
+
+.dpi-ecosystem-graph__filter-toggle:active,
+.dpi-ecosystem-graph__filter-clear:active {
+    border-left-color: rgba(59, 209, 191, 0.78);
+    border-right-color: rgba(59, 209, 191, 0.78);
+    border-top-color: rgba(59, 209, 191, 0.78);
+    border-bottom-color: rgba(59, 209, 191, 0.78);
+    background-color: rgba(18, 43, 50, 0.78);
+    color: rgba(238, 250, 251, 1.00);
+}
+
+.dpi-ecosystem-graph__filter-toggle:hover .dpi-ecosystem-graph__filter-label,
+.dpi-ecosystem-graph__filter-toggle:active .dpi-ecosystem-graph__filter-label {
+    color: rgba(238, 250, 251, 0.98);
+}
+
+.dpi-ecosystem-graph__filter-toggle:hover .dpi-ecosystem-graph__filter-count,
+.dpi-ecosystem-graph__filter-toggle:active .dpi-ecosystem-graph__filter-count {
+    color: rgba(221, 241, 245, 0.96);
+    background-color: rgba(8, 17, 24, 0.34);
 }
 
 .dpi-ecosystem-graph__filter-icon {
@@ -812,6 +878,14 @@
     border-top-color: rgba(59, 209, 191, 0.56);
     border-bottom-color: rgba(59, 209, 191, 0.56);
     background-color: rgba(33, 66, 70, 0.74);
+}
+
+.dpi-ecosystem-graph__toolbar-button:active {
+    border-left-color: rgba(59, 209, 191, 0.78);
+    border-right-color: rgba(59, 209, 191, 0.78);
+    border-top-color: rgba(59, 209, 191, 0.78);
+    border-bottom-color: rgba(59, 209, 191, 0.78);
+    background-color: rgba(20, 48, 56, 0.82);
 }
 
 .dpi-graph-legend__item {
@@ -960,8 +1034,32 @@
     border-top-right-radius: 5px;
     border-bottom-right-radius: 5px;
     border-bottom-left-radius: 5px;
+    border-left-width: 1px;
+    border-right-width: 1px;
+    border-top-width: 1px;
+    border-bottom-width: 1px;
+    border-left-color: rgba(59, 166, 154, 0.42);
+    border-right-color: rgba(59, 166, 154, 0.42);
+    border-top-color: rgba(59, 166, 154, 0.42);
+    border-bottom-color: rgba(59, 166, 154, 0.42);
     background-color: rgba(27, 48, 58, 0.76);
     color: var(--deucarian-text);
+}
+
+.dpi-ecosystem-graph__empty-action:hover {
+    border-left-color: rgba(59, 209, 191, 0.64);
+    border-right-color: rgba(59, 209, 191, 0.64);
+    border-top-color: rgba(59, 209, 191, 0.64);
+    border-bottom-color: rgba(59, 209, 191, 0.64);
+    background-color: rgba(35, 73, 78, 0.82);
+}
+
+.dpi-ecosystem-graph__empty-action:active {
+    border-left-color: rgba(59, 209, 191, 0.82);
+    border-right-color: rgba(59, 209, 191, 0.82);
+    border-top-color: rgba(59, 209, 191, 0.82);
+    border-bottom-color: rgba(59, 209, 191, 0.82);
+    background-color: rgba(21, 50, 58, 0.90);
 }
 
 .dpi-ecosystem-graph__content {
@@ -2040,6 +2138,14 @@
     border-bottom-color: rgba(59, 166, 154, 0.70);
 }
 
+.dpi-graph-node__action:active {
+    background-color: rgba(25, 74, 82, 0.88);
+    border-left-color: rgba(59, 209, 191, 0.84);
+    border-right-color: rgba(59, 209, 191, 0.84);
+    border-top-color: rgba(59, 209, 191, 0.84);
+    border-bottom-color: rgba(59, 209, 191, 0.84);
+}
+
 .dpi-graph-node--status-update .dpi-graph-node__action {
     background-color: rgba(112, 84, 31, 0.82);
     border-left-color: rgba(224, 178, 72, 0.60);
@@ -2055,4 +2161,12 @@
     border-right-color: rgba(240, 194, 88, 0.82);
     border-top-color: rgba(240, 194, 88, 0.82);
     border-bottom-color: rgba(240, 194, 88, 0.82);
+}
+
+.dpi-graph-node--status-update .dpi-graph-node__action:active {
+    background-color: rgba(96, 69, 25, 0.94);
+    border-left-color: rgba(255, 213, 112, 0.94);
+    border-right-color: rgba(255, 213, 112, 0.94);
+    border-top-color: rgba(255, 213, 112, 0.94);
+    border-bottom-color: rgba(255, 213, 112, 0.94);
 }
