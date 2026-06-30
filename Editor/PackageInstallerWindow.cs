@@ -659,6 +659,7 @@ namespace Deucarian.PackageInstaller.Editor
             _windowContentRoot.EnableInClassList("dpi-responsive--narrow", nextMode == PackageInstallerResponsiveMode.Narrow);
 
             _graphView?.SetResponsiveMode(nextMode);
+            PositionGlobalChannelOverridePopup();
         }
 
         private static PackageInstallerResponsiveMode ResolveResponsiveMode(float width)
@@ -711,10 +712,12 @@ namespace Deucarian.PackageInstaller.Editor
             spacer.AddToClassList("deucarian-toolbar-spacer");
             toolbar.Add(spacer);
 
+            _graphGlobalChannelButton = CreateGlobalChannelOverrideButton();
             _graphRefreshButton = CreateGraphActionButton("Refresh", RefreshPackages);
             _graphCheckUpdatesButton = CreateGraphActionButton("Check Updates", CheckForUpdates);
             _graphUpdateAllButton = CreateGraphActionButton("Update All", UpdateAllPackages);
             _graphInstallAllButton = CreateGraphActionButton("Install All", InstallAllPackages);
+            toolbar.Add(_graphGlobalChannelButton);
             toolbar.Add(_graphRefreshButton);
             toolbar.Add(_graphCheckUpdatesButton);
             toolbar.Add(_graphUpdateAllButton);
@@ -730,6 +733,19 @@ namespace Deucarian.PackageInstaller.Editor
             return button;
         }
 
+        private Button CreateGlobalChannelOverrideButton()
+        {
+            Button button = new Button(ToggleGlobalChannelOverridePopup)
+            {
+                name = GlobalChannelOverrideButtonName,
+                text = "Override: " + GetChannelLabel(GetGlobalProjectChannel()),
+                tooltip = "Set the global package channel override. The latest change between this override and an individual package channel wins."
+            };
+            button.AddToClassList("dpi-view-toolbar__action");
+            button.AddToClassList("dpi-view-toolbar__channel-button");
+            return button;
+        }
+
         private Button CreateGraphActionButton(string text, Action action)
         {
             Button button = new Button(() =>
@@ -741,6 +757,235 @@ namespace Deucarian.PackageInstaller.Editor
             };
             button.AddToClassList("dpi-view-toolbar__action");
             return button;
+        }
+
+        private void ToggleGlobalChannelOverridePopup()
+        {
+            if (IsGlobalChannelOverridePopupVisible())
+            {
+                HideGlobalChannelOverridePopup();
+                return;
+            }
+
+            ShowGlobalChannelOverridePopup();
+        }
+
+        private void ShowGlobalChannelOverridePopup()
+        {
+            if (rootVisualElement == null || _graphGlobalChannelButton == null)
+            {
+                return;
+            }
+
+            if (_globalChannelPopup == null)
+            {
+                _globalChannelPopup = CreateGlobalChannelOverridePopup();
+                rootVisualElement.Add(_globalChannelPopup);
+            }
+
+            UpdateGlobalChannelOverridePopup();
+            PositionGlobalChannelOverridePopup();
+            _globalChannelPopup.style.display = DisplayStyle.Flex;
+            _globalChannelPopup.BringToFront();
+            rootVisualElement.RegisterCallback<MouseDownEvent>(
+                HandleGlobalChannelOverrideRootMouseDown,
+                TrickleDown.TrickleDown);
+            rootVisualElement.RegisterCallback<KeyDownEvent>(
+                HandleGlobalChannelOverrideRootKeyDown,
+                TrickleDown.TrickleDown);
+        }
+
+        private VisualElement CreateGlobalChannelOverridePopup()
+        {
+            VisualElement popup = new VisualElement { name = GlobalChannelOverridePopupName };
+            popup.AddToClassList("dpi-global-channel-popup");
+            popup.style.display = DisplayStyle.None;
+
+            Label title = new Label("Global Channel Override");
+            title.AddToClassList("dpi-global-channel-popup__title");
+            popup.Add(title);
+
+            Label message = new Label(
+                "This will override all package states. An individual package dropdown can take over again when changed later.");
+            message.AddToClassList("dpi-global-channel-popup__message");
+            popup.Add(message);
+
+            _globalChannelDropdown = new DropdownField
+            {
+                label = "Channel",
+                choices = GlobalChannelOptionLabels.ToList()
+            };
+            _globalChannelDropdown.AddToClassList("dpi-global-channel-popup__dropdown");
+            popup.Add(_globalChannelDropdown);
+
+            VisualElement actions = new VisualElement();
+            actions.AddToClassList("dpi-global-channel-popup__actions");
+
+            Button applyButton = new Button(ApplyGlobalChannelOverrideFromPopup)
+            {
+                text = "Apply Override"
+            };
+            applyButton.AddToClassList("dpi-global-channel-popup__apply");
+            actions.Add(applyButton);
+
+            popup.Add(actions);
+            return popup;
+        }
+
+        private void UpdateGlobalChannelOverridePopup()
+        {
+            if (_globalChannelDropdown == null)
+            {
+                return;
+            }
+
+            _globalChannelDropdown.SetValueWithoutNotify(GetChannelLabel(GetGlobalProjectChannel()));
+        }
+
+        private PackageChannel GetGlobalProjectChannel()
+        {
+            return _stateRepository != null
+                ? _stateRepository.GetProjectChannelSelection().Channel
+                : PackageChannel.Stable;
+        }
+
+        private void UpdateGlobalChannelOverrideButton()
+        {
+            if (_graphGlobalChannelButton == null)
+            {
+                return;
+            }
+
+            _graphGlobalChannelButton.text = "Override: " + GetChannelLabel(GetGlobalProjectChannel());
+            _graphGlobalChannelButton.tooltip =
+                "Set the global package channel override. The latest change between this override and an individual package channel wins.";
+        }
+
+        private void SetGlobalChannelOverride(PackageChannel channel)
+        {
+            PackageChannel safeChannel = channel == PackageChannel.Development
+                ? PackageChannel.Development
+                : PackageChannel.Stable;
+
+            _stateRepository?.SetProjectChannel(safeChannel);
+
+            PackageChannelSelection projectChannelSelection = _stateRepository != null
+                ? _stateRepository.GetProjectChannelSelection()
+                : PackageChannelSelection.Create(safeChannel, DateTime.UtcNow.Ticks);
+            _lastObservedProjectChannel = projectChannelSelection.Channel;
+            _lastObservedProjectChannelChangedAtUtcTicks = projectChannelSelection.ChangedAtUtcTicks;
+
+            _packageUpdateCheckService?.InvalidateAll();
+            InvalidateGraphModelCache("global channel override changed");
+            UpdateGlobalChannelOverrideButton();
+            UpdateGlobalChannelOverridePopup();
+            RefreshGraphView("global channel override changed");
+            Repaint();
+        }
+
+        private static PackageChannel ParseChannelLabel(string label)
+        {
+            return string.Equals(label, GetChannelLabel(PackageChannel.Development), StringComparison.OrdinalIgnoreCase)
+                ? PackageChannel.Development
+                : PackageChannel.Stable;
+        }
+
+        private void PositionGlobalChannelOverridePopup()
+        {
+            if (_globalChannelPopup == null ||
+                _graphGlobalChannelButton == null ||
+                rootVisualElement == null)
+            {
+                return;
+            }
+
+            Rect rootBounds = rootVisualElement.worldBound;
+            Rect buttonBounds = _graphGlobalChannelButton.worldBound;
+            float maxLeft = Mathf.Max(
+                GlobalChannelOverridePopupMargin,
+                rootBounds.width - GlobalChannelOverridePopupWidth - GlobalChannelOverridePopupMargin);
+            float left = Mathf.Clamp(
+                buttonBounds.xMin - rootBounds.xMin,
+                GlobalChannelOverridePopupMargin,
+                maxLeft);
+            float top = Mathf.Max(
+                GlobalChannelOverridePopupMargin,
+                buttonBounds.yMax - rootBounds.yMin + 5f);
+
+            _globalChannelPopup.style.left = left;
+            _globalChannelPopup.style.top = top;
+            _globalChannelPopup.style.width = GlobalChannelOverridePopupWidth;
+        }
+
+        private void HideGlobalChannelOverridePopup()
+        {
+            if (_globalChannelPopup != null)
+            {
+                _globalChannelPopup.style.display = DisplayStyle.None;
+            }
+
+            if (rootVisualElement != null)
+            {
+                rootVisualElement.UnregisterCallback<MouseDownEvent>(
+                    HandleGlobalChannelOverrideRootMouseDown,
+                    TrickleDown.TrickleDown);
+                rootVisualElement.UnregisterCallback<KeyDownEvent>(
+                    HandleGlobalChannelOverrideRootKeyDown,
+                    TrickleDown.TrickleDown);
+            }
+        }
+
+        private bool IsGlobalChannelOverridePopupVisible()
+        {
+            return _globalChannelPopup != null &&
+                   _globalChannelPopup.style.display.value == DisplayStyle.Flex;
+        }
+
+        private void HandleGlobalChannelOverrideRootMouseDown(MouseDownEvent evt)
+        {
+            VisualElement target = evt.target as VisualElement;
+
+            if (IsElementOrDescendant(_globalChannelPopup, target) ||
+                IsElementOrDescendant(_graphGlobalChannelButton, target))
+            {
+                return;
+            }
+
+            HideGlobalChannelOverridePopup();
+        }
+
+        private void HandleGlobalChannelOverrideRootKeyDown(KeyDownEvent evt)
+        {
+            if (evt.keyCode != KeyCode.Escape)
+            {
+                return;
+            }
+
+            HideGlobalChannelOverridePopup();
+            evt.StopPropagation();
+        }
+
+        private void ApplyGlobalChannelOverrideFromPopup()
+        {
+            PackageChannel channel = ParseChannelLabel(
+                _globalChannelDropdown != null
+                    ? _globalChannelDropdown.value
+                    : GetChannelLabel(GetGlobalProjectChannel()));
+            SetGlobalChannelOverride(channel);
+            HideGlobalChannelOverridePopup();
+        }
+
+        private static bool IsElementOrDescendant(VisualElement root, VisualElement target)
+        {
+            for (VisualElement current = target; current != null; current = current.parent)
+            {
+                if (current == root)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static VisualElement CreateOperationDrawer(
@@ -1206,6 +1451,18 @@ namespace Deucarian.PackageInstaller.Editor
                 ? GetPackagesWithUpdates()
                 : Array.Empty<PackageDefinition>();
 
+            if (_graphGlobalChannelButton != null)
+            {
+                _graphGlobalChannelButton.style.display = graphMode ? DisplayStyle.Flex : DisplayStyle.None;
+                _graphGlobalChannelButton.SetEnabled(!busy);
+                UpdateGlobalChannelOverrideButton();
+
+                if (!graphMode)
+                {
+                    HideGlobalChannelOverridePopup();
+                }
+            }
+
             if (_graphRefreshButton != null)
             {
                 _graphRefreshButton.style.display = graphMode ? DisplayStyle.Flex : DisplayStyle.None;
@@ -1249,13 +1506,17 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             bool shouldRefreshGraph = false;
-            PackageChannel projectChannel = _stateRepository.GetProjectChannel();
+            PackageChannelSelection projectChannelSelection = _stateRepository.GetProjectChannelSelection();
+            PackageChannel projectChannel = projectChannelSelection.Channel;
 
-            if (projectChannel != _lastObservedProjectChannel)
+            if (projectChannel != _lastObservedProjectChannel ||
+                projectChannelSelection.ChangedAtUtcTicks != _lastObservedProjectChannelChangedAtUtcTicks)
             {
                 _lastObservedProjectChannel = projectChannel;
+                _lastObservedProjectChannelChangedAtUtcTicks = projectChannelSelection.ChangedAtUtcTicks;
                 _packageUpdateCheckService?.InvalidateAll();
                 InvalidateGraphModelCache("selected channel changed externally");
+                UpdateGlobalChannelOverrideButton();
                 shouldRefreshGraph = true;
             }
 
@@ -4411,23 +4672,96 @@ namespace Deucarian.PackageInstaller.Editor
                 return PackageChannel.Stable;
             }
 
-            PackageChannel projectChannel = _stateRepository != null
-                ? _stateRepository.GetProjectChannel()
-                : PackageChannel.Stable;
-
-            if (projectChannel == PackageChannel.Development && packageDefinition.HasDevelopmentUrl)
-            {
-                return PackageChannel.Development;
-            }
-
-            if (_packageDetectionService != null &&
+            PackageChannelSelection projectSelection = _stateRepository != null
+                ? _stateRepository.GetProjectChannelSelection()
+                : PackageChannelSelection.None;
+            PackageChannelSelection packageSelection = _stateRepository != null
+                ? _stateRepository.GetPackageChannelSelection(packageDefinition.PackageId)
+                : PackageChannelSelection.None;
+            PackageChannel installedChannel = PackageChannel.Stable;
+            bool hasInstalledChannel = _packageDetectionService != null &&
                 _packageDetectionService.TryGetInstalledPackageChannel(
                     packageDefinition,
-                    out PackageChannel installedChannel,
-                    out _) &&
-                installedChannel == PackageChannel.Custom)
+                    out installedChannel,
+                    out _);
+
+            return ResolveSelectedChannel(
+                packageDefinition,
+                projectSelection,
+                packageSelection,
+                hasInstalledChannel,
+                installedChannel);
+        }
+
+        internal static PackageChannel ResolveSelectedChannelForTests(
+            PackageDefinition packageDefinition,
+            PackageChannelSelection projectSelection,
+            PackageChannelSelection packageSelection,
+            bool hasInstalledChannel,
+            PackageChannel installedChannel)
+        {
+            return ResolveSelectedChannel(
+                packageDefinition,
+                projectSelection,
+                packageSelection,
+                hasInstalledChannel,
+                installedChannel);
+        }
+
+        private static PackageChannel ResolveSelectedChannel(
+            PackageDefinition packageDefinition,
+            PackageChannelSelection projectSelection,
+            PackageChannelSelection packageSelection,
+            bool hasInstalledChannel,
+            PackageChannel installedChannel)
+        {
+            if (packageDefinition == null)
+            {
+                return PackageChannel.Stable;
+            }
+
+            PackageChannelSelection latestExplicitSelection = GetLatestExplicitChannelSelection(
+                projectSelection,
+                packageSelection);
+
+            if (latestExplicitSelection.HasValue)
+            {
+                return ResolveConfiguredChannel(packageDefinition, latestExplicitSelection.Channel);
+            }
+
+            if (hasInstalledChannel && installedChannel == PackageChannel.Custom)
             {
                 return PackageChannel.Custom;
+            }
+
+            return PackageChannel.Stable;
+        }
+
+        private static PackageChannelSelection GetLatestExplicitChannelSelection(
+            PackageChannelSelection projectSelection,
+            PackageChannelSelection packageSelection)
+        {
+            if (packageSelection.HasValue &&
+                (!projectSelection.HasValue ||
+                 packageSelection.ChangedAtUtcTicks > projectSelection.ChangedAtUtcTicks))
+            {
+                return packageSelection;
+            }
+
+            return projectSelection.HasValue
+                ? projectSelection
+                : PackageChannelSelection.None;
+        }
+
+        private static PackageChannel ResolveConfiguredChannel(
+            PackageDefinition packageDefinition,
+            PackageChannel channel)
+        {
+            if (channel == PackageChannel.Development &&
+                packageDefinition != null &&
+                packageDefinition.HasDevelopmentUrl)
+            {
+                return PackageChannel.Development;
             }
 
             return PackageChannel.Stable;
@@ -4445,12 +4779,9 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            _stateRepository?.SetProjectChannel(channel);
-            _lastObservedProjectChannel = channel == PackageChannel.Development
-                ? PackageChannel.Development
-                : PackageChannel.Stable;
-            _packageUpdateCheckService?.InvalidateAll();
-            InvalidateGraphModelCache("selected channel changed");
+            _stateRepository?.SetPackageChannel(packageDefinition.PackageId, channel);
+            _packageUpdateCheckService?.Invalidate(packageDefinition.PackageId);
+            InvalidateGraphModelCache("package channel changed");
 
             if (_packageDetectionService != null &&
                 _packageUpdateCheckService != null &&
@@ -4463,7 +4794,7 @@ namespace Deucarian.PackageInstaller.Editor
                 _packageUpdateCheckService?.Invalidate(packageDefinition.PackageId);
             }
 
-            RefreshGraphView("selected channel changed");
+            RefreshGraphView("package channel changed");
         }
 
         private bool IsCategoryExpanded(string category)

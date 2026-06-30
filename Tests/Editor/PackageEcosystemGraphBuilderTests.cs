@@ -121,6 +121,107 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void StateRepository_StoresPackageChannelSelectionWithTimestamp()
+        {
+            string projectRoot = CreateTempProjectRoot();
+            string packageId = "com.example.package";
+
+            try
+            {
+                PackageInstallerStateRepository.DeletePackageChannelForTests(projectRoot, packageId);
+                string key = PackageInstallerStateRepository.GetPackageChannelPreferenceKeyForTests(projectRoot, packageId);
+                string changedAtKey =
+                    PackageInstallerStateRepository.GetPackageChannelChangedAtPreferenceKeyForTests(projectRoot, packageId);
+
+                StringAssert.StartsWith(PackageInstallerStateRepository.PackageChannelPreferencePrefix, key);
+                StringAssert.StartsWith(
+                    PackageInstallerStateRepository.PackageChannelChangedAtPreferencePrefix,
+                    changedAtKey);
+                Assert.IsFalse(
+                    PackageInstallerStateRepository.GetPackageChannelSelectionForTests(projectRoot, packageId).HasValue);
+
+                PackageInstallerStateRepository.SetPackageChannelForTests(
+                    projectRoot,
+                    packageId,
+                    PackageChannel.Development,
+                    1234L);
+                PackageChannelSelection selection =
+                    PackageInstallerStateRepository.GetPackageChannelSelectionForTests(projectRoot, packageId);
+
+                Assert.IsTrue(selection.HasValue);
+                Assert.AreEqual(PackageChannel.Development, selection.Channel);
+                Assert.AreEqual(1234L, selection.ChangedAtUtcTicks);
+                Assert.AreEqual((int)PackageChannel.Development, EditorPrefs.GetInt(key, -1));
+                Assert.AreEqual("1234", EditorPrefs.GetString(changedAtKey, string.Empty));
+            }
+            finally
+            {
+                PackageInstallerStateRepository.DeletePackageChannelForTests(projectRoot, packageId);
+                DeleteTempProjectRoot(projectRoot);
+            }
+        }
+
+        [Test]
+        public void Window_ResolvesLatestGlobalOrPackageChannelSelection()
+        {
+            PackageDefinition package = CreatePackage("Package", "com.example.package", "Core");
+            PackageChannelSelection olderPackageSelection =
+                PackageChannelSelection.Create(PackageChannel.Development, 10L);
+            PackageChannelSelection newerGlobalSelection =
+                PackageChannelSelection.Create(PackageChannel.Stable, 20L);
+            PackageChannelSelection newerPackageSelection =
+                PackageChannelSelection.Create(PackageChannel.Development, 30L);
+
+            Assert.AreEqual(
+                PackageChannel.Stable,
+                PackageInstallerWindow.ResolveSelectedChannelForTests(
+                    package,
+                    newerGlobalSelection,
+                    olderPackageSelection,
+                    hasInstalledChannel: false,
+                    installedChannel: PackageChannel.Stable));
+            Assert.AreEqual(
+                PackageChannel.Development,
+                PackageInstallerWindow.ResolveSelectedChannelForTests(
+                    package,
+                    newerGlobalSelection,
+                    newerPackageSelection,
+                    hasInstalledChannel: false,
+                    installedChannel: PackageChannel.Stable));
+
+            PackageDefinition stableOnlyPackage = new PackageDefinition(
+                "Stable Only",
+                "com.example.stable-only",
+                "https://example.com/stable-only.git#main",
+                "Stable only package.");
+
+            Assert.AreEqual(
+                PackageChannel.Stable,
+                PackageInstallerWindow.ResolveSelectedChannelForTests(
+                    stableOnlyPackage,
+                    PackageChannelSelection.None,
+                    newerPackageSelection,
+                    hasInstalledChannel: false,
+                    installedChannel: PackageChannel.Stable));
+            Assert.AreEqual(
+                PackageChannel.Custom,
+                PackageInstallerWindow.ResolveSelectedChannelForTests(
+                    package,
+                    PackageChannelSelection.None,
+                    PackageChannelSelection.None,
+                    hasInstalledChannel: true,
+                    installedChannel: PackageChannel.Custom));
+            Assert.AreEqual(
+                PackageChannel.Stable,
+                PackageInstallerWindow.ResolveSelectedChannelForTests(
+                    package,
+                    newerGlobalSelection,
+                    PackageChannelSelection.None,
+                    hasInstalledChannel: true,
+                    installedChannel: PackageChannel.Custom));
+        }
+
+        [Test]
         public void StateRepository_ManifestSignatureChangesForPackageManifestState()
         {
             string projectRoot = CreateTempProjectRoot();
