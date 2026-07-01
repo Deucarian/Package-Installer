@@ -327,6 +327,14 @@ The installer uses:
 
 After installing, updating, or removing a package, the installer refreshes installed-package state so entries show their current status.
 
+## Troubleshooting
+
+- Package list looks stale: close and reopen the Package Installer window, then refresh the remote registry if network access is available.
+- Install or update is blocked: check the selected channel, package dependency list, and Unity Package Manager console output for the first failed package in the dependency-first plan.
+- A remove button is disabled: another installed registered package depends on that package; remove the dependent integration or suite package first.
+- Update status is unknown: the installed package may be embedded, local/file-based, missing Git metadata, or unavailable from the current network.
+- Samples do not import: confirm the package is installed, then import the sample explicitly from the package details panel or Unity Package Manager.
+
 ## Limitations
 
 - This package is editor-only. It has no `Runtime` folder and should not be referenced by game code.
