@@ -666,6 +666,7 @@
         "com.deucarian.gameplay-foundation",
         "com.deucarian.attacks",
         "com.deucarian.weapon-systems",
+        "com.deucarian.editor",
         "com.deucarian.game-content-authoring"
       ]
     },
@@ -760,6 +761,7 @@
       "dependencies": [
         "com.deucarian.gameplay-foundation",
         "com.deucarian.combat",
+        "com.deucarian.editor",
         "com.deucarian.game-content-authoring"
       ]
     },
@@ -796,6 +798,7 @@
       "dependencies": [
         "com.deucarian.gameplay-foundation",
         "com.deucarian.attacks",
+        "com.deucarian.editor",
         "com.deucarian.projectiles",
         "com.deucarian.game-content-authoring"
       ]
@@ -912,6 +915,7 @@
       "developmentUrl": "https://github.com/Deucarian/Template-Game-Idle-Auto-Defense.git#develop",
       "dependencies": [
         "com.deucarian.auto-defense-suite",
+        "com.deucarian.editor",
         "com.deucarian.game-content-authoring",
         "com.deucarian.gameplay-foundation",
         "com.deucarian.monetization"
@@ -976,18 +980,10 @@
       "stableUrl": "https://github.com/Deucarian/Template-Game-Movement-FPS.git#main",
       "developmentUrl": "https://github.com/Deucarian/Template-Game-Movement-FPS.git#develop",
       "dependencies": [
-        "com.deucarian.attacks",
         "com.deucarian.combat",
-        "com.deucarian.common",
-        "com.deucarian.editor",
-        "com.deucarian.encounters",
         "com.deucarian.game-content-authoring",
         "com.deucarian.gameplay-foundation",
-        "com.deucarian.projectiles",
-        "com.deucarian.run-upgrades",
-        "com.deucarian.weapon-systems",
-        "com.deucarian.world-navigation",
-        "com.deucarian.world-spawning"
+        "com.deucarian.run-upgrades"
       ],
       "searchAliases": [
         "movement fps template",
