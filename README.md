@@ -77,10 +77,10 @@ The current bundled fallback registry includes these Ecosystem Graph groups:
 
 - Infrastructure: Editor, Logging
 - State & Data: Core State
-- Runtime Services: API, Session, Object Loading
-- Experience & Interaction: UI Binding, UI Flow, Theming, Object Selection
+- Runtime Services: API, Session, Object Loading, Monetization
+- Experience & Interaction: UI Binding, UI, UI Flow, Theming, XR UI, Camera Navigation, Object Selection
 - Tools & Quality: Package Installer, Diagnostics, Game Content Authoring
-- Integrations: UI Binding + Core State Integration, Object Loading API Integration, Object Selection + Core State Integration, Session + API Integration
+- Integrations: UI Binding + Core State Integration, Object Loading API Integration, Object Selection + Core State Integration, Session + API Integration, XR UI Theming Integration
 - Gameplay: Gameplay Foundation, Persistence, Progression, Combat, Encounters, World Spawning, World Navigation, Defense Games, Attacks, Projectiles, Weapon Systems, Auto Defense, Run Upgrades, Idle Progression
 - Suites: Selection Suite, Auto Defense Suite
 - Templates: Idle Auto Defense, Survivors, Movement FPS
@@ -92,9 +92,13 @@ Registered packages are first-class UPM packages with their own package IDs:
 - `com.deucarian.logging`
 - `com.deucarian.object-loading`
 - `com.deucarian.session`
+- `com.deucarian.monetization`
 - `com.deucarian.ui-binding`
+- `com.deucarian.ui`
 - `com.deucarian.ui-flow`
 - `com.deucarian.theming`
+- `com.deucarian.xr-ui`
+- `com.deucarian.camera-navigation`
 - `com.deucarian.object-selection`
 - `com.deucarian.editor`
 - `com.deucarian.game-content-authoring`
@@ -102,6 +106,7 @@ Registered packages are first-class UPM packages with their own package IDs:
 - `com.deucarian.object-loading.api-integration`
 - `com.deucarian.object-selection.core-state-integration`
 - `com.deucarian.session.api-integration`
+- `com.deucarian.xr-ui.theming-integration`
 - `com.deucarian.selection-suite`
 - `com.deucarian.diagnostics`
 - `com.deucarian.package-installer`
