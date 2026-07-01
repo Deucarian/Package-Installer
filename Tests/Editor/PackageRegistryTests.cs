@@ -17,6 +17,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         private const string TemplatePackageId = "com.deucarian.template.game.idle-auto-defense";
         private const string SurvivorsTemplatePackageId = "com.deucarian.template.game.survivors";
         private const string MovementFpsTemplatePackageId = "com.deucarian.template.game.movement-fps";
+        private const string EditorPackageId = "com.deucarian.editor";
         private const string GameContentAuthoringPackageId = "com.deucarian.game-content-authoring";
         private const string GameplayFoundationPackageId = "com.deucarian.gameplay-foundation";
         private const string MonetizationPackageId = "com.deucarian.monetization";
@@ -753,6 +754,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 new[]
                 {
                     "com.deucarian.auto-defense-suite",
+                    EditorPackageId,
                     GameContentAuthoringPackageId,
                     GameplayFoundationPackageId,
                     MonetizationPackageId

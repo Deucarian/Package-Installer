@@ -840,6 +840,7 @@
       "developmentUrl": "https://github.com/Deucarian/Template-Game-Idle-Auto-Defense.git#develop",
       "dependencies": [
         "com.deucarian.auto-defense-suite",
+        "com.deucarian.editor",
         "com.deucarian.game-content-authoring",
         "com.deucarian.gameplay-foundation",
         "com.deucarian.monetization"
