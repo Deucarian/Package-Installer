@@ -728,6 +728,7 @@
       "stableUrl": "https://github.com/Deucarian/World-Spawning.git#main",
       "developmentUrl": "https://github.com/Deucarian/World-Spawning.git#develop",
       "dependencies": [
+        "com.deucarian.common",
         "com.deucarian.gameplay-foundation"
       ]
     },
