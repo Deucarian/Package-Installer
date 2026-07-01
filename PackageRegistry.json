@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-06-25",
+  "updatedAt": "2026-07-01",
   "groups": [
     {
       "id": "infrastructure",
@@ -348,6 +348,22 @@
       ]
     },
     {
+      "id": "com.deucarian.ui",
+      "displayName": "Deucarian UI",
+      "category": "UI",
+      "type": "Core",
+      "ecosystemGroup": "Experience & Interaction",
+      "groupId": "ui-presentation",
+      "overviewOrder": 12,
+      "description": "Reusable Deucarian UI motion, glass, icon, control island, and UI Toolkit/uGUI presentation primitives.",
+      "stableUrl": "https://github.com/Deucarian/UI.git#main",
+      "developmentUrl": "https://github.com/Deucarian/UI.git#develop",
+      "dependencies": [
+        "com.deucarian.common",
+        "com.deucarian.theming"
+      ]
+    },
+    {
       "id": "com.deucarian.ui-flow",
       "displayName": "Deucarian UI Flow",
       "category": "UI",
@@ -377,6 +393,42 @@
       "dependencies": [
         "com.deucarian.editor",
         "com.deucarian.logging"
+      ],
+      "optionalIntegrations": [
+        "com.deucarian.xr-ui.theming-integration"
+      ]
+    },
+    {
+      "id": "com.deucarian.xr-ui",
+      "displayName": "Deucarian XR UI",
+      "category": "World",
+      "type": "Core",
+      "ecosystemGroup": "Experience & Interaction",
+      "groupId": "world-interaction",
+      "overviewOrder": 28,
+      "description": "Standalone XR-ready uGUI pressable controls, world canvas helpers, poke affordances, and neutral visual settings.",
+      "stableUrl": "https://github.com/Deucarian/XR-UI.git#main",
+      "developmentUrl": "https://github.com/Deucarian/XR-UI.git#develop",
+      "dependencies": [
+        "com.deucarian.common"
+      ],
+      "optionalIntegrations": [
+        "com.deucarian.xr-ui.theming-integration"
+      ]
+    },
+    {
+      "id": "com.deucarian.camera-navigation",
+      "displayName": "Deucarian Camera Navigation",
+      "category": "World",
+      "type": "Core",
+      "ecosystemGroup": "Experience & Interaction",
+      "groupId": "world-interaction",
+      "overviewOrder": 25,
+      "description": "Reusable camera pose, framing, transition, orbit, fly, top-down, and waypoint navigation primitives.",
+      "stableUrl": "https://github.com/Deucarian/Camera-Navigation.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Camera-Navigation.git#develop",
+      "dependencies": [
+        "com.deucarian.common"
       ]
     },
     {
@@ -492,6 +544,26 @@
       "ecosystemGroup": "Integrations"
     },
     {
+      "id": "com.deucarian.xr-ui.theming-integration",
+      "displayName": "Deucarian XR UI Theming Integration",
+      "category": "Integration",
+      "type": "Integration",
+      "groupId": "integrations",
+      "overviewOrder": 35,
+      "description": "Optional integration that maps Deucarian Theming color roles into Deucarian XR UI palettes.",
+      "stableUrl": "https://github.com/Deucarian/XR-UI-Theming-Integration.git#main",
+      "developmentUrl": "https://github.com/Deucarian/XR-UI-Theming-Integration.git#develop",
+      "dependencies": [
+        "com.deucarian.xr-ui",
+        "com.deucarian.theming"
+      ],
+      "integrationTargets": [
+        "com.deucarian.xr-ui",
+        "com.deucarian.theming"
+      ],
+      "ecosystemGroup": "Integrations"
+    },
+    {
       "id": "com.deucarian.object-selection.core-state-integration",
       "displayName": "Deucarian Object Selection Core State Integration",
       "category": "Integration",
@@ -594,6 +666,7 @@
         "com.deucarian.gameplay-foundation",
         "com.deucarian.attacks",
         "com.deucarian.weapon-systems",
+        "com.deucarian.editor",
         "com.deucarian.game-content-authoring"
       ]
     },
@@ -655,6 +728,7 @@
       "stableUrl": "https://github.com/Deucarian/World-Spawning.git#main",
       "developmentUrl": "https://github.com/Deucarian/World-Spawning.git#develop",
       "dependencies": [
+        "com.deucarian.common",
         "com.deucarian.gameplay-foundation"
       ]
     },
@@ -688,6 +762,7 @@
       "dependencies": [
         "com.deucarian.gameplay-foundation",
         "com.deucarian.combat",
+        "com.deucarian.editor",
         "com.deucarian.game-content-authoring"
       ]
     },
@@ -724,6 +799,7 @@
       "dependencies": [
         "com.deucarian.gameplay-foundation",
         "com.deucarian.attacks",
+        "com.deucarian.editor",
         "com.deucarian.projectiles",
         "com.deucarian.game-content-authoring"
       ]
@@ -840,6 +916,7 @@
       "developmentUrl": "https://github.com/Deucarian/Template-Game-Idle-Auto-Defense.git#develop",
       "dependencies": [
         "com.deucarian.auto-defense-suite",
+        "com.deucarian.editor",
         "com.deucarian.game-content-authoring",
         "com.deucarian.gameplay-foundation",
         "com.deucarian.monetization"
@@ -868,6 +945,7 @@
       "developmentUrl": "https://github.com/Deucarian/Template-Game-Survivors.git#develop",
       "dependencies": [
         "com.deucarian.attacks",
+        "com.deucarian.common",
         "com.deucarian.combat",
         "com.deucarian.encounters",
         "com.deucarian.game-content-authoring",
@@ -904,18 +982,11 @@
       "stableUrl": "https://github.com/Deucarian/Template-Game-Movement-FPS.git#main",
       "developmentUrl": "https://github.com/Deucarian/Template-Game-Movement-FPS.git#develop",
       "dependencies": [
-        "com.deucarian.attacks",
-        "com.deucarian.combat",
         "com.deucarian.common",
-        "com.deucarian.editor",
-        "com.deucarian.encounters",
+        "com.deucarian.combat",
         "com.deucarian.game-content-authoring",
         "com.deucarian.gameplay-foundation",
-        "com.deucarian.projectiles",
-        "com.deucarian.run-upgrades",
-        "com.deucarian.weapon-systems",
-        "com.deucarian.world-navigation",
-        "com.deucarian.world-spawning"
+        "com.deucarian.run-upgrades"
       ],
       "searchAliases": [
         "movement fps template",
