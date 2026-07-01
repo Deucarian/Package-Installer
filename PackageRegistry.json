@@ -945,6 +945,7 @@
       "developmentUrl": "https://github.com/Deucarian/Template-Game-Survivors.git#develop",
       "dependencies": [
         "com.deucarian.attacks",
+        "com.deucarian.common",
         "com.deucarian.combat",
         "com.deucarian.encounters",
         "com.deucarian.game-content-authoring",
@@ -981,6 +982,7 @@
       "stableUrl": "https://github.com/Deucarian/Template-Game-Movement-FPS.git#main",
       "developmentUrl": "https://github.com/Deucarian/Template-Game-Movement-FPS.git#develop",
       "dependencies": [
+        "com.deucarian.common",
         "com.deucarian.combat",
         "com.deucarian.game-content-authoring",
         "com.deucarian.gameplay-foundation",
