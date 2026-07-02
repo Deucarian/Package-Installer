@@ -179,6 +179,14 @@ namespace Deucarian.PackageInstaller.Editor
             Integration
         }
 
+        internal enum PackageInstallerActionKind
+        {
+            None,
+            CheckUpdates,
+            UpdateAll,
+            InstallAll
+        }
+
         private enum VisualStatusKind
         {
             Installed,
@@ -230,6 +238,19 @@ namespace Deucarian.PackageInstaller.Editor
             public IReadOnlyList<PackageInstallProgressItem> ProgressItems = Array.Empty<PackageInstallProgressItem>();
         }
 
+        internal readonly struct PackageInstallerActionButtonState
+        {
+            public PackageInstallerActionButtonState(string label, bool enabled)
+            {
+                Label = label ?? string.Empty;
+                Enabled = enabled;
+            }
+
+            public string Label { get; }
+
+            public bool Enabled { get; }
+        }
+
         private PackageInstallService _packageInstallService;
         private PackageDetectionService _packageDetectionService;
         private PackageUpdateCheckService _packageUpdateCheckService;
@@ -256,7 +277,12 @@ namespace Deucarian.PackageInstaller.Editor
         private string _graphModelCacheInvalidationReason = "initial load";
         private readonly PackageVisibilityFilterState _visibilityFilterState =
             new PackageVisibilityFilterState();
+        private readonly HashSet<string> _pendingUpdateStatusInvalidationPackageIds =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private bool _checkUpdatesAfterDetectionRefresh;
+        private PackageInstallerActionKind _deferredUpdateCheckActionKind = PackageInstallerActionKind.None;
+        private PackageInstallerActionKind _activeActionKind = PackageInstallerActionKind.None;
+        private PackageInstallerActionKind _cancelingActionKind = PackageInstallerActionKind.None;
         private bool _operationDetailsExpanded;
         private InstallerViewMode _viewMode = DefaultInstallerViewMode;
         private PackageChannel _lastObservedProjectChannel = PackageChannel.Stable;
@@ -375,6 +401,21 @@ namespace Deucarian.PackageInstaller.Editor
         }
 
         internal static IReadOnlyList<string> ViewToggleOrderForTests => new[] { "Ecosystem Graph", "List View" };
+
+        internal static PackageInstallerActionButtonState GetActionButtonStateForTests(
+            PackageInstallerActionKind buttonKind,
+            PackageInstallerActionKind activeActionKind,
+            PackageInstallerActionKind cancelingActionKind,
+            bool anyOperationBusy,
+            bool hasPackagesWithUpdates)
+        {
+            return CreateActionButtonState(
+                buttonKind,
+                activeActionKind,
+                cancelingActionKind,
+                anyOperationBusy,
+                hasPackagesWithUpdates);
+        }
 
         internal static Vector2 MinWindowSizeForTests => new Vector2(MinWindowWidth, MinWindowHeight);
 
@@ -499,6 +540,7 @@ namespace Deucarian.PackageInstaller.Editor
             _packageInstallService.StateChanged += Repaint;
             _packageInstallService.StateChanged += RefreshGraphView;
             _packageInstallService.StateChanged += UpdateOperationFooter;
+            _packageInstallService.InstallCompleted += HandlePackageInstallCompleted;
             _packageInstallService.QueueCompleted += HandlePackageOperationCompleted;
             _packageDetectionService.StateChanged += Repaint;
             _packageDetectionService.StateChanged += HandlePackageDetectionGraphStateChanged;
@@ -511,17 +553,20 @@ namespace Deucarian.PackageInstaller.Editor
             _packageSampleImportService.StateChanged += RefreshGraphView;
             _packageSampleImportService.StateChanged += UpdateOperationFooter;
 
-            bool checkUpdatesAfterDetectionRefresh =
-                PackageUpdateCheckPreferences.ShouldCheckOnWindowOpen(DateTime.UtcNow);
+            bool checkUpdatesAfterDetectionRefresh = ShouldCheckForUpdatesOnGraphOpen();
 
             if (!_packageInstallService.ResumeSavedOperation())
             {
-                _checkUpdatesAfterDetectionRefresh = checkUpdatesAfterDetectionRefresh;
+                if (checkUpdatesAfterDetectionRefresh)
+                {
+                    QueueDeferredUpdateCheck(PackageInstallerActionKind.CheckUpdates);
+                }
+
                 _packageDetectionService.Refresh();
             }
             else if (checkUpdatesAfterDetectionRefresh)
             {
-                _checkUpdatesAfterDetectionRefresh = true;
+                QueueDeferredUpdateCheck(PackageInstallerActionKind.CheckUpdates);
             }
         }
 
@@ -537,6 +582,7 @@ namespace Deucarian.PackageInstaller.Editor
                 _packageInstallService.StateChanged -= Repaint;
                 _packageInstallService.StateChanged -= RefreshGraphView;
                 _packageInstallService.StateChanged -= UpdateOperationFooter;
+                _packageInstallService.InstallCompleted -= HandlePackageInstallCompleted;
                 _packageInstallService.QueueCompleted -= HandlePackageOperationCompleted;
                 _packageInstallService.Dispose();
             }
@@ -714,9 +760,9 @@ namespace Deucarian.PackageInstaller.Editor
 
             _graphGlobalChannelButton = CreateGlobalChannelOverrideButton();
             _graphRefreshButton = CreateGraphActionButton("Refresh", RefreshPackages);
-            _graphCheckUpdatesButton = CreateGraphActionButton("Check Updates", CheckForUpdates);
-            _graphUpdateAllButton = CreateGraphActionButton("Update All", UpdateAllPackages);
-            _graphInstallAllButton = CreateGraphActionButton("Install All", InstallAllPackages);
+            _graphCheckUpdatesButton = CreateGraphActionButton("Check Updates", () => HandleActionButton(PackageInstallerActionKind.CheckUpdates));
+            _graphUpdateAllButton = CreateGraphActionButton("Update All", () => HandleActionButton(PackageInstallerActionKind.UpdateAll));
+            _graphInstallAllButton = CreateGraphActionButton("Install All", () => HandleActionButton(PackageInstallerActionKind.InstallAll));
             toolbar.Add(_graphGlobalChannelButton);
             toolbar.Add(_graphRefreshButton);
             toolbar.Add(_graphCheckUpdatesButton);
@@ -1397,15 +1443,150 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void SetViewMode(InstallerViewMode viewMode)
         {
+            bool wasGraphMode = _viewMode == InstallerViewMode.EcosystemGraph;
             _viewMode = viewMode;
             UpdateViewVisibility();
 
             if (_viewMode == InstallerViewMode.EcosystemGraph)
             {
                 RefreshGraphView("view mode changed");
+
+                if (!wasGraphMode)
+                {
+                    RequestAutomaticGraphUpdateCheck();
+                }
             }
 
             Repaint();
+        }
+
+        private bool ShouldCheckForUpdatesOnGraphOpen()
+        {
+            return _viewMode == InstallerViewMode.EcosystemGraph &&
+                   PackageUpdateCheckPreferences.ShouldCheckOnWindowOpen(DateTime.UtcNow);
+        }
+
+        private void RequestAutomaticGraphUpdateCheck()
+        {
+            if (!ShouldCheckForUpdatesOnGraphOpen())
+            {
+                return;
+            }
+
+            InvalidateGraphModelCache("automatic graph update check");
+            QueueDeferredUpdateCheck(PackageInstallerActionKind.CheckUpdates);
+
+            if (_packageInstallService != null && _packageInstallService.IsBusy)
+            {
+                UpdateViewVisibility();
+                Repaint();
+                return;
+            }
+
+            PackageRegistryProvider.RefreshRemote();
+            _packageUpdateCheckService.InvalidateAll();
+
+            if (!_packageDetectionService.IsRefreshing)
+            {
+                _packageDetectionService.Refresh();
+            }
+
+            TryRunDeferredUpdateCheck();
+            RefreshGraphView("automatic graph update check");
+            UpdateViewVisibility();
+            Repaint();
+        }
+
+        private void QueueDeferredUpdateCheck(PackageInstallerActionKind actionKind)
+        {
+            _checkUpdatesAfterDetectionRefresh = true;
+            _deferredUpdateCheckActionKind = actionKind;
+
+            if (actionKind != PackageInstallerActionKind.None &&
+                _activeActionKind == PackageInstallerActionKind.None &&
+                (_packageInstallService == null || !_packageInstallService.IsBusy))
+            {
+                _activeActionKind = actionKind;
+                _cancelingActionKind = PackageInstallerActionKind.None;
+            }
+        }
+
+        private void TryRunDeferredUpdateCheck()
+        {
+            if (!_checkUpdatesAfterDetectionRefresh)
+            {
+                ClearActiveActionIfIdle();
+                return;
+            }
+
+            if ((_packageDetectionService != null && _packageDetectionService.IsRefreshing) ||
+                PackageRegistryProvider.IsRemoteRefreshing)
+            {
+                UpdateViewVisibility();
+                Repaint();
+                return;
+            }
+
+            RunDeferredUpdateCheck();
+        }
+
+        private void RunDeferredUpdateCheck()
+        {
+            if (!_checkUpdatesAfterDetectionRefresh)
+            {
+                ClearActiveActionIfIdle();
+                return;
+            }
+
+            PackageInstallerActionKind actionKind = _deferredUpdateCheckActionKind;
+            _checkUpdatesAfterDetectionRefresh = false;
+            _deferredUpdateCheckActionKind = PackageInstallerActionKind.None;
+
+            if (actionKind != PackageInstallerActionKind.None &&
+                _activeActionKind == PackageInstallerActionKind.None)
+            {
+                _activeActionKind = actionKind;
+                _cancelingActionKind = PackageInstallerActionKind.None;
+            }
+
+            _packageUpdateCheckService.CheckForUpdates(PackageRegistryProvider.All, GetSelectedChannel);
+            ClearActiveActionIfIdle();
+        }
+
+        private void ClearActiveActionIfIdle()
+        {
+            if (_activeActionKind == PackageInstallerActionKind.None || IsActiveActionStillBusy())
+            {
+                return;
+            }
+
+            _activeActionKind = PackageInstallerActionKind.None;
+            _cancelingActionKind = PackageInstallerActionKind.None;
+
+            if (!_checkUpdatesAfterDetectionRefresh)
+            {
+                _deferredUpdateCheckActionKind = PackageInstallerActionKind.None;
+            }
+
+            UpdateViewVisibility();
+            Repaint();
+        }
+
+        private bool IsActiveActionStillBusy()
+        {
+            switch (_activeActionKind)
+            {
+                case PackageInstallerActionKind.CheckUpdates:
+                    return _checkUpdatesAfterDetectionRefresh ||
+                           (_packageUpdateCheckService != null && _packageUpdateCheckService.IsChecking) ||
+                           (_packageDetectionService != null && _packageDetectionService.IsRefreshing) ||
+                           PackageRegistryProvider.IsRemoteRefreshing;
+                case PackageInstallerActionKind.UpdateAll:
+                case PackageInstallerActionKind.InstallAll:
+                    return _packageInstallService != null && _packageInstallService.IsBusy;
+                default:
+                    return false;
+            }
         }
 
         private void UpdateViewVisibility()
@@ -1472,20 +1653,41 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (_graphCheckUpdatesButton != null)
             {
+                PackageInstallerActionButtonState state = CreateActionButtonState(
+                    PackageInstallerActionKind.CheckUpdates,
+                    _activeActionKind,
+                    _cancelingActionKind,
+                    busy,
+                    packagesWithUpdates.Length > 0);
                 _graphCheckUpdatesButton.style.display = graphMode ? DisplayStyle.Flex : DisplayStyle.None;
-                _graphCheckUpdatesButton.SetEnabled(!busy);
+                _graphCheckUpdatesButton.text = state.Label;
+                _graphCheckUpdatesButton.SetEnabled(state.Enabled);
             }
 
             if (_graphUpdateAllButton != null)
             {
+                PackageInstallerActionButtonState state = CreateActionButtonState(
+                    PackageInstallerActionKind.UpdateAll,
+                    _activeActionKind,
+                    _cancelingActionKind,
+                    busy,
+                    packagesWithUpdates.Length > 0);
                 _graphUpdateAllButton.style.display = graphMode ? DisplayStyle.Flex : DisplayStyle.None;
-                _graphUpdateAllButton.SetEnabled(!busy && packagesWithUpdates.Length > 0);
+                _graphUpdateAllButton.text = state.Label;
+                _graphUpdateAllButton.SetEnabled(state.Enabled);
             }
 
             if (_graphInstallAllButton != null)
             {
+                PackageInstallerActionButtonState state = CreateActionButtonState(
+                    PackageInstallerActionKind.InstallAll,
+                    _activeActionKind,
+                    _cancelingActionKind,
+                    busy,
+                    packagesWithUpdates.Length > 0);
                 _graphInstallAllButton.style.display = graphMode ? DisplayStyle.Flex : DisplayStyle.None;
-                _graphInstallAllButton.SetEnabled(!busy);
+                _graphInstallAllButton.text = state.Label;
+                _graphInstallAllButton.SetEnabled(state.Enabled);
             }
 
             if (_viewSummaryLabel != null)
@@ -1524,8 +1726,11 @@ namespace Deucarian.PackageInstaller.Editor
             if (_packageDetectionService != null &&
                 _packageDetectionService.RefreshIfManifestStateChanged())
             {
-                _checkUpdatesAfterDetectionRefresh = _packageUpdateCheckService != null &&
-                                                     _packageUpdateCheckService.HasStatuses;
+                if (_packageUpdateCheckService != null && _packageUpdateCheckService.HasStatuses)
+                {
+                    QueueDeferredUpdateCheck(PackageInstallerActionKind.CheckUpdates);
+                }
+
                 InvalidateGraphModelCache("project manifest changed externally");
                 shouldRefreshGraph = true;
             }
@@ -2078,15 +2283,33 @@ namespace Deucarian.PackageInstaller.Editor
         private void DrawHeaderButtonRow()
         {
             PackageDefinition[] packagesWithUpdates = GetPackagesWithUpdates();
+            bool busy = IsAnyOperationBusy();
+            bool hasPackagesWithUpdates = packagesWithUpdates.Length > 0;
 
             using (new EditorGUILayout.HorizontalScope())
             {
                 DrawHeaderButton("Refresh", 82f, IsAnyOperationBusy(), RefreshPackages);
-                DrawHeaderButton("Check Updates", 118f, IsAnyOperationBusy(), CheckForUpdates);
-                DrawHeaderButton("Update All", 92f, packagesWithUpdates.Length == 0 || IsAnyOperationBusy(), UpdateAllPackages);
-                DrawHeaderButton("Install All", 86f, IsAnyOperationBusy(), InstallAllPackages);
+                DrawActionHeaderButton(PackageInstallerActionKind.CheckUpdates, 118f, busy, hasPackagesWithUpdates);
+                DrawActionHeaderButton(PackageInstallerActionKind.UpdateAll, 92f, busy, hasPackagesWithUpdates);
+                DrawActionHeaderButton(PackageInstallerActionKind.InstallAll, 86f, busy, hasPackagesWithUpdates);
                 GUILayout.FlexibleSpace();
             }
+        }
+
+        private void DrawActionHeaderButton(
+            PackageInstallerActionKind buttonKind,
+            float width,
+            bool anyOperationBusy,
+            bool hasPackagesWithUpdates)
+        {
+            PackageInstallerActionButtonState state = CreateActionButtonState(
+                buttonKind,
+                _activeActionKind,
+                _cancelingActionKind,
+                anyOperationBusy,
+                hasPackagesWithUpdates);
+
+            DrawHeaderButton(state.Label, width, !state.Enabled, () => HandleActionButton(buttonKind));
         }
 
         private void DrawHeaderButton(string label, float width, bool disabled, Action action)
@@ -2100,6 +2323,57 @@ namespace Deucarian.PackageInstaller.Editor
             }
         }
 
+        private static PackageInstallerActionButtonState CreateActionButtonState(
+            PackageInstallerActionKind buttonKind,
+            PackageInstallerActionKind activeActionKind,
+            PackageInstallerActionKind cancelingActionKind,
+            bool anyOperationBusy,
+            bool hasPackagesWithUpdates)
+        {
+            bool isOwner = activeActionKind == buttonKind && buttonKind != PackageInstallerActionKind.None;
+
+            if (isOwner)
+            {
+                return cancelingActionKind == buttonKind
+                    ? new PackageInstallerActionButtonState("Canceling...", false)
+                    : new PackageInstallerActionButtonState(GetCancelActionLabel(buttonKind), true);
+            }
+
+            bool enabled = !anyOperationBusy &&
+                           (buttonKind != PackageInstallerActionKind.UpdateAll || hasPackagesWithUpdates);
+            return new PackageInstallerActionButtonState(GetDefaultActionLabel(buttonKind), enabled);
+        }
+
+        private static string GetDefaultActionLabel(PackageInstallerActionKind actionKind)
+        {
+            switch (actionKind)
+            {
+                case PackageInstallerActionKind.CheckUpdates:
+                    return "Check Updates";
+                case PackageInstallerActionKind.UpdateAll:
+                    return "Update All";
+                case PackageInstallerActionKind.InstallAll:
+                    return "Install All";
+                default:
+                    return string.Empty;
+            }
+        }
+
+        private static string GetCancelActionLabel(PackageInstallerActionKind actionKind)
+        {
+            switch (actionKind)
+            {
+                case PackageInstallerActionKind.CheckUpdates:
+                    return "Cancel Check";
+                case PackageInstallerActionKind.UpdateAll:
+                    return "Cancel Update";
+                case PackageInstallerActionKind.InstallAll:
+                    return "Cancel Install";
+                default:
+                    return "Cancel";
+            }
+        }
+
         private void RefreshPackages()
         {
             InvalidateGraphModelCache("manual refresh");
@@ -2109,10 +2383,72 @@ namespace Deucarian.PackageInstaller.Editor
             RefreshGraphView("manual refresh");
         }
 
+        private void HandleActionButton(PackageInstallerActionKind actionKind)
+        {
+            if (_activeActionKind == actionKind)
+            {
+                CancelAction(actionKind);
+                return;
+            }
+
+            if (IsAnyOperationBusy())
+            {
+                return;
+            }
+
+            switch (actionKind)
+            {
+                case PackageInstallerActionKind.CheckUpdates:
+                    CheckForUpdates();
+                    break;
+                case PackageInstallerActionKind.UpdateAll:
+                    UpdateAllPackages();
+                    break;
+                case PackageInstallerActionKind.InstallAll:
+                    InstallAllPackages();
+                    break;
+            }
+        }
+
+        private void CancelAction(PackageInstallerActionKind actionKind)
+        {
+            if (_activeActionKind != actionKind ||
+                _cancelingActionKind != PackageInstallerActionKind.None)
+            {
+                return;
+            }
+
+            _cancelingActionKind = actionKind;
+
+            switch (actionKind)
+            {
+                case PackageInstallerActionKind.CheckUpdates:
+                    _checkUpdatesAfterDetectionRefresh = false;
+                    _deferredUpdateCheckActionKind = PackageInstallerActionKind.None;
+                    _packageUpdateCheckService.CancelCurrentCheck();
+                    break;
+                case PackageInstallerActionKind.UpdateAll:
+                case PackageInstallerActionKind.InstallAll:
+                    _packageInstallService.CancelCurrentOperation();
+                    break;
+            }
+
+            UpdateViewVisibility();
+            ClearActiveActionIfIdle();
+            Repaint();
+        }
+
         private void CheckForUpdates()
         {
-            InvalidateGraphModelCache("manual update check");
-            _checkUpdatesAfterDetectionRefresh = true;
+            RequestUpdateCheck(PackageInstallerActionKind.CheckUpdates, "manual update check");
+        }
+
+        private void RequestUpdateCheck(PackageInstallerActionKind actionKind, string reason)
+        {
+            InvalidateGraphModelCache(reason);
+            _activeActionKind = actionKind;
+            _cancelingActionKind = PackageInstallerActionKind.None;
+            QueueDeferredUpdateCheck(actionKind);
             PackageRegistryProvider.RefreshRemote();
             _packageUpdateCheckService.InvalidateAll();
 
@@ -2120,23 +2456,40 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 _packageDetectionService.Refresh();
             }
-            else
-            {
-                Repaint();
-            }
+
+            TryRunDeferredUpdateCheck();
+            RefreshGraphView(reason);
+            UpdateViewVisibility();
+            Repaint();
         }
 
         private void UpdateAllPackages()
         {
+            PackageDefinition[] packagesWithUpdates = GetPackagesWithUpdates();
+            TrackPendingUpdateStatusInvalidations(packagesWithUpdates);
+
+            _activeActionKind = PackageInstallerActionKind.UpdateAll;
+            _cancelingActionKind = PackageInstallerActionKind.None;
             _packageDependencyInstaller.UpdateAll(
-                GetPackagesWithUpdates(),
+                packagesWithUpdates,
                 GetSelectedChannel);
-            _packageUpdateCheckService.InvalidateAll();
+
+            if (!_packageInstallService.IsBusy)
+            {
+                _pendingUpdateStatusInvalidationPackageIds.Clear();
+            }
+
+            ClearActiveActionIfIdle();
+            UpdateViewVisibility();
         }
 
         private void InstallAllPackages()
         {
+            _activeActionKind = PackageInstallerActionKind.InstallAll;
+            _cancelingActionKind = PackageInstallerActionKind.None;
             _packageDependencyInstaller.InstallAll(GetSelectedChannel);
+            ClearActiveActionIfIdle();
+            UpdateViewVisibility();
         }
 
         private void DrawSidebar()
@@ -3481,11 +3834,17 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void UpdatePackage(PackageDefinition packageDefinition)
         {
+            TrackPendingUpdateStatusInvalidation(packageDefinition);
             _packageDependencyInstaller.UpdateWithDependencies(
                 packageDefinition,
                 GetSelectedChannel);
-            _packageUpdateCheckService.Invalidate(packageDefinition.PackageId);
-            _checkUpdatesAfterDetectionRefresh = true;
+
+            if (!_packageInstallService.IsBusy && packageDefinition != null)
+            {
+                _pendingUpdateStatusInvalidationPackageIds.Remove(packageDefinition.PackageId);
+            }
+
+            QueueDeferredUpdateCheck(PackageInstallerActionKind.CheckUpdates);
         }
 
         private void ReinstallPackage(PackageDefinition packageDefinition)
@@ -5070,7 +5429,8 @@ namespace Deucarian.PackageInstaller.Editor
             return (_packageInstallService != null && _packageInstallService.IsBusy) ||
                    (_packageDetectionService != null && _packageDetectionService.IsRefreshing) ||
                    (_packageUpdateCheckService != null && _packageUpdateCheckService.IsChecking) ||
-                   (_packageSampleImportService != null && _packageSampleImportService.IsBusy);
+                   (_packageSampleImportService != null && _packageSampleImportService.IsBusy) ||
+                   IsActiveActionStillBusy();
         }
 
         private static string GetUpdateStatusText(PackageUpdateStatus status)
@@ -5184,17 +5544,17 @@ namespace Deucarian.PackageInstaller.Editor
         private void HandleRegistryChanged()
         {
             InvalidateGraphModelCache("registry changed");
-            _packageUpdateCheckService?.InvalidateAll();
+            if (_cancelingActionKind != PackageInstallerActionKind.CheckUpdates ||
+                _checkUpdatesAfterDetectionRefresh)
+            {
+                _packageUpdateCheckService?.InvalidateAll();
+            }
+
             EnsureValidSelection();
             RefreshGraphView("registry changed");
 
-            if (_checkUpdatesAfterDetectionRefresh &&
-                !_packageDetectionService.IsRefreshing &&
-                !PackageRegistryProvider.IsRemoteRefreshing)
-            {
-                RunDeferredUpdateCheck();
-            }
-
+            TryRunDeferredUpdateCheck();
+            ClearActiveActionIfIdle();
             Repaint();
         }
 
@@ -5202,6 +5562,24 @@ namespace Deucarian.PackageInstaller.Editor
         {
             InvalidateGraphModelCache("update status changed");
             RefreshGraphView("update status changed");
+            ClearActiveActionIfIdle();
+        }
+
+        private void HandlePackageInstallCompleted(PackageDefinition packageDefinition, bool success, string message)
+        {
+            if (!TryConsumePendingUpdateStatusInvalidation(
+                    _pendingUpdateStatusInvalidationPackageIds,
+                    packageDefinition,
+                    success))
+            {
+                return;
+            }
+
+            _packageUpdateCheckService?.Invalidate(packageDefinition.PackageId);
+            InvalidateGraphModelCache("package update completed");
+            RefreshGraphView("package update completed");
+            UpdateViewVisibility();
+            Repaint();
         }
 
         private void HandlePackageDetectionGraphStateChanged()
@@ -5214,12 +5592,29 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void HandlePackageOperationCompleted()
         {
-            if (_packageUpdateCheckService.HasStatuses)
+            PackageInstallerActionKind completedActionKind = _activeActionKind;
+            bool shouldCheckUpdates =
+                completedActionKind == PackageInstallerActionKind.UpdateAll ||
+                _checkUpdatesAfterDetectionRefresh ||
+                (_packageUpdateCheckService != null && _packageUpdateCheckService.HasStatuses);
+
+            if (completedActionKind == PackageInstallerActionKind.UpdateAll ||
+                completedActionKind == PackageInstallerActionKind.InstallAll)
             {
-                _checkUpdatesAfterDetectionRefresh = true;
+                _activeActionKind = PackageInstallerActionKind.None;
+                _cancelingActionKind = PackageInstallerActionKind.None;
+            }
+
+            _pendingUpdateStatusInvalidationPackageIds.Clear();
+
+            if (shouldCheckUpdates)
+            {
+                QueueDeferredUpdateCheck(PackageInstallerActionKind.CheckUpdates);
+                PackageRegistryProvider.RefreshRemote();
             }
 
             _packageDetectionService.Refresh();
+            UpdateViewVisibility();
         }
 
         private void HandlePackageDetectionRefreshCompleted()
@@ -5227,25 +5622,50 @@ namespace Deucarian.PackageInstaller.Editor
             InvalidateGraphModelCache("installed package manifest changed");
             _packageSampleDiscoveryService?.ClearCache();
             RefreshGraphView("installed package refresh completed");
-
-            if (!_checkUpdatesAfterDetectionRefresh)
-            {
-                return;
-            }
-
-            if (PackageRegistryProvider.IsRemoteRefreshing)
-            {
-                Repaint();
-                return;
-            }
-
-            RunDeferredUpdateCheck();
+            TryRunDeferredUpdateCheck();
+            ClearActiveActionIfIdle();
         }
 
-        private void RunDeferredUpdateCheck()
+        private void TrackPendingUpdateStatusInvalidations(IEnumerable<PackageDefinition> packageDefinitions)
         {
-            _checkUpdatesAfterDetectionRefresh = false;
-            _packageUpdateCheckService.CheckForUpdates(PackageRegistryProvider.All, GetSelectedChannel);
+            foreach (PackageDefinition packageDefinition in packageDefinitions ?? Array.Empty<PackageDefinition>())
+            {
+                TrackPendingUpdateStatusInvalidation(packageDefinition);
+            }
+        }
+
+        private void TrackPendingUpdateStatusInvalidation(PackageDefinition packageDefinition)
+        {
+            if (packageDefinition == null || string.IsNullOrWhiteSpace(packageDefinition.PackageId))
+            {
+                return;
+            }
+
+            _pendingUpdateStatusInvalidationPackageIds.Add(packageDefinition.PackageId);
+        }
+
+        internal static bool TryConsumePendingUpdateStatusInvalidationForTests(
+            ISet<string> pendingPackageIds,
+            PackageDefinition completedPackage,
+            bool success)
+        {
+            return TryConsumePendingUpdateStatusInvalidation(pendingPackageIds, completedPackage, success);
+        }
+
+        private static bool TryConsumePendingUpdateStatusInvalidation(
+            ISet<string> pendingPackageIds,
+            PackageDefinition completedPackage,
+            bool success)
+        {
+            if (pendingPackageIds == null ||
+                completedPackage == null ||
+                string.IsNullOrWhiteSpace(completedPackage.PackageId) ||
+                !pendingPackageIds.Remove(completedPackage.PackageId))
+            {
+                return false;
+            }
+
+            return success;
         }
     }
 }

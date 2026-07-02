@@ -1,14 +1,37 @@
 # Deucarian Package Installer
 
-## Overview
+## What this is
 
-Deucarian Package Installer is a small editor-only Unity Package Manager package that adds a custom installer window for Deucarian packages.
+`com.deucarian.package-installer` is a small editor-only Unity Package Manager package that adds a custom installer window for Deucarian packages.
+
+It is the Deucarian ecosystem front door for installing standalone packages, integration packages, suite packages, templates, and explicitly declared package samples from Package Registry metadata.
+
+Current package version: `1.1.60`.
+
+## When to use it
+
+- You want to browse and install Deucarian UPM packages from inside Unity.
+- You need dependency-first install/update flows for registered Deucarian packages.
+- You need to switch between stable Git `#main` and development Git `#develop` channels.
+- You want explicit sample import actions after package installation.
+- You want package status, update checks, and advanced package-reference details.
+
+## When not to use it
+
+- Do not use this package as a runtime dependency; it is editor-only and has no runtime assembly.
+- Do not use it as the source of registry governance; Package Registry owns package metadata.
+- Do not use it as a generic graph framework or generic Unity Package Manager replacement.
+- Do not put package-specific runtime behavior, diagnostics ownership, or editor shell ownership here.
+
+## 60-second quick start
 
 Open it from:
 
 ```text
 Tools > Deucarian > Package Installer
 ```
+
+Select Stable or Development, choose a package, review its dependency plan, and click `Install`. Import samples only when the package detail view shows a sample you explicitly want.
 
 ## Deucarian Menu
 
@@ -18,19 +41,15 @@ The installer can install standalone packages, integration packages, and explici
 
 Package ID: `com.deucarian.package-installer`
 
-## Installation
+## Install
 
-Add the installer through Unity Package Manager with a Git URL:
+Stable:
 
 ```json
-{
-  "dependencies": {
-    "com.deucarian.package-installer": "https://github.com/Deucarian/Package-Installer.git#main"
-  }
-}
+"com.deucarian.package-installer": "https://github.com/Deucarian/Package-Installer.git#main"
 ```
 
-For development builds, use:
+Development:
 
 ```json
 "com.deucarian.package-installer": "https://github.com/Deucarian/Package-Installer.git#develop"
@@ -45,7 +64,14 @@ You can also use Unity's Package Manager window:
 3. Enter the installer Git URL.
 4. Open `Tools > Deucarian > Package Installer`.
 
-The package requires Unity `2021.3` or newer and depends on `com.deucarian.editor` and `com.deucarian.logging`.
+## Unity compatibility
+
+Requires Unity 2021.3 or newer.
+
+Dependencies:
+
+- `com.deucarian.editor` for shared Deucarian editor chrome, styles, icons, and status badges.
+- `com.deucarian.logging` for installer diagnostics.
 
 ## Logging
 
@@ -77,10 +103,10 @@ The current bundled fallback registry includes these Ecosystem Graph groups:
 
 - Infrastructure: Editor, Logging
 - State & Data: Core State
-- Runtime Services: API, Session, Object Loading
-- Experience & Interaction: UI Binding, UI Flow, Theming, Object Selection
+- Runtime Services: API, Session, Object Loading, Monetization
+- Experience & Interaction: UI Binding, UI, UI Flow, Theming, XR UI, Camera Navigation, Object Selection
 - Tools & Quality: Package Installer, Diagnostics, Game Content Authoring
-- Integrations: UI Binding + Core State Integration, Object Loading API Integration, Object Selection + Core State Integration, Session + API Integration
+- Integrations: UI Binding + Core State Integration, Object Loading API Integration, Object Selection + Core State Integration, Session + API Integration, XR UI Theming Integration
 - Gameplay: Gameplay Foundation, Persistence, Progression, Combat, Encounters, World Spawning, World Navigation, Defense Games, Attacks, Projectiles, Weapon Systems, Auto Defense, Run Upgrades, Idle Progression
 - Suites: Selection Suite, Auto Defense Suite
 - Templates: Idle Auto Defense, Survivors, Movement FPS
@@ -92,9 +118,13 @@ Registered packages are first-class UPM packages with their own package IDs:
 - `com.deucarian.logging`
 - `com.deucarian.object-loading`
 - `com.deucarian.session`
+- `com.deucarian.monetization`
 - `com.deucarian.ui-binding`
+- `com.deucarian.ui`
 - `com.deucarian.ui-flow`
 - `com.deucarian.theming`
+- `com.deucarian.xr-ui`
+- `com.deucarian.camera-navigation`
 - `com.deucarian.object-selection`
 - `com.deucarian.editor`
 - `com.deucarian.game-content-authoring`
@@ -102,6 +132,7 @@ Registered packages are first-class UPM packages with their own package IDs:
 - `com.deucarian.object-loading.api-integration`
 - `com.deucarian.object-selection.core-state-integration`
 - `com.deucarian.session.api-integration`
+- `com.deucarian.xr-ui.theming-integration`
 - `com.deucarian.selection-suite`
 - `com.deucarian.diagnostics`
 - `com.deucarian.package-installer`
@@ -172,9 +203,21 @@ Sample imports are explicit. The installer first tries Unity's Package Manager s
 
 If a sample destination already exists, the installer shows it as already imported and does not overwrite it silently.
 
-## Tests
+## Validation
 
-Run the package's EditMode tests in Unity. The registry tests validate bundled fallback parsing, package ID consistency, dependency references, and the explicit package entries needed for bootstrap installs.
+Run the shared package validator from the repository root:
+
+```powershell
+python C:/Repositories/Package-Registry/Tools/deucarian_package_validator.py --registry-root C:/Repositories/Package-Registry --repository-root . --config deucarian-package.json
+```
+
+Run the package's EditMode tests in Unity after code or assembly definition changes. The registry tests validate bundled fallback parsing, package ID consistency, dependency references, and the explicit package entries needed for bootstrap installs.
+
+Documentation-only updates should still pass:
+
+```powershell
+git diff --check
+```
 
 ## Update Checks
 
@@ -283,6 +326,14 @@ The installer uses:
 - `UnityEditor.PackageManager.Client.List` for installed-package detection.
 
 After installing, updating, or removing a package, the installer refreshes installed-package state so entries show their current status.
+
+## Troubleshooting
+
+- Package list looks stale: close and reopen the Package Installer window, then refresh the remote registry if network access is available.
+- Install or update is blocked: check the selected channel, package dependency list, and Unity Package Manager console output for the first failed package in the dependency-first plan.
+- A remove button is disabled: another installed registered package depends on that package; remove the dependent integration or suite package first.
+- Update status is unknown: the installed package may be embedded, local/file-based, missing Git metadata, or unavailable from the current network.
+- Samples do not import: confirm the package is installed, then import the sample explicitly from the package details panel or Unity Package Manager.
 
 ## Limitations
 

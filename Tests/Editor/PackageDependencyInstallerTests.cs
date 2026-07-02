@@ -212,6 +212,40 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             }
         }
 
+        [Test]
+        public void InstallServiceCancelPendingOperationSkipsQueuedPackages()
+        {
+            PackageDefinition editor = CreatePackage(
+                "Deucarian Editor",
+                "com.deucarian.editor",
+                "Shared editor tooling.");
+            PackageDefinition logging = CreatePackage(
+                "Deucarian Logging",
+                "com.deucarian.logging",
+                "Logging package.");
+
+            using (PackageInstallService installService = new PackageInstallService())
+            {
+                bool queueCompleted = false;
+                installService.QueueCompleted += () => queueCompleted = true;
+                installService.QueuePendingOperationForTests(
+                    "Install All Packages",
+                    new[] { editor, logging });
+
+                Assert.IsTrue(installService.IsBusy);
+                Assert.IsTrue(installService.CancelCurrentOperation());
+
+                Assert.IsFalse(installService.IsBusy);
+                Assert.IsFalse(installService.IsCancelRequested);
+                Assert.IsTrue(queueCompleted);
+                Assert.AreEqual(2, installService.CompletedSteps);
+                Assert.AreEqual(2, installService.SkippedSteps);
+                Assert.AreEqual("Install All Packages canceled with 2 skipped.", installService.LastStatusMessage);
+                Assert.IsTrue(installService.ProgressItems.All(
+                    item => item.State == PackageInstallProgressItemState.Skipped));
+            }
+        }
+
         private static string JoinMessages(PackageDependencyInstallPlan plan)
         {
             return string.Join("\n", plan.Messages.ToArray());

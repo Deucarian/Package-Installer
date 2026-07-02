@@ -66,6 +66,8 @@ namespace Deucarian.PackageInstaller.Editor
         private int _failedSteps;
         private int _skippedSteps;
         private int _totalSteps;
+        private bool _cancelRequested;
+        private bool _operationCanceled;
 
         public event Action StateChanged;
 
@@ -85,6 +87,8 @@ namespace Deucarian.PackageInstaller.Editor
             State == PackageInstallRequestState.Installing ||
             State == PackageInstallRequestState.Removing ||
             _installQueue.Count > 0;
+
+        public bool IsCancelRequested => _cancelRequested;
 
         public bool HasProgress => _totalSteps > 0 || !string.IsNullOrWhiteSpace(_currentOperationName);
 
@@ -142,6 +146,41 @@ namespace Deucarian.PackageInstaller.Editor
             NotifyStateChanged();
 
             return IsBusy;
+        }
+
+        public bool CancelCurrentOperation()
+        {
+            if (!IsBusy)
+            {
+                return false;
+            }
+
+            if (_cancelRequested)
+            {
+                return true;
+            }
+
+            _cancelRequested = true;
+            _operationCanceled = true;
+            SkipQueuedInstalls("Skipped after cancellation.");
+            ClearSavedOperationState();
+
+            if (_currentRequest == null && _currentRemoveRequest == null)
+            {
+                EditorApplication.update -= Update;
+                State = PackageInstallRequestState.Idle;
+                SetOperationCompleteSummary();
+                _cancelRequested = false;
+                QueueCompleted?.Invoke();
+                NotifyStateChanged();
+                return true;
+            }
+
+            _lastStatusMessage = State == PackageInstallRequestState.Removing
+                ? "Cancel requested. Waiting for current remove operation to finish..."
+                : "Cancel requested. Waiting for current package operation to finish...";
+            NotifyStateChanged();
+            return true;
         }
 
         public bool Install(PackageDefinition packageDefinition)
@@ -297,6 +336,31 @@ namespace Deucarian.PackageInstaller.Editor
 
             _lastStatusMessage = summaryMessage ?? string.Empty;
             _lastErrorMessage = string.Empty;
+            NotifyStateChanged();
+        }
+
+        internal void QueuePendingOperationForTests(
+            string operationName,
+            IEnumerable<PackageDefinition> packageDefinitions)
+        {
+            PackageDefinition[] packages = (packageDefinitions ?? Array.Empty<PackageDefinition>())
+                .Where(packageDefinition => packageDefinition != null)
+                .ToArray();
+
+            BeginOperation(
+                string.IsNullOrWhiteSpace(operationName) ? "Package Operation" : operationName,
+                packages);
+
+            foreach (PackageDefinition packageDefinition in packages)
+            {
+                PackageChannel channel = PackageChannel.Stable;
+                _installQueue.Enqueue(new QueuedPackageInstall(
+                    packageDefinition,
+                    channel,
+                    packageDefinition.GetUrl(channel)));
+                _queuedOrInstallingPackageIds.Add(packageDefinition.PackageId);
+            }
+
             NotifyStateChanged();
         }
 
@@ -476,12 +540,16 @@ namespace Deucarian.PackageInstaller.Editor
             State = PackageInstallRequestState.Idle;
 
             InstallCompleted?.Invoke(completedPackage, success, message);
-            StartNextRequestIfNeeded();
+            if (!_cancelRequested)
+            {
+                StartNextRequestIfNeeded();
+            }
 
             if (_currentRequest == null && _installQueue.Count == 0)
             {
                 EditorApplication.update -= Update;
                 SetOperationCompleteSummary();
+                _cancelRequested = false;
                 ClearSavedOperationState();
                 QueueCompleted?.Invoke();
             }
@@ -510,6 +578,7 @@ namespace Deucarian.PackageInstaller.Editor
             State = PackageInstallRequestState.Idle;
             EditorApplication.update -= Update;
             SetOperationCompleteSummary();
+            _cancelRequested = false;
             ClearSavedOperationState();
             QueueCompleted?.Invoke();
             NotifyStateChanged();
@@ -523,6 +592,8 @@ namespace Deucarian.PackageInstaller.Editor
             _currentOperationName = operationName ?? string.Empty;
             _lastStatusMessage = "Queued " + _currentOperationName + ".";
             _lastErrorMessage = string.Empty;
+            _cancelRequested = false;
+            _operationCanceled = false;
             _completedSteps = 0;
             _successfulSteps = 0;
             _failedSteps = 0;
@@ -626,12 +697,16 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
+            if (_operationCanceled)
+            {
+                _lastStatusMessage = _currentOperationName + " canceled" + FormatOperationOutcomeSuffix() + ".";
+                return;
+            }
+
             if (_failedSteps > 0)
             {
-                _lastStatusMessage = _currentOperationName + " finished with " +
-                                     _successfulSteps + " succeeded and " +
-                                     _failedSteps + " failed" +
-                                     FormatSkippedSummarySuffix() + ".";
+                _lastStatusMessage = _currentOperationName + " finished" +
+                                     FormatOperationOutcomeSuffix() + ".";
                 return;
             }
 
@@ -642,6 +717,47 @@ namespace Deucarian.PackageInstaller.Editor
         private string FormatSkippedSummarySuffix()
         {
             return _skippedSteps > 0 ? " and " + _skippedSteps + " skipped" : string.Empty;
+        }
+
+        private string FormatOperationOutcomeSuffix()
+        {
+            List<string> parts = new List<string>();
+
+            if (_successfulSteps > 0)
+            {
+                parts.Add(_successfulSteps + " succeeded");
+            }
+
+            if (_failedSteps > 0)
+            {
+                parts.Add(_failedSteps + " failed");
+            }
+
+            if (_skippedSteps > 0)
+            {
+                parts.Add(_skippedSteps + " skipped");
+            }
+
+            return parts.Count > 0 ? " with " + string.Join(", ", parts.ToArray()) : string.Empty;
+        }
+
+        private void SkipQueuedInstalls(string message)
+        {
+            while (_installQueue.Count > 0)
+            {
+                QueuedPackageInstall install = _installQueue.Dequeue();
+
+                if (install == null || install.PackageDefinition == null)
+                {
+                    continue;
+                }
+
+                _queuedOrInstallingPackageIds.Remove(install.PackageDefinition.PackageId);
+                MarkProgressItem(
+                    install.PackageDefinition,
+                    PackageInstallProgressItemState.Skipped,
+                    message);
+            }
         }
 
         private void SavePendingOperationState()
