@@ -102,6 +102,61 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void Window_CompletedUpdateConsumesOnlyFinishedPackageAttention()
+        {
+            PackageDefinition updated = CreatePackage("Updated", "com.example.updated", "Core");
+            PackageDefinition stillUpdating = CreatePackage("Still Updating", "com.example.still-updating", "Core");
+            HashSet<string> pending = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                updated.PackageId,
+                stillUpdating.PackageId
+            };
+
+            Assert.IsTrue(PackageInstallerWindow.TryConsumePendingUpdateStatusInvalidationForTests(
+                pending,
+                updated,
+                success: true));
+
+            Assert.IsFalse(pending.Contains(updated.PackageId));
+            Assert.IsTrue(pending.Contains(stillUpdating.PackageId));
+        }
+
+        [Test]
+        public void Window_FailedUpdateConsumesPendingWorkButKeepsAttentionVisible()
+        {
+            PackageDefinition failed = CreatePackage("Failed", "com.example.failed", "Core");
+            HashSet<string> pending = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                failed.PackageId
+            };
+
+            Assert.IsFalse(PackageInstallerWindow.TryConsumePendingUpdateStatusInvalidationForTests(
+                pending,
+                failed,
+                success: false));
+
+            Assert.IsFalse(pending.Contains(failed.PackageId));
+        }
+
+        [Test]
+        public void Window_UntrackedCompletedPackageDoesNotClearUpdateAttention()
+        {
+            PackageDefinition tracked = CreatePackage("Tracked", "com.example.tracked", "Core");
+            PackageDefinition unrelated = CreatePackage("Unrelated", "com.example.unrelated", "Core");
+            HashSet<string> pending = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                tracked.PackageId
+            };
+
+            Assert.IsFalse(PackageInstallerWindow.TryConsumePendingUpdateStatusInvalidationForTests(
+                pending,
+                unrelated,
+                success: true));
+
+            Assert.IsTrue(pending.Contains(tracked.PackageId));
+        }
+
+        [Test]
         public void Window_DoesNotRegisterEditorStartupHooks()
         {
             System.Reflection.Assembly packageInstallerAssembly = typeof(PackageInstallerWindow).Assembly;

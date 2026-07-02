@@ -277,6 +277,8 @@ namespace Deucarian.PackageInstaller.Editor
         private string _graphModelCacheInvalidationReason = "initial load";
         private readonly PackageVisibilityFilterState _visibilityFilterState =
             new PackageVisibilityFilterState();
+        private readonly HashSet<string> _pendingUpdateStatusInvalidationPackageIds =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private bool _checkUpdatesAfterDetectionRefresh;
         private PackageInstallerActionKind _deferredUpdateCheckActionKind = PackageInstallerActionKind.None;
         private PackageInstallerActionKind _activeActionKind = PackageInstallerActionKind.None;
@@ -538,6 +540,7 @@ namespace Deucarian.PackageInstaller.Editor
             _packageInstallService.StateChanged += Repaint;
             _packageInstallService.StateChanged += RefreshGraphView;
             _packageInstallService.StateChanged += UpdateOperationFooter;
+            _packageInstallService.InstallCompleted += HandlePackageInstallCompleted;
             _packageInstallService.QueueCompleted += HandlePackageOperationCompleted;
             _packageDetectionService.StateChanged += Repaint;
             _packageDetectionService.StateChanged += HandlePackageDetectionGraphStateChanged;
@@ -579,6 +582,7 @@ namespace Deucarian.PackageInstaller.Editor
                 _packageInstallService.StateChanged -= Repaint;
                 _packageInstallService.StateChanged -= RefreshGraphView;
                 _packageInstallService.StateChanged -= UpdateOperationFooter;
+                _packageInstallService.InstallCompleted -= HandlePackageInstallCompleted;
                 _packageInstallService.QueueCompleted -= HandlePackageOperationCompleted;
                 _packageInstallService.Dispose();
             }
@@ -2461,12 +2465,20 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void UpdateAllPackages()
         {
+            PackageDefinition[] packagesWithUpdates = GetPackagesWithUpdates();
+            TrackPendingUpdateStatusInvalidations(packagesWithUpdates);
+
             _activeActionKind = PackageInstallerActionKind.UpdateAll;
             _cancelingActionKind = PackageInstallerActionKind.None;
             _packageDependencyInstaller.UpdateAll(
-                GetPackagesWithUpdates(),
+                packagesWithUpdates,
                 GetSelectedChannel);
-            _packageUpdateCheckService.InvalidateAll();
+
+            if (!_packageInstallService.IsBusy)
+            {
+                _pendingUpdateStatusInvalidationPackageIds.Clear();
+            }
+
             ClearActiveActionIfIdle();
             UpdateViewVisibility();
         }
@@ -3822,10 +3834,16 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void UpdatePackage(PackageDefinition packageDefinition)
         {
+            TrackPendingUpdateStatusInvalidation(packageDefinition);
             _packageDependencyInstaller.UpdateWithDependencies(
                 packageDefinition,
                 GetSelectedChannel);
-            _packageUpdateCheckService.Invalidate(packageDefinition.PackageId);
+
+            if (!_packageInstallService.IsBusy && packageDefinition != null)
+            {
+                _pendingUpdateStatusInvalidationPackageIds.Remove(packageDefinition.PackageId);
+            }
+
             QueueDeferredUpdateCheck(PackageInstallerActionKind.CheckUpdates);
         }
 
@@ -5547,6 +5565,23 @@ namespace Deucarian.PackageInstaller.Editor
             ClearActiveActionIfIdle();
         }
 
+        private void HandlePackageInstallCompleted(PackageDefinition packageDefinition, bool success, string message)
+        {
+            if (!TryConsumePendingUpdateStatusInvalidation(
+                    _pendingUpdateStatusInvalidationPackageIds,
+                    packageDefinition,
+                    success))
+            {
+                return;
+            }
+
+            _packageUpdateCheckService?.Invalidate(packageDefinition.PackageId);
+            InvalidateGraphModelCache("package update completed");
+            RefreshGraphView("package update completed");
+            UpdateViewVisibility();
+            Repaint();
+        }
+
         private void HandlePackageDetectionGraphStateChanged()
         {
             if (_packageDetectionService != null && _packageDetectionService.IsRefreshing)
@@ -5570,6 +5605,8 @@ namespace Deucarian.PackageInstaller.Editor
                 _cancelingActionKind = PackageInstallerActionKind.None;
             }
 
+            _pendingUpdateStatusInvalidationPackageIds.Clear();
+
             if (shouldCheckUpdates)
             {
                 QueueDeferredUpdateCheck(PackageInstallerActionKind.CheckUpdates);
@@ -5587,6 +5624,48 @@ namespace Deucarian.PackageInstaller.Editor
             RefreshGraphView("installed package refresh completed");
             TryRunDeferredUpdateCheck();
             ClearActiveActionIfIdle();
+        }
+
+        private void TrackPendingUpdateStatusInvalidations(IEnumerable<PackageDefinition> packageDefinitions)
+        {
+            foreach (PackageDefinition packageDefinition in packageDefinitions ?? Array.Empty<PackageDefinition>())
+            {
+                TrackPendingUpdateStatusInvalidation(packageDefinition);
+            }
+        }
+
+        private void TrackPendingUpdateStatusInvalidation(PackageDefinition packageDefinition)
+        {
+            if (packageDefinition == null || string.IsNullOrWhiteSpace(packageDefinition.PackageId))
+            {
+                return;
+            }
+
+            _pendingUpdateStatusInvalidationPackageIds.Add(packageDefinition.PackageId);
+        }
+
+        internal static bool TryConsumePendingUpdateStatusInvalidationForTests(
+            ISet<string> pendingPackageIds,
+            PackageDefinition completedPackage,
+            bool success)
+        {
+            return TryConsumePendingUpdateStatusInvalidation(pendingPackageIds, completedPackage, success);
+        }
+
+        private static bool TryConsumePendingUpdateStatusInvalidation(
+            ISet<string> pendingPackageIds,
+            PackageDefinition completedPackage,
+            bool success)
+        {
+            if (pendingPackageIds == null ||
+                completedPackage == null ||
+                string.IsNullOrWhiteSpace(completedPackage.PackageId) ||
+                !pendingPackageIds.Remove(completedPackage.PackageId))
+            {
+                return false;
+            }
+
+            return success;
         }
     }
 }
