@@ -258,6 +258,25 @@ namespace Deucarian.PackageInstaller.Editor
             NotifySharedStateChanged();
         }
 
+        public bool CancelCurrentCheck()
+        {
+            bool hadActiveCheck = IsChecking;
+
+            if (hadActiveCheck)
+            {
+                RestoreActiveCheckingStatusesToUnknown();
+            }
+
+            CheckTask = null;
+            ActiveCheckItems = Array.Empty<UpdateCheckItem>();
+            LastFailureMessageValue = string.Empty;
+            LastStatusMessageValue = "Update check canceled.";
+
+            EditorApplication.update -= UpdateShared;
+            NotifySharedStateChanged();
+            return hadActiveCheck;
+        }
+
         public void CheckForUpdate(PackageDefinition packageDefinition, PackageChannel channel)
         {
             if (packageDefinition == null || !packageDefinition.HasPackageReference)
@@ -1145,6 +1164,11 @@ namespace Deucarian.PackageInstaller.Editor
             UpdateTargetedChecks(forceStartPending);
         }
 
+        internal static void UpdateSharedForTests()
+        {
+            UpdateShared();
+        }
+
         internal static bool HasTargetedChecksForTests => HasTargetedChecks;
 
         internal static void ResetForTests()
@@ -1186,6 +1210,31 @@ namespace Deucarian.PackageInstaller.Editor
             CheckTask = null;
             ActiveCheckItems = Array.Empty<UpdateCheckItem>();
             NotifySharedStateChanged();
+        }
+
+        private static void RestoreActiveCheckingStatusesToUnknown()
+        {
+            foreach (UpdateCheckItem item in ActiveCheckItems ?? Array.Empty<UpdateCheckItem>())
+            {
+                if (item == null ||
+                    item.PackageDefinition == null ||
+                    string.IsNullOrWhiteSpace(item.PackageDefinition.PackageId))
+                {
+                    continue;
+                }
+
+                if (!Statuses.TryGetValue(item.PackageDefinition.PackageId, out PackageUpdateStatus status) ||
+                    status == null ||
+                    status.Kind != PackageUpdateStatusKind.Checking ||
+                    status.Channel != item.Channel ||
+                    !string.Equals(status.SelectedUrl, item.SelectedUrl, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                Statuses[item.PackageDefinition.PackageId] =
+                    PackageUpdateStatus.Unknown(item.PackageDefinition, item.Channel);
+            }
         }
 
         private static bool TryParseGitPackageReference(

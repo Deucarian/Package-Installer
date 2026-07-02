@@ -493,6 +493,52 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void CancelCurrentUpdateCheckClearsCheckingStatusAndIgnoresStaleResult()
+        {
+            PackageDefinition packageDefinition = CreatePackage();
+            PackageUpdateCheckService.RegistryChannelVersionResolverForTests =
+                (_, __) =>
+                {
+                    Thread.Sleep(100);
+                    return PackageUpdateCheckService.RegistryLatestVersionResult.Ok("1.2.3");
+                };
+
+            using (PackageDetectionService detectionService = new PackageDetectionService())
+            using (PackageUpdateCheckService updateCheckService = new PackageUpdateCheckService(detectionService))
+            {
+                detectionService.ReplaceInstalledPackageForTests(
+                    packageDefinition.PackageId,
+                    "1.2.0",
+                    PackageInstallSourceType.Registry,
+                    "1.2.0");
+
+                updateCheckService.CheckForUpdates(new[] { packageDefinition }, _ => PackageChannel.Stable);
+
+                Assert.IsTrue(updateCheckService.IsChecking);
+                Assert.AreEqual(
+                    PackageUpdateStatusKind.Checking,
+                    updateCheckService.GetStatus(packageDefinition, PackageChannel.Stable).Kind);
+
+                Assert.IsTrue(updateCheckService.CancelCurrentCheck());
+
+                Assert.IsFalse(updateCheckService.IsChecking);
+                Assert.AreEqual(string.Empty, updateCheckService.LastFailureMessage);
+                Assert.AreEqual("Update check canceled.", updateCheckService.LastStatusMessage);
+                Assert.AreEqual(
+                    PackageUpdateStatusKind.Unknown,
+                    updateCheckService.GetStatus(packageDefinition, PackageChannel.Stable).Kind);
+
+                Thread.Sleep(150);
+                PackageUpdateCheckService.UpdateSharedForTests();
+
+                Assert.AreEqual("Update check canceled.", updateCheckService.LastStatusMessage);
+                Assert.AreEqual(
+                    PackageUpdateStatusKind.Unknown,
+                    updateCheckService.GetStatus(packageDefinition, PackageChannel.Stable).Kind);
+            }
+        }
+
+        [Test]
         public void TargetedStableToDevelopmentCheckMarksCheckingThenSwitchAvailable()
         {
             PackageDefinition packageDefinition = CreatePackage();
