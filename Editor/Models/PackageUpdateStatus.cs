@@ -8,6 +8,8 @@ namespace Deucarian.PackageInstaller.Editor
         UpToDate,
         UpdateAvailable,
         SwitchAvailable,
+        SourceMigrationAvailable,
+        ReloadPending,
         CannotDetermine,
         Failed
     }
@@ -26,6 +28,7 @@ namespace Deucarian.PackageInstaller.Editor
             string latestRevision,
             string installedVersion,
             string latestVersion,
+            string runningVersion,
             string message)
         {
             Kind = kind;
@@ -37,6 +40,7 @@ namespace Deucarian.PackageInstaller.Editor
             LatestRevision = latestRevision ?? string.Empty;
             InstalledVersion = installedVersion ?? string.Empty;
             LatestVersion = latestVersion ?? string.Empty;
+            RunningVersion = runningVersion ?? string.Empty;
             Message = message ?? string.Empty;
         }
 
@@ -58,6 +62,8 @@ namespace Deucarian.PackageInstaller.Editor
 
         public string LatestVersion { get; }
 
+        public string RunningVersion { get; }
+
         public string Message { get; }
 
         public bool IsChecking => Kind == PackageUpdateStatusKind.Checking;
@@ -65,6 +71,12 @@ namespace Deucarian.PackageInstaller.Editor
         public bool IsUpdateAvailable =>
             Kind == PackageUpdateStatusKind.UpdateAvailable ||
             Kind == PackageUpdateStatusKind.SwitchAvailable;
+
+        public bool IsSourceMigrationAvailable => Kind == PackageUpdateStatusKind.SourceMigrationAvailable;
+
+        public bool IsReloadPending => Kind == PackageUpdateStatusKind.ReloadPending;
+
+        public bool NeedsAttention => IsUpdateAvailable || IsSourceMigrationAvailable || IsReloadPending;
 
         public string ShortInstalledRevision => ShortenRevision(InstalledRevision);
 
@@ -104,6 +116,10 @@ namespace Deucarian.PackageInstaller.Editor
                         return "Update available";
                     case PackageUpdateStatusKind.SwitchAvailable:
                         return "Switch available";
+                    case PackageUpdateStatusKind.SourceMigrationAvailable:
+                        return "Source migration available";
+                    case PackageUpdateStatusKind.ReloadPending:
+                        return "Reload pending";
                     case PackageUpdateStatusKind.CannotDetermine:
                         return "Cannot determine update";
                     case PackageUpdateStatusKind.Failed:
@@ -252,6 +268,60 @@ namespace Deucarian.PackageInstaller.Editor
                 message);
         }
 
+        public static PackageUpdateStatus SourceMigrationAvailable(
+            PackageDefinition packageDefinition,
+            PackageChannel channel,
+            string selectedUrl,
+            string latestRevision,
+            string installedVersion,
+            string latestVersion,
+            string message)
+        {
+            string packageId = packageDefinition != null ? packageDefinition.PackageId : string.Empty;
+            string displayName = packageDefinition != null ? packageDefinition.DisplayName : string.Empty;
+
+            return new PackageUpdateStatus(
+                PackageUpdateStatusKind.SourceMigrationAvailable,
+                packageId,
+                displayName,
+                channel,
+                selectedUrl,
+                string.Empty,
+                latestRevision,
+                installedVersion,
+                latestVersion,
+                string.Empty,
+                message);
+        }
+
+        public static PackageUpdateStatus ReloadPending(
+            PackageDefinition packageDefinition,
+            PackageChannel channel,
+            string selectedUrl,
+            string installedRevision,
+            string latestRevision,
+            string installedVersion,
+            string latestVersion,
+            string runningVersion,
+            string message)
+        {
+            string packageId = packageDefinition != null ? packageDefinition.PackageId : string.Empty;
+            string displayName = packageDefinition != null ? packageDefinition.DisplayName : string.Empty;
+
+            return new PackageUpdateStatus(
+                PackageUpdateStatusKind.ReloadPending,
+                packageId,
+                displayName,
+                channel,
+                selectedUrl,
+                installedRevision,
+                latestRevision,
+                installedVersion,
+                latestVersion,
+                runningVersion,
+                message);
+        }
+
         public static PackageUpdateStatus CannotDetermine(
             PackageDefinition packageDefinition,
             PackageChannel channel,
@@ -308,6 +378,7 @@ namespace Deucarian.PackageInstaller.Editor
                 latestRevision,
                 string.Empty,
                 string.Empty,
+                string.Empty,
                 message);
         }
 
@@ -323,6 +394,23 @@ namespace Deucarian.PackageInstaller.Editor
                 LatestRevision,
                 installedVersion,
                 latestVersion,
+                RunningVersion,
+                Message);
+        }
+
+        public PackageUpdateStatus WithRunningVersion(string runningVersion)
+        {
+            return new PackageUpdateStatus(
+                Kind,
+                PackageId,
+                DisplayName,
+                Channel,
+                SelectedUrl,
+                InstalledRevision,
+                LatestRevision,
+                InstalledVersion,
+                LatestVersion,
+                runningVersion,
                 Message);
         }
 

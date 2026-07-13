@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Deucarian.Editor;
 using UnityEditor;
+using UnityEditor.Compilation;
 using UnityEngine;
 using UnityEngine.UIElements;
 using PackageManagerPackageInfo = UnityEditor.PackageManager.PackageInfo;
@@ -14,6 +15,12 @@ namespace Deucarian.PackageInstaller.Editor
         Wide,
         Compact,
         Narrow
+    }
+
+    internal enum PackageSourceMigrationAction
+    {
+        InstallSelectedGitUrl,
+        OpenBootstrap
     }
 
     internal enum PackageGraphNavigationTargetKind
@@ -116,8 +123,9 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed class PackageInstallerWindow : EditorWindow
     {
         private const string WindowTitle = "Package Installer";
-        private const string PackageId = "com.deucarian.package-installer";
-        private const string PackageVersion = "1.1.58";
+        private const string BootstrapMenuPath = "Tools/Deucarian/Bootstrap/Open Bootstrapper";
+        private const string BootstrapStableGitUrl = "https://github.com/Deucarian/Bootstrap.git#main";
+        private const string BootstrapDevelopmentGitUrl = "https://github.com/Deucarian/Bootstrap.git#develop";
         private const float MinWindowWidth = 820f;
         private const float MinWindowHeight = 650f;
         private const float CompactLayoutWidth = 1180f;
@@ -419,9 +427,9 @@ namespace Deucarian.PackageInstaller.Editor
 
         internal static Vector2 MinWindowSizeForTests => new Vector2(MinWindowWidth, MinWindowHeight);
 
-        internal static string PackageIdForTests => PackageId;
+        internal static string PackageIdForTests => PackageInstallerRuntimeIdentity.PackageId;
 
-        internal static string PackageVersionForTests => PackageVersion;
+        internal static string PackageVersionForTests => PackageInstallerRuntimeIdentity.Version;
 
         internal static float OperationFooterHeightForTests => OperationFooterHeight;
 
@@ -1354,7 +1362,9 @@ namespace Deucarian.PackageInstaller.Editor
 
             string safeStatusText = string.IsNullOrWhiteSpace(statusText) ? "Idle" : statusText.Trim();
             string safeSummaryText = string.IsNullOrWhiteSpace(summaryText) ? "No operation running." : summaryText.Trim();
-            string safeVersionText = string.IsNullOrWhiteSpace(packageVersionText) ? PackageId : packageVersionText.Trim();
+            string safeVersionText = string.IsNullOrWhiteSpace(packageVersionText)
+                ? PackageInstallerRuntimeIdentity.PackageId
+                : packageVersionText.Trim();
             string statusMarker = GetStatusMarker(statusKind);
             Color statusColor = GetStatusColor(statusKind);
 
@@ -2265,6 +2275,19 @@ namespace Deucarian.PackageInstaller.Editor
         {
             using (new EditorGUILayout.HorizontalScope())
             {
+                bool checkOnStart = PackageUpdateCheckPreferences.CheckOnEditorStart;
+                bool nextCheckOnStart = EditorGUILayout.ToggleLeft(
+                    new GUIContent(
+                        "Check on Start",
+                        "Run one delayed background update check per Unity editor session."),
+                    checkOnStart,
+                    GUILayout.Width(compact ? 118f : 124f));
+
+                if (nextCheckOnStart != checkOnStart)
+                {
+                    PackageUpdateCheckPreferences.CheckOnEditorStart = nextCheckOnStart;
+                }
+
                 bool checkOnOpen = PackageUpdateCheckPreferences.CheckOnWindowOpen;
                 bool nextCheckOnOpen = EditorGUILayout.ToggleLeft(
                     new GUIContent(
@@ -3562,6 +3585,11 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 DrawInlineHelp(updateStatus.PackageVersionWarningMessage, VisualStatusKind.UpdateAvailable);
             }
+            else if ((updateStatus.IsSourceMigrationAvailable || updateStatus.IsReloadPending) &&
+                     !string.IsNullOrWhiteSpace(updateStatus.Message))
+            {
+                DrawInlineHelp(updateStatus.Message, VisualStatusKind.UpdateAvailable);
+            }
             else if (updateStatus.Kind == PackageUpdateStatusKind.CannotDetermine && !string.IsNullOrWhiteSpace(updateStatus.Message))
             {
                 DrawInlineHelp(updateStatus.Message, VisualStatusKind.Info);
@@ -3710,6 +3738,19 @@ namespace Deucarian.PackageInstaller.Editor
                     {
                         DrawInlineHelp("An update is available for the selected channel.", VisualStatusKind.UpdateAvailable);
                     }
+                    else if (updateStatus.IsSourceMigrationAvailable)
+                    {
+                        string migrationHelp = PackageInstallerRuntimeIdentity.IsSelf(packageDefinition.PackageId)
+                            ? "This registry-installed Package Installer must be migrated through Bootstrap. " +
+                              "Bootstrap: " + GetBootstrapGitUrl(GetSelectedChannel(packageDefinition)) +
+                              ". Then open " + BootstrapMenuPath + "."
+                            : "Migrate this registry-installed package to the selected catalog Git URL.";
+                        DrawInlineHelp(migrationHelp, VisualStatusKind.UpdateAvailable);
+                    }
+                    else if (updateStatus.IsReloadPending)
+                    {
+                        DrawInlineHelp(updateStatus.Message, VisualStatusKind.UpdateAvailable);
+                    }
                     else
                     {
                         EditorGUILayout.LabelField("Package is installed. Reinstall uses the selected channel URL/ref.", _mutedMiniLabelStyle);
@@ -3769,18 +3810,22 @@ namespace Deucarian.PackageInstaller.Editor
             bool queuedOrInstalling,
             bool actionsBusy)
         {
-            using (new EditorGUI.DisabledScope(!updateStatus.IsUpdateAvailable || queuedOrInstalling || actionsBusy))
+            using (new EditorGUI.DisabledScope(!HasPrimaryPackageAction(updateStatus) || queuedOrInstalling || actionsBusy))
             {
                 if (GUILayout.Button(
                         GetUpdateActionLabel(updateStatus, GetSelectedChannel(packageDefinition)),
                         _primaryButtonStyle,
                         GUILayout.Width(156f)))
                 {
-                    UpdatePackage(packageDefinition);
+                    RunPrimaryPackageAction(packageDefinition, updateStatus);
                 }
             }
 
-            using (new EditorGUI.DisabledScope(queuedOrInstalling || actionsBusy))
+            using (new EditorGUI.DisabledScope(
+                       queuedOrInstalling ||
+                       actionsBusy ||
+                       updateStatus.IsSourceMigrationAvailable ||
+                       updateStatus.IsReloadPending))
             {
                 if (GUILayout.Button("Reinstall", _secondaryButtonStyle, GUILayout.Width(104f)))
                 {
@@ -3804,18 +3849,22 @@ namespace Deucarian.PackageInstaller.Editor
             bool queuedOrInstalling,
             bool actionsBusy)
         {
-            using (new EditorGUI.DisabledScope(!updateStatus.IsUpdateAvailable || queuedOrInstalling || actionsBusy))
+            using (new EditorGUI.DisabledScope(!HasPrimaryPackageAction(updateStatus) || queuedOrInstalling || actionsBusy))
             {
                 if (GUILayout.Button(
                         GetUpdateActionLabel(updateStatus, GetSelectedChannel(packageDefinition)),
                         _primaryButtonStyle,
                         GUILayout.ExpandWidth(true)))
                 {
-                    UpdatePackage(packageDefinition);
+                    RunPrimaryPackageAction(packageDefinition, updateStatus);
                 }
             }
 
-            using (new EditorGUI.DisabledScope(queuedOrInstalling || actionsBusy))
+            using (new EditorGUI.DisabledScope(
+                       queuedOrInstalling ||
+                       actionsBusy ||
+                       updateStatus.IsSourceMigrationAvailable ||
+                       updateStatus.IsReloadPending))
             {
                 if (GUILayout.Button("Reinstall", _secondaryButtonStyle, GUILayout.ExpandWidth(true)))
                 {
@@ -3845,6 +3894,93 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             QueueDeferredUpdateCheck(PackageInstallerActionKind.CheckUpdates);
+        }
+
+        private static bool HasPrimaryPackageAction(PackageUpdateStatus status)
+        {
+            return status != null &&
+                   (status.IsUpdateAvailable ||
+                    status.IsSourceMigrationAvailable ||
+                    status.IsReloadPending);
+        }
+
+        private void RunPrimaryPackageAction(
+            PackageDefinition packageDefinition,
+            PackageUpdateStatus status)
+        {
+            if (status != null && status.IsReloadPending)
+            {
+                RetryScriptReload();
+                return;
+            }
+
+            if (status != null && status.IsSourceMigrationAvailable)
+            {
+                if (GetSourceMigrationActionForTests(packageDefinition) ==
+                    PackageSourceMigrationAction.OpenBootstrap)
+                {
+                    OpenBootstrapForSourceMigration(packageDefinition);
+                }
+                else
+                {
+                    UpdatePackage(packageDefinition);
+                }
+
+                return;
+            }
+
+            UpdatePackage(packageDefinition);
+        }
+
+        internal static PackageSourceMigrationAction GetSourceMigrationActionForTests(
+            PackageDefinition packageDefinition)
+        {
+            return packageDefinition != null &&
+                   PackageInstallerRuntimeIdentity.IsSelf(packageDefinition.PackageId)
+                ? PackageSourceMigrationAction.OpenBootstrap
+                : PackageSourceMigrationAction.InstallSelectedGitUrl;
+        }
+
+        internal static string GetBootstrapGitUrlForTests(PackageChannel channel)
+        {
+            return GetBootstrapGitUrl(channel);
+        }
+
+        internal static string BootstrapMenuPathForTests => BootstrapMenuPath;
+
+        private void RetryScriptReload()
+        {
+            const string message =
+                "Requested a fresh script compilation. Resolve any Console compile errors so Unity can load the updated Package Installer assembly.";
+            CompilationPipeline.RequestScriptCompilation();
+            ShowNotification(new GUIContent(message));
+            PackageInstallerLog.Install.DiagnosticInfo(message);
+        }
+
+        private void OpenBootstrapForSourceMigration(PackageDefinition packageDefinition)
+        {
+            if (EditorApplication.ExecuteMenuItem(BootstrapMenuPath))
+            {
+                PackageInstallerLog.Install.DiagnosticInfo(
+                    "Opened Bootstrap for Package Installer source migration.");
+                return;
+            }
+
+            PackageChannel channel = GetSelectedChannel(packageDefinition);
+            string bootstrapUrl = GetBootstrapGitUrl(channel);
+            string message =
+                "Bootstrap is not installed. Add " + bootstrapUrl +
+                " with Unity Package Manager, then open " + BootstrapMenuPath +
+                " to migrate Package Installer safely.";
+            ShowNotification(new GUIContent(message));
+            PackageInstallerLog.Install.Warning(message);
+        }
+
+        private static string GetBootstrapGitUrl(PackageChannel channel)
+        {
+            return channel == PackageChannel.Development
+                ? BootstrapDevelopmentGitUrl
+                : BootstrapStableGitUrl;
         }
 
         private void ReinstallPackage(PackageDefinition packageDefinition)
@@ -4265,7 +4401,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static string GetFooterVersionText()
         {
-            return PackageId + " " + PackageVersion;
+            return PackageInstallerRuntimeIdentity.PackageId + " " + PackageInstallerRuntimeIdentity.Version;
         }
 
         private int GetOperationDrawerContentLineCount()
@@ -4907,6 +5043,16 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (_packageDetectionService.IsInstalled(packageDefinition.PackageId))
             {
+                if (updateStatus.IsSourceMigrationAvailable)
+                {
+                    return new VisualStatus(AttentionStatusMarker, "Migrate", VisualStatusKind.UpdateAvailable);
+                }
+
+                if (updateStatus.IsReloadPending)
+                {
+                    return new VisualStatus(AttentionStatusMarker, "Reload", VisualStatusKind.UpdateAvailable);
+                }
+
                 if (updateStatus.IsUpdateAvailable)
                 {
                     if (updateStatus.Kind == PackageUpdateStatusKind.SwitchAvailable)
@@ -5068,7 +5214,7 @@ namespace Deucarian.PackageInstaller.Editor
                 installedChannel);
         }
 
-        private static PackageChannel ResolveSelectedChannel(
+        internal static PackageChannel ResolveSelectedChannel(
             PackageDefinition packageDefinition,
             PackageChannelSelection projectSelection,
             PackageChannelSelection packageSelection,
@@ -5451,6 +5597,16 @@ namespace Deucarian.PackageInstaller.Editor
                 return status.Label + " (" + status.ShortInstalledRevision + " -> " + status.ShortLatestRevision + ")";
             }
 
+            if (status.IsSourceMigrationAvailable && !string.IsNullOrWhiteSpace(status.ShortLatestRevision))
+            {
+                return status.Label + " (Git " + status.ShortLatestRevision + ")";
+            }
+
+            if (status.IsReloadPending && !string.IsNullOrWhiteSpace(status.Message))
+            {
+                return status.Label + ": " + status.Message;
+            }
+
             if (status.Kind == PackageUpdateStatusKind.Failed && !string.IsNullOrWhiteSpace(status.Message))
             {
                 return status.Label + ": " + status.Message;
@@ -5473,6 +5629,13 @@ namespace Deucarian.PackageInstaller.Editor
                 ? "-"
                 : resolvedInstalledVersion.Trim();
 
+            if (status != null &&
+                status.IsReloadPending &&
+                !string.IsNullOrWhiteSpace(status.RunningVersion))
+            {
+                return status.RunningVersion + " running; " + currentVersion + " resolved";
+            }
+
             if (status != null && status.HasPackageVersionTransition)
             {
                 return currentVersion + " -> " + status.LatestVersion;
@@ -5483,6 +5646,18 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static string GetUpdateActionLabel(PackageUpdateStatus status, PackageChannel channel)
         {
+            if (status != null && status.IsReloadPending)
+            {
+                return "Retry Script Reload";
+            }
+
+            if (status != null && status.IsSourceMigrationAvailable)
+            {
+                return PackageInstallerRuntimeIdentity.IsSelf(status.PackageId)
+                    ? "Open Bootstrap"
+                    : "Migrate to Git";
+            }
+
             if (status != null && status.Kind == PackageUpdateStatusKind.SwitchAvailable)
             {
                 return "Switch to " + GetChannelLabel(channel);

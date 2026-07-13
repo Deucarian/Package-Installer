@@ -53,7 +53,6 @@ namespace Deucarian.PackageInstaller.Editor
         private readonly List<string> _operationMessages = new List<string>();
         private readonly Dictionary<string, PackageInstallProgressItem> _progressItemsByPackageId =
             new Dictionary<string, PackageInstallProgressItem>(StringComparer.OrdinalIgnoreCase);
-
         private AddRequest _currentRequest;
         private RemoveRequest _currentRemoveRequest;
         private QueuedPackageInstall _currentInstall;
@@ -114,9 +113,26 @@ namespace Deucarian.PackageInstaller.Editor
 
         public IReadOnlyList<string> OperationMessages => _operationMessages;
 
+        public PackageInstallService()
+        {
+            PackageInstallerSelfUpdateState.ReconcileCurrentRuntime();
+        }
+
         public bool ResumeSavedOperation()
         {
-            if (IsBusy || !TryLoadSavedOperation(out string operationName, out QueuedPackageInstall[] pendingInstalls))
+            if (IsBusy)
+            {
+                return false;
+            }
+
+            bool selfUpdateAppliedOnReload =
+                PackageInstallerSelfUpdateState.ReconcileCurrentRuntime() ==
+                PackageInstallerSelfUpdateReconcileResult.AppliedOnReload;
+
+            if (!TryPrepareSavedOperationForResume(
+                    selfUpdateAppliedOnReload,
+                    out string operationName,
+                    out QueuedPackageInstall[] pendingInstalls))
             {
                 return false;
             }
@@ -292,6 +308,8 @@ namespace Deucarian.PackageInstaller.Editor
                 .Where(packageDefinition => packageDefinition != null)
                 .GroupBy(packageDefinition => packageDefinition.PackageId, StringComparer.OrdinalIgnoreCase)
                 .Select(group => group.First())
+                .OrderBy(packageDefinition =>
+                    PackageInstallerRuntimeIdentity.IsSelf(packageDefinition.PackageId) ? 1 : 0)
                 .ToArray();
 
             if (packages.Length == 0)
@@ -362,6 +380,86 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             NotifyStateChanged();
+        }
+
+        internal static PackageDefinition[] OrderSelfUpdateLastForTests(
+            IEnumerable<PackageDefinition> packageDefinitions)
+        {
+            return (packageDefinitions ?? Array.Empty<PackageDefinition>())
+                .Where(packageDefinition => packageDefinition != null)
+                .OrderBy(packageDefinition =>
+                    PackageInstallerRuntimeIdentity.IsSelf(packageDefinition.PackageId) ? 1 : 0)
+                .ToArray();
+        }
+
+        internal static PackageDefinition[] FilterAppliedSelfUpdateForTests(
+            IEnumerable<PackageDefinition> packageDefinitions)
+        {
+            return (packageDefinitions ?? Array.Empty<PackageDefinition>())
+                .Where(packageDefinition =>
+                    packageDefinition != null &&
+                    !PackageInstallerRuntimeIdentity.IsSelf(packageDefinition.PackageId))
+                .ToArray();
+        }
+
+        internal void SavePendingOperationForTests()
+        {
+            SavePendingOperationState();
+        }
+
+        internal static string[] RestorePendingPackageIdsForTests(
+            bool selfUpdateAppliedOnReload,
+            out string operationName)
+        {
+            if (!TryLoadSavedOperation(out operationName, out QueuedPackageInstall[] pendingInstalls))
+            {
+                return Array.Empty<string>();
+            }
+
+            if (selfUpdateAppliedOnReload)
+            {
+                pendingInstalls = FilterAppliedSelfUpdate(pendingInstalls);
+            }
+
+            return pendingInstalls
+                .Where(install => install != null && install.PackageDefinition != null)
+                .Select(install => install.PackageDefinition.PackageId)
+                .ToArray();
+        }
+
+        internal static string[] PreparePendingPackageIdsForResumeForTests(
+            bool selfUpdateAppliedOnReload,
+            out string operationName)
+        {
+            if (!TryPrepareSavedOperationForResume(
+                    selfUpdateAppliedOnReload,
+                    out operationName,
+                    out QueuedPackageInstall[] pendingInstalls))
+            {
+                return Array.Empty<string>();
+            }
+
+            return pendingInstalls
+                .Where(install => install != null && install.PackageDefinition != null)
+                .Select(install => install.PackageDefinition.PackageId)
+                .ToArray();
+        }
+
+        internal static void ClearPendingOperationForTests()
+        {
+            ClearSavedOperationState();
+        }
+
+        internal static void ReconcileSelfUpdateAfterInstallForTests(
+            PackageDefinition completedPackage,
+            bool success)
+        {
+            if (!success &&
+                completedPackage != null &&
+                PackageInstallerRuntimeIdentity.IsSelf(completedPackage.PackageId))
+            {
+                PackageInstallerSelfUpdateState.MarkInstallFailed();
+            }
         }
 
         public bool Remove(PackageDefinition packageDefinition)
@@ -446,6 +544,11 @@ namespace Deucarian.PackageInstaller.Editor
 
             try
             {
+                if (PackageInstallerRuntimeIdentity.IsSelf(_currentInstall.PackageDefinition.PackageId))
+                {
+                    PackageInstallerSelfUpdateState.Begin(_currentInstall.Url);
+                }
+
                 _currentRequest = Client.Add(_currentInstall.Url);
                 EditorApplication.update -= Update;
                 EditorApplication.update += Update;
@@ -479,6 +582,12 @@ namespace Deucarian.PackageInstaller.Editor
                 string packageName = _currentRequest.Result != null ? _currentRequest.Result.name : packageDefinition.PackageId;
                 string version = _currentRequest.Result != null ? _currentRequest.Result.version : "unknown";
                 string message = "Installed " + packageDefinition.DisplayName + " (" + packageName + "@" + version + ") from " + _currentInstall.Channel + ".";
+
+                if (PackageInstallerRuntimeIdentity.IsSelf(packageDefinition.PackageId))
+                {
+                    PackageInstallerSelfUpdateState.MarkResolved(version);
+                    message += " Waiting for Unity to load the updated installer assembly.";
+                }
 
                 CompleteCurrentRequest(true, message);
                 PackageInstallerLog.Install.Info(message);
@@ -525,6 +634,8 @@ namespace Deucarian.PackageInstaller.Editor
         private void CompleteCurrentRequest(bool success, string message)
         {
             PackageDefinition completedPackage = _currentInstall != null ? _currentInstall.PackageDefinition : null;
+
+            ReconcileSelfUpdateAfterInstallForTests(completedPackage, success);
 
             if (completedPackage != null)
             {
@@ -768,15 +879,25 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
+            SavePendingOperationState(_currentOperationName, GetCurrentAndQueuedInstalls());
+        }
+
+        private static void SavePendingOperationState(
+            string operationName,
+            IEnumerable<QueuedPackageInstall> pendingInstalls)
+        {
             string queue = string.Join(
                 "\n",
-                GetCurrentAndQueuedInstalls().Select(SerializePendingInstall).ToArray());
+                (pendingInstalls ?? Array.Empty<QueuedPackageInstall>())
+                .Select(SerializePendingInstall)
+                .Where(serializedInstall => !string.IsNullOrWhiteSpace(serializedInstall))
+                .ToArray());
 
-            SessionState.SetString(PendingOperationNameKey, _currentOperationName ?? string.Empty);
+            SessionState.SetString(PendingOperationNameKey, operationName ?? string.Empty);
             SessionState.SetString(PendingQueueKey, queue);
         }
 
-        private void ClearSavedOperationState()
+        private static void ClearSavedOperationState()
         {
             SessionState.SetString(PendingOperationNameKey, string.Empty);
             SessionState.SetString(PendingQueueKey, string.Empty);
@@ -846,6 +967,53 @@ namespace Deucarian.PackageInstaller.Editor
 
             pendingInstalls = installs.ToArray();
             return pendingInstalls.Length > 0;
+        }
+
+        private static bool TryPrepareSavedOperationForResume(
+            bool selfUpdateAppliedOnReload,
+            out string operationName,
+            out QueuedPackageInstall[] pendingInstalls)
+        {
+            if (!TryLoadSavedOperation(out operationName, out pendingInstalls))
+            {
+                ClearSavedOperationState();
+
+                if (selfUpdateAppliedOnReload)
+                {
+                    PackageInstallerSelfUpdateState.AcknowledgeApplied();
+                }
+
+                return false;
+            }
+
+            if (!selfUpdateAppliedOnReload)
+            {
+                return true;
+            }
+
+            pendingInstalls = FilterAppliedSelfUpdate(pendingInstalls);
+
+            if (pendingInstalls.Length == 0)
+            {
+                ClearSavedOperationState();
+                PackageInstallerSelfUpdateState.AcknowledgeApplied();
+                return false;
+            }
+
+            SavePendingOperationState(operationName, pendingInstalls);
+            PackageInstallerSelfUpdateState.AcknowledgeApplied();
+            return true;
+        }
+
+        private static QueuedPackageInstall[] FilterAppliedSelfUpdate(
+            IEnumerable<QueuedPackageInstall> pendingInstalls)
+        {
+            return (pendingInstalls ?? Array.Empty<QueuedPackageInstall>())
+                .Where(install =>
+                    install != null &&
+                    install.PackageDefinition != null &&
+                    !PackageInstallerRuntimeIdentity.IsSelf(install.PackageDefinition.PackageId))
+                .ToArray();
         }
 
         private void NotifyStateChanged()

@@ -6,6 +6,7 @@ namespace Deucarian.PackageInstaller.Editor
     internal static class PackageUpdateCheckPreferences
     {
         private const string CheckOnWindowOpenKey = "Deucarian.PackageInstaller.CheckUpdatesOnWindowOpen";
+        private const string CheckOnEditorStartKey = "Deucarian.PackageInstaller.CheckUpdatesOnEditorStart";
         private const string LastCheckedUtcTicksKey = "Deucarian.PackageInstaller.LastUpdateCheckUtcTicks";
 
         public static readonly TimeSpan WindowOpenThrottle = TimeSpan.FromMinutes(30);
@@ -14,6 +15,12 @@ namespace Deucarian.PackageInstaller.Editor
         {
             get => EditorPrefs.GetBool(CheckOnWindowOpenKey, true);
             set => EditorPrefs.SetBool(CheckOnWindowOpenKey, value);
+        }
+
+        public static bool CheckOnEditorStart
+        {
+            get => EditorPrefs.GetBool(CheckOnEditorStartKey, true);
+            set => EditorPrefs.SetBool(CheckOnEditorStartKey, value);
         }
 
         public static DateTime? LastCheckedUtc

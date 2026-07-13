@@ -13,3 +13,9 @@ jobs:
     uses: Deucarian/Package-Registry/.github/workflows/deucarian-package-validation.yml@develop
     with:
       package-config: deucarian-package.json
+
+  validate-catalog-projection:
+    name: Validate installer catalog projection
+    uses: Deucarian/Package-Registry/.github/workflows/deucarian-catalog-projection-check.yml@develop
+    with:
+      catalog: installer

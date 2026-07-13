@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.1.61 - 2026-07-13
+
 - Consolidated Ecosystem Graph group navigation into the right-side Groups list with shared graph selection state.
 - Moved generic ambient glass, wallpaper, and glass sheen styling to `com.deucarian.editor` while keeping Package Installer graph-specific styling local.
 - Simplified Ecosystem Overview group rows and added left-edge attention styling for graph group cards.
@@ -9,6 +11,12 @@
 - Centralized selected stable/development channel state behind a project-scoped package-management preference shared with Bootstrap.
 - Added manifest/package-lock state signatures so installed-package refreshes are invalidated when Unity Package Manager changes package state outside the installer window.
 - Tightened graph route obstacle validation so package-to-package routes can leave or enter their own category while still avoiding unrelated category obstacles.
+- Added assembly-aware Package Installer self-update reconciliation, persisted reload-pending state, self-last multi-package ordering, and safe queue resume after domain reloads.
+- Added explicit Git source-migration status for every registry-installed Deucarian package without querying npm metadata; Package Installer migrations are handed to Bootstrap while other packages queue their selected catalog Git URL directly.
+- Added actionable reload recovery with a `Retry Script Reload` action when Unity Package Manager resolved a newer installer but the previous assembly is still running.
+- Added configurable, delayed update checks that run at most once per editor session.
+- Added catalog-projection validation to Package Installer CI.
+- Documented Bootstrap/manual one-time recovery for legacy npm `1.1.12` and for a compile-blocked first hop from an already-running `1.1.60` assembly; MVID-based reload recovery is available after `1.1.61` has loaded.
 
 ## 1.1.60 - 2026-06-23
 
