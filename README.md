@@ -6,7 +6,7 @@
 
 It is the Deucarian ecosystem front door for installing standalone packages, integration packages, suite packages, templates, and explicitly declared package samples from Package Registry metadata.
 
-Current package version: `1.1.60`.
+Current package version: `1.1.61`.
 
 ## When to use it
 
@@ -81,7 +81,7 @@ Package Installer diagnostics use stable package categories: `PackageInstaller`,
 
 ## Usage
 
-Use the installer window to install standalone packages, install packages with their registered dependencies, import package samples explicitly, and check installed Git packages for updates.
+Use the installer window to install standalone packages, install packages with their registered dependencies, import package samples explicitly, and check installed packages for updates or source migrations.
 
 ## Package Registry
 
@@ -221,15 +221,21 @@ git diff --check
 
 ## Update Checks
 
-`Check for Updates` is source-aware. Git-installed packages are compared by installed revision and the latest revision returned by `git ls-remote`. Scoped-registry/npm-installed packages are compared by installed package version and the npmjs `latest` dist-tag.
+`Check for Updates` is source-aware. Git-installed packages are compared by installed revision and the latest revision returned by `git ls-remote`. Every registry-installed Deucarian package is reported as a Git source migration using the selected catalog URL; the installer does not query npm metadata or dist-tags for this decision.
 
-Unknown installed revisions or versions are shown as "Cannot determine update" while the package remains installed. Missing Git metadata, unavailable registry metadata, local/file packages, and embedded packages stay neutral instead of marking the row as failed.
+For non-installer packages, `Migrate to Git` queues the selected stable or development catalog URL directly. Package Installer never silently migrates itself: `Open Bootstrap` uses `Tools > Deucarian > Bootstrap > Open Bootstrapper`, and if Bootstrap is absent the UI and logs provide the exact Bootstrap Git URL and menu instructions. A source migration remains actionable even when target SHA or `package.json` metadata cannot be fetched.
 
-The installer can also check for updates automatically when Unity starts and when the Package Installer window opens. Startup checks run at most once per editor session, and window-open checks are throttled so reopening the window does not repeatedly hit remotes. These settings are stored in `EditorPrefs` and can be toggled from the window header.
+Legacy npm Package Installer `1.1.12` cannot display that new migration action because its already-loaded assembly predates this flow. Install Bootstrap from `https://github.com/Deucarian/Bootstrap.git#main` (or `#develop`), open `Tools > Deucarian > Bootstrap > Open Bootstrapper`, and let Bootstrap replace only Package Installer after resolving Editor and Logging from Git. Existing `scopedRegistries` entries are detected read-only and are not removed or rewritten.
+
+Unknown Git revisions are shown as "Cannot determine update" while the package remains installed. Missing Git metadata, local/file packages, and embedded packages stay neutral instead of marking the row as failed.
+
+The installer can also check for updates automatically when Unity starts and when the Package Installer window opens. Startup checks wait until Unity is not compiling or updating, run at most once per editor session, cache their statuses, and log actionable results plus a completion summary without opening a modal or installing anything. Window-open checks are throttled so reopening the window does not repeatedly hit remotes. These settings are stored in `EditorPrefs` and can be toggled from the window header.
 
 `Update` and `Update All Installed Packages` reuse Unity Package Manager installation through `Client.Add` with the selected channel URL after dependency-first planning has installed any missing registered Deucarian dependencies.
 
-The installer package itself is included in update discovery when it is installed in the current project.
+The installer package itself is included in update discovery when it is installed in the current project. Multi-package operations place Package Installer last. After a successful self-update, the installer persists the source assembly version and module identity across domain reloads; if Unity Package Manager resolved the new package while the previous assembly is still running, the row shows `Reload pending` with a `Retry Script Reload` action.
+
+The reload-pending state machine first ships in `1.1.61`; an already-running `1.1.60` assembly cannot retroactively display it during that one transition. If compilation blocks the first `1.1.60` to `1.1.61` reload, recover through Bootstrap or migrate the manifest to the selected Installer Git URL, fix compilation, and reload scripts. Once `1.1.61` has loaded, MVID-based recovery applies to subsequent self-updates even when the package version text is unchanged.
 
 ## Progress Display
 
@@ -301,7 +307,7 @@ Keeping the installer editor-only ensures:
 
 ## Versioning
 
-Current package version: `1.1.60`.
+Current package version: `1.1.61`.
 
 Branch strategy:
 
@@ -333,13 +339,16 @@ After installing, updating, or removing a package, the installer refreshes insta
 - Install or update is blocked: check the selected channel, package dependency list, and Unity Package Manager console output for the first failed package in the dependency-first plan.
 - A remove button is disabled: another installed registered package depends on that package; remove the dependent integration or suite package first.
 - Update status is unknown: the installed package may be embedded, local/file-based, missing Git metadata, or unavailable from the current network.
+- Package Installer shows `Reload pending`: fix any Console compilation errors, then use `Retry Script Reload` so Unity can load the resolved installer assembly.
+- A registry-installed Package Installer shows `Source migration available`: install/open Bootstrap and use `Tools > Deucarian > Bootstrap > Open Bootstrapper`; Package Installer does not self-migrate silently.
+- Legacy npm `1.1.12`, or a compile-blocked first hop from `1.1.60`, cannot expose the new recovery UI from its old running assembly: use Bootstrap or the selected Git manifest URL once, then reload scripts.
 - Samples do not import: confirm the package is installed, then import the sample explicitly from the package details panel or Unity Package Manager.
 
 ## Limitations
 
 - This package is editor-only. It has no `Runtime` folder and should not be referenced by game code.
 - The installer uses a bundled registry first and a remote registry refresh when available; it does not auto-discover GitHub repositories.
-- Only Git branch update checks are supported today.
+- Update comparisons use Git references; registry-installed Deucarian packages are offered an explicit migration to their catalog Git URL.
 - The installer cannot know download-byte progress for Git packages.
 - Sample import avoids silent overwrite; there is no overwrite UI in this version.
 

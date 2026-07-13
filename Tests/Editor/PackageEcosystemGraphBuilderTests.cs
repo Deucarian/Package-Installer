@@ -157,7 +157,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
-        public void Window_DoesNotRegisterEditorStartupHooks()
+        public void StartupUpdateCheckIsTheOnlyRegisteredEditorStartupHook()
         {
             System.Reflection.Assembly packageInstallerAssembly = typeof(PackageInstallerWindow).Assembly;
             Type[] startupHookTypes = packageInstallerAssembly
@@ -170,8 +170,55 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 .Where(method => method.GetCustomAttributes(typeof(InitializeOnLoadMethodAttribute), inherit: false).Length > 0)
                 .ToArray();
 
-            Assert.IsEmpty(startupHookTypes);
+            CollectionAssert.AreEquivalent(
+                new[] { typeof(PackageInstallerStartupUpdateCheck) },
+                startupHookTypes);
             Assert.IsEmpty(startupHookMethods);
+        }
+
+        [Test]
+        public void StartupUpdateCheckSchedulesOncePerEnabledSession()
+        {
+            Assert.IsTrue(PackageInstallerStartupUpdateCheck.ShouldScheduleForTests(
+                enabled: true,
+                alreadyAttempted: false,
+                isBatchMode: false));
+            Assert.IsFalse(PackageInstallerStartupUpdateCheck.ShouldScheduleForTests(
+                enabled: true,
+                alreadyAttempted: true,
+                isBatchMode: false));
+            Assert.IsFalse(PackageInstallerStartupUpdateCheck.ShouldScheduleForTests(
+                enabled: false,
+                alreadyAttempted: false,
+                isBatchMode: false));
+            Assert.IsFalse(PackageInstallerStartupUpdateCheck.ShouldScheduleForTests(
+                enabled: true,
+                alreadyAttempted: false,
+                isBatchMode: true));
+            Assert.AreEqual(
+                PackageInstallerStartupCheckDecision.WaitForEditor,
+                PackageInstallerStartupUpdateCheck.GetDecisionForTests(
+                    enabled: true,
+                    alreadyAttempted: false,
+                    isBatchMode: false,
+                    isCompiling: true,
+                    isUpdating: false));
+            Assert.AreEqual(
+                PackageInstallerStartupCheckDecision.WaitForEditor,
+                PackageInstallerStartupUpdateCheck.GetDecisionForTests(
+                    enabled: true,
+                    alreadyAttempted: false,
+                    isBatchMode: false,
+                    isCompiling: false,
+                    isUpdating: true));
+            Assert.AreEqual(
+                PackageInstallerStartupCheckDecision.Start,
+                PackageInstallerStartupUpdateCheck.GetDecisionForTests(
+                    enabled: true,
+                    alreadyAttempted: false,
+                    isBatchMode: false,
+                    isCompiling: false,
+                    isUpdating: false));
         }
 
         [Test]

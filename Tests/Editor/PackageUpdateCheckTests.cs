@@ -231,103 +231,243 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 "fedcba9876543210fedcba9876543210fedcba98");
 
             Assert.AreEqual(LogType.Log, PackageUpdateCheckService.GetLogType(status));
+            Assert.IsTrue(PackageUpdateCheckService.ShouldLogStatusForTests(status));
         }
 
         [Test]
-        public void RegistryPackageInstalledAtLatestVersionReturnsUpToDate()
+        public void RegistryInstalledPackageReturnsGitSourceMigration()
         {
-            PackageDefinition packageDefinition = CreatePackage();
-
-            PackageUpdateStatus status = CheckRegistryPackageForTests(
-                packageDefinition,
-                installedVersion: "1.2.3",
-                latestVersion: "1.2.3");
-
-            Assert.AreEqual(PackageUpdateStatusKind.UpToDate, status.Kind);
-            Assert.AreEqual("1.2.3", status.InstalledRevision);
-            Assert.AreEqual("1.2.3", status.LatestRevision);
-            Assert.AreEqual("1.2.3", status.InstalledVersion);
-            Assert.AreEqual("1.2.3", status.LatestVersion);
-            Assert.IsFalse(status.IsUpdateAvailable);
-        }
-
-        [Test]
-        public void RegistryPackageInstalledBelowLatestVersionReturnsUpdateAvailable()
-        {
-            PackageDefinition packageDefinition = CreatePackage();
-
-            PackageUpdateStatus status = CheckRegistryPackageForTests(
-                packageDefinition,
-                installedVersion: "1.2.2",
-                latestVersion: "1.2.3");
-
-            Assert.AreEqual(PackageUpdateStatusKind.UpdateAvailable, status.Kind);
-            Assert.AreEqual("1.2.2", status.InstalledRevision);
-            Assert.AreEqual("1.2.3", status.LatestRevision);
-            Assert.AreEqual("1.2.2", status.InstalledVersion);
-            Assert.AreEqual("1.2.3", status.LatestVersion);
-            Assert.IsTrue(status.HasPackageVersionTransition);
-            Assert.IsTrue(status.IsUpdateAvailable);
-        }
-
-        [Test]
-        public void RegistryPackageSelectedDevelopmentUsesDevelopmentDistTag()
-        {
-            PackageDefinition packageDefinition = CreatePackage();
-            PackageUpdateCheckService.RegistryChannelVersionResolverForTests =
-                (_, channel) => PackageUpdateCheckService.RegistryLatestVersionResult.Ok(
-                    channel == PackageChannel.Development ? "1.2.4-dev.7" : "1.2.3");
-
-            PackageUpdateStatus status = PackageUpdateCheckService.CheckItemForTests(
-                packageDefinition,
-                PackageChannel.Development,
-                packageDefinition.DevelopmentUrl,
-                packageDefinition.PackageId + "@1.2.3",
-                string.Empty,
-                "1.2.3",
-                PackageInstallSourceType.Registry,
-                "1.2.3",
-                hasInstalledChannel: true,
-                installedChannel: PackageChannel.Stable,
-                packageLockPaths: Array.Empty<string>());
-
-            Assert.AreEqual(PackageUpdateStatusKind.SwitchAvailable, status.Kind);
-            Assert.AreEqual("1.2.3", status.InstalledRevision);
-            Assert.AreEqual("1.2.4-dev.7", status.LatestRevision);
-            Assert.AreEqual("1.2.3", status.InstalledVersion);
-            Assert.AreEqual("1.2.4-dev.7", status.LatestVersion);
-            Assert.IsTrue(status.HasPackageVersionTransition);
-            Assert.IsTrue(status.IsUpdateAvailable);
-        }
-
-        [Test]
-        public void RegistryPackageSelectedStableFromDevelopmentVersionReturnsSwitchAvailable()
-        {
-            PackageDefinition packageDefinition = CreatePackage();
-            PackageUpdateCheckService.RegistryChannelVersionResolverForTests =
-                (_, channel) => PackageUpdateCheckService.RegistryLatestVersionResult.Ok(
-                    channel == PackageChannel.Stable ? "1.2.3" : "1.2.4-dev.7");
+            const string latestRevision = "fedcba9876543210fedcba9876543210fedcba98";
+            PackageDefinition packageDefinition = CreatePackage(
+                stableUrl: "https://github.com/Deucarian/Object-Loading.git#" + latestRevision);
+            PackageUpdateCheckService.GitPackageVersionResolverForTests =
+                (_, __, revision) =>
+                {
+                    Assert.AreEqual(latestRevision, revision);
+                    return PackageUpdateCheckService.PackageVersionResult.Ok("1.2.4");
+                };
 
             PackageUpdateStatus status = PackageUpdateCheckService.CheckItemForTests(
                 packageDefinition,
                 PackageChannel.Stable,
                 packageDefinition.StableUrl,
-                packageDefinition.PackageId + "@1.2.4-dev.7",
+                packageDefinition.PackageId + "@1.2.3",
                 string.Empty,
-                "1.2.4-dev.7",
+                "1.2.3",
                 PackageInstallSourceType.Registry,
-                "1.2.4-dev.7",
-                hasInstalledChannel: true,
-                installedChannel: PackageChannel.Development,
-                packageLockPaths: Array.Empty<string>());
+                "1.2.3",
+                Array.Empty<string>());
 
-            Assert.AreEqual(PackageUpdateStatusKind.SwitchAvailable, status.Kind);
-            Assert.AreEqual("1.2.4-dev.7", status.InstalledRevision);
-            Assert.AreEqual("1.2.3", status.LatestRevision);
-            Assert.AreEqual("1.2.4-dev.7", status.InstalledVersion);
-            Assert.AreEqual("1.2.3", status.LatestVersion);
-            Assert.IsTrue(status.HasPackageVersionTransition);
-            Assert.IsTrue(status.IsUpdateAvailable);
+            Assert.AreEqual(PackageUpdateStatusKind.SourceMigrationAvailable, status.Kind);
+            Assert.IsTrue(status.IsSourceMigrationAvailable);
+            Assert.IsFalse(status.IsUpdateAvailable);
+            Assert.AreEqual("1.2.3", status.InstalledVersion);
+            Assert.AreEqual("1.2.4", status.LatestVersion);
+            Assert.AreEqual(latestRevision, status.LatestRevision);
+        }
+
+        [Test]
+        public void SelfGitPackageWithResolvedTargetAndOlderRunningAssemblyReturnsReloadPending()
+        {
+            const string revision = "0123456789abcdef0123456789abcdef01234567";
+            PackageDefinition packageDefinition = CreateInstallerPackage();
+            PackageUpdateCheckService.GitPackageVersionResolverForTests =
+                (_, __, ___) => PackageUpdateCheckService.PackageVersionResult.Ok("1.1.61");
+
+            PackageUpdateStatus status = PackageUpdateCheckService.CheckItemForTests(
+                packageDefinition,
+                PackageChannel.Stable,
+                packageDefinition.StableUrl.Replace("#main", "#" + revision),
+                string.Empty,
+                string.Empty,
+                packageDefinition.StableUrl.Replace("#main", "#" + revision),
+                PackageInstallSourceType.Git,
+                "1.1.61",
+                hasInstalledChannel: true,
+                installedChannel: PackageChannel.Stable,
+                packageLockPaths: Array.Empty<string>(),
+                runningInstallerVersion: "1.1.60",
+                selfUpdateSnapshot: PackageInstallerSelfUpdateSnapshot.None);
+
+            Assert.AreEqual(PackageUpdateStatusKind.ReloadPending, status.Kind);
+            Assert.IsTrue(status.IsReloadPending);
+            Assert.IsFalse(status.IsUpdateAvailable);
+            Assert.AreEqual("1.1.60", status.RunningVersion);
+            Assert.AreEqual("1.1.61", status.InstalledVersion);
+        }
+
+        [Test]
+        public void SelfGitPackageWithSameVersionAndPendingMarkerReturnsReloadPending()
+        {
+            const string revision = "0123456789abcdef0123456789abcdef01234567";
+            PackageDefinition packageDefinition = CreateInstallerPackage();
+            string selectedUrl = packageDefinition.StableUrl.Replace("#main", "#" + revision);
+            PackageUpdateCheckService.GitPackageVersionResolverForTests =
+                (_, __, ___) => PackageUpdateCheckService.PackageVersionResult.Ok("1.1.61");
+
+            PackageUpdateStatus status = PackageUpdateCheckService.CheckItemForTests(
+                packageDefinition,
+                PackageChannel.Stable,
+                selectedUrl,
+                string.Empty,
+                string.Empty,
+                selectedUrl,
+                PackageInstallSourceType.Git,
+                "1.1.61",
+                hasInstalledChannel: true,
+                installedChannel: PackageChannel.Stable,
+                packageLockPaths: Array.Empty<string>(),
+                runningInstallerVersion: "1.1.61",
+                selfUpdateSnapshot: new PackageInstallerSelfUpdateSnapshot(
+                    true,
+                    "1.1.61",
+                    "11111111111111111111111111111111",
+                    "1.1.61",
+                    selectedUrl));
+
+            Assert.AreEqual(PackageUpdateStatusKind.ReloadPending, status.Kind);
+        }
+
+        [Test]
+        public void PendingSelfMarkerDoesNotHideANewerRemoteRevision()
+        {
+            const string installedRevision = "0123456789abcdef0123456789abcdef01234567";
+            const string latestRevision = "fedcba9876543210fedcba9876543210fedcba98";
+            PackageDefinition packageDefinition = CreateInstallerPackage();
+            string installedUrl = packageDefinition.StableUrl.Replace("#main", "#" + installedRevision);
+            string selectedUrl = packageDefinition.StableUrl.Replace("#main", "#" + latestRevision);
+            PackageUpdateCheckService.GitPackageVersionResolverForTests =
+                (_, __, ___) => PackageUpdateCheckService.PackageVersionResult.Ok("1.1.62");
+
+            PackageUpdateStatus status = PackageUpdateCheckService.CheckItemForTests(
+                packageDefinition,
+                PackageChannel.Stable,
+                selectedUrl,
+                string.Empty,
+                string.Empty,
+                installedUrl,
+                PackageInstallSourceType.Git,
+                "1.1.61",
+                hasInstalledChannel: true,
+                installedChannel: PackageChannel.Stable,
+                packageLockPaths: Array.Empty<string>(),
+                runningInstallerVersion: "1.1.60",
+                selfUpdateSnapshot: new PackageInstallerSelfUpdateSnapshot(
+                    true,
+                    "1.1.60",
+                    "11111111111111111111111111111111",
+                    "1.1.61",
+                    installedUrl));
+
+            Assert.AreEqual(PackageUpdateStatusKind.UpdateAvailable, status.Kind);
+        }
+
+        [Test]
+        public void RegistryInstalledSelfReturnsGitSourceMigrationWithoutQueryingNpm()
+        {
+            const string latestRevision = "fedcba9876543210fedcba9876543210fedcba98";
+            PackageDefinition packageDefinition = CreateInstallerPackage();
+            PackageUpdateCheckService.GitPackageVersionResolverForTests =
+                (_, __, ___) => PackageUpdateCheckService.PackageVersionResult.Ok("1.1.61");
+
+            PackageUpdateStatus status = PackageUpdateCheckService.CheckItemForTests(
+                packageDefinition,
+                PackageChannel.Stable,
+                packageDefinition.StableUrl.Replace("#main", "#" + latestRevision),
+                packageDefinition.PackageId + "@1.1.12",
+                string.Empty,
+                "1.1.12",
+                PackageInstallSourceType.Registry,
+                "1.1.12",
+                hasInstalledChannel: true,
+                installedChannel: PackageChannel.Stable,
+                packageLockPaths: Array.Empty<string>(),
+                runningInstallerVersion: "1.1.12",
+                selfUpdateSnapshot: PackageInstallerSelfUpdateSnapshot.None);
+
+            Assert.AreEqual(PackageUpdateStatusKind.SourceMigrationAvailable, status.Kind);
+            Assert.IsTrue(status.IsSourceMigrationAvailable);
+            Assert.IsFalse(status.IsUpdateAvailable);
+            Assert.AreEqual("1.1.12", status.InstalledVersion);
+            Assert.AreEqual("1.1.61", status.LatestVersion);
+            Assert.AreEqual(latestRevision, status.LatestRevision);
+        }
+
+        [Test]
+        public void SelfSourceMigrationHandsOffToBootstrapWithChannelFallbackUrls()
+        {
+            PackageDefinition installer = CreateInstallerPackage();
+            PackageDefinition otherPackage = CreatePackage();
+
+            Assert.AreEqual(
+                PackageSourceMigrationAction.OpenBootstrap,
+                PackageInstallerWindow.GetSourceMigrationActionForTests(installer));
+            Assert.AreEqual(
+                PackageSourceMigrationAction.InstallSelectedGitUrl,
+                PackageInstallerWindow.GetSourceMigrationActionForTests(otherPackage));
+            Assert.AreEqual(
+                "Tools/Deucarian/Bootstrap/Open Bootstrapper",
+                PackageInstallerWindow.BootstrapMenuPathForTests);
+            Assert.AreEqual(
+                "https://github.com/Deucarian/Bootstrap.git#main",
+                PackageInstallerWindow.GetBootstrapGitUrlForTests(PackageChannel.Stable));
+            Assert.AreEqual(
+                "https://github.com/Deucarian/Bootstrap.git#develop",
+                PackageInstallerWindow.GetBootstrapGitUrlForTests(PackageChannel.Development));
+        }
+
+        [Test]
+        public void CompletionSummaryIncludesMigrationAndReloadPendingCounts()
+        {
+            PackageDefinition packageDefinition = CreateInstallerPackage();
+            PackageUpdateStatus migration = PackageUpdateStatus.SourceMigrationAvailable(
+                packageDefinition,
+                PackageChannel.Stable,
+                packageDefinition.StableUrl,
+                "fedcba9876543210fedcba9876543210fedcba98",
+                "1.1.12",
+                "1.1.61",
+                "Use Bootstrap.");
+            PackageUpdateStatus reloadPending = PackageUpdateStatus.ReloadPending(
+                packageDefinition,
+                PackageChannel.Stable,
+                packageDefinition.StableUrl,
+                "fedcba9876543210fedcba9876543210fedcba98",
+                "fedcba9876543210fedcba9876543210fedcba98",
+                "1.1.61",
+                "1.1.61",
+                "1.1.60",
+                "Retry reload.");
+
+            Assert.AreEqual(
+                "Checked for updates. 0 updates available, 1 source migration available, 1 reload pending.",
+                PackageUpdateCheckService.GetCompletionSummaryForTests(new[] { migration, reloadPending }));
+        }
+
+        [Test]
+        public void RegistryMigrationRemainsActionableWhenTargetMetadataFails()
+        {
+            PackageDefinition packageDefinition = CreatePackage();
+            PackageUpdateCheckService.GitPackageVersionResolverForTests =
+                (_, __, ___) => PackageUpdateCheckService.PackageVersionResult.Fail(
+                    "Target package.json was unavailable.");
+
+            PackageUpdateStatus status = PackageUpdateCheckService.CheckItemForTests(
+                packageDefinition,
+                PackageChannel.Stable,
+                "not-a-git-package-reference",
+                packageDefinition.PackageId + "@1.2.3",
+                string.Empty,
+                "1.2.3",
+                PackageInstallSourceType.Registry,
+                "1.2.3",
+                Array.Empty<string>());
+
+            Assert.AreEqual(PackageUpdateStatusKind.SourceMigrationAvailable, status.Kind);
+            Assert.IsTrue(status.NeedsAttention);
+            Assert.IsFalse(status.IsUpdateAvailable);
+            StringAssert.Contains("Target metadata was unavailable", status.Message);
+            StringAssert.Contains("Target package.json was unavailable", status.Message);
         }
 
         [Test]
@@ -399,83 +539,28 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
-        public void RegistryPackageWithoutLatestVersionReturnsCannotDetermine()
+        public void RegistryMigrationReadsInstalledVersionFromPackageIdMetadata()
         {
-            PackageDefinition packageDefinition = CreatePackage();
+            const string latestRevision = "fedcba9876543210fedcba9876543210fedcba98";
+            PackageDefinition packageDefinition = CreatePackage(
+                stableUrl: "https://github.com/Deucarian/Object-Loading.git#" + latestRevision);
+            PackageUpdateCheckService.GitPackageVersionResolverForTests =
+                (_, __, ___) => PackageUpdateCheckService.PackageVersionResult.Fail("No package version metadata.");
 
-            PackageUpdateStatus status = CheckRegistryPackageForTests(
+            PackageUpdateStatus status = PackageUpdateCheckService.CheckItemForTests(
                 packageDefinition,
-                installedVersion: "1.2.3",
-                latestVersion: string.Empty);
+                PackageChannel.Stable,
+                packageDefinition.StableUrl,
+                packageDefinition.PackageId + "@1.2.3",
+                string.Empty,
+                string.Empty,
+                PackageInstallSourceType.Registry,
+                string.Empty,
+                Array.Empty<string>());
 
-            Assert.AreEqual(PackageUpdateStatusKind.CannotDetermine, status.Kind);
-            Assert.AreEqual(LogType.Log, PackageUpdateCheckService.GetLogType(status));
-            Assert.IsFalse(status.IsUpdateAvailable);
-        }
-
-        [Test]
-        public void RegistryPackageVersionCanBeReadFromPackageIdMetadata()
-        {
-            PackageDefinition packageDefinition = CreatePackage();
-            PackageUpdateCheckService.RegistryLatestVersionResolverForTests =
-                _ => PackageUpdateCheckService.RegistryLatestVersionResult.Ok("1.2.3");
-
-            try
-            {
-                PackageUpdateStatus status = PackageUpdateCheckService.CheckItemForTests(
-                    packageDefinition,
-                    PackageChannel.Stable,
-                    packageDefinition.StableUrl,
-                    packageDefinition.PackageId + "@1.2.3",
-                    string.Empty,
-                    string.Empty,
-                    PackageInstallSourceType.Registry,
-                    string.Empty,
-                    Array.Empty<string>());
-
-                Assert.AreEqual(PackageUpdateStatusKind.UpToDate, status.Kind);
-                Assert.AreEqual("1.2.3", status.InstalledRevision);
-            }
-            finally
-            {
-                PackageUpdateCheckService.RegistryLatestVersionResolverForTests = null;
-            }
-        }
-
-        [Test]
-        public void NpmLatestDistTagCanBeReadFromRegistryMetadata()
-        {
-            bool found = PackageUpdateCheckService.TryReadNpmLatestVersion(
-                "{\"dist-tags\":{\"dev\":\"1.2.4-dev.7\",\"latest\":\"1.2.3\"}}",
-                out string latestVersion);
-
-            Assert.IsTrue(found);
-            Assert.AreEqual("1.2.3", latestVersion);
-        }
-
-        [Test]
-        public void NpmDevelopmentDistTagCanBeReadFromRegistryMetadata()
-        {
-            bool found = PackageUpdateCheckService.TryReadNpmDistTagVersion(
-                "{\"dist-tags\":{\"dev\":\"1.2.4-dev.7\",\"latest\":\"1.2.3\"}}",
-                "dev",
-                out string developmentVersion);
-
-            Assert.IsTrue(found);
-            Assert.AreEqual("1.2.4-dev.7", developmentVersion);
-        }
-
-        [Test]
-        public void SemanticVersionComparisonDetectsOlderInstalledVersion()
-        {
-            bool compared = PackageUpdateCheckService.TryCompareSemanticVersions(
-                "1.2.2",
-                "1.2.3",
-                out int comparison,
-                out string message);
-
-            Assert.IsTrue(compared, message);
-            Assert.Less(comparison, 0);
+            Assert.AreEqual(PackageUpdateStatusKind.SourceMigrationAvailable, status.Kind);
+            Assert.AreEqual("1.2.3", status.InstalledVersion);
+            Assert.AreEqual(latestRevision, status.LatestRevision);
         }
 
         [Test]
@@ -495,12 +580,12 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         [Test]
         public void CancelCurrentUpdateCheckClearsCheckingStatusAndIgnoresStaleResult()
         {
-            PackageDefinition packageDefinition = CreatePackage();
-            PackageUpdateCheckService.RegistryChannelVersionResolverForTests =
-                (_, __) =>
+            PackageDefinition packageDefinition = CreatePackageWithRevisionChannels();
+            PackageUpdateCheckService.GitPackageVersionResolverForTests =
+                (_, __, ___) =>
                 {
                     Thread.Sleep(100);
-                    return PackageUpdateCheckService.RegistryLatestVersionResult.Ok("1.2.3");
+                    return PackageUpdateCheckService.PackageVersionResult.Ok("1.2.3");
                 };
 
             using (PackageDetectionService detectionService = new PackageDetectionService())
@@ -539,11 +624,11 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
-        public void TargetedStableToDevelopmentCheckMarksCheckingThenSwitchAvailable()
+        public void TargetedStableToDevelopmentCheckMarksCheckingThenMigrationAvailable()
         {
-            PackageDefinition packageDefinition = CreatePackage();
-            PackageUpdateCheckService.RegistryChannelVersionResolverForTests =
-                (_, channel) => PackageUpdateCheckService.RegistryLatestVersionResult.Ok(
+            PackageDefinition packageDefinition = CreatePackageWithRevisionChannels();
+            PackageUpdateCheckService.GitPackageVersionResolverForTests =
+                (_, channel, __) => PackageUpdateCheckService.PackageVersionResult.Ok(
                     channel == PackageChannel.Development ? "1.2.4-dev.7" : "1.2.3");
 
             using (PackageDetectionService detectionService = new PackageDetectionService())
@@ -566,17 +651,18 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 PackageUpdateStatus status = updateCheckService.GetStatus(
                     packageDefinition,
                     PackageChannel.Development);
-                Assert.AreEqual(PackageUpdateStatusKind.SwitchAvailable, status.Kind);
-                Assert.AreEqual("1.2.4-dev.7", status.LatestRevision);
+                Assert.AreEqual(PackageUpdateStatusKind.SourceMigrationAvailable, status.Kind);
+                Assert.AreEqual(DevelopmentRevision, status.LatestRevision);
+                Assert.AreEqual("1.2.4-dev.7", status.LatestVersion);
             }
         }
 
         [Test]
-        public void TargetedDevelopmentToStableCheckMarksCheckingThenSwitchAvailable()
+        public void TargetedDevelopmentToStableCheckMarksCheckingThenMigrationAvailable()
         {
-            PackageDefinition packageDefinition = CreatePackage();
-            PackageUpdateCheckService.RegistryChannelVersionResolverForTests =
-                (_, channel) => PackageUpdateCheckService.RegistryLatestVersionResult.Ok(
+            PackageDefinition packageDefinition = CreatePackageWithRevisionChannels();
+            PackageUpdateCheckService.GitPackageVersionResolverForTests =
+                (_, channel, __) => PackageUpdateCheckService.PackageVersionResult.Ok(
                     channel == PackageChannel.Stable ? "1.2.3" : "1.2.4-dev.7");
 
             using (PackageDetectionService detectionService = new PackageDetectionService())
@@ -599,8 +685,9 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 PackageUpdateStatus status = updateCheckService.GetStatus(
                     packageDefinition,
                     PackageChannel.Stable);
-                Assert.AreEqual(PackageUpdateStatusKind.SwitchAvailable, status.Kind);
-                Assert.AreEqual("1.2.3", status.LatestRevision);
+                Assert.AreEqual(PackageUpdateStatusKind.SourceMigrationAvailable, status.Kind);
+                Assert.AreEqual(StableRevision, status.LatestRevision);
+                Assert.AreEqual("1.2.3", status.LatestVersion);
             }
         }
 
@@ -624,17 +711,17 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         [Test]
         public void StaleTargetedCheckResultDoesNotOverwriteNewerChannelSelection()
         {
-            PackageDefinition packageDefinition = CreatePackage();
-            PackageUpdateCheckService.RegistryChannelVersionResolverForTests =
-                (_, channel) =>
+            PackageDefinition packageDefinition = CreatePackageWithRevisionChannels();
+            PackageUpdateCheckService.GitPackageVersionResolverForTests =
+                (_, channel, __) =>
                 {
                     if (channel == PackageChannel.Stable)
                     {
                         Thread.Sleep(100);
-                        return PackageUpdateCheckService.RegistryLatestVersionResult.Ok("1.2.3");
+                        return PackageUpdateCheckService.PackageVersionResult.Ok("1.2.3");
                     }
 
-                    return PackageUpdateCheckService.RegistryLatestVersionResult.Ok("1.2.4-dev.7");
+                    return PackageUpdateCheckService.PackageVersionResult.Ok("1.2.4-dev.7");
                 };
 
             using (PackageDetectionService detectionService = new PackageDetectionService())
@@ -655,10 +742,14 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 PackageUpdateStatus status = updateCheckService.GetStatus(
                     packageDefinition,
                     PackageChannel.Development);
-                Assert.AreEqual(PackageUpdateStatusKind.SwitchAvailable, status.Kind);
-                Assert.AreEqual("1.2.4-dev.7", status.LatestRevision);
+                Assert.AreEqual(PackageUpdateStatusKind.SourceMigrationAvailable, status.Kind);
+                Assert.AreEqual(DevelopmentRevision, status.LatestRevision);
+                Assert.AreEqual("1.2.4-dev.7", status.LatestVersion);
             }
         }
+
+        private const string StableRevision = "0123456789abcdef0123456789abcdef01234567";
+        private const string DevelopmentRevision = "fedcba9876543210fedcba9876543210fedcba98";
 
         private static PackageDefinition CreatePackage(
             string stableUrl = "https://github.com/Deucarian/Object-Loading.git#main")
@@ -674,33 +765,30 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 category: "Core");
         }
 
-        private static PackageUpdateStatus CheckRegistryPackageForTests(
-            PackageDefinition packageDefinition,
-            string installedVersion,
-            string latestVersion)
+        private static PackageDefinition CreateInstallerPackage()
         {
-            PackageUpdateCheckService.RegistryLatestVersionResolverForTests =
-                string.IsNullOrWhiteSpace(latestVersion)
-                    ? _ => PackageUpdateCheckService.RegistryLatestVersionResult.Fail("Could not fetch latest npmjs version.")
-                    : _ => PackageUpdateCheckService.RegistryLatestVersionResult.Ok(latestVersion);
+            return new PackageDefinition(
+                "Deucarian Package Installer",
+                PackageInstallerRuntimeIdentity.PackageId,
+                "https://github.com/Deucarian/Package-Installer.git#main",
+                "Package management.",
+                Array.Empty<string>(),
+                PackageType.Core,
+                "https://github.com/Deucarian/Package-Installer.git#develop",
+                category: "Tools");
+        }
 
-            try
-            {
-                return PackageUpdateCheckService.CheckItemForTests(
-                    packageDefinition,
-                    PackageChannel.Stable,
-                    packageDefinition.StableUrl,
-                    packageDefinition.PackageId + "@" + installedVersion,
-                    string.Empty,
-                    installedVersion,
-                    PackageInstallSourceType.Registry,
-                    installedVersion,
-                    Array.Empty<string>());
-            }
-            finally
-            {
-                PackageUpdateCheckService.RegistryLatestVersionResolverForTests = null;
-            }
+        private static PackageDefinition CreatePackageWithRevisionChannels()
+        {
+            return new PackageDefinition(
+                "Deucarian Object Loading",
+                "com.deucarian.object-loading",
+                "https://github.com/Deucarian/Object-Loading.git#" + StableRevision,
+                "Reusable runtime loading pipeline.",
+                Array.Empty<string>(),
+                PackageType.Core,
+                "https://github.com/Deucarian/Object-Loading.git#" + DevelopmentRevision,
+                category: "Core");
         }
 
         private static void PumpTargetedChecksUntilIdle()

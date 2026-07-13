@@ -468,6 +468,8 @@ namespace Deucarian.PackageInstaller.Editor
                     return PackageGraphNodeStatus.UpdateAvailable;
                 case PackageUpdateStatusKind.CannotDetermine:
                 case PackageUpdateStatusKind.Failed:
+                case PackageUpdateStatusKind.SourceMigrationAvailable:
+                case PackageUpdateStatusKind.ReloadPending:
                     return PackageGraphNodeStatus.Warning;
                 default:
                     return PackageGraphNodeStatus.Installed;
