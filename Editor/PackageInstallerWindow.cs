@@ -150,16 +150,19 @@ namespace Deucarian.PackageInstaller.Editor
         internal const string OperationDrawerVerboseToggleName = "package-installer-operation-drawer-verbose-toggle";
         internal const string OperationDrawerVerboseLabelName = "package-installer-operation-drawer-verbose-label";
         internal const string OperationDrawerMessageName = "package-installer-operation-drawer-message";
+        internal const string OperationDrawerRetryButtonName = "package-installer-operation-drawer-retry";
         internal const string OperationFooterRowName = "package-installer-operation-footer";
         internal const string OperationFooterStatusGroupName = "package-installer-operation-footer-status";
         internal const string OperationFooterStatusIconName = "package-installer-operation-footer-status-icon";
         internal const string OperationFooterStatusLabelName = "package-installer-operation-footer-status-label";
         internal const string OperationFooterSummaryName = "package-installer-operation-footer-summary";
+        internal const string OperationFooterCancelButtonName = "package-installer-operation-footer-cancel";
         internal const string OperationFooterDetailsButtonName = "package-installer-operation-footer-details-toggle";
         internal const string OperationFooterVersionName = "package-installer-operation-footer-version";
         internal const string WallpaperTopSafeFadeName = "package-installer-wallpaper-top-safe-fade";
         internal const string GlobalChannelOverrideButtonName = "package-installer-global-channel-override";
         internal const string GlobalChannelOverridePopupName = "package-installer-global-channel-override-popup";
+        internal const string GlobalChannelOverrideResetButtonName = "package-installer-global-channel-override-reset";
         private const string AdvancedFoldoutPreferencePrefix = "Deucarian.PackageInstaller.AdvancedFoldout.";
         private const string CategoryFoldoutPreferencePrefix = "Deucarian.PackageInstaller.CategoryFoldout.";
         private const string OperationDrawerPreferencePrefix = "Deucarian.PackageInstaller.OperationDrawer.";
@@ -264,6 +267,7 @@ namespace Deucarian.PackageInstaller.Editor
         private PackageUpdateCheckService _packageUpdateCheckService;
         private PackageSampleImportService _packageSampleImportService;
         private PackageSampleDiscoveryService _packageSampleDiscoveryService;
+        private PackageReverseDependencyResolver _packageReverseDependencyResolver;
         private PackageDependencyInstaller _packageDependencyInstaller;
         private PackageGraphBuilder _packageGraphBuilder;
         private PackageInstallerStateRepository _stateRepository;
@@ -292,6 +296,8 @@ namespace Deucarian.PackageInstaller.Editor
         private PackageInstallerActionKind _activeActionKind = PackageInstallerActionKind.None;
         private PackageInstallerActionKind _cancelingActionKind = PackageInstallerActionKind.None;
         private bool _operationDetailsExpanded;
+        private bool _promptSavedOperationAfterDetectionRefresh;
+        private PackageOperationTerminalSnapshot _terminalOperationRetryAfterRefresh;
         private InstallerViewMode _viewMode = DefaultInstallerViewMode;
         private PackageChannel _lastObservedProjectChannel = PackageChannel.Stable;
         private long _lastObservedProjectChannelChangedAtUtcTicks;
@@ -305,6 +311,7 @@ namespace Deucarian.PackageInstaller.Editor
         private Button _graphInstallAllButton;
         private VisualElement _globalChannelPopup;
         private DropdownField _globalChannelDropdown;
+        private Button _globalChannelResetButton;
         private Label _viewSummaryLabel;
         private VisualElement _listViewContainerHost;
         private VisualElement _graphModeContainer;
@@ -319,6 +326,7 @@ namespace Deucarian.PackageInstaller.Editor
         private Toggle _operationDrawerVerboseToggle;
         private Label _operationDrawerVerboseLabel;
         private Label _operationDrawerMessageLabel;
+        private Button _operationDrawerRetryButton;
         private VisualElement _operationFooterContainer;
         private VisualElement _operationFooterStatusGroup;
         private Label _operationFooterStatusIcon;
@@ -452,6 +460,45 @@ namespace Deucarian.PackageInstaller.Editor
             return ResolveResponsiveMode(width);
         }
 
+        internal static bool IsGraphNavigationRowKeyboardActivationForTests(
+            bool hasKeyboardFocus,
+            EventType eventType,
+            KeyCode keyCode)
+        {
+            return IsGraphNavigationRowKeyboardActivation(
+                hasKeyboardFocus,
+                eventType,
+                keyCode);
+        }
+
+        internal static void HandleGraphEscapeForTests(
+            PackageGraphView graphView,
+            Action fallbackBackNavigation)
+        {
+            HandleGraphEscape(graphView, fallbackBackNavigation);
+        }
+
+        internal static bool ShouldShowEcosystemAttentionForTests(int attentionCount)
+        {
+            return ShouldShowEcosystemAttention(attentionCount);
+        }
+
+        internal static string FormatGlobalChannelButtonLabelForTests(PackageChannelSelection selection)
+        {
+            return FormatGlobalChannelButtonLabel(selection);
+        }
+
+        internal static bool ShouldShowGlobalChannelResetForTests(PackageChannelSelection selection)
+        {
+            return ShouldShowGlobalChannelReset(selection);
+        }
+
+        internal static bool ShouldDrawGraphNavigationBeforeContextForTests(
+            PackageInstallerResponsiveMode responsiveMode)
+        {
+            return ShouldDrawGraphNavigationBeforeContext(responsiveMode);
+        }
+
         internal static VisualElement CreateOperationFooterForTests(bool expanded = false)
         {
             VisualElement footer = CreateOperationFooterRow(null);
@@ -470,6 +517,7 @@ namespace Deucarian.PackageInstaller.Editor
             string report = "Package operation completed.\nInstalled package.")
         {
             VisualElement drawer = CreateOperationDrawer(
+                null,
                 null,
                 out ScrollView scrollView,
                 out VisualElement content,
@@ -528,12 +576,16 @@ namespace Deucarian.PackageInstaller.Editor
             _lastObservedProjectChannelChangedAtUtcTicks = projectChannelSelection.ChangedAtUtcTicks;
             _packageInstallService = new PackageInstallService();
             _packageDetectionService = new PackageDetectionService();
+            _packageInstallService.ExactTargetAlreadyInstalled =
+                _packageDetectionService.IsInstalledAtExactTargetAfterChange;
             _packageUpdateCheckService = new PackageUpdateCheckService(_packageDetectionService);
             _packageSampleImportService = new PackageSampleImportService();
             _packageSampleDiscoveryService = new PackageSampleDiscoveryService();
+            _packageReverseDependencyResolver = new PackageReverseDependencyResolver();
             _packageDependencyInstaller = new PackageDependencyInstaller(
                 _packageInstallService,
                 _packageDetectionService);
+            _packageDependencyInstaller.PreflightConfirmation = ConfirmContextualOperation;
             _packageGraphBuilder = new PackageGraphBuilder(
                 packageId => _packageDetectionService != null && _packageDetectionService.IsInstalled(packageId),
                 GetSelectedChannel,
@@ -560,22 +612,18 @@ namespace Deucarian.PackageInstaller.Editor
             _packageSampleImportService.StateChanged += Repaint;
             _packageSampleImportService.StateChanged += RefreshGraphView;
             _packageSampleImportService.StateChanged += UpdateOperationFooter;
+            PackageInstallerActivityService.Changed += Repaint;
+            PackageInstallerActivityService.Changed += UpdateOperationFooter;
 
             bool checkUpdatesAfterDetectionRefresh = ShouldCheckForUpdatesOnGraphOpen();
+            _promptSavedOperationAfterDetectionRefresh = _packageInstallService.HasSavedOperation;
 
-            if (!_packageInstallService.ResumeSavedOperation())
-            {
-                if (checkUpdatesAfterDetectionRefresh)
-                {
-                    QueueDeferredUpdateCheck(PackageInstallerActionKind.CheckUpdates);
-                }
-
-                _packageDetectionService.Refresh();
-            }
-            else if (checkUpdatesAfterDetectionRefresh)
+            if (checkUpdatesAfterDetectionRefresh)
             {
                 QueueDeferredUpdateCheck(PackageInstallerActionKind.CheckUpdates);
             }
+
+            _packageDetectionService.Refresh();
         }
 
         private void OnFocus()
@@ -617,9 +665,12 @@ namespace Deucarian.PackageInstaller.Editor
                 _packageSampleImportService.StateChanged -= Repaint;
                 _packageSampleImportService.StateChanged -= RefreshGraphView;
                 _packageSampleImportService.StateChanged -= UpdateOperationFooter;
+                _packageSampleImportService.Dispose();
             }
 
             PackageRegistryProvider.RegistryChanged -= HandleRegistryChanged;
+            PackageInstallerActivityService.Changed -= Repaint;
+            PackageInstallerActivityService.Changed -= UpdateOperationFooter;
             HideGlobalChannelOverridePopup();
             _stateRepository = null;
         }
@@ -680,15 +731,20 @@ namespace Deucarian.PackageInstaller.Editor
 
             _operationDrawerContainer = CreateOperationDrawer(
                 HandleVerboseConsoleLoggingChanged,
+                RetryLatestActivity,
                 out _operationDrawerScrollView,
                 out _operationDrawerContent,
                 out _operationDrawerTitleLabel,
                 out _operationDrawerVerboseToggle,
                 out _operationDrawerVerboseLabel,
                 out _operationDrawerMessageLabel);
+            _operationDrawerRetryButton = _operationDrawerContainer.Q<Button>(
+                OperationDrawerRetryButtonName);
             content.Add(_operationDrawerContainer);
 
-            _operationFooterContainer = CreateOperationFooterRow(() => SetOperationDetailsExpanded(!_operationDetailsExpanded));
+            _operationFooterContainer = CreateOperationFooterRow(
+                () => SetOperationDetailsExpanded(!_operationDetailsExpanded),
+                CancelCurrentContextualOperation);
             CacheOperationFooterElements(_operationFooterContainer);
             content.Add(_operationFooterContainer);
 
@@ -769,13 +825,9 @@ namespace Deucarian.PackageInstaller.Editor
             _graphGlobalChannelButton = CreateGlobalChannelOverrideButton();
             _graphRefreshButton = CreateGraphActionButton("Refresh", RefreshPackages);
             _graphCheckUpdatesButton = CreateGraphActionButton("Check Updates", () => HandleActionButton(PackageInstallerActionKind.CheckUpdates));
-            _graphUpdateAllButton = CreateGraphActionButton("Update All", () => HandleActionButton(PackageInstallerActionKind.UpdateAll));
-            _graphInstallAllButton = CreateGraphActionButton("Install All", () => HandleActionButton(PackageInstallerActionKind.InstallAll));
             toolbar.Add(_graphGlobalChannelButton);
             toolbar.Add(_graphRefreshButton);
             toolbar.Add(_graphCheckUpdatesButton);
-            toolbar.Add(_graphUpdateAllButton);
-            toolbar.Add(_graphInstallAllButton);
 
             content.Add(toolbar);
         }
@@ -789,11 +841,12 @@ namespace Deucarian.PackageInstaller.Editor
 
         private Button CreateGlobalChannelOverrideButton()
         {
+            PackageChannelSelection selection = GetGlobalProjectChannelSelection();
             Button button = new Button(ToggleGlobalChannelOverridePopup)
             {
                 name = GlobalChannelOverrideButtonName,
-                text = "Override: " + GetChannelLabel(GetGlobalProjectChannel()),
-                tooltip = "Set the global package channel override. The latest change between this override and an individual package channel wins."
+                text = FormatGlobalChannelButtonLabel(selection),
+                tooltip = GetGlobalChannelButtonTooltip(selection)
             };
             button.AddToClassList("dpi-view-toolbar__action");
             button.AddToClassList("dpi-view-toolbar__channel-button");
@@ -881,6 +934,15 @@ namespace Deucarian.PackageInstaller.Editor
                 text = "Apply Override"
             };
             applyButton.AddToClassList("dpi-global-channel-popup__apply");
+
+            _globalChannelResetButton = new Button(ClearGlobalChannelOverrideFromPopup)
+            {
+                name = GlobalChannelOverrideResetButtonName,
+                text = "Use Default",
+                tooltip = "Remove the explicit project override and use inherited/default channel selection."
+            };
+            _globalChannelResetButton.AddToClassList("dpi-global-channel-popup__apply");
+            actions.Add(_globalChannelResetButton);
             actions.Add(applyButton);
 
             popup.Add(actions);
@@ -894,14 +956,29 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            _globalChannelDropdown.SetValueWithoutNotify(GetChannelLabel(GetGlobalProjectChannel()));
+            PackageChannelSelection selection = GetGlobalProjectChannelSelection();
+            _globalChannelDropdown.SetValueWithoutNotify(GetChannelLabel(selection.Channel));
+
+            if (_globalChannelResetButton != null)
+            {
+                bool showReset = ShouldShowGlobalChannelReset(selection);
+                _globalChannelResetButton.style.display = showReset
+                    ? DisplayStyle.Flex
+                    : DisplayStyle.None;
+                _globalChannelResetButton.SetEnabled(showReset);
+            }
         }
 
         private PackageChannel GetGlobalProjectChannel()
         {
+            return GetGlobalProjectChannelSelection().Channel;
+        }
+
+        private PackageChannelSelection GetGlobalProjectChannelSelection()
+        {
             return _stateRepository != null
-                ? _stateRepository.GetProjectChannelSelection().Channel
-                : PackageChannel.Stable;
+                ? _stateRepository.GetProjectChannelSelection()
+                : PackageChannelSelection.None;
         }
 
         private void UpdateGlobalChannelOverrideButton()
@@ -911,9 +988,9 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            _graphGlobalChannelButton.text = "Override: " + GetChannelLabel(GetGlobalProjectChannel());
-            _graphGlobalChannelButton.tooltip =
-                "Set the global package channel override. The latest change between this override and an individual package channel wins.";
+            PackageChannelSelection selection = GetGlobalProjectChannelSelection();
+            _graphGlobalChannelButton.text = FormatGlobalChannelButtonLabel(selection);
+            _graphGlobalChannelButton.tooltip = GetGlobalChannelButtonTooltip(selection);
         }
 
         private void SetGlobalChannelOverride(PackageChannel channel)
@@ -936,6 +1013,41 @@ namespace Deucarian.PackageInstaller.Editor
             UpdateGlobalChannelOverridePopup();
             RefreshGraphView("global channel override changed");
             Repaint();
+        }
+
+        private void ClearGlobalChannelOverrideFromPopup()
+        {
+            _stateRepository?.ClearProjectChannel();
+
+            PackageChannelSelection selection = GetGlobalProjectChannelSelection();
+            _lastObservedProjectChannel = selection.Channel;
+            _lastObservedProjectChannelChangedAtUtcTicks = selection.ChangedAtUtcTicks;
+
+            _packageUpdateCheckService?.InvalidateAll();
+            InvalidateGraphModelCache("global channel override cleared");
+            UpdateGlobalChannelOverrideButton();
+            UpdateGlobalChannelOverridePopup();
+            RefreshGraphView("global channel override cleared");
+            HideGlobalChannelOverridePopup();
+            Repaint();
+        }
+
+        private static string FormatGlobalChannelButtonLabel(PackageChannelSelection selection)
+        {
+            return (selection.HasValue ? "Override: " : "Channel: ") +
+                   GetChannelLabel(selection.Channel);
+        }
+
+        private static string GetGlobalChannelButtonTooltip(PackageChannelSelection selection)
+        {
+            return selection.HasValue
+                ? "An explicit project channel override is active. Open to change it or return to the inherited/default channel."
+                : "No explicit project override is active. Open to set a project channel override.";
+        }
+
+        private static bool ShouldShowGlobalChannelReset(PackageChannelSelection selection)
+        {
+            return selection.HasValue;
         }
 
         private static PackageChannel ParseChannelLabel(string label)
@@ -1045,6 +1157,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static VisualElement CreateOperationDrawer(
             Action<bool> verboseLoggingChanged,
+            Action retryAction,
             out ScrollView scrollView,
             out VisualElement content,
             out Label titleLabel,
@@ -1106,16 +1219,41 @@ namespace Deucarian.PackageInstaller.Editor
             });
             optionRow.Add(verboseLabel);
 
-            messageLabel = new Label("No detailed operation report is available.")
+            Label localMessageLabel = new Label("No detailed operation report is available.")
             {
                 name = OperationDrawerMessageName
             };
-            messageLabel.AddToClassList("dpi-operation-row");
-            messageLabel.AddToClassList("dpi-operation-row--message");
-            messageLabel.AddToClassList("dpi-operation-text--secondary");
-            messageLabel.AddToClassList("dpi-operation-drawer__message");
-            messageLabel.style.color = DeucarianEditorVisualShell.MutedText;
-            content.Add(messageLabel);
+            localMessageLabel.AddToClassList("dpi-operation-row");
+            localMessageLabel.AddToClassList("dpi-operation-row--message");
+            localMessageLabel.AddToClassList("dpi-operation-text--secondary");
+            localMessageLabel.AddToClassList("dpi-operation-drawer__message");
+            localMessageLabel.style.color = DeucarianEditorVisualShell.MutedText;
+            content.Add(localMessageLabel);
+            messageLabel = localMessageLabel;
+
+            VisualElement reportActions = new VisualElement();
+            reportActions.AddToClassList("dpi-operation-row");
+            reportActions.AddToClassList("dpi-operation-row--option");
+            Button retryButton = new Button(retryAction)
+            {
+                name = OperationDrawerRetryButtonName,
+                text = "Retry",
+                tooltip = "Retry the latest failed or canceled activity."
+            };
+            retryButton.AddToClassList("dpi-operation-drawer__copy");
+            retryButton.style.display = DisplayStyle.None;
+            reportActions.Add(retryButton);
+            Button copyDetailsButton = new Button(() =>
+            {
+                GUIUtility.systemCopyBuffer = localMessageLabel.text ?? string.Empty;
+            })
+            {
+                text = "Copy details",
+                tooltip = "Copy the chronological operation report to the clipboard."
+            };
+            copyDetailsButton.AddToClassList("dpi-operation-drawer__copy");
+            reportActions.Add(copyDetailsButton);
+            content.Add(reportActions);
 
             return drawer;
         }
@@ -1144,6 +1282,134 @@ namespace Deucarian.PackageInstaller.Editor
                 _operationDetailsExpanded,
                 PackageInstallerLoggingPreferences.VerboseConsoleLogging,
                 GetOperationDrawerReportText());
+            UpdateActivityRetryButton();
+        }
+
+        private void UpdateActivityRetryButton()
+        {
+            if (_operationDrawerRetryButton == null)
+            {
+                return;
+            }
+
+            PackageInstallerActivityEntry latest = PackageInstallerActivityService.Latest;
+            PackageInstallerRetryKind retryKind = ResolveContextualRetryKind(
+                latest,
+                _packageInstallService?.TerminalOperationSnapshot);
+            if (retryKind == PackageInstallerRetryKind.ReplanOperation &&
+                (_packageDependencyInstaller == null ||
+                 !_packageDependencyInstaller.CanRetryLastPlannerFailure))
+            {
+                retryKind = PackageInstallerRetryKind.None;
+            }
+            ApplyContextualRetryButtonState(
+                _operationDrawerRetryButton,
+                retryKind,
+                IsAnyOperationBusy());
+        }
+
+        internal static void ApplyContextualRetryButtonStateForTests(
+            Button retryButton,
+            PackageInstallerRetryKind retryKind,
+            bool isBusy)
+        {
+            ApplyContextualRetryButtonState(retryButton, retryKind, isBusy);
+        }
+
+        private static void ApplyContextualRetryButtonState(
+            Button retryButton,
+            PackageInstallerRetryKind retryKind,
+            bool isBusy)
+        {
+            if (retryButton == null)
+            {
+                return;
+            }
+
+            bool canRetry = retryKind != PackageInstallerRetryKind.None && !isBusy;
+            retryButton.text = retryKind == PackageInstallerRetryKind.RestartOperation
+                ? "Retry package operation"
+                : retryKind == PackageInstallerRetryKind.ReplanOperation
+                    ? "Retry package plan"
+                    : "Retry";
+            retryButton.tooltip = retryKind == PackageInstallerRetryKind.RestartOperation
+                ? "Refresh installed and registry state, then replan the affected package operation."
+                : retryKind == PackageInstallerRetryKind.ReplanOperation
+                    ? "Rebuild the failed package plan from the current registry and installed state."
+                    : "Retry the latest failed or canceled activity.";
+            retryButton.style.display = canRetry
+                ? DisplayStyle.Flex
+                : DisplayStyle.None;
+            retryButton.SetEnabled(canRetry);
+        }
+
+        private void RetryLatestActivity()
+        {
+            PackageInstallerActivityEntry latest = PackageInstallerActivityService.Latest;
+            PackageOperationTerminalSnapshot snapshot =
+                _packageInstallService?.TerminalOperationSnapshot;
+            PackageInstallerRetryKind retryKind = ResolveContextualRetryKind(latest, snapshot);
+            if (retryKind == PackageInstallerRetryKind.ReplanOperation &&
+                (_packageDependencyInstaller == null ||
+                 !_packageDependencyInstaller.CanRetryLastPlannerFailure))
+            {
+                retryKind = PackageInstallerRetryKind.None;
+            }
+            if (retryKind == PackageInstallerRetryKind.None || IsAnyOperationBusy())
+            {
+                return;
+            }
+
+            switch (retryKind)
+            {
+                case PackageInstallerRetryKind.Refresh:
+                    _packageDetectionService?.Refresh();
+                    break;
+                case PackageInstallerRetryKind.CheckUpdates:
+                    CheckForUpdates();
+                    break;
+                case PackageInstallerRetryKind.ImportSample:
+                    _packageSampleImportService?.RetryLastImport();
+                    break;
+                case PackageInstallerRetryKind.ResumeOperation:
+                    _promptSavedOperationAfterDetectionRefresh =
+                        _packageInstallService != null && _packageInstallService.HasSavedOperation;
+                    PackageRegistryProvider.RefreshRemote();
+                    _packageDetectionService?.Refresh();
+                    break;
+                case PackageInstallerRetryKind.RestartOperation:
+                    if (snapshot == null || !snapshot.CanRestart)
+                    {
+                        return;
+                    }
+
+                    _terminalOperationRetryAfterRefresh = snapshot;
+                    PackageRegistryProvider.RefreshRemote();
+                    _packageDetectionService?.Refresh();
+                    break;
+                case PackageInstallerRetryKind.ReplanOperation:
+                    _packageDependencyInstaller?.RetryLastPlannerFailure();
+                    break;
+            }
+        }
+
+        internal static PackageInstallerRetryKind ResolveContextualRetryKindForTests(
+            PackageInstallerActivityEntry latest,
+            PackageOperationTerminalSnapshot terminalSnapshot)
+        {
+            return ResolveContextualRetryKind(latest, terminalSnapshot);
+        }
+
+        private static PackageInstallerRetryKind ResolveContextualRetryKind(
+            PackageInstallerActivityEntry latest,
+            PackageOperationTerminalSnapshot terminalSnapshot)
+        {
+            if (terminalSnapshot != null && terminalSnapshot.CanRestart)
+            {
+                return PackageInstallerRetryKind.RestartOperation;
+            }
+
+            return latest != null ? latest.RetryKind : PackageInstallerRetryKind.None;
         }
 
         private static void ApplyOperationDrawerData(
@@ -1189,7 +1455,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (titleLabel != null)
             {
-                titleLabel.text = "Last Operation Summary";
+                titleLabel.text = "Activity";
                 titleLabel.style.display = DisplayStyle.Flex;
                 titleLabel.style.opacity = 1f;
                 titleLabel.style.color = DeucarianEditorVisualShell.Text;
@@ -1221,7 +1487,9 @@ namespace Deucarian.PackageInstaller.Editor
             }
         }
 
-        private static VisualElement CreateOperationFooterRow(Action detailsToggleAction)
+        private static VisualElement CreateOperationFooterRow(
+            Action detailsToggleAction,
+            Action cancelAction = null)
         {
             VisualElement footer = new VisualElement { name = OperationFooterRowName };
             footer.AddToClassList("dpi-operation-surface");
@@ -1272,6 +1540,21 @@ namespace Deucarian.PackageInstaller.Editor
             spacer.style.flexGrow = 0f;
             spacer.style.flexShrink = 0f;
             footer.Add(spacer);
+
+            Button cancelButton = new Button { name = OperationFooterCancelButtonName, text = "Cancel" };
+            if (cancelAction != null)
+            {
+                cancelButton.clicked += cancelAction;
+            }
+            cancelButton.AddToClassList("dpi-operation-footer__details-button");
+            cancelButton.style.flexShrink = 0f;
+            cancelButton.style.width = 92f;
+            cancelButton.style.height = 24f;
+            cancelButton.style.minHeight = 24f;
+            cancelButton.style.maxHeight = 24f;
+            cancelButton.style.marginRight = OperationControlGap;
+            cancelButton.style.display = DisplayStyle.None;
+            footer.Add(cancelButton);
 
             Button detailsButton = new Button { name = OperationFooterDetailsButtonName };
             if (detailsToggleAction != null)
@@ -1344,7 +1627,62 @@ namespace Deucarian.PackageInstaller.Editor
                 GetFooterVersionText());
 
             CacheOperationFooterElements(_operationFooterContainer);
+            UpdateOperationCancelButton();
             RefreshOperationDrawerContent();
+        }
+
+        private void UpdateOperationCancelButton()
+        {
+            Button cancelButton = _operationFooterContainer?.Q<Button>(OperationFooterCancelButtonName);
+            if (cancelButton == null)
+            {
+                return;
+            }
+
+            bool installBusy = _packageInstallService != null && _packageInstallService.IsBusy;
+            bool sampleBusy = _packageSampleImportService != null && _packageSampleImportService.IsBusy;
+            bool checkBusy = _packageUpdateCheckService != null && _packageUpdateCheckService.IsChecking;
+            bool registryBusy = _activeActionKind == PackageInstallerActionKind.CheckUpdates &&
+                                PackageRegistryProvider.IsRemoteRefreshing;
+            cancelButton.style.display = installBusy || sampleBusy || checkBusy || registryBusy
+                ? DisplayStyle.Flex
+                : DisplayStyle.None;
+            cancelButton.text = sampleBusy
+                ? "Cancel Import"
+                : checkBusy
+                    ? "Cancel Check"
+                    : registryBusy
+                        ? "Cancel Check"
+                        : "Cancel";
+        }
+
+        private void CancelCurrentContextualOperation()
+        {
+            if (_packageSampleImportService != null && _packageSampleImportService.IsBusy)
+            {
+                _packageSampleImportService.CancelCurrentImport();
+            }
+            else if (_packageInstallService != null && _packageInstallService.IsBusy)
+            {
+                _packageInstallService.CancelCurrentOperation();
+            }
+            else if (_packageUpdateCheckService != null && _packageUpdateCheckService.IsChecking)
+            {
+                _packageUpdateCheckService.CancelCurrentCheck();
+            }
+            else if (PackageRegistryProvider.IsRemoteRefreshing)
+            {
+                if (_activeActionKind == PackageInstallerActionKind.CheckUpdates)
+                {
+                    CancelAction(PackageInstallerActionKind.CheckUpdates);
+                }
+                else
+                {
+                    PackageRegistryProvider.CancelRemoteRefresh();
+                }
+            }
+
+            UpdateOperationFooter();
         }
 
         private static void ApplyOperationFooterData(
@@ -2020,8 +2358,21 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            HandleGraphBackNavigation();
+            HandleGraphEscape(_graphView, HandleGraphBackNavigation);
             evt.StopPropagation();
+        }
+
+        private static void HandleGraphEscape(
+            PackageGraphView graphView,
+            Action fallbackBackNavigation)
+        {
+            if (graphView != null)
+            {
+                graphView.HandleEscapeFromWindow();
+                return;
+            }
+
+            fallbackBackNavigation?.Invoke();
         }
 
         private void HandleGraphPackageAction(PackageDefinition packageDefinition, PackageGraphNodeAction action)
@@ -2313,8 +2664,6 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 DrawHeaderButton("Refresh", 82f, IsAnyOperationBusy(), RefreshPackages);
                 DrawActionHeaderButton(PackageInstallerActionKind.CheckUpdates, 118f, busy, hasPackagesWithUpdates);
-                DrawActionHeaderButton(PackageInstallerActionKind.UpdateAll, 92f, busy, hasPackagesWithUpdates);
-                DrawActionHeaderButton(PackageInstallerActionKind.InstallAll, 86f, busy, hasPackagesWithUpdates);
                 GUILayout.FlexibleSpace();
             }
         }
@@ -2449,6 +2798,14 @@ namespace Deucarian.PackageInstaller.Editor
                     _checkUpdatesAfterDetectionRefresh = false;
                     _deferredUpdateCheckActionKind = PackageInstallerActionKind.None;
                     _packageUpdateCheckService.CancelCurrentCheck();
+                    if (PackageRegistryProvider.CancelRemoteRefresh())
+                    {
+                        PackageInstallerActivityService.Record(
+                            "Registry",
+                            PackageInstallerActivitySeverity.Warning,
+                            "Registry refresh canceled.",
+                            retryKind: PackageInstallerRetryKind.CheckUpdates);
+                    }
                     break;
                 case PackageInstallerActionKind.UpdateAll:
                 case PackageInstallerActionKind.InstallAll:
@@ -2961,6 +3318,9 @@ namespace Deucarian.PackageInstaller.Editor
                 GUILayout.ExpandHeight(true));
 
             PackageDefinition selectedDefinition = GetSelectedDefinition();
+            bool drawGraphNavigation = _viewMode == InstallerViewMode.EcosystemGraph;
+            bool drawGraphNavigationBeforeContext =
+                drawGraphNavigation && ShouldDrawGraphNavigationBeforeContext(_responsiveMode);
 
             if (selectedDefinition == null)
             {
@@ -2968,18 +3328,23 @@ namespace Deucarian.PackageInstaller.Editor
 
                 if (focusedGroup != null)
                 {
-                    if (_viewMode == InstallerViewMode.EcosystemGraph)
+                    if (drawGraphNavigationBeforeContext)
                     {
                         DrawEcosystemOverviewGroupsPanel();
                     }
 
                     DrawGraphGroupDetails(focusedGroup);
+
+                    if (drawGraphNavigation && !drawGraphNavigationBeforeContext)
+                    {
+                        DrawEcosystemOverviewGroupsPanel();
+                    }
                 }
                 else
                 {
                     DrawEcosystemOverviewDashboard();
 
-                    if (_viewMode == InstallerViewMode.EcosystemGraph)
+                    if (drawGraphNavigation)
                     {
                         DrawEcosystemOverviewGroupsPanel();
                     }
@@ -2987,21 +3352,31 @@ namespace Deucarian.PackageInstaller.Editor
             }
             else if (_selectionKind == SelectionKind.Integration)
             {
-                if (_viewMode == InstallerViewMode.EcosystemGraph)
+                if (drawGraphNavigationBeforeContext)
                 {
                     DrawEcosystemOverviewGroupsPanel();
                 }
 
                 DrawIntegrationDetails(selectedDefinition);
+
+                if (drawGraphNavigation && !drawGraphNavigationBeforeContext)
+                {
+                    DrawEcosystemOverviewGroupsPanel();
+                }
             }
             else
             {
-                if (_viewMode == InstallerViewMode.EcosystemGraph)
+                if (drawGraphNavigationBeforeContext)
                 {
                     DrawEcosystemOverviewGroupsPanel();
                 }
 
                 DrawPackageDetails(selectedDefinition);
+
+                if (drawGraphNavigation && !drawGraphNavigationBeforeContext)
+                {
+                    DrawEcosystemOverviewGroupsPanel();
+                }
             }
 
             EditorGUILayout.EndScrollView();
@@ -3033,10 +3408,13 @@ namespace Deucarian.PackageInstaller.Editor
                 DrawFlatStatusRow(InstalledStatusMarker, installedCount + " installed", VisualStatusKind.Installed);
                 DrawFlatStatusRow(NotInstalledStatusMarker, notInstalledCount + " not installed", VisualStatusKind.NotInstalled);
                 DrawFlatStatusRow(AttentionStatusMarker, updateCount + " updates", VisualStatusKind.UpdateAvailable);
-                DrawFlatStatusRow(
-                    AttentionStatusMarker,
-                    attentionCount + " attention",
-                    attentionCount > 0 ? VisualStatusKind.UpdateAvailable : VisualStatusKind.Info);
+                if (ShouldShowEcosystemAttention(attentionCount))
+                {
+                    DrawFlatStatusRow(
+                        AttentionStatusMarker,
+                        attentionCount + " attention",
+                        VisualStatusKind.UpdateAvailable);
+                }
                 GUILayout.Space(6f);
                 DrawKeyValueRow("Registry", PackageRegistryProvider.StatusMessage);
                 DrawKeyValueRow("Filters", GetActiveFilterSummary());
@@ -3076,13 +3454,15 @@ namespace Deucarian.PackageInstaller.Editor
         private bool DrawEcosystemOverviewGroupRow(PackageGraphGroupNavigationRow row)
         {
             Rect rowRect = GUILayoutUtility.GetRect(1f, 34f, GUILayout.ExpandWidth(true));
+            int controlId = GUIUtility.GetControlID(FocusType.Keyboard, rowRect);
             bool hover = rowRect.Contains(Event.current.mousePosition);
             bool graphHover = !row.IsOverview && IsGraphGroupHoverContext(row.Id);
             bool selected = row.IsSelected;
+            bool keyboardFocused = GUIUtility.keyboardControl == controlId;
 
             if (Event.current.type == EventType.Repaint)
             {
-                bool highlighted = selected || hover || graphHover;
+                bool highlighted = selected || hover || graphHover || keyboardFocused;
                 DeucarianEditorVisualShell.DrawInsetSurface(
                     rowRect,
                     selected ? _rowSelectedColor : highlighted ? _rowHoverColor : _sampleRowBackgroundColor,
@@ -3099,15 +3479,16 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (Event.current.type == EventType.MouseDown && hover && Event.current.button == 0)
             {
-                if (row.IsOverview)
-                {
-                    NavigateGraphToRoot();
-                }
-                else
-                {
-                    NavigateGraphToGroup(row.Id);
-                }
-
+                GUIUtility.keyboardControl = controlId;
+                ActivateEcosystemOverviewGroupRow(row);
+                Event.current.Use();
+            }
+            else if (IsGraphNavigationRowKeyboardActivation(
+                         keyboardFocused,
+                         Event.current.type,
+                         Event.current.keyCode))
+            {
+                ActivateEcosystemOverviewGroupRow(row);
                 Event.current.Use();
             }
 
@@ -3117,7 +3498,10 @@ namespace Deucarian.PackageInstaller.Editor
             DrawGraphNavigationIcon(iconRect, row.IconKey);
 
             GUIContent nameContent = new GUIContent(row.DisplayName, row.Tooltip);
-            GUIContent summaryContent = new GUIContent(row.Summary, row.Summary);
+            string summaryText = _responsiveMode == PackageInstallerResponsiveMode.Compact
+                ? FormatCompactEcosystemOverviewGroupStatusSummary(row.StatusSummary)
+                : row.Summary;
+            GUIContent summaryContent = new GUIContent(summaryText, row.Summary);
             Rect contentRect = new Rect(rowRect.x + 38f, rowRect.y + 8f, rowRect.width - 48f, 18f);
             float gap = 10f;
             float summaryWidth = Mathf.Min(
@@ -3131,6 +3515,38 @@ namespace Deucarian.PackageInstaller.Editor
             DrawSingleLineLabel(nameRect, nameContent, _miniLabelStyle);
             DrawSingleLineLabel(summaryRect, summaryContent, _mutedMiniLabelStyle);
             return hover;
+        }
+
+        private void ActivateEcosystemOverviewGroupRow(PackageGraphGroupNavigationRow row)
+        {
+            if (row.IsOverview)
+            {
+                NavigateGraphToRoot();
+                return;
+            }
+
+            NavigateGraphToGroup(row.Id);
+        }
+
+        private static bool IsGraphNavigationRowKeyboardActivation(
+            bool hasKeyboardFocus,
+            EventType eventType,
+            KeyCode keyCode)
+        {
+            return hasKeyboardFocus &&
+                   eventType == EventType.KeyDown &&
+                   PackageGraphKeyboard.IsActivationKey(keyCode);
+        }
+
+        private static bool ShouldShowEcosystemAttention(int attentionCount)
+        {
+            return attentionCount > 0;
+        }
+
+        private static bool ShouldDrawGraphNavigationBeforeContext(
+            PackageInstallerResponsiveMode responsiveMode)
+        {
+            return responsiveMode != PackageInstallerResponsiveMode.Narrow;
         }
 
         private void DrawGraphNavigationIcon(Rect rect, string iconKey)
@@ -3177,6 +3593,34 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             return parts.Count == 0 ? "0 packages" : string.Join("   ", parts.ToArray());
+        }
+
+        private static string FormatCompactEcosystemOverviewGroupStatusSummary(
+            PackageGraphCategoryStatusSummary statusSummary)
+        {
+            List<string> parts = new List<string>();
+
+            if (statusSummary.AttentionCount > 0)
+            {
+                parts.Add(AttentionStatusMarker + " " + statusSummary.AttentionCount);
+            }
+
+            if (statusSummary.InstalledCount > 0)
+            {
+                parts.Add(InstalledStatusMarker + " " + statusSummary.InstalledCount);
+            }
+
+            if (statusSummary.NotInstalledCount > 0)
+            {
+                parts.Add(NotInstalledStatusMarker + " " + statusSummary.NotInstalledCount);
+            }
+
+            if (statusSummary.UnknownCount > 0)
+            {
+                parts.Add("? " + statusSummary.UnknownCount);
+            }
+
+            return parts.Count == 0 ? "0" : string.Join("   ", parts.ToArray());
         }
 
         private static IReadOnlyList<PackageGraphGroupNavigationRow> CreateEcosystemOverviewGroupNavigationRows(
@@ -3380,6 +3824,7 @@ namespace Deucarian.PackageInstaller.Editor
         {
             DrawDetailHeader(packageDefinition);
             DrawStatusPanel(packageDefinition);
+            DrawRequirementsPanel(packageDefinition);
             DrawChannelPanel(packageDefinition);
             DrawActionsPanel(packageDefinition);
             DrawOptionalCompanionsPanel(packageDefinition);
@@ -3394,6 +3839,18 @@ namespace Deucarian.PackageInstaller.Editor
             PackageGraphNode[] directPackages = descendants
                 .Where(node => string.Equals(node.GroupId, group.Id, StringComparison.OrdinalIgnoreCase))
                 .OrderBy(node => node.DisplayName, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            PackageDefinition[] missingPackages = descendants
+                .Where(node => node != null && !node.IsInstalled && node.PackageDefinition != null)
+                .Select(node => node.PackageDefinition)
+                .Distinct()
+                .ToArray();
+            PackageDefinition[] packagesWithUpdates = descendants
+                .Where(node => node != null &&
+                               node.Status == PackageGraphNodeStatus.UpdateAvailable &&
+                               node.PackageDefinition != null)
+                .Select(node => node.PackageDefinition)
+                .Distinct()
                 .ToArray();
             int installedCount = descendants.Count(node => node.IsInstalled);
             int updateCount = descendants.Count(node => node.Status == PackageGraphNodeStatus.UpdateAvailable);
@@ -3435,6 +3892,33 @@ namespace Deucarian.PackageInstaller.Editor
                     EditorGUILayout.LabelField(packageNode.DisplayName, _miniLabelStyle);
                 }
             }, GUILayout.ExpandWidth(true));
+
+            if (missingPackages.Length > 0 || packagesWithUpdates.Length > 0)
+            {
+                DrawPanel("Actions", () =>
+                {
+                    using (new EditorGUI.DisabledScope(IsAnyOperationBusy()))
+                    {
+                        if (missingPackages.Length > 0 &&
+                            GUILayout.Button(
+                                "Install missing (" + missingPackages.Length + ")",
+                                _primaryButtonStyle,
+                                GUILayout.Height(28f)))
+                        {
+                            InstallGraphGroupPackages(group, missingPackages);
+                        }
+
+                        if (packagesWithUpdates.Length > 0 &&
+                            GUILayout.Button(
+                                "Update available (" + packagesWithUpdates.Length + ")",
+                                _secondaryButtonStyle,
+                                GUILayout.Height(28f)))
+                        {
+                            UpdateGraphGroupPackages(group, packagesWithUpdates);
+                        }
+                    }
+                }, GUILayout.ExpandWidth(true));
+            }
         }
 
         private void DrawIntegrationDetails(PackageDefinition packageDefinition)
@@ -3447,6 +3931,104 @@ namespace Deucarian.PackageInstaller.Editor
             DrawOptionalCompanionsPanel(packageDefinition);
             DrawExtrasPanel(packageDefinition);
             DrawAdvancedPanel(packageDefinition);
+        }
+
+        private void InstallGraphGroupPackages(
+            PackageGraphGroup group,
+            IReadOnlyCollection<PackageDefinition> packageDefinitions)
+        {
+            if (_packageDependencyInstaller == null || packageDefinitions == null || packageDefinitions.Count == 0)
+            {
+                return;
+            }
+
+            _activeActionKind = PackageInstallerActionKind.InstallAll;
+            _cancelingActionKind = PackageInstallerActionKind.None;
+            _packageDependencyInstaller.InstallManyWithDependencies(
+                packageDefinitions,
+                GetSelectedChannel,
+                "Install missing in " + group.DisplayName);
+            ClearActiveActionIfIdle();
+            UpdateViewVisibility();
+        }
+
+        private void UpdateGraphGroupPackages(
+            PackageGraphGroup group,
+            IReadOnlyCollection<PackageDefinition> packageDefinitions)
+        {
+            if (_packageDependencyInstaller == null || packageDefinitions == null || packageDefinitions.Count == 0)
+            {
+                return;
+            }
+
+            TrackPendingUpdateStatusInvalidations(packageDefinitions);
+            _activeActionKind = PackageInstallerActionKind.UpdateAll;
+            _cancelingActionKind = PackageInstallerActionKind.None;
+            _packageDependencyInstaller.UpdateManyWithDependencies(
+                packageDefinitions,
+                GetSelectedChannel,
+                "Update available in " + group.DisplayName);
+
+            if (!_packageInstallService.IsBusy)
+            {
+                _pendingUpdateStatusInvalidationPackageIds.Clear();
+            }
+
+            ClearActiveActionIfIdle();
+            UpdateViewVisibility();
+        }
+
+        private static bool ConfirmContextualOperation(PackageDependencyInstallPlan plan, string operationName)
+        {
+            if (plan == null || !plan.IsValid)
+            {
+                EditorUtility.DisplayDialog(
+                    "Package operation unavailable",
+                    plan != null && !string.IsNullOrWhiteSpace(plan.ErrorMessage)
+                        ? plan.ErrorMessage
+                        : "The package operation could not be planned.",
+                    "OK");
+                return false;
+            }
+
+            if (!plan.RequiresPreflight)
+            {
+                return true;
+            }
+
+            List<string> riskLabels = new List<string>();
+            if (plan.IsMultiStep) riskLabels.Add("multiple package steps");
+            if (plan.HasMigrationRisk) riskLabels.Add("source/channel migration");
+            if (plan.HasDowngradeRisk) riskLabels.Add("possible downgrade");
+            if (plan.HasChannelFallback) riskLabels.Add("channel fallback");
+            if (plan.HasDestructiveRisk) riskLabels.Add("destructive reinstall/remove behavior");
+
+            List<string> lines = new List<string>
+            {
+                "Review " + plan.Steps.Count + " planned package step(s).",
+                riskLabels.Count == 0 ? string.Empty : "Attention: " + string.Join(", ", riskLabels.ToArray()),
+                string.Empty
+            };
+            foreach (PackageDependencyInstallStep step in plan.Steps)
+            {
+                lines.Add(
+                    "- " + step.PackageDefinition.DisplayName +
+                    " [" + GetChannelLabel(step.Channel) + "]" +
+                    (step.IsDependency ? " - dependency" : string.Empty));
+                lines.Add("  " + step.TargetUrl);
+            }
+
+            if (plan.Messages.Count > 0)
+            {
+                lines.Add(string.Empty);
+                lines.AddRange(plan.Messages.Where(message => !string.IsNullOrWhiteSpace(message)));
+            }
+
+            return EditorUtility.DisplayDialog(
+                operationName,
+                string.Join("\n", lines.Where(line => line != null).ToArray()).Trim(),
+                "Continue",
+                "Cancel");
         }
 
         private float GetDetailsContentWidth()
@@ -3576,11 +4158,6 @@ namespace Deucarian.PackageInstaller.Editor
             DrawKeyValueRow("Installed rev", string.IsNullOrWhiteSpace(updateStatus.ShortInstalledRevision) ? "-" : updateStatus.ShortInstalledRevision);
             DrawKeyValueRow("Latest rev", string.IsNullOrWhiteSpace(updateStatus.ShortLatestRevision) ? "-" : updateStatus.ShortLatestRevision);
 
-            if (packageDefinition.Dependencies.Count > 0)
-            {
-                DrawKeyValueRow("Dependencies", GetDependencyDisplayNames(packageDefinition));
-            }
-
             if (updateStatus.HasUnbumpedPackageVersionWarning)
             {
                 DrawInlineHelp(updateStatus.PackageVersionWarningMessage, VisualStatusKind.UpdateAvailable);
@@ -3631,22 +4208,141 @@ namespace Deucarian.PackageInstaller.Editor
 
                 DrawKeyValueRow("Stable", string.IsNullOrWhiteSpace(packageDefinition.StableUrl) ? "Not configured" : "Configured");
                 DrawKeyValueRow("Development", string.IsNullOrWhiteSpace(packageDefinition.DevelopmentUrl) ? "Not configured" : "Configured");
+
+                PackageChannelSelection projectSelection = _stateRepository != null
+                    ? _stateRepository.GetProjectChannelSelection()
+                    : PackageChannelSelection.None;
+                PackageChannelSelection packageSelection = _stateRepository != null
+                    ? _stateRepository.GetPackageChannelSelection(packageDefinition.PackageId)
+                    : PackageChannelSelection.None;
+                PackageChannel installedChannel = PackageChannel.Stable;
+                string installedSourceReason = string.Empty;
+                bool hasInstalledChannel = _packageDetectionService != null &&
+                    _packageDetectionService.TryGetInstalledPackageChannel(
+                        packageDefinition,
+                        out installedChannel,
+                        out installedSourceReason);
+                string provenance = GetContextualChannelProvenance(
+                    packageDefinition,
+                    projectSelection,
+                    packageSelection,
+                    hasInstalledChannel,
+                    installedChannel,
+                    installedSourceReason);
+
+                if (!string.IsNullOrWhiteSpace(provenance))
+                {
+                    GUILayout.Space(6f);
+                    DrawKeyValueRow("Source", provenance);
+
+                    if (packageSelection.HasValue &&
+                        GUILayout.Button("Reset package override", _secondaryButtonStyle))
+                    {
+                        ResetPackageChannelOverride(packageDefinition);
+                    }
+                }
             }, GUILayout.ExpandWidth(true));
+        }
+
+        internal static string GetContextualChannelProvenance(
+            PackageDefinition packageDefinition,
+            PackageChannelSelection projectSelection,
+            PackageChannelSelection packageSelection,
+            bool hasInstalledChannel,
+            PackageChannel installedChannel,
+            string installedSourceReason)
+        {
+            if (packageDefinition == null)
+            {
+                return string.Empty;
+            }
+
+            if (hasInstalledChannel && installedChannel == PackageChannel.Custom)
+            {
+                return string.IsNullOrWhiteSpace(installedSourceReason)
+                    ? "Custom installed source"
+                    : "Custom installed source - " + installedSourceReason.Trim();
+            }
+
+            PackageChannelSelection explicitSelection = GetLatestExplicitChannelSelection(
+                projectSelection,
+                packageSelection);
+
+            if (!explicitSelection.HasValue)
+            {
+                return string.Empty;
+            }
+
+            bool packageOverride = packageSelection.HasValue &&
+                                   (!projectSelection.HasValue ||
+                                    packageSelection.ChangedAtUtcTicks > projectSelection.ChangedAtUtcTicks);
+            string scope = packageOverride ? "Package override" : "Project override";
+
+            if (explicitSelection.Channel == PackageChannel.Development &&
+                !packageDefinition.HasDevelopmentUrl)
+            {
+                return scope + " requested Development - using Stable fallback";
+            }
+
+            return scope + " - " + GetChannelLabel(explicitSelection.Channel);
+        }
+
+        private void ResetPackageChannelOverride(PackageDefinition packageDefinition)
+        {
+            if (packageDefinition == null || _stateRepository == null)
+            {
+                return;
+            }
+
+            _stateRepository.ClearPackageChannel(packageDefinition.PackageId);
+            _packageUpdateCheckService?.Invalidate(packageDefinition.PackageId);
+            InvalidateGraphModelCache("package channel override reset");
+            RefreshGraphView("package channel override reset");
         }
 
         private void DrawRequirementsPanel(PackageDefinition packageDefinition)
         {
+            IReadOnlyList<PackageReverseDependency> dependents =
+                _packageReverseDependencyResolver != null
+                    ? _packageReverseDependencyResolver.Resolve(
+                        packageDefinition.PackageId,
+                        _packageDetectionService?.InstalledPackageIds)
+                    : Array.Empty<PackageReverseDependency>();
+
+            if (packageDefinition.Dependencies.Count == 0 && dependents.Count == 0)
+            {
+                return;
+            }
+
             DrawPanel("Requirements", () =>
             {
-                if (packageDefinition.Dependencies.Count == 0)
+                if (packageDefinition.Dependencies.Count > 0)
                 {
-                    EditorGUILayout.LabelField("No package dependencies.", _mutedMiniLabelStyle);
-                    return;
+                    EditorGUILayout.LabelField("Dependencies", _miniLabelStyle);
+
+                    foreach (string dependencyId in packageDefinition.Dependencies)
+                    {
+                        DrawRequirementRow(dependencyId);
+                    }
                 }
 
-                foreach (string dependencyId in packageDefinition.Dependencies)
+                if (dependents.Count > 0)
                 {
-                    DrawRequirementRow(dependencyId);
+                    if (packageDefinition.Dependencies.Count > 0)
+                    {
+                        GUILayout.Space(6f);
+                    }
+
+                    EditorGUILayout.LabelField("Required by", _miniLabelStyle);
+
+                    foreach (PackageReverseDependency dependent in dependents)
+                    {
+                        DrawKeyValueRow(
+                            dependent.DisplayName,
+                            dependent.Source == PackageReverseDependencySource.Registry
+                                ? "Registry relationship"
+                                : "Installed dependency");
+                    }
                 }
             }, GUILayout.ExpandWidth(true));
         }
@@ -3697,6 +4393,9 @@ namespace Deucarian.PackageInstaller.Editor
             PackageUpdateStatus updateStatus = _packageUpdateCheckService.GetStatus(
                 packageDefinition,
                 GetSelectedChannel(packageDefinition));
+            IReadOnlyList<PackageReverseDependency> installedDependents = installed
+                ? ResolveInstalledDependents(packageDefinition)
+                : Array.Empty<PackageReverseDependency>();
 
             if (includeNotes)
             {
@@ -3718,14 +4417,14 @@ namespace Deucarian.PackageInstaller.Editor
                 }
                 else
                 {
-                    PackageDefinition[] dependentPackages = _packageDependencyInstaller.GetInstalledDependents(packageDefinition);
-
-                    if (dependentPackages.Length > 0)
+                    if (installedDependents.Count > 0)
                     {
                         DrawInlineHelp(
                             "This package is required by installed package(s): " +
-                            string.Join(", ", dependentPackages.Select(package => package.DisplayName).ToArray()) +
-                            ". Remove those integration packages first.",
+                            string.Join(", ", installedDependents
+                                .Select(dependent => dependent.DisplayName)
+                                .ToArray()) +
+                            ". Removing it may break those packages.",
                             VisualStatusKind.UpdateAvailable);
                     }
                     else if (updateStatus.Kind == PackageUpdateStatusKind.SwitchAvailable)
@@ -3778,8 +4477,6 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            PackageDefinition[] installedDependents = _packageDependencyInstaller.GetInstalledDependents(packageDefinition);
-
             if (stackActions)
             {
                 DrawInstalledActionButtonsStacked(
@@ -3806,7 +4503,7 @@ namespace Deucarian.PackageInstaller.Editor
         private void DrawInstalledActionButtonsInline(
             PackageDefinition packageDefinition,
             PackageUpdateStatus updateStatus,
-            PackageDefinition[] installedDependents,
+            IReadOnlyList<PackageReverseDependency> installedDependents,
             bool queuedOrInstalling,
             bool actionsBusy)
         {
@@ -3833,7 +4530,10 @@ namespace Deucarian.PackageInstaller.Editor
                 }
             }
 
-            using (new EditorGUI.DisabledScope(installedDependents.Length > 0 || queuedOrInstalling || actionsBusy))
+            using (new EditorGUI.DisabledScope(!CanRemovePackage(
+                       installedDependents,
+                       queuedOrInstalling,
+                       actionsBusy)))
             {
                 if (GUILayout.Button("Remove", _secondaryButtonStyle, GUILayout.Width(104f)))
                 {
@@ -3845,7 +4545,7 @@ namespace Deucarian.PackageInstaller.Editor
         private void DrawInstalledActionButtonsStacked(
             PackageDefinition packageDefinition,
             PackageUpdateStatus updateStatus,
-            PackageDefinition[] installedDependents,
+            IReadOnlyList<PackageReverseDependency> installedDependents,
             bool queuedOrInstalling,
             bool actionsBusy)
         {
@@ -3872,7 +4572,10 @@ namespace Deucarian.PackageInstaller.Editor
                 }
             }
 
-            using (new EditorGUI.DisabledScope(installedDependents.Length > 0 || queuedOrInstalling || actionsBusy))
+            using (new EditorGUI.DisabledScope(!CanRemovePackage(
+                       installedDependents,
+                       queuedOrInstalling,
+                       actionsBusy)))
             {
                 if (GUILayout.Button("Remove", _secondaryButtonStyle, GUILayout.ExpandWidth(true)))
                 {
@@ -3993,9 +4696,13 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void RemovePackage(PackageDefinition packageDefinition)
         {
+            IReadOnlyList<PackageReverseDependency> dependents =
+                ResolveInstalledDependents(packageDefinition);
+            string dependentWarning = BuildRemoveDependentWarning(dependents);
+
             if (!EditorUtility.DisplayDialog(
                     "Remove Package",
-                    "Remove " + packageDefinition.DisplayName + " from this Unity project?",
+                    "Remove " + packageDefinition.DisplayName + " from this Unity project?" + dependentWarning,
                     "Remove",
                     "Cancel"))
             {
@@ -4004,6 +4711,55 @@ namespace Deucarian.PackageInstaller.Editor
 
             _packageInstallService.Remove(packageDefinition);
             _packageUpdateCheckService.Invalidate(packageDefinition.PackageId);
+        }
+
+        private IReadOnlyList<PackageReverseDependency> ResolveInstalledDependents(
+            PackageDefinition packageDefinition)
+        {
+            if (packageDefinition == null || _packageReverseDependencyResolver == null)
+            {
+                return Array.Empty<PackageReverseDependency>();
+            }
+
+            return _packageReverseDependencyResolver.Resolve(
+                packageDefinition.PackageId,
+                _packageDetectionService?.InstalledPackageIds);
+        }
+
+        internal static bool CanRemovePackageForTests(
+            IReadOnlyList<PackageReverseDependency> installedDependents,
+            bool queuedOrInstalling,
+            bool actionsBusy)
+        {
+            return CanRemovePackage(installedDependents, queuedOrInstalling, actionsBusy);
+        }
+
+        private static bool CanRemovePackage(
+            IReadOnlyList<PackageReverseDependency> installedDependents,
+            bool queuedOrInstalling,
+            bool actionsBusy)
+        {
+            // Installed dependents are a removal warning, not a hidden hard block.
+            // Unity still permits removal and the confirmation dialog must remain reachable.
+            return !queuedOrInstalling && !actionsBusy;
+        }
+
+        internal static string BuildRemoveDependentWarningForTests(
+            IReadOnlyList<PackageReverseDependency> dependents)
+        {
+            return BuildRemoveDependentWarning(dependents);
+        }
+
+        private static string BuildRemoveDependentWarning(
+            IReadOnlyList<PackageReverseDependency> dependents)
+        {
+            return dependents == null || dependents.Count == 0
+                ? string.Empty
+                : "\n\nInstalled packages that currently depend on it:\n" +
+                  string.Join("\n", dependents
+                      .Select(dependent => "- " + dependent.DisplayName + " (" + dependent.PackageId + ")")
+                      .ToArray()) +
+                  "\n\nRemoving it may break those packages.";
         }
 
         private void DrawOptionalCompanionsPanel(PackageDefinition packageDefinition)
@@ -4411,15 +5167,24 @@ namespace Deucarian.PackageInstaller.Editor
 
         private string GetOperationDrawerReportText()
         {
+            IReadOnlyList<PackageInstallerActivityEntry> recentActivity =
+                PackageInstallerActivityService.Recent;
             List<string> lines = new List<string>();
-            string summary = GetLastOperationSummary();
+            bool packageOperationActive = _packageInstallService != null && _packageInstallService.IsBusy;
+            bool liveOperationActive = packageOperationActive ||
+                                       (_packageSampleImportService != null && _packageSampleImportService.IsBusy) ||
+                                       (_packageUpdateCheckService != null && _packageUpdateCheckService.IsChecking) ||
+                                       (_packageDetectionService != null && _packageDetectionService.IsRefreshing);
+            string summary = liveOperationActive ? GetLastOperationSummary() : string.Empty;
 
             if (!string.IsNullOrWhiteSpace(summary))
             {
                 lines.Add(summary.Trim());
             }
 
-            IReadOnlyList<string> operationMessages = GetLastOperationMessages();
+            IReadOnlyList<string> operationMessages = packageOperationActive
+                ? GetLastOperationMessages()
+                : Array.Empty<string>();
 
             if (operationMessages != null)
             {
@@ -4432,16 +5197,15 @@ namespace Deucarian.PackageInstaller.Editor
                 }
             }
 
-            IReadOnlyList<PackageInstallProgressItem> progressItems = GetLastProgressItems();
+            IReadOnlyList<PackageInstallProgressItem> progressItems = packageOperationActive
+                ? GetLastProgressItems()
+                : Array.Empty<PackageInstallProgressItem>();
 
             if (progressItems != null)
             {
                 foreach (PackageInstallProgressItem item in progressItems)
                 {
-                    if (item == null ||
-                        (item.State != PackageInstallProgressItemState.Completed &&
-                         item.State != PackageInstallProgressItemState.Failed &&
-                         item.State != PackageInstallProgressItemState.Skipped))
+                    if (item == null)
                     {
                         continue;
                     }
@@ -4458,9 +5222,79 @@ namespace Deucarian.PackageInstaller.Editor
                 }
             }
 
-            return lines.Count == 0
-                ? "No detailed operation report is available."
-                : string.Join("\n", lines.ToArray());
+            return MergeLiveOperationWithActivity(
+                lines.Count == 0 ? string.Empty : string.Join("\n", lines.ToArray()),
+                recentActivity);
+        }
+
+        internal static string MergeLiveOperationWithActivityForTests(
+            string liveReport,
+            IReadOnlyList<PackageInstallerActivityEntry> activity)
+        {
+            return MergeLiveOperationWithActivity(liveReport, activity);
+        }
+
+        private static string MergeLiveOperationWithActivity(
+            string liveReport,
+            IReadOnlyList<PackageInstallerActivityEntry> activity)
+        {
+            string live = (liveReport ?? string.Empty).Trim();
+            string history = activity != null && activity.Count > 0
+                ? FormatActivityReport(activity).Trim()
+                : string.Empty;
+            if (!string.IsNullOrWhiteSpace(live) && !string.IsNullOrWhiteSpace(history))
+            {
+                return "Current\n" + live + "\n\nHistory\n" + history;
+            }
+
+            if (!string.IsNullOrWhiteSpace(live))
+            {
+                return "Current\n" + live;
+            }
+
+            if (!string.IsNullOrWhiteSpace(history))
+            {
+                return "History\n" + history;
+            }
+
+            return "No detailed operation report is available.";
+        }
+
+        internal static string FormatActivityReportForTests(
+            IReadOnlyList<PackageInstallerActivityEntry> entries)
+        {
+            return FormatActivityReport(entries);
+        }
+
+        private static string FormatActivityReport(
+            IReadOnlyList<PackageInstallerActivityEntry> entries)
+        {
+            PackageInstallerActivityEntry[] visibleEntries = (entries ??
+                    Array.Empty<PackageInstallerActivityEntry>())
+                .Where(entry => entry != null)
+                .Skip(Math.Max(0, (entries?.Count ?? 0) - 20))
+                .ToArray();
+            if (visibleEntries.Length == 0)
+            {
+                return "No activity has been recorded yet.";
+            }
+
+            List<string> lines = new List<string>();
+            foreach (PackageInstallerActivityEntry entry in visibleEntries)
+            {
+                lines.Add(
+                    entry.TimestampUtc.ToString("u") +
+                    " | " + entry.Source +
+                    " | " + entry.Severity +
+                    " | " + entry.Summary);
+                if (!string.IsNullOrWhiteSpace(entry.Details) &&
+                    !string.Equals(entry.Details, entry.Summary, StringComparison.Ordinal))
+                {
+                    lines.Add(entry.Details.Trim());
+                }
+            }
+
+            return string.Join("\n", lines.ToArray());
         }
 
         private static int CountOperationMessageLines(string message)
@@ -4659,6 +5493,11 @@ namespace Deucarian.PackageInstaller.Editor
 
         private bool HasLastOperationDetails()
         {
+            if (PackageInstallerActivityService.Recent.Count > 0)
+            {
+                return true;
+            }
+
             IReadOnlyList<PackageInstallProgressItem> progressItems = GetLastProgressItems();
             IReadOnlyList<string> operationMessages = GetLastOperationMessages();
 
@@ -4669,6 +5508,12 @@ namespace Deucarian.PackageInstaller.Editor
 
         private bool HasLastOperationFailure()
         {
+            PackageInstallerActivityEntry latestActivity = PackageInstallerActivityService.Latest;
+            if (latestActivity != null)
+            {
+                return latestActivity.Severity == PackageInstallerActivitySeverity.Error;
+            }
+
             IReadOnlyList<PackageInstallProgressItem> progressItems = GetLastProgressItems();
 
             return !string.IsNullOrWhiteSpace(_packageSampleImportService.LastErrorMessage) ||
@@ -5531,17 +6376,13 @@ namespace Deucarian.PackageInstaller.Editor
 
         private string GetLastOperationSummary()
         {
-            if (!string.IsNullOrWhiteSpace(_packageSampleImportService.LastErrorMessage))
-            {
-                return _packageSampleImportService.LastErrorMessage;
-            }
-
-            if (!string.IsNullOrWhiteSpace(_packageSampleImportService.LastStatusMessage))
+            if (_packageSampleImportService.IsBusy &&
+                !string.IsNullOrWhiteSpace(_packageSampleImportService.LastStatusMessage))
             {
                 return _packageSampleImportService.LastStatusMessage;
             }
 
-            if (_packageInstallService.HasProgress &&
+            if (_packageInstallService.IsBusy &&
                 !string.IsNullOrWhiteSpace(_packageInstallService.LastStatusMessage))
             {
                 return _packageInstallService.LastStatusMessage;
@@ -5555,6 +6396,28 @@ namespace Deucarian.PackageInstaller.Editor
             if (_packageDetectionService.IsRefreshing)
             {
                 return "Refreshing installed packages...";
+            }
+
+            PackageInstallerActivityEntry latestActivity = PackageInstallerActivityService.Latest;
+            if (latestActivity != null && !string.IsNullOrWhiteSpace(latestActivity.Summary))
+            {
+                return latestActivity.Summary;
+            }
+
+            if (_packageInstallService.HasProgress &&
+                !string.IsNullOrWhiteSpace(_packageInstallService.LastStatusMessage))
+            {
+                return _packageInstallService.LastStatusMessage;
+            }
+
+            if (!string.IsNullOrWhiteSpace(_packageSampleImportService.LastErrorMessage))
+            {
+                return _packageSampleImportService.LastErrorMessage;
+            }
+
+            if (!string.IsNullOrWhiteSpace(_packageSampleImportService.LastStatusMessage))
+            {
+                return _packageSampleImportService.LastStatusMessage;
             }
 
             if (!string.IsNullOrWhiteSpace(_packageUpdateCheckService.LastFailureMessage))
@@ -5681,6 +6544,8 @@ namespace Deucarian.PackageInstaller.Editor
                     return string.IsNullOrWhiteSpace(status.Message) ? "Imported sample." : status.Message;
                 case PackageSampleImportState.AlreadyImported:
                     return "Sample already imported.";
+                case PackageSampleImportState.Canceled:
+                    return string.IsNullOrWhiteSpace(status.Message) ? "Sample import canceled." : status.Message;
                 case PackageSampleImportState.Failed:
                     return string.IsNullOrWhiteSpace(status.Message) ? "Import failed." : status.Message;
                 default:
@@ -5702,6 +6567,8 @@ namespace Deucarian.PackageInstaller.Editor
                 case PackageSampleImportState.Imported:
                 case PackageSampleImportState.AlreadyImported:
                     return VisualStatusKind.Installed;
+                case PackageSampleImportState.Canceled:
+                    return VisualStatusKind.NotInstalled;
                 case PackageSampleImportState.Failed:
                     return VisualStatusKind.Failed;
                 default:
@@ -5727,6 +6594,9 @@ namespace Deucarian.PackageInstaller.Editor
 
             EnsureValidSelection();
             RefreshGraphView("registry changed");
+
+            TryPromptForSavedOperationRecovery();
+            TryRestartTerminalOperationAfterRefresh();
 
             TryRunDeferredUpdateCheck();
             ClearActiveActionIfIdle();
@@ -5797,8 +6667,507 @@ namespace Deucarian.PackageInstaller.Editor
             InvalidateGraphModelCache("installed package manifest changed");
             _packageSampleDiscoveryService?.ClearCache();
             RefreshGraphView("installed package refresh completed");
+
+            TryPromptForSavedOperationRecovery();
+            TryRestartTerminalOperationAfterRefresh();
+
             TryRunDeferredUpdateCheck();
             ClearActiveActionIfIdle();
+        }
+
+        private void TryRestartTerminalOperationAfterRefresh()
+        {
+            PackageOperationTerminalSnapshot snapshot = _terminalOperationRetryAfterRefresh;
+            if (snapshot == null ||
+                PackageRegistryProvider.IsRemoteRefreshing ||
+                (_packageDetectionService != null && _packageDetectionService.IsRefreshing) ||
+                (_packageDetectionService != null && !_packageDetectionService.HasSuccessfulRefresh))
+            {
+                return;
+            }
+
+            _terminalOperationRetryAfterRefresh = null;
+            PackageOperationTerminalSnapshot currentSnapshot =
+                _packageInstallService?.TerminalOperationSnapshot;
+            if (_packageInstallService == null ||
+                _packageInstallService.IsBusy ||
+                currentSnapshot == null ||
+                !currentSnapshot.CanRestart ||
+                !string.Equals(
+                    currentSnapshot.OperationId,
+                    snapshot.OperationId,
+                    StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            PackageDependencyInstallPlan freshPlan = CreateFreshTerminalRetryPlan(
+                snapshot,
+                _packageDependencyInstaller,
+                packageId => PackageRegistryProvider.TryGetPackage(
+                    packageId,
+                    out PackageDefinition definition)
+                    ? definition
+                    : null);
+            if (freshPlan == null || !freshPlan.IsValid || freshPlan.Steps.Count == 0)
+            {
+                EditorUtility.DisplayDialog(
+                    "Package operation cannot be restarted",
+                    freshPlan != null && !string.IsNullOrWhiteSpace(freshPlan.ErrorMessage)
+                        ? freshPlan.ErrorMessage
+                        : "The affected root packages are no longer available in the current registry.",
+                    "OK");
+                return;
+            }
+
+            string delta = FormatTerminalRetryPlanDelta(snapshot, freshPlan);
+            if ((freshPlan.RequiresPreflight || !string.IsNullOrWhiteSpace(delta)) &&
+                !EditorUtility.DisplayDialog(
+                    "Restart package operation",
+                    BuildTerminalRetryReview(snapshot, freshPlan, delta),
+                    "Restart",
+                    "Cancel"))
+            {
+                return;
+            }
+
+            TrackPendingUpdateStatusInvalidations(freshPlan.Packages);
+            _packageInstallService.InstallPlan(
+                freshPlan,
+                "Retry " + (string.IsNullOrWhiteSpace(snapshot.OperationName)
+                    ? "Package Operation"
+                    : snapshot.OperationName));
+            UpdateViewVisibility();
+        }
+
+        internal static PackageDependencyInstallPlan CreateFreshTerminalRetryPlanForTests(
+            PackageOperationTerminalSnapshot snapshot,
+            PackageDependencyInstaller installer,
+            IEnumerable<PackageDefinition> registeredPackages)
+        {
+            Dictionary<string, PackageDefinition> definitions =
+                (registeredPackages ?? Array.Empty<PackageDefinition>())
+                .Where(definition => definition != null &&
+                                     !string.IsNullOrWhiteSpace(definition.PackageId))
+                .GroupBy(definition => definition.PackageId, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(
+                    group => group.Key,
+                    group => group.First(),
+                    StringComparer.OrdinalIgnoreCase);
+            return CreateFreshTerminalRetryPlan(
+                snapshot,
+                installer,
+                packageId => definitions.TryGetValue(packageId, out PackageDefinition definition)
+                    ? definition
+                    : null);
+        }
+
+        private static PackageDependencyInstallPlan CreateFreshTerminalRetryPlan(
+            PackageOperationTerminalSnapshot snapshot,
+            PackageDependencyInstaller installer,
+            Func<string, PackageDefinition> packageResolver)
+        {
+            if (snapshot == null || !snapshot.CanRestart || installer == null || packageResolver == null)
+            {
+                return null;
+            }
+
+            PackageOperationRootRequest[] rootRequests = snapshot.RestartRoots
+                .Where(root => root != null && !string.IsNullOrWhiteSpace(root.PackageId))
+                .GroupBy(root => root.PackageId, StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.First())
+                .ToArray();
+            PackageDefinition[] roots = rootRequests
+                .Select(root => packageResolver(root.PackageId))
+                .Where(definition => definition != null)
+                .ToArray();
+            if (roots.Length == 0 || roots.Length != rootRequests.Length)
+            {
+                return null;
+            }
+
+            Dictionary<string, PackageChannel> channels = rootRequests.ToDictionary(
+                root => root.PackageId,
+                root => root.Channel,
+                StringComparer.OrdinalIgnoreCase);
+            return installer.CreateInstallPlan(
+                roots,
+                package => channels.TryGetValue(package.PackageId, out PackageChannel channel)
+                    ? channel
+                    : PackageChannel.Stable,
+                includeInstalledRequestedPackages: true);
+        }
+
+        internal static string FormatTerminalRetryPlanDeltaForTests(
+            PackageOperationTerminalSnapshot snapshot,
+            PackageDependencyInstallPlan freshPlan)
+        {
+            return FormatTerminalRetryPlanDelta(snapshot, freshPlan);
+        }
+
+        private static string FormatTerminalRetryPlanDelta(
+            PackageOperationTerminalSnapshot snapshot,
+            PackageDependencyInstallPlan freshPlan)
+        {
+            if (snapshot == null || freshPlan == null || !freshPlan.IsValid)
+            {
+                return string.Empty;
+            }
+
+            HashSet<string> retryRootIds = new HashSet<string>(
+                snapshot.RestartRoots.Select(root => root.PackageId),
+                StringComparer.OrdinalIgnoreCase);
+            Dictionary<string, PackageOperationStepSnapshot> previous = snapshot.Steps
+                .Where(step => step != null &&
+                               ((!step.IsDependency && retryRootIds.Contains(step.PackageId)) ||
+                                 step.RootPackageIds.Any(retryRootIds.Contains)))
+                .GroupBy(step => step.PackageId, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+            Dictionary<string, PackageDependencyInstallStep> current = freshPlan.Steps
+                .Where(step => step != null && step.PackageDefinition != null)
+                .GroupBy(step => step.PackageDefinition.PackageId, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+            List<string> lines = new List<string>();
+
+            foreach (string packageId in previous.Keys.Union(current.Keys, StringComparer.OrdinalIgnoreCase)
+                         .OrderBy(id => id, StringComparer.OrdinalIgnoreCase))
+            {
+                bool hadPrevious = previous.TryGetValue(packageId, out PackageOperationStepSnapshot oldStep);
+                bool hasCurrent = current.TryGetValue(packageId, out PackageDependencyInstallStep newStep);
+                if (!hadPrevious)
+                {
+                    lines.Add("Added: " + newStep.PackageDefinition.DisplayName + " -> " + newStep.TargetUrl);
+                }
+                else if (!hasCurrent)
+                {
+                    lines.Add("Now skipped: " + oldStep.DisplayName + " is already correct or no longer required.");
+                }
+                else if (oldStep.Channel != newStep.Channel ||
+                         !string.Equals(oldStep.TargetUrl, newStep.TargetUrl, StringComparison.Ordinal))
+                {
+                    lines.Add(
+                        "Changed: " + newStep.PackageDefinition.DisplayName +
+                        "\n  was [" + GetChannelLabel(oldStep.Channel) + "] " + oldStep.TargetUrl +
+                        "\n  now [" + GetChannelLabel(newStep.Channel) + "] " + newStep.TargetUrl);
+                }
+            }
+
+            return string.Join("\n", lines.ToArray());
+        }
+
+        private static string BuildTerminalRetryReview(
+            PackageOperationTerminalSnapshot snapshot,
+            PackageDependencyInstallPlan freshPlan,
+            string delta)
+        {
+            List<string> lines = new List<string>
+            {
+                "Installed and registry state were refreshed. " +
+                (string.IsNullOrWhiteSpace(snapshot.OperationName)
+                    ? "The affected roots"
+                    : snapshot.OperationName + "'s affected roots") +
+                " were planned again from the current registry.",
+                string.Empty
+            };
+            if (!string.IsNullOrWhiteSpace(delta))
+            {
+                lines.Add("Plan changes:");
+                lines.Add(delta);
+                lines.Add(string.Empty);
+            }
+
+            lines.Add("Fresh plan:");
+            lines.AddRange(freshPlan.Steps.Select(step =>
+                "- " + step.PackageDefinition.DisplayName +
+                " [" + GetChannelLabel(step.Channel) + "]\n  " + step.TargetUrl));
+            if (freshPlan.RequiresPreflight)
+            {
+                lines.Add(string.Empty);
+                lines.Add("This plan requires review because it is multi-step or carries migration, fallback, downgrade, conflict, or destructive risk.");
+            }
+
+            return string.Join("\n", lines.Where(line => line != null).ToArray()).Trim();
+        }
+
+        private void TryPromptForSavedOperationRecovery()
+        {
+            if (!_promptSavedOperationAfterDetectionRefresh ||
+                (_packageDetectionService != null && _packageDetectionService.IsRefreshing) ||
+                (_packageDetectionService != null && !_packageDetectionService.HasSuccessfulRefresh) ||
+                PackageRegistryProvider.IsRemoteRefreshing)
+            {
+                return;
+            }
+
+            _promptSavedOperationAfterDetectionRefresh = false;
+            PromptForSavedOperationRecovery();
+        }
+
+        private void PromptForSavedOperationRecovery()
+        {
+            if (_packageInstallService == null || _packageInstallService.IsBusy)
+            {
+                return;
+            }
+
+            if (!_packageInstallService.TryGetSavedOperation(
+                    out PackageOperationRecoveryRecord recovery,
+                    out string recoveryError) ||
+                recovery == null)
+            {
+                if (!string.IsNullOrWhiteSpace(recoveryError) &&
+                    recoveryError.IndexOf("No saved", StringComparison.OrdinalIgnoreCase) < 0)
+                {
+                    EditorUtility.DisplayDialog(
+                        "Package operation recovery unavailable",
+                        recoveryError,
+                        "OK");
+                }
+                return;
+            }
+
+            PackageDependencyInstallPlan freshPlan = CreateFreshRecoveryPlan(recovery);
+            bool canReuseExactTargets = CanReuseSavedExactTargets(recovery, freshPlan);
+            int remainingSteps = recovery.Steps.Count(step =>
+                step.State == PackageInstallProgressItemState.Pending ||
+                step.State == PackageInstallProgressItemState.Active ||
+                step.State == PackageInstallProgressItemState.Failed ||
+                step.State == PackageInstallProgressItemState.Blocked ||
+                step.State == PackageInstallProgressItemState.Canceled);
+            string interruptedSummary =
+                (string.IsNullOrWhiteSpace(recovery.OperationName)
+                    ? "A package operation"
+                    : recovery.OperationName) +
+                " was interrupted with " + remainingSteps + " step(s) remaining.";
+            string summary = interruptedSummary + "\n\n" +
+                "Resume keeps its exact saved URLs and skips completed steps. " +
+                "Restart repeats the saved plan. Discard removes only the recovery record.";
+
+            if (!canReuseExactTargets && freshPlan != null && freshPlan.IsValid)
+            {
+                string planDelta = FormatRecoveryPlanDelta(recovery, freshPlan);
+                int choice = EditorUtility.DisplayDialogComplex(
+                    "Package registry changed",
+                    BuildRecoveryRegistryDriftReview(interruptedSummary, freshPlan, planDelta),
+                    "Restart Fresh Plan",
+                    "Keep for Later",
+                    "Discard");
+
+                if (choice == 0)
+                {
+                    _packageInstallService.DiscardSavedOperation();
+                    _packageInstallService.InstallPlan(
+                        freshPlan,
+                        string.IsNullOrWhiteSpace(recovery.OperationName)
+                            ? "Restart Package Operation"
+                            : recovery.OperationName);
+                }
+                else if (choice == 2)
+                {
+                    _packageInstallService.DiscardSavedOperation();
+                }
+                return;
+            }
+
+            if (!canReuseExactTargets)
+            {
+                string planningFailure = freshPlan == null
+                    ? "One or more saved root packages are no longer registered."
+                    : freshPlan.ErrorMessage;
+                int choice = EditorUtility.DisplayDialogComplex(
+                    "Package operation needs replanning",
+                    summary +
+                    "\n\nThe current registry cannot reproduce a complete valid plan, so its saved URLs cannot be resumed safely." +
+                    (string.IsNullOrWhiteSpace(planningFailure)
+                        ? string.Empty
+                        : "\n\n" + planningFailure),
+                    "Keep for Later",
+                    "Discard",
+                    "Close");
+                if (choice == 1)
+                {
+                    _packageInstallService.DiscardSavedOperation();
+                }
+                return;
+            }
+
+            int recoveryChoice = EditorUtility.DisplayDialogComplex(
+                "Resume package operation",
+                summary,
+                recovery.CanResume ? "Resume" : "Restart",
+                "Restart",
+                "Discard");
+
+            if (recoveryChoice == 0)
+            {
+                if (recovery.CanResume)
+                {
+                    _packageInstallService.ResumeSavedOperation();
+                }
+                else
+                {
+                    _packageInstallService.RestartSavedOperation();
+                }
+            }
+            else if (recoveryChoice == 1)
+            {
+                _packageInstallService.RestartSavedOperation();
+            }
+            else if (recoveryChoice == 2)
+            {
+                _packageInstallService.DiscardSavedOperation();
+            }
+        }
+
+        private PackageDependencyInstallPlan CreateFreshRecoveryPlan(
+            PackageOperationRecoveryRecord recovery)
+        {
+            if (recovery == null || _packageDependencyInstaller == null)
+            {
+                return null;
+            }
+
+            HashSet<string> rootIds = new HashSet<string>(
+                recovery.Steps
+                    .Where(step => step.State != PackageInstallProgressItemState.Completed &&
+                                   step.State != PackageInstallProgressItemState.AlreadyCorrect)
+                    .SelectMany(step => step.RootPackageIds),
+                StringComparer.OrdinalIgnoreCase);
+            if (rootIds.Count == 0)
+            {
+                rootIds.UnionWith(recovery.Steps
+                    .Where(step => !step.IsDependency)
+                    .Select(step => step.PackageId));
+            }
+
+            PackageDefinition[] roots = rootIds
+                .Select(packageId =>
+                    PackageRegistryProvider.TryGetPackage(packageId, out PackageDefinition definition)
+                        ? definition
+                        : null)
+                .Where(definition => definition != null)
+                .ToArray();
+            Dictionary<string, PackageChannel> channels = recovery.Steps
+                .GroupBy(step => step.PackageId, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(
+                    group => group.Key,
+                    group => group.First().Channel,
+                    StringComparer.OrdinalIgnoreCase);
+
+            return roots.Length == 0 || roots.Length != rootIds.Count
+                ? null
+                : _packageDependencyInstaller.CreateInstallPlan(
+                    roots,
+                    package => channels.TryGetValue(package.PackageId, out PackageChannel channel)
+                        ? channel
+                        : GetSelectedChannel(package),
+                    includeInstalledRequestedPackages: true);
+        }
+
+        internal static string FormatRecoveryPlanDeltaForTests(
+            PackageOperationRecoveryRecord recovery,
+            PackageDependencyInstallPlan freshPlan)
+        {
+            return FormatRecoveryPlanDelta(recovery, freshPlan);
+        }
+
+        private static string FormatRecoveryPlanDelta(
+            PackageOperationRecoveryRecord recovery,
+            PackageDependencyInstallPlan freshPlan)
+        {
+            if (recovery == null || freshPlan == null || !freshPlan.IsValid)
+            {
+                return string.Empty;
+            }
+
+            Dictionary<string, PackageOperationRecoveryStep> previous = recovery.Steps
+                .Where(step => step != null && !string.IsNullOrWhiteSpace(step.PackageId))
+                .GroupBy(step => step.PackageId, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+            Dictionary<string, PackageDependencyInstallStep> current = freshPlan.Steps
+                .Where(step => step != null && step.PackageDefinition != null)
+                .GroupBy(step => step.PackageDefinition.PackageId, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+            List<string> lines = new List<string>();
+
+            foreach (string packageId in previous.Keys.Union(current.Keys, StringComparer.OrdinalIgnoreCase)
+                         .OrderBy(id => id, StringComparer.OrdinalIgnoreCase))
+            {
+                bool hadPrevious = previous.TryGetValue(packageId, out PackageOperationRecoveryStep oldStep);
+                bool hasCurrent = current.TryGetValue(packageId, out PackageDependencyInstallStep newStep);
+
+                if (!hadPrevious)
+                {
+                    lines.Add("Added: " + newStep.PackageDefinition.DisplayName + " -> " + newStep.TargetUrl);
+                }
+                else if (!hasCurrent)
+                {
+                    lines.Add("Now skipped: " + oldStep.DisplayName + " is already correct or no longer required.");
+                }
+                else if (oldStep.Channel != newStep.Channel ||
+                         !string.Equals(oldStep.TargetUrl, newStep.TargetUrl, StringComparison.Ordinal))
+                {
+                    lines.Add(
+                        "Changed: " + newStep.PackageDefinition.DisplayName +
+                        "\n  was [" + GetChannelLabel(oldStep.Channel) + "] " + oldStep.TargetUrl +
+                        "\n  now [" + GetChannelLabel(newStep.Channel) + "] " + newStep.TargetUrl);
+                }
+            }
+
+            return string.Join("\n", lines.ToArray());
+        }
+
+        private static string BuildRecoveryRegistryDriftReview(
+            string summary,
+            PackageDependencyInstallPlan freshPlan,
+            string planDelta)
+        {
+            List<string> lines = new List<string>
+            {
+                (summary ?? string.Empty).Trim(),
+                string.Empty,
+                "The registry fingerprint changed. Saved exact URLs will not be reused.",
+                string.Empty,
+                "Plan changes:",
+                string.IsNullOrWhiteSpace(planDelta)
+                    ? "No target URL changed in the remaining plan; registry metadata changed elsewhere."
+                    : planDelta,
+                string.Empty,
+                "Fresh plan:"
+            };
+            lines.AddRange(freshPlan.Steps.Select(step =>
+                "- " + step.PackageDefinition.DisplayName +
+                " [" + GetChannelLabel(step.Channel) + "]\n  " + step.TargetUrl));
+
+            if (freshPlan.RequiresPreflight)
+            {
+                lines.Add(string.Empty);
+                lines.Add("Attention: this plan is multi-step or carries migration, fallback, downgrade, conflict, or destructive risk.");
+            }
+
+            return string.Join("\n", lines.Where(line => line != null).ToArray()).Trim();
+        }
+
+        internal static bool CanReuseSavedExactTargetsForTests(
+            PackageOperationRecoveryRecord recovery,
+            PackageDependencyInstallPlan freshPlan)
+        {
+            return CanReuseSavedExactTargets(recovery, freshPlan);
+        }
+
+        private static bool CanReuseSavedExactTargets(
+            PackageOperationRecoveryRecord recovery,
+            PackageDependencyInstallPlan freshPlan)
+        {
+            return recovery != null &&
+                   freshPlan != null &&
+                   freshPlan.IsValid &&
+                   !string.IsNullOrWhiteSpace(recovery.RegistryFingerprint) &&
+                   !string.IsNullOrWhiteSpace(freshPlan.RegistryFingerprint) &&
+                   string.Equals(
+                       recovery.RegistryFingerprint,
+                       freshPlan.RegistryFingerprint,
+                       StringComparison.Ordinal);
         }
 
         private void TrackPendingUpdateStatusInvalidations(IEnumerable<PackageDefinition> packageDefinitions)

@@ -271,7 +271,8 @@ namespace Deucarian.PackageInstaller.Editor
             Rect unrelatedSummaryRect = default(Rect),
             IEnumerable<PackageGraphGroupLayoutNode> groupNodes = null,
             string focusGroupId = null,
-            IReadOnlyDictionary<string, PackageGraphNodePresentationLevel> nodePresentationLevels = null)
+            IReadOnlyDictionary<string, PackageGraphNodePresentationLevel> nodePresentationLevels = null,
+            IEnumerable<PackageGraphOverflowSummary> overflowSummaries = null)
         {
             Mode = mode;
             FocusPackageId = focusPackageId ?? string.Empty;
@@ -295,6 +296,11 @@ namespace Deucarian.PackageInstaller.Editor
                 : groupNodes.Where(node => node != null).ToArray();
             NodePresentationLevels = nodePresentationLevels ??
                                      new Dictionary<string, PackageGraphNodePresentationLevel>(StringComparer.OrdinalIgnoreCase);
+            OverflowSummaries = overflowSummaries == null
+                ? Array.Empty<PackageGraphOverflowSummary>()
+                : overflowSummaries
+                    .Where(summary => summary != null && summary.HiddenCount > 0)
+                    .ToArray();
         }
 
         public PackageGraphLayoutMode Mode { get; }
@@ -326,6 +332,8 @@ namespace Deucarian.PackageInstaller.Editor
         public IReadOnlyList<PackageGraphGroupLayoutNode> GroupNodes { get; }
 
         public IReadOnlyDictionary<string, PackageGraphNodePresentationLevel> NodePresentationLevels { get; }
+
+        public IReadOnlyList<PackageGraphOverflowSummary> OverflowSummaries { get; }
 
         public bool HasUnrelatedSummary => UnrelatedPackageCount > 0 && UnrelatedSummaryRect.width > 0.01f;
     }
@@ -476,6 +484,22 @@ namespace Deucarian.PackageInstaller.Editor
         CompanionsAndSuites
     }
 
+    internal sealed class PackageGraphOverflowSummary
+    {
+        public PackageGraphOverflowSummary(PackageGraphEgoLayoutZone zone, int hiddenCount, Rect rect)
+        {
+            Zone = zone;
+            HiddenCount = Math.Max(0, hiddenCount);
+            Rect = rect;
+        }
+
+        public PackageGraphEgoLayoutZone Zone { get; }
+
+        public int HiddenCount { get; }
+
+        public Rect Rect { get; }
+    }
+
     internal readonly struct PackageGraphEgoLayoutMetrics
     {
         public PackageGraphEgoLayoutMetrics(
@@ -595,6 +619,12 @@ namespace Deucarian.PackageInstaller.Editor
         private const float FocusOrbitRadius = 335f;
         private const float FocusGridGapX = 48f;
         private const float CategoryCaptionClearance = 24f;
+        private const int DenseEgoRows = 6;
+        private const int DenseEgoColumns = 8;
+        private const int DenseEgoVisibleLimit = DenseEgoRows * DenseEgoColumns;
+        private const float DenseContextGroupGap = 12f;
+        private const float OverflowSummaryWidth = 188f;
+        private const float OverflowSummaryHeight = 46f;
 
         public static readonly Vector2 GraphCenter = new Vector2(2400f, 2250f);
 
@@ -910,6 +940,7 @@ namespace Deucarian.PackageInstaller.Editor
             List<PackageGraphNode> optionalCompanions = GetOptionalCompanionNodes(graph, nodeById, focusPackageId, placed);
             List<PackageGraphNode> suiteNodes = GetSuiteNodes(graph, nodeById, focusPackageId, placed);
             List<PackageGraphGroupLayoutNode> contextGroups = new List<PackageGraphGroupLayoutNode>();
+            List<PackageGraphOverflowSummary> overflowSummaries = new List<PackageGraphOverflowSummary>();
             HashSet<string> placedGroupIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             PlaceOwningCategoryGroup(
@@ -928,7 +959,8 @@ namespace Deucarian.PackageInstaller.Editor
                 relatedPresentationLevel,
                 placed,
                 contextGroups,
-                placedGroupIds);
+                placedGroupIds,
+                overflowSummaries);
             PlaceEgoZone(
                 graph,
                 dependents,
@@ -939,7 +971,8 @@ namespace Deucarian.PackageInstaller.Editor
                 relatedPresentationLevel,
                 placed,
                 contextGroups,
-                placedGroupIds);
+                placedGroupIds,
+                overflowSummaries);
             PlaceEgoZone(
                 graph,
                 integrationNodes,
@@ -950,7 +983,8 @@ namespace Deucarian.PackageInstaller.Editor
                 relatedPresentationLevel,
                 placed,
                 contextGroups,
-                placedGroupIds);
+                placedGroupIds,
+                overflowSummaries);
             PlaceEgoZone(
                 graph,
                 MergeGroups(optionalCompanions, suiteNodes),
@@ -961,7 +995,8 @@ namespace Deucarian.PackageInstaller.Editor
                 relatedPresentationLevel,
                 placed,
                 contextGroups,
-                placedGroupIds);
+                placedGroupIds,
+                overflowSummaries);
 
             return new PackageGraphLayoutResult(
                 PackageGraphLayoutMode.Focus,
@@ -976,7 +1011,8 @@ namespace Deucarian.PackageInstaller.Editor
                 Array.Empty<PackageGraphSectorLabel>(),
                 groupNodes: contextGroups,
                 focusGroupId: focusNode.GroupId,
-                nodePresentationLevels: nodePresentations);
+                nodePresentationLevels: nodePresentations,
+                overflowSummaries: overflowSummaries);
         }
 
         private static void PlaceOwningCategoryGroup(
@@ -1025,12 +1061,32 @@ namespace Deucarian.PackageInstaller.Editor
             PackageGraphNodePresentationLevel relatedPresentationLevel,
             ISet<string> placedPackageIds,
             ICollection<PackageGraphGroupLayoutNode> groupNodes,
-            ISet<string> placedGroupIds)
+            ISet<string> placedGroupIds,
+            ICollection<PackageGraphOverflowSummary> overflowSummaries)
         {
             EgoCategoryCluster[] clusters = CreateEgoCategoryClusters(graph, nodes, placedPackageIds);
 
             if (clusters.Length == 0)
             {
+                return;
+            }
+
+            int packageCount = clusters.Sum(cluster => cluster.Packages.Count);
+
+            if (packageCount > DenseEgoVisibleLimit)
+            {
+                PlaceDenseEgoZone(
+                    graph,
+                    clusters,
+                    zone,
+                    metrics,
+                    nodeRects,
+                    nodePresentations,
+                    relatedPresentationLevel,
+                    placedPackageIds,
+                    groupNodes,
+                    placedGroupIds,
+                    overflowSummaries);
                 return;
             }
 
@@ -1114,6 +1170,171 @@ namespace Deucarian.PackageInstaller.Editor
                 .ThenBy(cluster => cluster.Group.DisplayName, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(cluster => cluster.Group.Id, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
+        }
+
+        private static void PlaceDenseEgoZone(
+            PackageGraphModel graph,
+            IReadOnlyList<EgoCategoryCluster> clusters,
+            PackageGraphEgoLayoutZone zone,
+            PackageGraphEgoLayoutMetrics metrics,
+            IDictionary<string, Rect> nodeRects,
+            IDictionary<string, PackageGraphNodePresentationLevel> nodePresentations,
+            PackageGraphNodePresentationLevel relatedPresentationLevel,
+            ISet<string> placedPackageIds,
+            ICollection<PackageGraphGroupLayoutNode> groupNodes,
+            ISet<string> placedGroupIds,
+            ICollection<PackageGraphOverflowSummary> overflowSummaries)
+        {
+            PackageGraphNode[] allPackages = clusters
+                .SelectMany(cluster => cluster.Packages)
+                .Where(package => package != null)
+                .ToArray();
+            PackageGraphNode[] visiblePackages = allPackages
+                .Take(DenseEgoVisibleLimit)
+                .ToArray();
+
+            foreach (PackageGraphNode package in allPackages)
+            {
+                placedPackageIds.Add(package.PackageId);
+            }
+
+            bool vertical = zone == PackageGraphEgoLayoutZone.Providers ||
+                            zone == PackageGraphEgoLayoutZone.Dependents;
+            int primaryCapacity = vertical ? DenseEgoRows : DenseEgoColumns;
+            int primaryCount = Math.Min(primaryCapacity, visiblePackages.Length);
+            int secondaryCount = Mathf.CeilToInt(visiblePackages.Length / (float)primaryCapacity);
+            float horizontalStep = metrics.RelatedPackageMetrics.Width + FocusGridGapX;
+            float verticalStep = metrics.RelatedPackageMetrics.Height + metrics.PackageCardGap;
+            float outerPackageX = metrics.SelectedNodeCenter.x;
+            float outerPackageY = metrics.SelectedNodeCenter.y;
+
+            if (vertical)
+            {
+                float direction = zone == PackageGraphEgoLayoutZone.Providers ? -1f : 1f;
+                float baseX = zone == PackageGraphEgoLayoutZone.Providers
+                    ? metrics.ProviderPackageX
+                    : metrics.DependentPackageX;
+                float totalHeight = primaryCount * metrics.RelatedPackageMetrics.Height +
+                                    Mathf.Max(0, primaryCount - 1) * metrics.PackageCardGap;
+                float startY = metrics.SelectedNodeCenter.y - totalHeight * 0.5f +
+                               metrics.RelatedPackageMetrics.Height * 0.5f;
+
+                for (int index = 0; index < visiblePackages.Length; index++)
+                {
+                    int column = index / primaryCapacity;
+                    int row = index % primaryCapacity;
+                    PackageGraphNode package = visiblePackages[index];
+                    Vector2 center = new Vector2(
+                        baseX + direction * column * horizontalStep,
+                        startY + row * verticalStep);
+                    nodeRects[package.PackageId] = ClampToCanvas(CenteredRect(center, metrics.RelatedPackageMetrics));
+                    nodePresentations[package.PackageId] = relatedPresentationLevel;
+                }
+
+                outerPackageX = baseX + direction * Mathf.Max(0, secondaryCount - 1) * horizontalStep;
+                outerPackageY = startY + Mathf.Max(0, primaryCount - 1) * verticalStep;
+                AddDenseContextGroups(
+                    graph,
+                    clusters,
+                    visiblePackages,
+                    vertical,
+                    outerPackageX + direction * metrics.CategoryRailGap,
+                    metrics.SelectedNodeCenter.y,
+                    groupNodes,
+                    placedGroupIds);
+            }
+            else
+            {
+                float direction = zone == PackageGraphEgoLayoutZone.Integrations ? 1f : -1f;
+                float baseY = zone == PackageGraphEgoLayoutZone.Integrations
+                    ? metrics.IntegrationPackageY
+                    : metrics.CompanionPackageY;
+                float totalWidth = primaryCount * metrics.RelatedPackageMetrics.Width +
+                                   Mathf.Max(0, primaryCount - 1) * FocusGridGapX;
+                float startX = metrics.SelectedNodeCenter.x - totalWidth * 0.5f +
+                               metrics.RelatedPackageMetrics.Width * 0.5f;
+
+                for (int index = 0; index < visiblePackages.Length; index++)
+                {
+                    int row = index / primaryCapacity;
+                    int column = index % primaryCapacity;
+                    PackageGraphNode package = visiblePackages[index];
+                    Vector2 center = new Vector2(
+                        startX + column * horizontalStep,
+                        baseY + direction * row * verticalStep);
+                    nodeRects[package.PackageId] = ClampToCanvas(CenteredRect(center, metrics.RelatedPackageMetrics));
+                    nodePresentations[package.PackageId] = relatedPresentationLevel;
+                }
+
+                outerPackageX = startX + Mathf.Max(0, primaryCount - 1) * horizontalStep;
+                outerPackageY = baseY + direction * Mathf.Max(0, secondaryCount - 1) * verticalStep;
+                AddDenseContextGroups(
+                    graph,
+                    clusters,
+                    visiblePackages,
+                    vertical,
+                    metrics.SelectedNodeCenter.x,
+                    outerPackageY + direction * metrics.CategoryRailGap * 0.82f,
+                    groupNodes,
+                    placedGroupIds);
+            }
+
+            int hiddenCount = allPackages.Length - visiblePackages.Length;
+
+            if (hiddenCount <= 0)
+            {
+                return;
+            }
+
+            Vector2 summaryCenter = vertical
+                ? new Vector2(
+                    outerPackageX,
+                    outerPackageY + metrics.RelatedPackageMetrics.Height * 0.5f + 96f)
+                : new Vector2(
+                    outerPackageX + metrics.RelatedPackageMetrics.Width * 0.5f + 144f,
+                    outerPackageY);
+            Rect summaryRect = ClampToCanvas(new Rect(
+                summaryCenter.x - OverflowSummaryWidth * 0.5f,
+                summaryCenter.y - OverflowSummaryHeight * 0.5f,
+                OverflowSummaryWidth,
+                OverflowSummaryHeight));
+            overflowSummaries?.Add(new PackageGraphOverflowSummary(zone, hiddenCount, summaryRect));
+        }
+
+        private static void AddDenseContextGroups(
+            PackageGraphModel graph,
+            IReadOnlyList<EgoCategoryCluster> clusters,
+            IReadOnlyCollection<PackageGraphNode> visiblePackages,
+            bool vertical,
+            float anchorX,
+            float anchorY,
+            ICollection<PackageGraphGroupLayoutNode> groupNodes,
+            ISet<string> placedGroupIds)
+        {
+            HashSet<string> visiblePackageIds = new HashSet<string>(
+                visiblePackages.Select(package => package.PackageId),
+                StringComparer.OrdinalIgnoreCase);
+            EgoCategoryCluster[] visibleClusters = clusters
+                .Where(cluster => cluster.Packages.Any(package => visiblePackageIds.Contains(package.PackageId)))
+                .Take(4)
+                .ToArray();
+            float contextGroupStep = vertical
+                ? GroupChipHubSize + GroupChipCaptionHeight + DenseContextGroupGap
+                : Mathf.Max(GroupChipHubSize, GroupChipCaptionWidth) + DenseContextGroupGap;
+            float startOffset = (visibleClusters.Length - 1) * contextGroupStep * -0.5f;
+
+            for (int index = 0; index < visibleClusters.Length; index++)
+            {
+                Vector2 center = vertical
+                    ? new Vector2(anchorX, anchorY + startOffset + index * contextGroupStep)
+                    : new Vector2(anchorX + startOffset + index * contextGroupStep, anchorY);
+                AddEgoContextGroup(
+                    graph,
+                    visibleClusters[index],
+                    center,
+                    groupNodes,
+                    placedGroupIds);
+            }
         }
 
         private static void PlaceVerticalEgoClusters(

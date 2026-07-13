@@ -236,6 +236,13 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void Window_AttentionIsContextualAndHiddenAtZero()
+        {
+            Assert.IsFalse(PackageInstallerWindow.ShouldShowEcosystemAttentionForTests(0));
+            Assert.IsTrue(PackageInstallerWindow.ShouldShowEcosystemAttentionForTests(1));
+        }
+
+        [Test]
         public void StateRepository_UsesSharedProjectChannelPreference()
         {
             string projectRoot = CreateTempProjectRoot();
@@ -252,6 +259,43 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
                 Assert.AreEqual(PackageChannel.Development, PackageInstallerStateRepository.GetProjectChannelForTests(projectRoot));
                 Assert.AreEqual((int)PackageChannel.Development, EditorPrefs.GetInt(key, -1));
+
+                PackageInstallerStateRepository.ClearProjectChannelForTests(projectRoot);
+
+                PackageChannelSelection cleared =
+                    PackageInstallerStateRepository.GetProjectChannelSelectionForTests(projectRoot);
+                Assert.IsFalse(cleared.HasValue);
+                Assert.AreEqual(PackageChannel.Stable, cleared.Channel);
+                Assert.IsFalse(EditorPrefs.HasKey(key));
+                Assert.IsFalse(EditorPrefs.HasKey(
+                    PackageInstallerStateRepository.GetProjectChannelChangedAtPreferenceKeyForTests(projectRoot)));
+            }
+            finally
+            {
+                PackageInstallerStateRepository.DeleteProjectChannelForTests(projectRoot);
+                DeleteTempProjectRoot(projectRoot);
+            }
+        }
+
+        [Test]
+        public void StateRepository_ClearProjectChannelAlsoRemovesLegacyOverride()
+        {
+            string projectRoot = CreateTempProjectRoot();
+            string legacyKey =
+                PackageInstallerStateRepository.GetLegacyBootstrapChannelPreferenceKeyForTests(projectRoot);
+
+            try
+            {
+                PackageInstallerStateRepository.DeleteProjectChannelForTests(projectRoot);
+                EditorPrefs.SetInt(legacyKey, (int)PackageChannel.Development);
+                Assert.IsTrue(
+                    PackageInstallerStateRepository.GetProjectChannelSelectionForTests(projectRoot).HasValue);
+
+                PackageInstallerStateRepository.ClearProjectChannelForTests(projectRoot);
+
+                Assert.IsFalse(EditorPrefs.HasKey(legacyKey));
+                Assert.IsFalse(
+                    PackageInstallerStateRepository.GetProjectChannelSelectionForTests(projectRoot).HasValue);
             }
             finally
             {
@@ -386,6 +430,46 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void Window_ChannelProvenanceAppearsOnlyForOverrideFallbackOrCustomSource()
+        {
+            PackageDefinition package = CreatePackage("Package", "com.example.package", "Core");
+            PackageDefinition stableOnly = new PackageDefinition(
+                "Stable Only",
+                "com.example.stable-only",
+                "https://example.com/stable-only.git#main",
+                "Stable only package.");
+
+            Assert.IsEmpty(PackageInstallerWindow.GetContextualChannelProvenance(
+                package,
+                PackageChannelSelection.None,
+                PackageChannelSelection.None,
+                hasInstalledChannel: false,
+                installedChannel: PackageChannel.Stable,
+                installedSourceReason: string.Empty));
+            StringAssert.StartsWith("Package override", PackageInstallerWindow.GetContextualChannelProvenance(
+                package,
+                PackageChannelSelection.None,
+                PackageChannelSelection.Create(PackageChannel.Development, 10L),
+                hasInstalledChannel: false,
+                installedChannel: PackageChannel.Stable,
+                installedSourceReason: string.Empty));
+            StringAssert.Contains("Stable fallback", PackageInstallerWindow.GetContextualChannelProvenance(
+                stableOnly,
+                PackageChannelSelection.Create(PackageChannel.Development, 10L),
+                PackageChannelSelection.None,
+                hasInstalledChannel: false,
+                installedChannel: PackageChannel.Stable,
+                installedSourceReason: string.Empty));
+            StringAssert.StartsWith("Custom installed source", PackageInstallerWindow.GetContextualChannelProvenance(
+                package,
+                PackageChannelSelection.None,
+                PackageChannelSelection.None,
+                hasInstalledChannel: true,
+                installedChannel: PackageChannel.Custom,
+                installedSourceReason: "Local package path"));
+        }
+
+        [Test]
         public void StateRepository_ManifestSignatureChangesForPackageManifestState()
         {
             string projectRoot = CreateTempProjectRoot();
@@ -420,6 +504,64 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual(PackageInstallerResponsiveMode.Narrow, PackageInstallerWindow.ResolveResponsiveModeForTests(820f));
             Assert.AreEqual(820f, PackageInstallerWindow.MinWindowSizeForTests.x);
             Assert.AreEqual(650f, PackageInstallerWindow.MinWindowSizeForTests.y);
+        }
+
+        [Test]
+        public void Window_DetailsGroupRowsActivateOnlyFromFocusedKeyboardControls()
+        {
+            Assert.IsTrue(PackageInstallerWindow.IsGraphNavigationRowKeyboardActivationForTests(
+                true,
+                EventType.KeyDown,
+                KeyCode.Return));
+            Assert.IsTrue(PackageInstallerWindow.IsGraphNavigationRowKeyboardActivationForTests(
+                true,
+                EventType.KeyDown,
+                KeyCode.KeypadEnter));
+            Assert.IsTrue(PackageInstallerWindow.IsGraphNavigationRowKeyboardActivationForTests(
+                true,
+                EventType.KeyDown,
+                KeyCode.Space));
+            Assert.IsFalse(PackageInstallerWindow.IsGraphNavigationRowKeyboardActivationForTests(
+                false,
+                EventType.KeyDown,
+                KeyCode.Return));
+            Assert.IsFalse(PackageInstallerWindow.IsGraphNavigationRowKeyboardActivationForTests(
+                true,
+                EventType.KeyUp,
+                KeyCode.Return));
+            Assert.IsFalse(PackageInstallerWindow.IsGraphNavigationRowKeyboardActivationForTests(
+                true,
+                EventType.KeyDown,
+                KeyCode.Escape));
+        }
+
+        [Test]
+        public void Window_GlobalChannelResetAppearsOnlyForExplicitOverrides()
+        {
+            PackageChannelSelection inherited = PackageChannelSelection.None;
+            PackageChannelSelection explicitOverride = PackageChannelSelection.Create(
+                PackageChannel.Development,
+                123L);
+
+            Assert.AreEqual(
+                "Channel: Stable",
+                PackageInstallerWindow.FormatGlobalChannelButtonLabelForTests(inherited));
+            Assert.AreEqual(
+                "Override: Development",
+                PackageInstallerWindow.FormatGlobalChannelButtonLabelForTests(explicitOverride));
+            Assert.IsFalse(PackageInstallerWindow.ShouldShowGlobalChannelResetForTests(inherited));
+            Assert.IsTrue(PackageInstallerWindow.ShouldShowGlobalChannelResetForTests(explicitOverride));
+        }
+
+        [Test]
+        public void Window_NarrowDetailsPutContextBeforeGraphNavigation()
+        {
+            Assert.IsTrue(PackageInstallerWindow.ShouldDrawGraphNavigationBeforeContextForTests(
+                PackageInstallerResponsiveMode.Wide));
+            Assert.IsTrue(PackageInstallerWindow.ShouldDrawGraphNavigationBeforeContextForTests(
+                PackageInstallerResponsiveMode.Compact));
+            Assert.IsFalse(PackageInstallerWindow.ShouldDrawGraphNavigationBeforeContextForTests(
+                PackageInstallerResponsiveMode.Narrow));
         }
 
         [Test]
@@ -633,6 +775,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Toggle toggle = drawer.Q<Toggle>(PackageInstallerWindow.OperationDrawerVerboseToggleName);
             Label verboseLabel = drawer.Q<Label>(PackageInstallerWindow.OperationDrawerVerboseLabelName);
             Label message = drawer.Q<Label>(PackageInstallerWindow.OperationDrawerMessageName);
+            Button retry = drawer.Q<Button>(PackageInstallerWindow.OperationDrawerRetryButtonName);
 
             Assert.AreEqual(PackageInstallerWindow.OperationDrawerName, drawer.name);
             Assert.IsTrue(drawer.ClassListContains("dpi-operation-surface"));
@@ -645,7 +788,9 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             AssertFooterElementVisible(toggle);
             AssertFooterElementVisible(verboseLabel);
             AssertFooterElementVisible(message);
-            Assert.AreEqual("Last Operation Summary", title.text);
+            Assert.IsNotNull(retry);
+            Assert.AreEqual(DisplayStyle.None, retry.style.display.value);
+            Assert.AreEqual("Activity", title.text);
             Assert.AreEqual("Verbose Console Logging", verboseLabel.text);
             StringAssert.Contains("Package operation completed.", message.text);
             StringAssert.Contains("Installed com.example.core.", message.text);
@@ -996,6 +1141,12 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
             Assert.IsTrue(FindGraphGroup(view, "infrastructure").ClassListContains("dpi-graph-group--attention"));
             Assert.IsFalse(FindGraphGroup(view, "runtime-services").ClassListContains("dpi-graph-group--attention"));
+            Assert.IsNotEmpty(FindByClass(
+                FindGraphGroup(view, "infrastructure"),
+                "dpi-graph-group__stat--attention"));
+            Assert.IsEmpty(FindByClass(
+                FindGraphGroup(view, "runtime-services"),
+                "dpi-graph-group__stat--attention"));
 
             IReadOnlyList<PackageGraphGroupNavigationRow> rows =
                 PackageInstallerWindow.CreateEcosystemOverviewGroupNavigationRowsForTests(
@@ -2133,10 +2284,189 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 .ToArray();
 
             CollectionAssert.AreEquivalent(
-                new[] { "Deucarian root", "Group", "Package", "Installed", "Not installed", "Attention" },
+                new[] { "Deucarian root", "Group", "Package", "Installed", "Not installed" },
                 labels);
             CollectionAssert.DoesNotContain(labels, "Dependency flow");
             CollectionAssert.DoesNotContain(labels, "Integration connection");
+        }
+
+        [Test]
+        public void GraphView_TransientLegendItemsAppearOnlyWhenTheirStatusExists()
+        {
+            PackageDefinition package = CreatePackage("Checking", "com.example.checking", "Core");
+            PackageGraphModel checkingGraph = new PackageGraphBuilder(
+                    _ => true,
+                    _ => PackageChannel.Stable,
+                    definition => PackageUpdateStatus.Checking(
+                        definition,
+                        PackageChannel.Stable,
+                        definition.StableUrl))
+                .Build(new[] { package });
+            PackageGraphModel idleGraph = new PackageGraphBuilder(_ => false)
+                .Build(new[] { package });
+            PackageGraphView view = new PackageGraphView(_ => { }, (_, __) => { });
+
+            view.SetGraph(checkingGraph, string.Empty, actionsEnabled: true);
+
+            CollectionAssert.Contains(
+                FindByClass(view, "dpi-graph-legend__label").OfType<Label>().Select(label => label.text).ToArray(),
+                "Checking");
+
+            view.SetGraph(
+                checkingGraph,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                actionsEnabled: true,
+                visiblePackageIds: Array.Empty<string>(),
+                searchState: PackageGraphSearchState.Empty,
+                filterCounts: null,
+                hiddenRelatedCount: 0);
+
+            CollectionAssert.DoesNotContain(
+                FindByClass(view, "dpi-graph-legend__label").OfType<Label>().Select(label => label.text).ToArray(),
+                "Checking");
+
+            view.SetGraph(idleGraph, string.Empty, actionsEnabled: true);
+
+            string[] idleLabels = FindByClass(view, "dpi-graph-legend__label")
+                .OfType<Label>()
+                .Select(label => label.text)
+                .ToArray();
+            CollectionAssert.DoesNotContain(idleLabels, "Checking");
+            CollectionAssert.DoesNotContain(idleLabels, "Attention");
+        }
+
+        [Test]
+        public void GraphView_AttentionLegendRequiresARenderedAttentionNode()
+        {
+            PackageDefinition update = CreatePackage(
+                "Update",
+                "com.example.update",
+                "Core");
+            PackageGraphModel graph = new PackageGraphBuilder(
+                    _ => true,
+                    _ => PackageChannel.Stable,
+                    package => PackageUpdateStatus.UpdateAvailable(
+                        package,
+                        PackageChannel.Stable,
+                        package.StableUrl,
+                        "1111111",
+                        "2222222"))
+                .Build(new[] { update });
+            PackageGraphView view = new PackageGraphView(_ => { }, (_, __) => { });
+
+            view.SetGraph(graph, string.Empty, actionsEnabled: true);
+
+            CollectionAssert.DoesNotContain(
+                FindByClass(view, "dpi-graph-legend__label")
+                    .OfType<Label>()
+                    .Select(label => label.text)
+                    .ToArray(),
+                "Attention");
+
+            view.SetGraph(graph, update.PackageId, actionsEnabled: true);
+
+            CollectionAssert.Contains(
+                FindByClass(view, "dpi-graph-legend__label")
+                    .OfType<Label>()
+                    .Select(label => label.text)
+                    .ToArray(),
+                "Attention");
+        }
+
+        [Test]
+        public void GraphView_PackageFocusExplainsThatDirectRelationsIgnoreVisibilityFilters()
+        {
+            PackageDefinition dependency = CreatePackage("Dependency", "com.example.dependency", "Core");
+            PackageDefinition root = CreatePackage(
+                "Root",
+                "com.example.root",
+                "Core",
+                dependencies: new[] { dependency.PackageId });
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false).Build(new[] { dependency, root });
+            PackageVisibilityFilterState filterState = new PackageVisibilityFilterState(
+                string.Empty,
+                showInstalled: true,
+                showNotInstalled: false);
+            PackageGraphView view = new PackageGraphView(
+                _ => { },
+                (_, __) => { },
+                null,
+                filterState,
+                null);
+
+            view.SetGraph(
+                graph,
+                root.PackageId,
+                root.PackageId,
+                actionsEnabled: true,
+                Array.Empty<string>(),
+                PackageVisibilityFilter.CalculateCounts(graph, filterState),
+                hiddenRelatedCount: 1);
+
+            Label context = FindByClass(view, "dpi-ecosystem-graph__hidden-related")
+                .OfType<Label>()
+                .Single();
+            Assert.AreEqual("Focus includes all direct relations", context.text);
+            StringAssert.Contains("keeps every direct relationship visible", context.tooltip);
+        }
+
+        [Test]
+        public void GraphView_EscapeClearsSearchBeforeBackingOut()
+        {
+            int backCount = 0;
+            PackageVisibilityFilterState filterState = new PackageVisibilityFilterState(
+                "logging",
+                showInstalled: true,
+                showNotInstalled: true);
+            PackageGraphView view = new PackageGraphView(
+                _ => { },
+                (_, __) => { },
+                () => backCount++,
+                filterState,
+                null);
+
+            view.HandleEscapeForTests();
+
+            Assert.IsFalse(filterState.HasSearch);
+            Assert.AreEqual(0, backCount);
+
+            view.HandleEscapeForTests();
+
+            Assert.AreEqual(1, backCount);
+        }
+
+        [Test]
+        public void Window_RootEscapeClearsGraphSearchBeforeBackNavigation()
+        {
+            int backCount = 0;
+            int fallbackCount = 0;
+            PackageVisibilityFilterState filterState = new PackageVisibilityFilterState(
+                "logging",
+                showInstalled: true,
+                showNotInstalled: true);
+            PackageGraphView view = new PackageGraphView(
+                _ => { },
+                (_, __) => { },
+                () => backCount++,
+                filterState,
+                null);
+
+            PackageInstallerWindow.HandleGraphEscapeForTests(view, () => fallbackCount++);
+
+            Assert.IsFalse(filterState.HasSearch);
+            Assert.AreEqual(0, backCount);
+            Assert.AreEqual(0, fallbackCount);
+
+            PackageInstallerWindow.HandleGraphEscapeForTests(view, () => fallbackCount++);
+
+            Assert.AreEqual(1, backCount);
+            Assert.AreEqual(0, fallbackCount);
+
+            PackageInstallerWindow.HandleGraphEscapeForTests(null, () => fallbackCount++);
+
+            Assert.AreEqual(1, fallbackCount);
         }
 
         [Test]
@@ -2802,10 +3132,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 FindByClass(runtimeGroup, "dpi-graph-group__stat--available")
                     .OfType<Label>()
                     .Any(label => label.text.Contains("not installed")));
-            Assert.IsTrue(
-                FindByClass(runtimeGroup, "dpi-graph-group__stat--attention")
-                    .OfType<Label>()
-                    .Any(label => label.text.Contains("attention")));
+            Assert.IsEmpty(FindByClass(runtimeGroup, "dpi-graph-group__stat--attention"));
             Assert.IsEmpty(FindByClass(runtimeGroup, "dpi-graph-node__action"));
         }
 
@@ -2958,6 +3285,36 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void GraphView_PreviewUpdatesInPlaceWithoutReplacingKeyboardTargets()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+            PackageGraphView focused = new PackageGraphView(_ => { }, (_, __) => { });
+            focused.SetGraph(graph, "com.deucarian.session", actionsEnabled: true);
+            VisualElement nodeBeforePreview = FindGraphNode(focused, "com.deucarian.logging");
+
+            focused.PreviewPackageHoverForTests("com.deucarian.logging");
+
+            VisualElement nodeAfterPreview = FindGraphNode(focused, "com.deucarian.logging");
+            Assert.AreSame(nodeBeforePreview, nodeAfterPreview);
+            Assert.IsTrue(nodeAfterPreview.ClassListContains("dpi-graph-node--previewed"));
+
+            focused.ClearPackageHoverForTests("com.deucarian.logging");
+
+            Assert.AreSame(nodeBeforePreview, FindGraphNode(focused, "com.deucarian.logging"));
+            Assert.IsFalse(nodeBeforePreview.ClassListContains("dpi-graph-node--previewed"));
+
+            PackageGraphView overview = new PackageGraphView(_ => { }, (_, __) => { });
+            overview.SetGraph(graph, string.Empty, actionsEnabled: true);
+            VisualElement groupBeforePreview = FindGraphGroup(overview, "infrastructure");
+
+            overview.PreviewCategoryHoverForTests("infrastructure");
+
+            Assert.AreSame(groupBeforePreview, FindGraphGroup(overview, "infrastructure"));
+            Assert.IsTrue(groupBeforePreview.ClassListContains("dpi-graph-group--hover-context"));
+        }
+
+        [Test]
         public void GraphView_ClearHoverStateClearsSharedPackageAndCategoryHover()
         {
             PackageGraphModel graph = new PackageGraphBuilder(_ => false)
@@ -2994,6 +3351,28 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
             Assert.IsTrue(view.ClassListContains("dpi-ecosystem-graph--narrow"));
             Assert.IsFalse(view.ClassListContains("dpi-ecosystem-graph--compact"));
+        }
+
+        [Test]
+        public void GraphView_ExistingGraphTargetsAreKeyboardFocusable()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+            PackageGraphView view = new PackageGraphView(_ => { }, (_, __) => { });
+            PackageGraphView focusedView = new PackageGraphView(_ => { }, (_, __) => { });
+
+            view.SetGraph(graph, string.Empty, actionsEnabled: true);
+
+            Assert.IsTrue(FindByClass(view, "dpi-graph-hub").Single().focusable);
+            Assert.IsTrue(FindByClass(view, "dpi-graph-group").All(group => group.focusable));
+
+            focusedView.SetGraph(graph, "com.deucarian.logging", actionsEnabled: true);
+
+            Assert.IsTrue(FindByClass(focusedView, "dpi-graph-node").All(node => node.focusable));
+            Assert.IsTrue(PackageGraphKeyboard.IsActivationKey(KeyCode.Return));
+            Assert.IsTrue(PackageGraphKeyboard.IsActivationKey(KeyCode.KeypadEnter));
+            Assert.IsTrue(PackageGraphKeyboard.IsActivationKey(KeyCode.Space));
+            Assert.IsFalse(PackageGraphKeyboard.IsActivationKey(KeyCode.Escape));
         }
 
         [Test]
@@ -3144,6 +3523,46 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.IsTrue(infrastructureRow.HasAttention);
             Assert.AreEqual(1, infrastructureRow.StatusSummary.AttentionCount);
             StringAssert.Contains("! 1 attention", infrastructureRow.Summary);
+        }
+
+        [Test]
+        public void MissingRelationshipTarget_ProvidesCopyableDiagnosticWithoutInstallAction()
+        {
+            PackageDefinition root = CreatePackage(
+                "Root",
+                "com.example.root",
+                "Core",
+                dependencies: new[] { "com.example.unregistered" });
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false).Build(new[] { root });
+            PackageGraphNode missing = graph.Nodes.Single(node => node.PackageId == "com.example.unregistered");
+
+            string diagnostic = PackageGraphView.GetMissingPackageDiagnostic(missing);
+
+            Assert.IsFalse(missing.IsRegistered);
+            Assert.AreEqual(PackageGraphNodeAction.None, missing.PrimaryAction);
+            StringAssert.Contains("Package ID: com.example.unregistered", diagnostic);
+            StringAssert.Contains("Registry relationship target is not registered", diagnostic);
+
+            PackageGraphView view = new PackageGraphView(_ => { }, (_, __) => { });
+            view.SetGraph(graph, root.PackageId, actionsEnabled: true);
+            PackageGraphNodeElement missingElement =
+                (PackageGraphNodeElement)FindGraphNode(view, missing.PackageId);
+            string previousClipboard = EditorGUIUtility.systemCopyBuffer;
+
+            try
+            {
+                EditorGUIUtility.systemCopyBuffer = string.Empty;
+                Assert.IsTrue(missingElement.focusable);
+                Assert.IsTrue(missingElement.HasKeyboardActivationForTests);
+
+                missingElement.ActivateForTests();
+
+                Assert.AreEqual(diagnostic, EditorGUIUtility.systemCopyBuffer);
+            }
+            finally
+            {
+                EditorGUIUtility.systemCopyBuffer = previousClipboard;
+            }
         }
 
         [Test]
@@ -4097,6 +4516,201 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void Focus_PreviewEmphasizesOnlyTheRelatedPackageRoute()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+            const string FocusPackageId = "com.deucarian.api";
+            const string PreviewPackageId = "com.deucarian.logging";
+            PackageGraphFocus focus = PackageGraphFocus.Create(graph, FocusPackageId);
+            PackageGraphLayoutResult layout = new PackageGraphLayout().Calculate(
+                graph,
+                PackageGraphLayoutMode.Focus,
+                FocusPackageId);
+            PackageGraphEdgeRoute[] routes = PackageGraphEdgeLayer.BuildRoutesForTests(
+                    graph,
+                    layout.NodeRects,
+                    focus)
+                .Where(route => route.Bundle.ConnectsPackage(FocusPackageId))
+                .ToArray();
+            PackageGraphEdgeRoute previewRoute = routes.Single(route =>
+                route.Bundle.ConnectsPackage(PreviewPackageId));
+            PackageGraphEdgeRoute unrelatedRoute = routes.First(route =>
+                !route.Bundle.ConnectsPackage(PreviewPackageId));
+
+            Assert.IsTrue(PackageGraphEdgeLayer.IsRouteEmphasized(previewRoute, focus, PreviewPackageId));
+            Assert.IsFalse(PackageGraphEdgeLayer.IsRouteEmphasized(unrelatedRoute, focus, PreviewPackageId));
+            Assert.IsTrue(PackageGraphEdgeLayer.IsRouteEmphasized(unrelatedRoute, focus, string.Empty));
+        }
+
+        [Test]
+        public void GraphView_FocusedRelationshipTooltipNamesRelationshipType()
+        {
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(CreateDefaultGraphPackages());
+            PackageGraphView view = new PackageGraphView(_ => { }, (_, __) => { });
+
+            view.SetGraph(graph, "com.deucarian.api", actionsEnabled: true);
+
+            VisualElement related = FindGraphNode(view, "com.deucarian.logging");
+            StringAssert.Contains("Relationship:", related.tooltip);
+            StringAssert.Contains("Required dependency", related.tooltip);
+            StringAssert.Contains("Deucarian API uses Deucarian Logging", related.tooltip);
+        }
+
+        [Test]
+        public void GraphView_DenseOverflowSummaryIsKeyboardActionableAndCopiesHiddenIds()
+        {
+            const int providerCount = 49;
+            string centralPackageId = "com.example.dense-root";
+            string[] providerIds = Enumerable.Range(0, providerCount)
+                .Select(index => "com.example.dense-provider-" + index)
+                .ToArray();
+            List<PackageDefinition> packages = new List<PackageDefinition>
+            {
+                CreatePackage(
+                    "Dense Root",
+                    centralPackageId,
+                    "Core",
+                    dependencies: providerIds)
+            };
+            packages.AddRange(providerIds.Select(providerId =>
+                CreatePackage("Provider " + providerId, providerId, "Core")));
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false).Build(packages);
+            PackageGraphView view = new PackageGraphView(_ => { }, (_, __) => { });
+            view.SetGraph(graph, centralPackageId, actionsEnabled: true);
+            PackageGraphOverflowSummaryElement summary = FindByClass(view, "dpi-graph-overflow-summary")
+                .OfType<PackageGraphOverflowSummaryElement>()
+                .Single();
+            string previousClipboard = EditorGUIUtility.systemCopyBuffer;
+
+            try
+            {
+                EditorGUIUtility.systemCopyBuffer = string.Empty;
+                Assert.IsTrue(summary.focusable);
+                Assert.AreEqual(0, summary.tabIndex);
+                Assert.AreEqual(PickingMode.Position, summary.pickingMode);
+                Assert.IsTrue(summary.HasKeyboardActivationForTests);
+
+                summary.ActivateForTests();
+
+                StringAssert.Contains("Additional prerequisites: 1", EditorGUIUtility.systemCopyBuffer);
+                StringAssert.Contains("com.example.dense-provider-", EditorGUIUtility.systemCopyBuffer);
+            }
+            finally
+            {
+                EditorGUIUtility.systemCopyBuffer = previousClipboard;
+            }
+        }
+
+        [Test]
+        public void GraphView_DenseOverflowDoesNotAdvertiseHiddenCheckingNode()
+        {
+            const int ProviderCount = 49;
+            const string RootPackageId = "com.example.dense-root";
+            const string CheckingPackageId = "com.example.dense-provider-checking";
+            string[] providerIds = Enumerable.Range(0, ProviderCount - 1)
+                .Select(index => "com.example.dense-provider-" + index.ToString("D2"))
+                .Concat(new[] { CheckingPackageId })
+                .ToArray();
+            List<PackageDefinition> packages = new List<PackageDefinition>
+            {
+                CreatePackage(
+                    "Dense Root",
+                    RootPackageId,
+                    "Core",
+                    dependencies: providerIds)
+            };
+            packages.AddRange(providerIds.Select((providerId, index) =>
+                CreatePackage(
+                    providerId == CheckingPackageId ? "ZZZ Checking" : "Provider " + index.ToString("D2"),
+                    providerId,
+                    "Core")));
+            PackageGraphModel graph = new PackageGraphBuilder(
+                    _ => true,
+                    _ => PackageChannel.Stable,
+                    package => package.PackageId == CheckingPackageId
+                        ? PackageUpdateStatus.Checking(
+                            package,
+                            PackageChannel.Stable,
+                            package.StableUrl)
+                        : null)
+                .Build(packages);
+            PackageGraphLayoutResult layout = new PackageGraphLayout().Calculate(
+                graph,
+                PackageGraphLayoutMode.Focus,
+                RootPackageId);
+            PackageGraphView view = new PackageGraphView(_ => { }, (_, __) => { });
+
+            Assert.AreEqual(1, layout.OverflowSummaries.Count);
+            Assert.IsFalse(layout.NodeRects.ContainsKey(CheckingPackageId));
+
+            view.SetGraph(graph, RootPackageId, actionsEnabled: true);
+
+            CollectionAssert.DoesNotContain(
+                FindByClass(view, "dpi-graph-legend__label")
+                    .OfType<Label>()
+                    .Select(label => label.text)
+                    .ToArray(),
+                "Checking");
+        }
+
+        [Test]
+        public void Layout_DenseContextGroupCardsDoNotOverlap()
+        {
+            const int CompanionCount = 49;
+            const string RootPackageId = "com.example.dense-root";
+            string[] companionGroupIds =
+            {
+                "companion-a",
+                "companion-b",
+                "companion-c",
+                "companion-d"
+            };
+            PackageGraphGroup[] groups =
+            {
+                new PackageGraphGroup("root", "Root", string.Empty, string.Empty, 0, string.Empty, string.Empty),
+                new PackageGraphGroup("companion-a", "Companion A", string.Empty, string.Empty, 10, string.Empty, string.Empty),
+                new PackageGraphGroup("companion-b", "Companion B", string.Empty, string.Empty, 20, string.Empty, string.Empty),
+                new PackageGraphGroup("companion-c", "Companion C", string.Empty, string.Empty, 30, string.Empty, string.Empty),
+                new PackageGraphGroup("companion-d", "Companion D", string.Empty, string.Empty, 40, string.Empty, string.Empty)
+            };
+            string[] companionIds = Enumerable.Range(0, CompanionCount)
+                .Select(index => "com.example.companion-" + index.ToString("D2"))
+                .ToArray();
+            List<PackageDefinition> packages = new List<PackageDefinition>
+            {
+                CreatePackage(
+                    "Dense Root",
+                    RootPackageId,
+                    "Core",
+                    optionalCompanions: companionIds,
+                    groupId: "root")
+            };
+            packages.AddRange(companionIds.Select((packageId, index) =>
+                CreatePackage(
+                    "Companion " + index.ToString("D2"),
+                    packageId,
+                    "Core",
+                    groupId: companionGroupIds[index % companionGroupIds.Length])));
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false).Build(packages, groups);
+            PackageGraphLayoutResult layout = new PackageGraphLayout().Calculate(
+                graph,
+                PackageGraphLayoutMode.Focus,
+                RootPackageId);
+            PackageGraphGroupLayoutNode[] contextGroups = layout.GroupNodes
+                .Where(group => companionGroupIds.Contains(
+                    group.GroupId,
+                    StringComparer.OrdinalIgnoreCase))
+                .ToArray();
+
+            Assert.AreEqual(1, layout.OverflowSummaries.Count);
+            Assert.AreEqual(companionGroupIds.Length, contextGroups.Length);
+            AssertNoOverlaps(contextGroups.Select(group => group.Rect).ToArray());
+            AssertNoOverlaps(layout.GroupNodes.Select(group => group.Rect).ToArray());
+        }
+
+        [Test]
         public void LargeGraph_CentralPackageFocusUsesPrecomputedDirectRelationships()
         {
             const int providerCount = 120;
@@ -4163,7 +4777,16 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual(
                 1 + providerCount + dependentCount + integrationCount + optionalCompanionCount,
                 focus.RelatedPackageIds.Count);
-            Assert.AreEqual(focus.RelatedPackageIds.Count, layout.NodeRects.Count);
+            Assert.AreEqual(4, layout.OverflowSummaries.Count);
+            Assert.AreEqual(
+                focus.RelatedPackageIds.Count - layout.NodeRects.Count,
+                layout.OverflowSummaries.Sum(summary => summary.HiddenCount));
+            Assert.AreEqual(1 + 4 * 48, layout.NodeRects.Count);
+            AssertNoOverlaps(layout.NodeRects.Values.ToArray());
+            AssertNoOverlaps(
+                layout.NodeRects.Values
+                    .Concat(layout.OverflowSummaries.Select(summary => summary.Rect))
+                    .ToArray());
         }
 
         private static PackageDefinition CreatePackage(
