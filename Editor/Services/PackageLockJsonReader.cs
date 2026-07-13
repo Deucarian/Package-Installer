@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.RegularExpressions;
 
 namespace Deucarian.PackageInstaller.Editor
@@ -47,10 +49,101 @@ namespace Deucarian.PackageInstaller.Editor
                 return false;
             }
 
-            return TryReadPackageObjectBodyFromJson(
-                File.ReadAllText(packageLockPath),
-                packageId,
-                out packageBody);
+            try
+            {
+                return TryReadPackageObjectBodyFromJson(
+                    File.ReadAllText(packageLockPath),
+                    packageId,
+                    out packageBody);
+            }
+            catch (IOException)
+            {
+                return false;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return false;
+            }
+        }
+
+        public static bool TryReadPackageDependencies(
+            string packageLockPath,
+            string packageId,
+            out IReadOnlyList<string> dependencies)
+        {
+            dependencies = Array.Empty<string>();
+
+            if (!TryReadPackageObjectBody(packageLockPath, packageId, out string packageBody) ||
+                !TryReadNamedObjectBody(packageBody, "dependencies", out string dependencyBody))
+            {
+                return false;
+            }
+
+            dependencies = Regex.Matches(
+                    dependencyBody,
+                    "\"(?<id>[^\"]+)\"\\s*:\\s*\"[^\"]*\"",
+                    RegexOptions.Singleline)
+                .Cast<Match>()
+                .Select(match => match.Groups["id"].Value.Trim())
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            return true;
+        }
+
+        internal static bool TryReadPackageDependenciesFromJson(
+            string json,
+            string packageId,
+            out IReadOnlyList<string> dependencies)
+        {
+            dependencies = Array.Empty<string>();
+            if (!TryReadPackageObjectBodyFromJson(json, packageId, out string packageBody) ||
+                !TryReadNamedObjectBody(packageBody, "dependencies", out string dependencyBody))
+            {
+                return false;
+            }
+
+            dependencies = Regex.Matches(
+                    dependencyBody,
+                    "\"(?<id>[^\"]+)\"\\s*:\\s*\"[^\"]*\"",
+                    RegexOptions.Singleline)
+                .Cast<Match>()
+                .Select(match => match.Groups["id"].Value.Trim())
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            return true;
+        }
+
+        internal static bool TryReadPackageDependenciesFromJsonForTests(
+            string json,
+            string packageId,
+            out IReadOnlyList<string> dependencies)
+        {
+            return TryReadPackageDependenciesFromJson(json, packageId, out dependencies);
+        }
+
+        internal static bool TryReadFileText(string path, out string contents)
+        {
+            contents = string.Empty;
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+            {
+                return false;
+            }
+
+            try
+            {
+                contents = File.ReadAllText(path);
+                return true;
+            }
+            catch (IOException)
+            {
+                return false;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return false;
+            }
         }
 
         private static bool TryReadPackageObjectBodyFromJson(
@@ -139,6 +232,78 @@ namespace Deucarian.PackageInstaller.Editor
                     {
                         break;
                     }
+                }
+            }
+
+            return false;
+        }
+
+        private static bool TryReadNamedObjectBody(
+            string containingBody,
+            string fieldName,
+            out string objectBody)
+        {
+            objectBody = string.Empty;
+            if (string.IsNullOrWhiteSpace(containingBody) || string.IsNullOrWhiteSpace(fieldName))
+            {
+                return false;
+            }
+
+            Match fieldMatch = Regex.Match(
+                containingBody,
+                "\"" + Regex.Escape(fieldName) + "\"\\s*:",
+                RegexOptions.Singleline);
+            if (!fieldMatch.Success)
+            {
+                return false;
+            }
+
+            int objectStart = fieldMatch.Index + fieldMatch.Length;
+            while (objectStart < containingBody.Length && char.IsWhiteSpace(containingBody[objectStart]))
+            {
+                objectStart++;
+            }
+
+            if (objectStart >= containingBody.Length || containingBody[objectStart] != '{')
+            {
+                return false;
+            }
+
+            int depth = 0;
+            bool inString = false;
+            bool escaped = false;
+            for (int index = objectStart; index < containingBody.Length; index++)
+            {
+                char character = containingBody[index];
+                if (inString)
+                {
+                    if (escaped)
+                    {
+                        escaped = false;
+                    }
+                    else if (character == '\\')
+                    {
+                        escaped = true;
+                    }
+                    else if (character == '"')
+                    {
+                        inString = false;
+                    }
+                    continue;
+                }
+
+                if (character == '"')
+                {
+                    inString = true;
+                }
+                else if (character == '{')
+                {
+                    depth++;
+                }
+                else if (character == '}' && --depth == 0)
+                {
+                    objectBody = containingBody.Substring(objectStart + 1, index - objectStart - 1);
+                    return true;
                 }
             }
 

@@ -1,4 +1,6 @@
 using System;
+using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
 
@@ -51,6 +53,24 @@ namespace Deucarian.PackageInstaller.Editor
             PackageRegistry registry,
             Func<string, Task<string>> packageJsonFetcher)
         {
+            PackageRegistryRemoteFetchDelegate fetcher = packageJsonFetcher != null
+                ? PackageRegistryRemoteFetch.WrapLegacy(packageJsonFetcher)
+                : null;
+            return await ValidateRemotePackageNamesAsync(
+                registry,
+                fetcher,
+                CancellationToken.None,
+                PackageRegistryRemoteFetch.DefaultTimeout,
+                4).ConfigureAwait(false);
+        }
+
+        internal static async Task<string> ValidateRemotePackageNamesAsync(
+            PackageRegistry registry,
+            PackageRegistryRemoteFetchDelegate packageJsonFetcher,
+            CancellationToken cancellationToken,
+            TimeSpan timeout,
+            int maxConcurrency = 4)
+        {
             if (!PackageRegistryValidator.Validate(registry, out string message))
             {
                 return message;
@@ -61,34 +81,100 @@ namespace Deucarian.PackageInstaller.Editor
                 return "Package JSON fetcher is unavailable.";
             }
 
-            foreach (PackageRegistryEntry package in registry.packages)
+            int concurrency = Math.Max(1, Math.Min(4, maxConcurrency));
+
+            using (SemaphoreSlim semaphore = new SemaphoreSlim(concurrency, concurrency))
             {
-                if (!TryCreateGitHubPackageJsonUrl(package.stableUrl, out string packageJsonUrl))
-                {
-                    return "Could not resolve target package.json URL for " + package.id +
-                           " from stableUrl " + package.stableUrl + ".";
-                }
+                Task<string>[] validationTasks = registry.packages
+                    .Select(package => ValidateRemotePackageNameAsync(
+                        package,
+                        packageJsonFetcher,
+                        semaphore,
+                        cancellationToken,
+                        timeout))
+                    .ToArray();
+                string[] validationMessages = await Task.WhenAll(validationTasks).ConfigureAwait(false);
 
-                string packageJson;
-
-                try
+                foreach (string validationMessage in validationMessages)
                 {
-                    packageJson = await packageJsonFetcher(packageJsonUrl);
-                }
-                catch (Exception exception)
-                {
-                    return "Could not fetch target package.json for " + package.id +
-                           " at " + packageJsonUrl + ": " +
-                           exception.GetBaseException().Message;
-                }
-
-                if (!ValidatePackageName(package, packageJson, packageJsonUrl, out message))
-                {
-                    return message;
+                    if (!string.IsNullOrWhiteSpace(validationMessage))
+                    {
+                        return validationMessage;
+                    }
                 }
             }
 
             return string.Empty;
+        }
+
+        private static async Task<string> ValidateRemotePackageNameAsync(
+            PackageRegistryEntry package,
+            PackageRegistryRemoteFetchDelegate packageJsonFetcher,
+            SemaphoreSlim semaphore,
+            CancellationToken cancellationToken,
+            TimeSpan timeout)
+        {
+            bool enteredSemaphore = false;
+            string activePackageJsonUrl = string.Empty;
+
+            try
+            {
+                await semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+                enteredSemaphore = true;
+                string[] channelUrls = new[] { package.stableUrl, package.developmentUrl }
+                    .Where(url => !string.IsNullOrWhiteSpace(url))
+                    .Distinct(StringComparer.Ordinal)
+                    .ToArray();
+
+                foreach (string channelUrl in channelUrls)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (!TryCreateGitHubPackageJsonUrl(channelUrl, out string packageJsonUrl))
+                    {
+                        return "Could not resolve target package.json URL for " + package.id +
+                               " from channel URL " + channelUrl + ".";
+                    }
+
+                    activePackageJsonUrl = packageJsonUrl;
+
+                    PackageRegistryRemoteFetchResponse response =
+                        await PackageRegistryRemoteFetch.ExecuteAsync(
+                            packageJsonFetcher,
+                            packageJsonUrl,
+                            cancellationToken,
+                            timeout).ConfigureAwait(false);
+
+                    if (!ValidatePackageName(
+                            package,
+                            response.Content,
+                            packageJsonUrl,
+                            out string message))
+                    {
+                        return message;
+                    }
+                }
+
+                return string.Empty;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                return "Could not fetch target package.json for " + package.id +
+                       (string.IsNullOrWhiteSpace(activePackageJsonUrl)
+                           ? string.Empty
+                           : " at " + activePackageJsonUrl) + ": " +
+                       exception.GetBaseException().Message;
+            }
+            finally
+            {
+                if (enteredSemaphore)
+                {
+                    semaphore.Release();
+                }
+            }
         }
 
         internal static bool TryCreateGitHubPackageJsonUrl(string packageUrl, out string packageJsonUrl)

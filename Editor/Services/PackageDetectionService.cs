@@ -19,6 +19,8 @@ namespace Deucarian.PackageInstaller.Editor
             new Dictionary<string, PackageInstallSourceType>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, string> _installedPackageVersions =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, string> _installedPackageHashes =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private readonly IReadOnlyList<string> _packageLockPaths;
         private readonly PackageInstallerStateRepository _stateRepository;
 
@@ -41,6 +43,11 @@ namespace Deucarian.PackageInstaller.Editor
 
         public bool IsRefreshing => _listRequest != null && !_listRequest.IsCompleted;
 
+        public bool HasSuccessfulRefresh { get; private set; }
+
+        public IReadOnlyCollection<string> InstalledPackageIds =>
+            new List<string>(_installedPackages.Keys);
+
         public void Refresh()
         {
             if (IsRefreshing)
@@ -50,6 +57,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             try
             {
+                HasSuccessfulRefresh = false;
                 _listRequest = Client.List(true, true);
                 EditorApplication.update -= Update;
                 EditorApplication.update += Update;
@@ -57,7 +65,13 @@ namespace Deucarian.PackageInstaller.Editor
             }
             catch (Exception exception)
             {
-                PackageInstallerLog.Registry.Error("Failed to start installed-package refresh: " + exception.Message);
+                string message = "Failed to start installed-package refresh: " + exception.Message;
+                PackageInstallerLog.Registry.Error(message);
+                PackageInstallerActivityService.Record(
+                    "Installed Packages",
+                    PackageInstallerActivitySeverity.Error,
+                    message,
+                    retryKind: PackageInstallerRetryKind.Refresh);
                 _listRequest = null;
                 ScheduleRefreshRetry();
                 NotifyStateChanged();
@@ -91,6 +105,7 @@ namespace Deucarian.PackageInstaller.Editor
             _installedPackageReferences.Clear();
             _installedPackageSourceTypes.Clear();
             _installedPackageVersions.Clear();
+            _installedPackageHashes.Clear();
 
             if (packageIds == null)
             {
@@ -101,7 +116,10 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 if (!string.IsNullOrWhiteSpace(packageId))
                 {
-                    _installedPackages[packageId.Trim()] = null;
+                    string normalizedPackageId = packageId.Trim();
+                    _installedPackages[normalizedPackageId] = null;
+                    _installedPackageSourceTypes[normalizedPackageId] =
+                        PackageInstallSourceType.Registry;
                 }
             }
         }
@@ -134,7 +152,8 @@ namespace Deucarian.PackageInstaller.Editor
             string packageId,
             string packageReference,
             PackageInstallSourceType sourceType,
-            string version = "")
+            string version = "",
+            string packageHash = "")
         {
             if (string.IsNullOrWhiteSpace(packageId))
             {
@@ -162,6 +181,15 @@ namespace Deucarian.PackageInstaller.Editor
             else
             {
                 _installedPackageVersions[normalizedPackageId] = version.Trim();
+            }
+
+            if (string.IsNullOrWhiteSpace(packageHash))
+            {
+                _installedPackageHashes.Remove(normalizedPackageId);
+            }
+            else
+            {
+                _installedPackageHashes[normalizedPackageId] = packageHash.Trim();
             }
         }
 
@@ -214,6 +242,60 @@ namespace Deucarian.PackageInstaller.Editor
                    !string.IsNullOrWhiteSpace(version);
         }
 
+        public bool IsInstalledAtExactTarget(string packageId, string targetReference)
+        {
+            if (!IsInstalled(packageId) || string.IsNullOrWhiteSpace(targetReference) ||
+                !TryGetInstalledPackageReference(packageId, out string installedReference))
+            {
+                return false;
+            }
+
+            if (PackageGitReference.TryParse(targetReference, out _))
+            {
+                return PackageGitReference.MatchesChannel(installedReference, targetReference);
+            }
+
+            return string.Equals(
+                installedReference.Trim(),
+                targetReference.Trim(),
+                StringComparison.Ordinal);
+        }
+
+        public string GetInstalledIdentity(string packageId)
+        {
+            if (!IsInstalled(packageId))
+            {
+                return string.Empty;
+            }
+
+            _installedPackageReferences.TryGetValue(packageId, out string packageReference);
+            _installedPackageVersions.TryGetValue(packageId, out string version);
+            _installedPackageHashes.TryGetValue(packageId, out string packageHash);
+            _installedPackageSourceTypes.TryGetValue(packageId, out PackageInstallSourceType sourceType);
+            return sourceType + "|" +
+                   (packageReference ?? string.Empty).Trim() + "|" +
+                   (version ?? string.Empty).Trim() + "|" +
+                   (packageHash ?? string.Empty).Trim();
+        }
+
+        public bool IsInstalledAtExactTargetAfterChange(
+            string packageId,
+            string targetReference,
+            string previousInstalledIdentity)
+        {
+            if (!IsInstalledAtExactTarget(packageId, targetReference))
+            {
+                return false;
+            }
+
+            string currentIdentity = GetInstalledIdentity(packageId);
+            return !string.IsNullOrWhiteSpace(currentIdentity) &&
+                   !string.Equals(
+                       currentIdentity,
+                       previousInstalledIdentity ?? string.Empty,
+                       StringComparison.Ordinal);
+        }
+
         public bool TryGetInstalledPackageChannel(
             PackageDefinition packageDefinition,
             out PackageChannel channel,
@@ -253,24 +335,14 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (!hasInstalledPackageReference)
             {
+                packageReference = string.Empty;
+                if (IsInstalled(packageDefinition.PackageId))
+                {
+                    channel = PackageChannel.Custom;
+                    return true;
+                }
+
                 return false;
-            }
-
-            if (TryGetReferenceName(packageReference, out string installedReferenceName))
-            {
-                if (string.Equals(installedReferenceName, "develop", StringComparison.OrdinalIgnoreCase) &&
-                    ReferenceMatchesChannel(packageReference, packageDefinition.DevelopmentUrl))
-                {
-                    channel = PackageChannel.Development;
-                    return true;
-                }
-
-                if (string.Equals(installedReferenceName, "main", StringComparison.OrdinalIgnoreCase) &&
-                    ReferenceMatchesChannel(packageReference, packageDefinition.StableUrl))
-                {
-                    channel = PackageChannel.Stable;
-                    return true;
-                }
             }
 
             if (ReferenceMatchesChannel(packageReference, packageDefinition.DevelopmentUrl))
@@ -306,10 +378,12 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (_listRequest.Status == StatusCode.Success)
             {
+                HasSuccessfulRefresh = true;
                 _installedPackages.Clear();
                 _installedPackageReferences.Clear();
                 _installedPackageSourceTypes.Clear();
                 _installedPackageVersions.Clear();
+                _installedPackageHashes.Clear();
 
                 foreach (PackageManagerPackageInfo packageInfo in _listRequest.Result)
                 {
@@ -348,6 +422,14 @@ namespace Deucarian.PackageInstaller.Editor
                         {
                             _installedPackageVersions[packageInfo.name] = packageReferenceVersion;
                         }
+
+                        if (TryReadPackageLockField(
+                                packageInfo.name,
+                                "hash",
+                                out string packageHash))
+                        {
+                            _installedPackageHashes[packageInfo.name] = packageHash;
+                        }
                     }
                 }
 
@@ -360,6 +442,13 @@ namespace Deucarian.PackageInstaller.Editor
                     : "Package Manager returned an unknown error.";
 
                 PackageInstallerLog.Registry.Error("Failed to refresh installed-package state: " + errorMessage);
+                HasSuccessfulRefresh = false;
+                PackageInstallerActivityService.Record(
+                    "Installed Packages",
+                    PackageInstallerActivitySeverity.Error,
+                    "Failed to refresh installed-package state.",
+                    errorMessage,
+                    retryKind: PackageInstallerRetryKind.Refresh);
             }
 
             _listRequest = null;
@@ -424,11 +513,23 @@ namespace Deucarian.PackageInstaller.Editor
 
         private bool TryReadPackageLockReference(string packageId, out string packageReference)
         {
-            packageReference = string.Empty;
+            return TryReadPackageLockField(packageId, "version", out packageReference);
+        }
+
+        private bool TryReadPackageLockField(
+            string packageId,
+            string fieldName,
+            out string value)
+        {
+            value = string.Empty;
 
             foreach (string packageLockPath in _packageLockPaths)
             {
-                if (TryReadPackageLockReference(packageLockPath, packageId, out packageReference))
+                if (PackageLockJsonReader.TryReadPackageStringField(
+                        packageLockPath,
+                        packageId,
+                        fieldName,
+                        out value))
                 {
                     return true;
                 }
@@ -482,76 +583,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static bool ReferenceMatchesChannel(string installedReference, string channelUrl)
         {
-            if (string.IsNullOrWhiteSpace(installedReference) || string.IsNullOrWhiteSpace(channelUrl))
-            {
-                return false;
-            }
-
-            if (string.Equals(
-                    NormalizePackageReference(installedReference),
-                    NormalizePackageReference(channelUrl),
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-
-            return TryGetReferenceName(installedReference, out string installedReferenceName) &&
-                   TryGetReferenceName(channelUrl, out string channelReferenceName) &&
-                   string.Equals(
-                       NormalizeReferenceName(installedReferenceName),
-                       NormalizeReferenceName(channelReferenceName),
-                       StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static bool TryGetReferenceName(string packageReference, out string referenceName)
-        {
-            referenceName = string.Empty;
-
-            if (string.IsNullOrWhiteSpace(packageReference))
-            {
-                return false;
-            }
-
-            int hashIndex = packageReference.LastIndexOf('#');
-
-            if (hashIndex < 0 || hashIndex == packageReference.Length - 1)
-            {
-                return false;
-            }
-
-            referenceName = packageReference.Substring(hashIndex + 1).Trim();
-            return !string.IsNullOrWhiteSpace(referenceName);
-        }
-
-        private static string NormalizePackageReference(string packageReference)
-        {
-            return (packageReference ?? string.Empty).Trim();
-        }
-
-        private static string NormalizeReferenceName(string referenceName)
-        {
-            referenceName = (referenceName ?? string.Empty).Trim();
-
-            const string refsHeadsPrefix = "refs/heads/";
-            const string headsPrefix = "heads/";
-            const string originPrefix = "origin/";
-
-            if (referenceName.StartsWith(refsHeadsPrefix, StringComparison.OrdinalIgnoreCase))
-            {
-                return referenceName.Substring(refsHeadsPrefix.Length);
-            }
-
-            if (referenceName.StartsWith(headsPrefix, StringComparison.OrdinalIgnoreCase))
-            {
-                return referenceName.Substring(headsPrefix.Length);
-            }
-
-            if (referenceName.StartsWith(originPrefix, StringComparison.OrdinalIgnoreCase))
-            {
-                return referenceName.Substring(originPrefix.Length);
-            }
-
-            return referenceName;
+            return PackageGitReference.MatchesChannel(installedReference, channelUrl);
         }
 
         private static bool IsDevelopmentRegistryVersion(string version)

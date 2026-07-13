@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using UnityEditor;
 
@@ -8,7 +9,7 @@ namespace Deucarian.PackageInstaller.Editor
 {
     internal static class PackageRegistryProvider
     {
-        private static readonly PackageRegistryLoader Loader = new PackageRegistryLoader();
+        private static PackageRegistryLoader _loader = new PackageRegistryLoader();
         private static readonly IReadOnlyList<PackageDefinition> EmptyPackages =
             Array.Empty<PackageDefinition>();
 
@@ -18,7 +19,8 @@ namespace Deucarian.PackageInstaller.Editor
             new Dictionary<string, PackageDefinition>(StringComparer.OrdinalIgnoreCase);
         private static IReadOnlyList<PackageGraphGroup> _ecosystemGroups =
             PackageGraphHierarchyBuilder.CreateGroups((IEnumerable<PackageGraphGroup>)null);
-        private static Task<PackageRegistryLoadResult> _remoteRefreshTask;
+        private static RemoteRefreshOperation _remoteRefreshOperation;
+        private static int _remoteRefreshGeneration;
         private static bool _bundledLoaded;
         private static bool _remoteRefreshStarted;
 
@@ -65,7 +67,7 @@ namespace Deucarian.PackageInstaller.Editor
             }
         }
 
-        public static bool IsRemoteRefreshing => _remoteRefreshTask != null;
+        public static bool IsRemoteRefreshing => _remoteRefreshOperation != null;
 
         public static string StatusMessage
         {
@@ -89,13 +91,22 @@ namespace Deucarian.PackageInstaller.Editor
         public static void RefreshRemote()
         {
             EnsureBundledLoaded();
+            StartRemoteRefresh(replaceExisting: true);
+        }
 
-            if (_remoteRefreshTask != null)
+        public static bool CancelRemoteRefresh()
+        {
+            RemoteRefreshOperation operation = _remoteRefreshOperation;
+            if (operation == null)
             {
-                return;
+                return false;
             }
 
-            StartRemoteRefresh();
+            CancelAndObserve(operation);
+            _remoteRefreshOperation = null;
+            _remoteRefreshGeneration++;
+            EditorApplication.update -= UpdateRemoteRefresh;
+            return true;
         }
 
         public static IReadOnlyList<PackageDefinition> GetPackagesByCategory(string category)
@@ -232,12 +243,37 @@ namespace Deucarian.PackageInstaller.Editor
             return PackageType.Core;
         }
 
-        private static void StartRemoteRefresh()
+        private static void StartRemoteRefresh(bool replaceExisting = false)
         {
+            if (_remoteRefreshOperation != null)
+            {
+                if (!replaceExisting)
+                {
+                    return;
+                }
+
+                CancelAndObserve(_remoteRefreshOperation);
+            }
+
             _remoteRefreshStarted = true;
-            _remoteRefreshTask = Loader.LoadRemoteAsync(_currentLoadResult != null
-                ? _currentLoadResult.Registry
-                : null);
+            int generation = ++_remoteRefreshGeneration;
+            CancellationTokenSource cancellation = new CancellationTokenSource();
+            PackageRegistryCacheCommitGuard cacheCommitGuard =
+                new PackageRegistryCacheCommitGuard();
+            PackageRegistryLoadResult fallback = _currentLoadResult ??
+                PackageRegistryLoadResult.Failure(
+                    PackageRegistrySource.Bundled,
+                    "Bundled registry is unavailable.");
+            Task<PackageRegistryLoadResult> task = _loader.LoadRemoteAsync(
+                fallback,
+                cancellation.Token,
+                cacheCommitGuard);
+            _remoteRefreshOperation = new RemoteRefreshOperation(
+                generation,
+                fallback,
+                cancellation,
+                cacheCommitGuard,
+                task);
 
             EditorApplication.update -= UpdateRemoteRefresh;
             EditorApplication.update += UpdateRemoteRefresh;
@@ -250,34 +286,66 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            ApplyLoadResult(Loader.LoadBundled(), logFailures: true);
             _bundledLoaded = true;
+            _remoteRefreshStarted = true;
+            ApplyLoadResult(_loader.LoadBundled(), logFailures: true);
+
+            if (_loader.TryLoadCached(
+                    out PackageRegistryLoadResult cachedResult,
+                    out string cacheErrorMessage))
+            {
+                ApplyLoadResult(cachedResult, logFailures: true);
+            }
+            else if (!string.IsNullOrWhiteSpace(cacheErrorMessage))
+            {
+                PackageInstallerLog.Registry.Warning(
+                    "Cached registry was ignored: " + cacheErrorMessage);
+            }
+
+            _remoteRefreshStarted = false;
         }
 
         private static void UpdateRemoteRefresh()
         {
-            if (_remoteRefreshTask == null || !_remoteRefreshTask.IsCompleted)
+            RemoteRefreshOperation operation = _remoteRefreshOperation;
+
+            if (operation == null || !operation.Task.IsCompleted)
             {
                 return;
             }
 
-            EditorApplication.update -= UpdateRemoteRefresh;
+            if (!ReferenceEquals(operation, _remoteRefreshOperation))
+            {
+                return;
+            }
 
+            _remoteRefreshOperation = null;
+            EditorApplication.update -= UpdateRemoteRefresh;
             PackageRegistryLoadResult result;
 
             try
             {
-                result = _remoteRefreshTask.Result;
+                result = operation.Task.GetAwaiter().GetResult();
+            }
+            catch (OperationCanceledException)
+            {
+                return;
             }
             catch (Exception exception)
             {
-                result = PackageRegistryLoadResult.RemoteFailureUsingBundled(
-                    _currentLoadResult != null ? _currentLoadResult.Registry : null,
+                result = PackageRegistryLoadResult.RemoteFailureUsingFallback(
+                    operation.Fallback,
                     exception.GetBaseException().Message);
             }
+            finally
+            {
+                operation.Cancellation.Dispose();
+            }
 
-            _remoteRefreshTask = null;
-            ApplyLoadResult(result, logFailures: true);
+            if (ShouldApplyRemoteRefresh(operation.Generation, _remoteRefreshGeneration))
+            {
+                ApplyLoadResult(result, logFailures: true);
+            }
         }
 
         private static void ApplyLoadResult(PackageRegistryLoadResult result, bool logFailures)
@@ -311,8 +379,108 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 PackageInstallerLog.Registry.Warning("Remote registry failed, using bundled registry: " + result.ErrorMessage);
             }
+            else if (result.Source == PackageRegistrySource.RemoteFailedUsingCache && logFailures)
+            {
+                PackageInstallerLog.Registry.Warning("Remote registry failed, using cached registry: " + result.ErrorMessage);
+            }
 
             RegistryChanged?.Invoke();
+        }
+
+        internal static bool ShouldApplyRemoteRefreshForTests(
+            int completedGeneration,
+            int activeGeneration)
+        {
+            return ShouldApplyRemoteRefresh(completedGeneration, activeGeneration);
+        }
+
+        internal static void SetLoaderForTests(PackageRegistryLoader loader)
+        {
+            ResetState(loader ?? new PackageRegistryLoader());
+        }
+
+        internal static void PollRemoteRefreshForTests()
+        {
+            UpdateRemoteRefresh();
+        }
+
+        internal static void ResetForTests()
+        {
+            ResetState(new PackageRegistryLoader());
+        }
+
+        private static bool ShouldApplyRemoteRefresh(
+            int completedGeneration,
+            int activeGeneration)
+        {
+            return completedGeneration == activeGeneration;
+        }
+
+        private static void ResetState(PackageRegistryLoader loader)
+        {
+            EditorApplication.update -= UpdateRemoteRefresh;
+
+            if (_remoteRefreshOperation != null)
+            {
+                CancelAndObserve(_remoteRefreshOperation);
+                _remoteRefreshOperation = null;
+            }
+
+            _loader = loader;
+            _currentLoadResult = null;
+            _allPackages = EmptyPackages;
+            _packageById = new Dictionary<string, PackageDefinition>(StringComparer.OrdinalIgnoreCase);
+            _ecosystemGroups = PackageGraphHierarchyBuilder.CreateGroups(
+                (IEnumerable<PackageGraphGroup>)null);
+            _remoteRefreshGeneration = 0;
+            _bundledLoaded = false;
+            _remoteRefreshStarted = false;
+        }
+
+        private static void CancelAndObserve(RemoteRefreshOperation operation)
+        {
+            operation.Cancellation.Cancel();
+            operation.CacheCommitGuard.Revoke();
+            operation.Task.ContinueWith(
+                completed =>
+                {
+                    if (completed.IsFaulted)
+                    {
+                        Exception ignored = completed.Exception;
+                    }
+
+                    operation.Cancellation.Dispose();
+                },
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+        }
+
+        private sealed class RemoteRefreshOperation
+        {
+            public RemoteRefreshOperation(
+                int generation,
+                PackageRegistryLoadResult fallback,
+                CancellationTokenSource cancellation,
+                PackageRegistryCacheCommitGuard cacheCommitGuard,
+                Task<PackageRegistryLoadResult> task)
+            {
+                Generation = generation;
+                Fallback = fallback;
+                Cancellation = cancellation;
+                CacheCommitGuard = cacheCommitGuard;
+                Task = task;
+            }
+
+            public int Generation { get; }
+
+            public PackageRegistryLoadResult Fallback { get; }
+
+            public CancellationTokenSource Cancellation { get; }
+
+            public PackageRegistryCacheCommitGuard CacheCommitGuard { get; }
+
+            public Task<PackageRegistryLoadResult> Task { get; }
         }
 
         private static IReadOnlyDictionary<string, PackageDefinition> CreatePackageById(

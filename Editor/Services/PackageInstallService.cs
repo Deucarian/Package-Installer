@@ -2,8 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
-using UnityEditor.PackageManager;
-using UnityEditor.PackageManager.Requests;
 
 namespace Deucarian.PackageInstaller.Editor
 {
@@ -20,7 +18,10 @@ namespace Deucarian.PackageInstaller.Editor
         Active,
         Completed,
         Failed,
-        Skipped
+        Skipped,
+        Blocked,
+        Canceled,
+        AlreadyCorrect
     }
 
     internal sealed class PackageInstallProgressItem
@@ -42,21 +43,131 @@ namespace Deucarian.PackageInstaller.Editor
         public string Message { get; internal set; }
     }
 
+    internal enum PackageOperationTerminalOutcome
+    {
+        Succeeded,
+        Failed,
+        Canceled
+    }
+
+    internal sealed class PackageOperationRootRequest
+    {
+        public PackageOperationRootRequest(string packageId, PackageChannel channel)
+        {
+            PackageId = packageId ?? string.Empty;
+            Channel = channel;
+        }
+
+        public string PackageId { get; }
+        public PackageChannel Channel { get; }
+    }
+
+    internal sealed class PackageOperationStepSnapshot
+    {
+        public PackageOperationStepSnapshot(
+            string packageId,
+            string displayName,
+            PackageChannel channel,
+            string targetUrl,
+            bool isDependency,
+            IEnumerable<string> rootPackageIds,
+            PackageInstallProgressItemState state,
+            string message)
+        {
+            PackageId = packageId ?? string.Empty;
+            DisplayName = displayName ?? string.Empty;
+            Channel = channel;
+            TargetUrl = targetUrl ?? string.Empty;
+            IsDependency = isDependency;
+            RootPackageIds = Array.AsReadOnly((rootPackageIds ?? Array.Empty<string>())
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray());
+            State = state;
+            Message = message ?? string.Empty;
+        }
+
+        public string PackageId { get; }
+        public string DisplayName { get; }
+        public PackageChannel Channel { get; }
+        public string TargetUrl { get; }
+        public bool IsDependency { get; }
+        public IReadOnlyList<string> RootPackageIds { get; }
+        public PackageInstallProgressItemState State { get; }
+        public string Message { get; }
+    }
+
+    internal sealed class PackageOperationTerminalSnapshot
+    {
+        public PackageOperationTerminalSnapshot(
+            string operationId,
+            string operationName,
+            PackageOperationTerminalOutcome outcome,
+            string summary,
+            string errorMessage,
+            IEnumerable<PackageOperationRootRequest> restartRoots,
+            IEnumerable<PackageOperationStepSnapshot> steps,
+            IEnumerable<string> messages,
+            DateTime completedAtUtc)
+        {
+            OperationId = operationId ?? string.Empty;
+            OperationName = operationName ?? string.Empty;
+            Outcome = outcome;
+            Summary = summary ?? string.Empty;
+            ErrorMessage = errorMessage ?? string.Empty;
+            RestartRoots = Array.AsReadOnly((restartRoots ?? Array.Empty<PackageOperationRootRequest>())
+                .Where(root => root != null && !string.IsNullOrWhiteSpace(root.PackageId))
+                .ToArray());
+            Steps = Array.AsReadOnly((steps ?? Array.Empty<PackageOperationStepSnapshot>())
+                .Where(step => step != null)
+                .ToArray());
+            Messages = Array.AsReadOnly((messages ?? Array.Empty<string>())
+                .Where(message => !string.IsNullOrWhiteSpace(message))
+                .Select(message => message.Trim())
+                .ToArray());
+            CompletedAtUtc = completedAtUtc;
+        }
+
+        public string OperationId { get; }
+        public string OperationName { get; }
+        public PackageOperationTerminalOutcome Outcome { get; }
+        public string Summary { get; }
+        public string ErrorMessage { get; }
+        public IReadOnlyList<PackageOperationRootRequest> RestartRoots { get; }
+        public IReadOnlyList<PackageOperationStepSnapshot> Steps { get; }
+        public IReadOnlyList<string> Messages { get; }
+        public DateTime CompletedAtUtc { get; }
+
+        public bool CanRestart =>
+            (Outcome == PackageOperationTerminalOutcome.Failed ||
+             Outcome == PackageOperationTerminalOutcome.Canceled) &&
+            RestartRoots.Count > 0;
+    }
+
     internal sealed class PackageInstallService : IDisposable
     {
         private const string PendingOperationNameKey = "Deucarian.PackageInstaller.PendingOperationName";
         private const string PendingQueueKey = "Deucarian.PackageInstaller.PendingQueue";
 
-        private readonly Queue<QueuedPackageInstall> _installQueue = new Queue<QueuedPackageInstall>();
+        private readonly List<QueuedPackageInstall> _installQueue = new List<QueuedPackageInstall>();
         private readonly HashSet<string> _queuedOrInstallingPackageIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly List<PackageInstallProgressItem> _progressItems = new List<PackageInstallProgressItem>();
         private readonly List<string> _operationMessages = new List<string>();
         private readonly Dictionary<string, PackageInstallProgressItem> _progressItemsByPackageId =
             new Dictionary<string, PackageInstallProgressItem>(StringComparer.OrdinalIgnoreCase);
-        private AddRequest _currentRequest;
-        private RemoveRequest _currentRemoveRequest;
+        private readonly Dictionary<string, QueuedPackageInstall> _operationInstallsByPackageId =
+            new Dictionary<string, QueuedPackageInstall>(StringComparer.OrdinalIgnoreCase);
+        private readonly List<PackageOperationRootRequest> _currentRootRequests =
+            new List<PackageOperationRootRequest>();
+        private readonly IPackageInstallClient _packageClient;
+        private readonly PackageOperationStateRepository _operationStateRepository;
+        private IPackageInstallRequest _currentRequest;
+        private IPackageInstallRequest _currentRemoveRequest;
         private QueuedPackageInstall _currentInstall;
         private PackageDefinition _currentRemovePackage;
+        private string _currentOperationId = string.Empty;
+        private string _currentRegistryFingerprint = string.Empty;
+        private long _currentOperationCreatedAtUtcTicks;
         private string _currentOperationName = string.Empty;
         private string _lastStatusMessage = string.Empty;
         private string _lastErrorMessage = string.Empty;
@@ -64,9 +175,13 @@ namespace Deucarian.PackageInstaller.Editor
         private int _successfulSteps;
         private int _failedSteps;
         private int _skippedSteps;
+        private int _blockedSteps;
+        private int _canceledSteps;
         private int _totalSteps;
         private bool _cancelRequested;
         private bool _operationCanceled;
+        private bool _completionActivityRecorded;
+        private PackageOperationTerminalSnapshot _terminalOperationSnapshot;
 
         public event Action StateChanged;
 
@@ -105,6 +220,10 @@ namespace Deucarian.PackageInstaller.Editor
 
         public int SkippedSteps => _skippedSteps;
 
+        public int BlockedSteps => _blockedSteps;
+
+        public int CanceledSteps => _canceledSteps;
+
         public string LastStatusMessage => _lastStatusMessage;
 
         public string LastErrorMessage => _lastErrorMessage;
@@ -113,9 +232,53 @@ namespace Deucarian.PackageInstaller.Editor
 
         public IReadOnlyList<string> OperationMessages => _operationMessages;
 
+        public PackageOperationTerminalSnapshot TerminalOperationSnapshot =>
+            _terminalOperationSnapshot;
+
+        internal Func<string, string, string, bool> ExactTargetAlreadyInstalled { get; set; }
+
         public PackageInstallService()
+            : this(new UnityPackageInstallClient(), new PackageOperationStateRepository())
         {
+        }
+
+        internal PackageInstallService(
+            IPackageInstallClient packageClient,
+            PackageOperationStateRepository operationStateRepository)
+        {
+            _packageClient = packageClient ?? throw new ArgumentNullException(nameof(packageClient));
+            _operationStateRepository = operationStateRepository ??
+                                        throw new ArgumentNullException(nameof(operationStateRepository));
             PackageInstallerSelfUpdateState.ReconcileCurrentRuntime();
+        }
+
+        public bool HasSavedOperation
+        {
+            get
+            {
+                return TryGetSavedOperation(out _, out _);
+            }
+        }
+
+        public bool TryGetSavedOperation(
+            out PackageOperationRecoveryRecord record,
+            out string errorMessage)
+        {
+            if (_operationStateRepository.TryLoad(out record, out errorMessage))
+            {
+                return true;
+            }
+
+            if (!string.IsNullOrWhiteSpace(errorMessage))
+            {
+                return false;
+            }
+
+            bool loadedLegacy = TryLoadSavedOperation(_operationStateRepository, out record);
+            errorMessage = loadedLegacy
+                ? string.Empty
+                : "No saved package operation is available.";
+            return loadedLegacy;
         }
 
         public bool ResumeSavedOperation()
@@ -130,38 +293,121 @@ namespace Deucarian.PackageInstaller.Editor
                 PackageInstallerSelfUpdateReconcileResult.AppliedOnReload;
 
             if (!TryPrepareSavedOperationForResume(
+                    _operationStateRepository,
                     selfUpdateAppliedOnReload,
-                    out string operationName,
-                    out QueuedPackageInstall[] pendingInstalls))
+                    out PackageOperationRecoveryRecord recoveryRecord))
             {
                 return false;
             }
 
-            PackageDefinition[] packages = pendingInstalls
-                .Select(install => install.PackageDefinition)
-                .Where(packageDefinition => packageDefinition != null)
-                .ToArray();
-
-            if (packages.Length == 0)
+            if (recoveryRecord == null || recoveryRecord.Steps.Count == 0)
             {
-                ClearSavedOperationState();
+                ClearSavedOperationState(_operationStateRepository);
                 return false;
             }
 
-            BeginOperation(
-                string.IsNullOrWhiteSpace(operationName) ? "Resume Package Operation" : operationName,
-                packages);
-
-            foreach (QueuedPackageInstall pendingInstall in pendingInstalls)
-            {
-                QueueInstall(pendingInstall.PackageDefinition, pendingInstall.Channel);
-            }
+            RestoreOperation(recoveryRecord);
 
             StartNextRequestIfNeeded();
             CompleteOperationIfIdle();
+            bool completedDuringReconciliation = CompleteRecoveredOperationWithoutRequestIfNeeded();
             NotifyStateChanged();
 
-            return IsBusy;
+            return IsBusy || completedDuringReconciliation;
+        }
+
+        public bool RestartSavedOperation()
+        {
+            if (IsBusy)
+            {
+                return false;
+            }
+
+            bool selfUpdateAppliedOnReload =
+                PackageInstallerSelfUpdateState.ReconcileCurrentRuntime() ==
+                PackageInstallerSelfUpdateReconcileResult.AppliedOnReload;
+
+            if (!TryPrepareSavedOperationForResume(
+                    _operationStateRepository,
+                    selfUpdateAppliedOnReload,
+                    out PackageOperationRecoveryRecord recoveryRecord))
+            {
+                return false;
+            }
+
+            PackageOperationRecoveryStep[] restartedSteps = recoveryRecord.Steps
+                .Select(step => new PackageOperationRecoveryStep(
+                    step.PackageId,
+                    step.DisplayName,
+                    step.Channel,
+                    step.TargetUrl,
+                    step.IsDependency,
+                    step.PrerequisitePackageIds,
+                    step.RootPackageIds,
+                    step.RootPaths,
+                    step.DependencyReason,
+                    PackageInstallProgressItemState.Pending,
+                    string.Empty,
+                    step.DetectedCurrentSource,
+                    step.DetectedCurrentVersion,
+                    step.DetectedCurrentIdentity))
+                .ToArray();
+            PackageOperationRecoveryRecord restartedRecord = new PackageOperationRecoveryRecord(
+                Guid.NewGuid().ToString("N"),
+                recoveryRecord.OperationName,
+                recoveryRecord.RegistryFingerprint,
+                DateTime.UtcNow.Ticks,
+                DateTime.UtcNow.Ticks,
+                restartedSteps,
+                recoveryRecord.Messages,
+                recoveryRecord.RootRequests);
+
+            if (!_operationStateRepository.Save(restartedRecord, out string saveError))
+            {
+                _lastErrorMessage = saveError;
+                PackageInstallerLog.Install.Warning(saveError);
+                NotifyStateChanged();
+                return false;
+            }
+
+            RestoreOperation(restartedRecord);
+            StartNextRequestIfNeeded();
+            CompleteOperationIfIdle();
+            bool completedDuringReconciliation = CompleteRecoveredOperationWithoutRequestIfNeeded();
+            if (!completedDuringReconciliation)
+            {
+                SavePendingOperationState();
+            }
+            NotifyStateChanged();
+            return IsBusy || completedDuringReconciliation;
+        }
+
+        private bool CompleteRecoveredOperationWithoutRequestIfNeeded()
+        {
+            if (IsBusy || !HasProgress)
+            {
+                return false;
+            }
+
+            ClearSavedOperationState(_operationStateRepository);
+            QueueCompleted?.Invoke();
+            return true;
+        }
+
+        public bool DiscardSavedOperation()
+        {
+            if (IsBusy)
+            {
+                return false;
+            }
+
+            bool hadSavedOperation = TryLoadSavedOperation(
+                _operationStateRepository,
+                out _);
+            ClearSavedOperationState(_operationStateRepository);
+            PackageInstallerSelfUpdateState.AcknowledgeApplied();
+            NotifyStateChanged();
+            return hadSavedOperation;
         }
 
         public bool CancelCurrentOperation()
@@ -178,8 +424,8 @@ namespace Deucarian.PackageInstaller.Editor
 
             _cancelRequested = true;
             _operationCanceled = true;
-            SkipQueuedInstalls("Skipped after cancellation.");
-            ClearSavedOperationState();
+            CancelQueuedInstalls("Canceled before starting.");
+            ClearSavedOperationState(_operationStateRepository);
 
             if (_currentRequest == null && _currentRemoveRequest == null)
             {
@@ -229,26 +475,45 @@ namespace Deucarian.PackageInstaller.Editor
                 return false;
             }
 
-            BeginOperation(
-                string.IsNullOrWhiteSpace(operationName) ? "Install " + packageDefinition.DisplayName : operationName,
-                new[] { packageDefinition });
+            string targetUrl = packageDefinition.GetUrl(channel);
+            PackageDependencyInstallStep step = new PackageDependencyInstallStep(
+                packageDefinition,
+                channel,
+                isDependency: false,
+                targetUrl: targetUrl,
+                rootPackageIds: new[] { packageDefinition.PackageId },
+                rootPaths: new[] { packageDefinition.DisplayName });
+            PackageDependencyInstallPlan plan = PackageDependencyInstallPlan.Success(
+                new[] { step },
+                Array.Empty<string>());
 
-            bool queued = QueueInstall(packageDefinition, channel);
-            StartNextRequestIfNeeded();
-            CompleteOperationIfIdle();
-            SavePendingOperationState();
-            NotifyStateChanged();
-
-            return queued;
+            return InstallPlan(
+                plan,
+                string.IsNullOrWhiteSpace(operationName)
+                    ? "Install " + packageDefinition.DisplayName
+                    : operationName);
         }
 
         private bool QueueInstall(PackageDefinition packageDefinition, PackageChannel channel)
         {
-            string packageUrl = packageDefinition.GetUrl(channel);
+            return QueueInstall(new PackageDependencyInstallStep(
+                packageDefinition,
+                channel,
+                isDependency: false,
+                targetUrl: packageDefinition.GetUrl(channel),
+                rootPackageIds: new[] { packageDefinition.PackageId },
+                rootPaths: new[] { packageDefinition.DisplayName }));
+        }
 
-            if (string.IsNullOrWhiteSpace(packageUrl))
+        private bool QueueInstall(PackageDependencyInstallStep step)
+        {
+            PackageDefinition packageDefinition = step != null ? step.PackageDefinition : null;
+            string packageUrl = step != null ? step.TargetUrl : string.Empty;
+
+            if (packageDefinition == null || string.IsNullOrWhiteSpace(packageUrl))
             {
-                string message = packageDefinition.DisplayName + " has no package URL to install.";
+                string displayName = packageDefinition != null ? packageDefinition.DisplayName : "Package";
+                string message = displayName + " has no package URL to install.";
                 MarkProgressItem(packageDefinition, PackageInstallProgressItemState.Failed, message);
                 PackageInstallerLog.Install.Warning(message);
                 return false;
@@ -262,10 +527,13 @@ namespace Deucarian.PackageInstaller.Editor
                 return false;
             }
 
-            _installQueue.Enqueue(new QueuedPackageInstall(packageDefinition, channel, packageUrl));
+            QueuedPackageInstall install = new QueuedPackageInstall(step);
+            _installQueue.Add(install);
+            _operationInstallsByPackageId[packageDefinition.PackageId] = install;
             _queuedOrInstallingPackageIds.Add(packageDefinition.PackageId);
             _lastStatusMessage = "Queued " + packageDefinition.DisplayName + ".";
-            PackageInstallerLog.Install.Info("Queued " + packageDefinition.DisplayName + " from " + packageUrl + " (" + channel + ").");
+            PackageInstallerLog.Install.Info(
+                "Queued " + packageDefinition.DisplayName + " from " + packageUrl + " (" + step.Channel + ").");
 
             return true;
         }
@@ -325,21 +593,58 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
+            PackageDependencyInstallStep[] steps = packages
+                .Select(packageDefinition =>
+                {
+                    PackageChannel channel = channelSelector != null
+                        ? channelSelector(packageDefinition)
+                        : PackageChannel.Stable;
+                    return new PackageDependencyInstallStep(
+                        packageDefinition,
+                        channel,
+                        isDependency: false,
+                        targetUrl: packageDefinition.GetUrl(channel),
+                        rootPackageIds: new[] { packageDefinition.PackageId },
+                        rootPaths: new[] { packageDefinition.DisplayName });
+                })
+                .ToArray();
+
+            InstallPlan(
+                PackageDependencyInstallPlan.Success(steps, operationMessages),
+                string.IsNullOrWhiteSpace(operationName) ? "Install Packages" : operationName);
+        }
+
+        internal bool InstallPlan(PackageDependencyInstallPlan plan, string operationName)
+        {
+            if (plan == null || !plan.IsValid || plan.Steps.Count == 0)
+            {
+                return false;
+            }
+
+            if (IsBusy)
+            {
+                _lastErrorMessage = "Cannot start " + operationName +
+                                    " because another package operation is already running.";
+                PackageInstallerLog.Install.Warning(_lastErrorMessage);
+                NotifyStateChanged();
+                return false;
+            }
+
             BeginOperation(
                 string.IsNullOrWhiteSpace(operationName) ? "Install Packages" : operationName,
-                packages,
-                operationMessages);
+                plan);
 
-            foreach (PackageDefinition packageDefinition in packages)
+            bool queuedAny = false;
+            foreach (PackageDependencyInstallStep step in plan.Steps)
             {
-                PackageChannel channel = channelSelector != null ? channelSelector(packageDefinition) : PackageChannel.Stable;
-                QueueInstall(packageDefinition, channel);
+                queuedAny |= QueueInstall(step);
             }
 
             StartNextRequestIfNeeded();
             CompleteOperationIfIdle();
             SavePendingOperationState();
             NotifyStateChanged();
+            return queuedAny;
         }
 
         internal void RecordCompletedOperation(
@@ -354,6 +659,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             _lastStatusMessage = summaryMessage ?? string.Empty;
             _lastErrorMessage = string.Empty;
+            RecordCompletionActivity(PackageInstallerActivitySeverity.Success);
             NotifyStateChanged();
         }
 
@@ -365,18 +671,25 @@ namespace Deucarian.PackageInstaller.Editor
                 .Where(packageDefinition => packageDefinition != null)
                 .ToArray();
 
+            PackageDependencyInstallStep[] steps = packages.Select(packageDefinition =>
+                new PackageDependencyInstallStep(
+                    packageDefinition,
+                    PackageChannel.Stable,
+                    isDependency: false,
+                    targetUrl: packageDefinition.GetUrl(PackageChannel.Stable),
+                    rootPackageIds: new[] { packageDefinition.PackageId },
+                    rootPaths: new[] { packageDefinition.DisplayName })).ToArray();
+            PackageDependencyInstallPlan plan = PackageDependencyInstallPlan.Success(
+                steps,
+                Array.Empty<string>());
+
             BeginOperation(
                 string.IsNullOrWhiteSpace(operationName) ? "Package Operation" : operationName,
-                packages);
+                plan);
 
-            foreach (PackageDefinition packageDefinition in packages)
+            foreach (PackageDependencyInstallStep step in steps)
             {
-                PackageChannel channel = PackageChannel.Stable;
-                _installQueue.Enqueue(new QueuedPackageInstall(
-                    packageDefinition,
-                    channel,
-                    packageDefinition.GetUrl(channel)));
-                _queuedOrInstallingPackageIds.Add(packageDefinition.PackageId);
+                QueueInstall(step);
             }
 
             NotifyStateChanged();
@@ -411,19 +724,23 @@ namespace Deucarian.PackageInstaller.Editor
             bool selfUpdateAppliedOnReload,
             out string operationName)
         {
-            if (!TryLoadSavedOperation(out operationName, out QueuedPackageInstall[] pendingInstalls))
+            PackageOperationStateRepository repository = new PackageOperationStateRepository();
+            if (!TryLoadSavedOperation(repository, out PackageOperationRecoveryRecord record))
             {
+                operationName = string.Empty;
                 return Array.Empty<string>();
             }
 
+            operationName = record.OperationName;
+            IEnumerable<PackageOperationRecoveryStep> steps = record.Steps;
             if (selfUpdateAppliedOnReload)
             {
-                pendingInstalls = FilterAppliedSelfUpdate(pendingInstalls);
+                steps = FilterAppliedSelfUpdate(steps);
             }
 
-            return pendingInstalls
-                .Where(install => install != null && install.PackageDefinition != null)
-                .Select(install => install.PackageDefinition.PackageId)
+            return steps
+                .Where(step => step != null && IsResumableState(step.State))
+                .Select(step => step.PackageId)
                 .ToArray();
         }
 
@@ -431,23 +748,26 @@ namespace Deucarian.PackageInstaller.Editor
             bool selfUpdateAppliedOnReload,
             out string operationName)
         {
+            PackageOperationStateRepository repository = new PackageOperationStateRepository();
             if (!TryPrepareSavedOperationForResume(
+                    repository,
                     selfUpdateAppliedOnReload,
-                    out operationName,
-                    out QueuedPackageInstall[] pendingInstalls))
+                    out PackageOperationRecoveryRecord record))
             {
+                operationName = string.Empty;
                 return Array.Empty<string>();
             }
 
-            return pendingInstalls
-                .Where(install => install != null && install.PackageDefinition != null)
-                .Select(install => install.PackageDefinition.PackageId)
+            operationName = record.OperationName;
+            return record.Steps
+                .Where(step => step != null && IsResumableState(step.State))
+                .Select(step => step.PackageId)
                 .ToArray();
         }
 
         internal static void ClearPendingOperationForTests()
         {
-            ClearSavedOperationState();
+            ClearSavedOperationState(new PackageOperationStateRepository());
         }
 
         internal static void ReconcileSelfUpdateAfterInstallForTests(
@@ -498,11 +818,11 @@ namespace Deucarian.PackageInstaller.Editor
                 PackageInstallProgressItemState.Active,
                 "Removing " + packageDefinition.DisplayName + "...");
             _lastStatusMessage = "Removing " + packageDefinition.DisplayName + "...";
-            ClearSavedOperationState();
+            ClearSavedOperationState(_operationStateRepository);
 
             try
             {
-                _currentRemoveRequest = Client.Remove(packageDefinition.PackageId);
+                _currentRemoveRequest = _packageClient.Remove(packageDefinition.PackageId);
                 EditorApplication.update -= Update;
                 EditorApplication.update += Update;
                 PackageInstallerLog.Install.Info("Removing " + packageDefinition.DisplayName + " (" + packageDefinition.PackageId + ").");
@@ -527,14 +847,39 @@ namespace Deucarian.PackageInstaller.Editor
             EditorApplication.update -= Update;
         }
 
+        internal void UpdateForTests()
+        {
+            Update();
+        }
+
         private void StartNextRequestIfNeeded()
         {
-            if (_currentRequest != null || _currentRemoveRequest != null || _installQueue.Count == 0)
+            if (_currentRequest != null || _currentRemoveRequest != null || _cancelRequested)
             {
                 return;
             }
 
-            _currentInstall = _installQueue.Dequeue();
+            BlockInstallsWithFailedPrerequisites();
+
+            if (_installQueue.Count == 0)
+            {
+                return;
+            }
+
+            _currentInstall = _installQueue
+                .Where(CanStartInstall)
+                .OrderBy(install => PackageInstallerRuntimeIdentity.IsSelf(
+                    install.PackageDefinition.PackageId) ? 1 : 0)
+                .ThenBy(install => _installQueue.IndexOf(install))
+                .FirstOrDefault();
+
+            if (_currentInstall == null)
+            {
+                BlockUnresolvableInstalls();
+                return;
+            }
+
+            _installQueue.Remove(_currentInstall);
             State = PackageInstallRequestState.Installing;
             MarkProgressItem(
                 _currentInstall.PackageDefinition,
@@ -549,7 +894,7 @@ namespace Deucarian.PackageInstaller.Editor
                     PackageInstallerSelfUpdateState.Begin(_currentInstall.Url);
                 }
 
-                _currentRequest = Client.Add(_currentInstall.Url);
+                _currentRequest = _packageClient.Add(_currentInstall.Url);
                 EditorApplication.update -= Update;
                 EditorApplication.update += Update;
                 SavePendingOperationState();
@@ -576,11 +921,15 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            if (_currentRequest.Status == StatusCode.Success)
+            if (_currentRequest.IsSuccess)
             {
                 PackageDefinition packageDefinition = _currentInstall.PackageDefinition;
-                string packageName = _currentRequest.Result != null ? _currentRequest.Result.name : packageDefinition.PackageId;
-                string version = _currentRequest.Result != null ? _currentRequest.Result.version : "unknown";
+                string packageName = !string.IsNullOrWhiteSpace(_currentRequest.PackageName)
+                    ? _currentRequest.PackageName
+                    : packageDefinition.PackageId;
+                string version = !string.IsNullOrWhiteSpace(_currentRequest.PackageVersion)
+                    ? _currentRequest.PackageVersion
+                    : "unknown";
                 string message = "Installed " + packageDefinition.DisplayName + " (" + packageName + "@" + version + ") from " + _currentInstall.Channel + ".";
 
                 if (PackageInstallerRuntimeIdentity.IsSelf(packageDefinition.PackageId))
@@ -594,9 +943,9 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            string errorMessage = _currentRequest.Error != null
-                ? _currentRequest.Error.message
-                : "Package Manager returned an unknown error.";
+            string errorMessage = string.IsNullOrWhiteSpace(_currentRequest.ErrorMessage)
+                ? "Package Manager returned an unknown error."
+                : _currentRequest.ErrorMessage;
             string failedPackageName = _currentInstall != null && _currentInstall.PackageDefinition != null
                 ? _currentInstall.PackageDefinition.DisplayName
                 : "package";
@@ -615,7 +964,7 @@ namespace Deucarian.PackageInstaller.Editor
             PackageDefinition packageDefinition = _currentRemovePackage;
             string packageName = packageDefinition != null ? packageDefinition.DisplayName : "package";
 
-            if (_currentRemoveRequest.Status == StatusCode.Success)
+            if (_currentRemoveRequest.IsSuccess)
             {
                 string message = "Removed " + packageName + ".";
                 CompleteCurrentRemoveRequest(true, message);
@@ -623,9 +972,9 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            string errorMessage = _currentRemoveRequest.Error != null
-                ? _currentRemoveRequest.Error.message
-                : "Package Manager returned an unknown error.";
+            string errorMessage = string.IsNullOrWhiteSpace(_currentRemoveRequest.ErrorMessage)
+                ? "Package Manager returned an unknown error."
+                : _currentRemoveRequest.ErrorMessage;
 
             CompleteCurrentRemoveRequest(false, errorMessage);
             PackageInstallerLog.Install.Error("Failed to remove " + packageName + ": " + errorMessage);
@@ -651,6 +1000,11 @@ namespace Deucarian.PackageInstaller.Editor
             State = PackageInstallRequestState.Idle;
 
             InstallCompleted?.Invoke(completedPackage, success, message);
+            if (!success)
+            {
+                BlockInstallsWithFailedPrerequisites();
+            }
+
             if (!_cancelRequested)
             {
                 StartNextRequestIfNeeded();
@@ -661,7 +1015,7 @@ namespace Deucarian.PackageInstaller.Editor
                 EditorApplication.update -= Update;
                 SetOperationCompleteSummary();
                 _cancelRequested = false;
-                ClearSavedOperationState();
+                ClearSavedOperationState(_operationStateRepository);
                 QueueCompleted?.Invoke();
             }
             else
@@ -690,7 +1044,7 @@ namespace Deucarian.PackageInstaller.Editor
             EditorApplication.update -= Update;
             SetOperationCompleteSummary();
             _cancelRequested = false;
-            ClearSavedOperationState();
+            ClearSavedOperationState(_operationStateRepository);
             QueueCompleted?.Invoke();
             NotifyStateChanged();
         }
@@ -700,20 +1054,66 @@ namespace Deucarian.PackageInstaller.Editor
             IEnumerable<PackageDefinition> packages,
             IEnumerable<string> operationMessages = null)
         {
+            PackageDependencyInstallStep[] steps = (packages ?? Array.Empty<PackageDefinition>())
+                .Where(package => package != null)
+                .Select(package => new PackageDependencyInstallStep(
+                    package,
+                    PackageChannel.Stable,
+                    isDependency: false,
+                    targetUrl: package.GetUrl(PackageChannel.Stable),
+                    rootPackageIds: new[] { package.PackageId },
+                    rootPaths: new[] { package.DisplayName }))
+                .ToArray();
+            BeginOperation(
+                operationName,
+                PackageDependencyInstallPlan.Success(steps, operationMessages));
+        }
+
+        private void BeginOperation(
+            string operationName,
+            PackageDependencyInstallPlan plan)
+        {
             _currentOperationName = operationName ?? string.Empty;
+            _currentOperationId = plan != null ? plan.OperationId : Guid.NewGuid().ToString("N");
+            _currentRegistryFingerprint = plan != null ? plan.RegistryFingerprint : string.Empty;
+            _currentOperationCreatedAtUtcTicks = plan != null
+                ? plan.CreatedAtUtcTicks
+                : DateTime.UtcNow.Ticks;
             _lastStatusMessage = "Queued " + _currentOperationName + ".";
             _lastErrorMessage = string.Empty;
             _cancelRequested = false;
             _operationCanceled = false;
+            _completionActivityRecorded = false;
             _completedSteps = 0;
             _successfulSteps = 0;
             _failedSteps = 0;
             _skippedSteps = 0;
+            _blockedSteps = 0;
+            _canceledSteps = 0;
+            _totalSteps = 0;
+            _installQueue.Clear();
+            _queuedOrInstallingPackageIds.Clear();
             _progressItems.Clear();
             _operationMessages.Clear();
             _progressItemsByPackageId.Clear();
+            _operationInstallsByPackageId.Clear();
+            _currentRootRequests.Clear();
 
-            foreach (string message in operationMessages ?? Array.Empty<string>())
+            foreach (PackageOperationRootRequest rootRequest in plan != null
+                         ? plan.RootRequests
+                         : Array.Empty<PackageOperationRootRequest>())
+            {
+                if (rootRequest != null && !string.IsNullOrWhiteSpace(rootRequest.PackageId))
+                {
+                    _currentRootRequests.Add(new PackageOperationRootRequest(
+                        rootRequest.PackageId,
+                        rootRequest.Channel));
+                }
+            }
+
+            foreach (string message in plan != null
+                         ? plan.Messages
+                         : Array.Empty<string>())
             {
                 if (!string.IsNullOrWhiteSpace(message))
                 {
@@ -721,8 +1121,11 @@ namespace Deucarian.PackageInstaller.Editor
                 }
             }
 
-            foreach (PackageDefinition packageDefinition in packages)
+            foreach (PackageDependencyInstallStep step in plan != null
+                         ? plan.Steps
+                         : Array.Empty<PackageDependencyInstallStep>())
             {
+                PackageDefinition packageDefinition = step != null ? step.PackageDefinition : null;
                 if (packageDefinition == null)
                 {
                     continue;
@@ -761,12 +1164,7 @@ namespace Deucarian.PackageInstaller.Editor
             item.State = state;
             item.Message = message ?? string.Empty;
 
-            if ((state == PackageInstallProgressItemState.Completed ||
-                 state == PackageInstallProgressItemState.Failed ||
-                 state == PackageInstallProgressItemState.Skipped) &&
-                previousState != PackageInstallProgressItemState.Completed &&
-                previousState != PackageInstallProgressItemState.Failed &&
-                previousState != PackageInstallProgressItemState.Skipped)
+            if (IsTerminalState(state) && !IsTerminalState(previousState))
             {
                 _completedSteps++;
 
@@ -778,6 +1176,14 @@ namespace Deucarian.PackageInstaller.Editor
                 {
                     _failedSteps++;
                     _lastErrorMessage = message ?? string.Empty;
+                }
+                else if (state == PackageInstallProgressItemState.Blocked)
+                {
+                    _blockedSteps++;
+                }
+                else if (state == PackageInstallProgressItemState.Canceled)
+                {
+                    _canceledSteps++;
                 }
                 else
                 {
@@ -811,18 +1217,135 @@ namespace Deucarian.PackageInstaller.Editor
             if (_operationCanceled)
             {
                 _lastStatusMessage = _currentOperationName + " canceled" + FormatOperationOutcomeSuffix() + ".";
+                RecordCompletionActivity(PackageInstallerActivitySeverity.Warning);
                 return;
             }
 
-            if (_failedSteps > 0)
+            if (_failedSteps > 0 || _blockedSteps > 0)
             {
                 _lastStatusMessage = _currentOperationName + " finished" +
                                      FormatOperationOutcomeSuffix() + ".";
+                RecordCompletionActivity(PackageInstallerActivitySeverity.Error);
                 return;
             }
 
             _lastStatusMessage = _currentOperationName + " completed successfully" +
                                  FormatSkippedSummarySuffix() + ".";
+            RecordCompletionActivity(PackageInstallerActivitySeverity.Success);
+        }
+
+        private void RecordCompletionActivity(PackageInstallerActivitySeverity severity)
+        {
+            if (_completionActivityRecorded || string.IsNullOrWhiteSpace(_lastStatusMessage))
+            {
+                return;
+            }
+
+            _completionActivityRecorded = true;
+            _terminalOperationSnapshot = CreateTerminalOperationSnapshot(severity);
+            List<string> details = new List<string>(_operationMessages);
+            details.AddRange(_progressItems
+                .Where(item => item != null && IsTerminalState(item.State))
+                .Select(item =>
+                    item.State + ": " +
+                    (string.IsNullOrWhiteSpace(item.Message)
+                        ? item.DisplayName
+                        : item.Message)));
+            PackageInstallerActivityService.Record(
+                "Packages",
+                severity,
+                _lastStatusMessage,
+                details.Count > 0 ? string.Join("\n", details.ToArray()) : string.Empty,
+                packageId: _terminalOperationSnapshot.RestartRoots.Count == 1
+                    ? _terminalOperationSnapshot.RestartRoots[0].PackageId
+                    : string.Empty,
+                retryKind: _terminalOperationSnapshot.CanRestart
+                    ? PackageInstallerRetryKind.RestartOperation
+                    : PackageInstallerRetryKind.None);
+        }
+
+        private PackageOperationTerminalSnapshot CreateTerminalOperationSnapshot(
+            PackageInstallerActivitySeverity severity)
+        {
+            PackageOperationTerminalOutcome outcome = _operationCanceled
+                ? PackageOperationTerminalOutcome.Canceled
+                : severity == PackageInstallerActivitySeverity.Error
+                    ? PackageOperationTerminalOutcome.Failed
+                    : PackageOperationTerminalOutcome.Succeeded;
+            List<PackageOperationStepSnapshot> stepSnapshots = new List<PackageOperationStepSnapshot>();
+
+            foreach (PackageInstallProgressItem progress in _progressItems.Where(item => item != null))
+            {
+                _operationInstallsByPackageId.TryGetValue(
+                    progress.PackageId,
+                    out QueuedPackageInstall install);
+                stepSnapshots.Add(new PackageOperationStepSnapshot(
+                    progress.PackageId,
+                    progress.DisplayName,
+                    install != null ? install.Channel : PackageChannel.Stable,
+                    install != null ? install.Url : string.Empty,
+                    install != null && install.IsDependency,
+                    install != null ? install.RootPackageIds : Array.Empty<string>(),
+                    progress.State,
+                    progress.Message));
+            }
+
+            List<string> affectedRootIds = new List<string>();
+            HashSet<string> seenRootIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (PackageOperationStepSnapshot step in stepSnapshots.Where(IsRetryableTerminalStep))
+            {
+                foreach (string rootId in step.RootPackageIds)
+                {
+                    if (seenRootIds.Add(rootId))
+                    {
+                        affectedRootIds.Add(rootId);
+                    }
+                }
+            }
+
+            List<PackageOperationRootRequest> restartRoots = new List<PackageOperationRootRequest>();
+            foreach (string rootId in affectedRootIds)
+            {
+                PackageOperationRootRequest requestedRoot = _currentRootRequests.FirstOrDefault(
+                    root => string.Equals(
+                        root.PackageId,
+                        rootId,
+                        StringComparison.OrdinalIgnoreCase));
+                PackageChannel channel = requestedRoot != null
+                    ? requestedRoot.Channel
+                    : _operationInstallsByPackageId.TryGetValue(
+                        rootId,
+                        out QueuedPackageInstall rootInstall)
+                        ? rootInstall.Channel
+                        : _operationInstallsByPackageId.Values
+                            .Where(install => install != null &&
+                                              install.RootPackageIds.Contains(
+                                                  rootId,
+                                                  StringComparer.OrdinalIgnoreCase))
+                            .Select(install => install.Channel)
+                            .DefaultIfEmpty(PackageChannel.Stable)
+                            .First();
+                restartRoots.Add(new PackageOperationRootRequest(rootId, channel));
+            }
+
+            return new PackageOperationTerminalSnapshot(
+                _currentOperationId,
+                _currentOperationName,
+                outcome,
+                _lastStatusMessage,
+                _lastErrorMessage,
+                restartRoots,
+                stepSnapshots,
+                _operationMessages,
+                DateTime.UtcNow);
+        }
+
+        private static bool IsRetryableTerminalStep(PackageOperationStepSnapshot step)
+        {
+            return step != null &&
+                   (step.State == PackageInstallProgressItemState.Failed ||
+                    step.State == PackageInstallProgressItemState.Blocked ||
+                    step.State == PackageInstallProgressItemState.Canceled);
         }
 
         private string FormatSkippedSummarySuffix()
@@ -849,14 +1372,25 @@ namespace Deucarian.PackageInstaller.Editor
                 parts.Add(_skippedSteps + " skipped");
             }
 
+            if (_blockedSteps > 0)
+            {
+                parts.Add(_blockedSteps + " blocked");
+            }
+
+            if (_canceledSteps > 0)
+            {
+                parts.Add(_canceledSteps + " canceled");
+            }
+
             return parts.Count > 0 ? " with " + string.Join(", ", parts.ToArray()) : string.Empty;
         }
 
-        private void SkipQueuedInstalls(string message)
+        private void CancelQueuedInstalls(string message)
         {
             while (_installQueue.Count > 0)
             {
-                QueuedPackageInstall install = _installQueue.Dequeue();
+                QueuedPackageInstall install = _installQueue[0];
+                _installQueue.RemoveAt(0);
 
                 if (install == null || install.PackageDefinition == null)
                 {
@@ -866,8 +1400,93 @@ namespace Deucarian.PackageInstaller.Editor
                 _queuedOrInstallingPackageIds.Remove(install.PackageDefinition.PackageId);
                 MarkProgressItem(
                     install.PackageDefinition,
-                    PackageInstallProgressItemState.Skipped,
+                    PackageInstallProgressItemState.Canceled,
                     message);
+            }
+        }
+
+        private static bool IsTerminalState(PackageInstallProgressItemState state)
+        {
+            return state == PackageInstallProgressItemState.Completed ||
+                   state == PackageInstallProgressItemState.Failed ||
+                   state == PackageInstallProgressItemState.Skipped ||
+                   state == PackageInstallProgressItemState.Blocked ||
+                   state == PackageInstallProgressItemState.Canceled ||
+                   state == PackageInstallProgressItemState.AlreadyCorrect;
+        }
+
+        private bool CanStartInstall(QueuedPackageInstall install)
+        {
+            if (install == null)
+            {
+                return false;
+            }
+
+            foreach (string prerequisitePackageId in install.PrerequisitePackageIds)
+            {
+                if (!_progressItemsByPackageId.TryGetValue(
+                        prerequisitePackageId,
+                        out PackageInstallProgressItem prerequisite))
+                {
+                    return false;
+                }
+
+                if (prerequisite.State != PackageInstallProgressItemState.Completed &&
+                    prerequisite.State != PackageInstallProgressItemState.AlreadyCorrect)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private void BlockInstallsWithFailedPrerequisites()
+        {
+            bool changed;
+
+            do
+            {
+                changed = false;
+
+                foreach (QueuedPackageInstall install in _installQueue.ToArray())
+                {
+                    string failedPrerequisiteId = install.PrerequisitePackageIds.FirstOrDefault(
+                        prerequisiteId =>
+                            _progressItemsByPackageId.TryGetValue(
+                                prerequisiteId,
+                                out PackageInstallProgressItem prerequisite) &&
+                            (prerequisite.State == PackageInstallProgressItemState.Failed ||
+                             prerequisite.State == PackageInstallProgressItemState.Blocked ||
+                             prerequisite.State == PackageInstallProgressItemState.Canceled));
+
+                    if (string.IsNullOrWhiteSpace(failedPrerequisiteId))
+                    {
+                        continue;
+                    }
+
+                    _installQueue.Remove(install);
+                    _queuedOrInstallingPackageIds.Remove(install.PackageDefinition.PackageId);
+                    MarkProgressItem(
+                        install.PackageDefinition,
+                        PackageInstallProgressItemState.Blocked,
+                        "Blocked because prerequisite " + failedPrerequisiteId + " did not complete.");
+                    changed = true;
+                }
+            }
+            while (changed);
+        }
+
+        private void BlockUnresolvableInstalls()
+        {
+            foreach (QueuedPackageInstall install in _installQueue.ToArray())
+            {
+                _installQueue.Remove(install);
+                _queuedOrInstallingPackageIds.Remove(install.PackageDefinition.PackageId);
+                MarkProgressItem(
+                    install.PackageDefinition,
+                    PackageInstallProgressItemState.Blocked,
+                    "Blocked because the prerequisite graph could not be satisfied.");
             }
         }
 
@@ -875,71 +1494,96 @@ namespace Deucarian.PackageInstaller.Editor
         {
             if (!IsBusy || State == PackageInstallRequestState.Removing)
             {
-                ClearSavedOperationState();
+                ClearSavedOperationState(_operationStateRepository);
                 return;
             }
 
-            SavePendingOperationState(_currentOperationName, GetCurrentAndQueuedInstalls());
+            PackageOperationRecoveryStep[] steps = _progressItems
+                .Where(item => item != null &&
+                               _operationInstallsByPackageId.ContainsKey(item.PackageId))
+                .Select(item =>
+                {
+                    QueuedPackageInstall install = _operationInstallsByPackageId[item.PackageId];
+                    return new PackageOperationRecoveryStep(
+                        item.PackageId,
+                        item.DisplayName,
+                        install.Channel,
+                        install.Url,
+                        install.IsDependency,
+                        install.PrerequisitePackageIds,
+                        install.RootPackageIds,
+                        install.RootPaths,
+                        install.DependencyReason,
+                        item.State,
+                        item.Message,
+                        install.Step.DetectedCurrentSource,
+                        install.Step.DetectedCurrentVersion,
+                        install.Step.DetectedCurrentIdentity);
+                })
+                .ToArray();
+
+            if (steps.Length == 0)
+            {
+                ClearSavedOperationState(_operationStateRepository);
+                return;
+            }
+
+            PackageOperationRecoveryRecord record = new PackageOperationRecoveryRecord(
+                _currentOperationId,
+                _currentOperationName,
+                _currentRegistryFingerprint,
+                _currentOperationCreatedAtUtcTicks,
+                DateTime.UtcNow.Ticks,
+                steps,
+                _operationMessages,
+                _currentRootRequests);
+
+            if (!_operationStateRepository.Save(record, out string errorMessage))
+            {
+                PackageInstallerLog.Install.Warning(errorMessage);
+            }
+
+            ClearLegacySavedOperationState();
         }
 
-        private static void SavePendingOperationState(
-            string operationName,
-            IEnumerable<QueuedPackageInstall> pendingInstalls)
+        private static void ClearSavedOperationState(PackageOperationStateRepository repository)
         {
-            string queue = string.Join(
-                "\n",
-                (pendingInstalls ?? Array.Empty<QueuedPackageInstall>())
-                .Select(SerializePendingInstall)
-                .Where(serializedInstall => !string.IsNullOrWhiteSpace(serializedInstall))
-                .ToArray());
-
-            SessionState.SetString(PendingOperationNameKey, operationName ?? string.Empty);
-            SessionState.SetString(PendingQueueKey, queue);
+            repository?.Clear();
+            ClearLegacySavedOperationState();
         }
 
-        private static void ClearSavedOperationState()
+        private static void ClearLegacySavedOperationState()
         {
             SessionState.SetString(PendingOperationNameKey, string.Empty);
             SessionState.SetString(PendingQueueKey, string.Empty);
         }
 
-        private IEnumerable<QueuedPackageInstall> GetCurrentAndQueuedInstalls()
-        {
-            if (_currentInstall != null)
-            {
-                yield return _currentInstall;
-            }
-
-            foreach (QueuedPackageInstall queuedInstall in _installQueue)
-            {
-                yield return queuedInstall;
-            }
-        }
-
-        private static string SerializePendingInstall(QueuedPackageInstall install)
-        {
-            if (install == null || install.PackageDefinition == null)
-            {
-                return string.Empty;
-            }
-
-            return install.PackageDefinition.PackageId + "|" + (int)install.Channel;
-        }
-
         private static bool TryLoadSavedOperation(
-            out string operationName,
-            out QueuedPackageInstall[] pendingInstalls)
+            PackageOperationStateRepository repository,
+            out PackageOperationRecoveryRecord record)
         {
-            operationName = SessionState.GetString(PendingOperationNameKey, string.Empty);
+            record = null;
+
+            if (repository.TryLoad(out record, out string repositoryError))
+            {
+                return true;
+            }
+
+            if (!string.IsNullOrWhiteSpace(repositoryError))
+            {
+                PackageInstallerLog.Install.Warning(repositoryError);
+                return false;
+            }
+
+            string operationName = SessionState.GetString(PendingOperationNameKey, string.Empty);
             string queue = SessionState.GetString(PendingQueueKey, string.Empty);
 
             if (string.IsNullOrWhiteSpace(queue))
             {
-                pendingInstalls = Array.Empty<QueuedPackageInstall>();
                 return false;
             }
 
-            List<QueuedPackageInstall> installs = new List<QueuedPackageInstall>();
+            List<PackageOperationRecoveryStep> legacySteps = new List<PackageOperationRecoveryStep>();
 
             foreach (string line in queue.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries))
             {
@@ -962,21 +1606,54 @@ namespace Deucarian.PackageInstaller.Editor
                     continue;
                 }
 
-                installs.Add(new QueuedPackageInstall(packageDefinition, channel, url));
+                legacySteps.Add(new PackageOperationRecoveryStep(
+                    packageDefinition.PackageId,
+                    packageDefinition.DisplayName,
+                    channel,
+                    url,
+                    isDependency: false,
+                    prerequisitePackageIds: Array.Empty<string>(),
+                    rootPackageIds: new[] { packageDefinition.PackageId },
+                    rootPaths: new[] { packageDefinition.DisplayName },
+                    dependencyReason: string.Empty,
+                    state: PackageInstallProgressItemState.Pending,
+                    message: string.Empty));
             }
 
-            pendingInstalls = installs.ToArray();
-            return pendingInstalls.Length > 0;
+            if (legacySteps.Count == 0)
+            {
+                return false;
+            }
+
+            record = new PackageOperationRecoveryRecord(
+                Guid.NewGuid().ToString("N"),
+                operationName,
+                string.Empty,
+                DateTime.UtcNow.Ticks,
+                DateTime.UtcNow.Ticks,
+                legacySteps,
+                Array.Empty<string>());
+
+            if (!repository.Save(record, out string saveError))
+            {
+                PackageInstallerLog.Install.Warning(saveError);
+            }
+            else
+            {
+                ClearLegacySavedOperationState();
+            }
+
+            return true;
         }
 
         private static bool TryPrepareSavedOperationForResume(
+            PackageOperationStateRepository repository,
             bool selfUpdateAppliedOnReload,
-            out string operationName,
-            out QueuedPackageInstall[] pendingInstalls)
+            out PackageOperationRecoveryRecord record)
         {
-            if (!TryLoadSavedOperation(out operationName, out pendingInstalls))
+            if (!TryLoadSavedOperation(repository, out record))
             {
-                ClearSavedOperationState();
+                ClearSavedOperationState(repository);
 
                 if (selfUpdateAppliedOnReload)
                 {
@@ -986,34 +1663,199 @@ namespace Deucarian.PackageInstaller.Editor
                 return false;
             }
 
-            if (!selfUpdateAppliedOnReload)
+            IEnumerable<PackageOperationRecoveryStep> preparedSteps = record.Steps;
+
+            if (selfUpdateAppliedOnReload)
             {
-                return true;
+                preparedSteps = FilterAppliedSelfUpdate(preparedSteps);
             }
 
-            pendingInstalls = FilterAppliedSelfUpdate(pendingInstalls);
+            PackageOperationRecoveryStep[] normalizedSteps = preparedSteps
+                .Where(step => step != null)
+                .Select(step => NormalizeStepForResume(step, selfUpdateAppliedOnReload))
+                .ToArray();
+            PackageOperationRootRequest[] normalizedRootRequests = record.RootRequests
+                .Where(root => normalizedSteps.Any(step => step.RootPackageIds.Contains(
+                    root.PackageId,
+                    StringComparer.OrdinalIgnoreCase)))
+                .ToArray();
 
-            if (pendingInstalls.Length == 0)
+            if (!normalizedSteps.Any(step => IsResumableState(step.State)))
             {
-                ClearSavedOperationState();
-                PackageInstallerSelfUpdateState.AcknowledgeApplied();
+                ClearSavedOperationState(repository);
+
+                if (selfUpdateAppliedOnReload)
+                {
+                    PackageInstallerSelfUpdateState.AcknowledgeApplied();
+                }
+
+                record = null;
                 return false;
             }
 
-            SavePendingOperationState(operationName, pendingInstalls);
-            PackageInstallerSelfUpdateState.AcknowledgeApplied();
+            record = new PackageOperationRecoveryRecord(
+                record.OperationId,
+                record.OperationName,
+                record.RegistryFingerprint,
+                record.CreatedAtUtcTicks,
+                DateTime.UtcNow.Ticks,
+                normalizedSteps,
+                record.Messages,
+                normalizedRootRequests);
+
+            if (!repository.Save(record, out string saveError))
+            {
+                PackageInstallerLog.Install.Warning(saveError);
+                return false;
+            }
+
+            if (selfUpdateAppliedOnReload)
+            {
+                PackageInstallerSelfUpdateState.AcknowledgeApplied();
+            }
+
             return true;
         }
 
-        private static QueuedPackageInstall[] FilterAppliedSelfUpdate(
-            IEnumerable<QueuedPackageInstall> pendingInstalls)
+        private static IEnumerable<PackageOperationRecoveryStep> FilterAppliedSelfUpdate(
+            IEnumerable<PackageOperationRecoveryStep> steps)
         {
-            return (pendingInstalls ?? Array.Empty<QueuedPackageInstall>())
-                .Where(install =>
-                    install != null &&
-                    install.PackageDefinition != null &&
-                    !PackageInstallerRuntimeIdentity.IsSelf(install.PackageDefinition.PackageId))
+            return (steps ?? Array.Empty<PackageOperationRecoveryStep>())
+                .Where(step =>
+                    step != null &&
+                    !PackageInstallerRuntimeIdentity.IsSelf(step.PackageId))
                 .ToArray();
+        }
+
+        private static PackageOperationRecoveryStep NormalizeStepForResume(
+            PackageOperationRecoveryStep step,
+            bool selfUpdateAppliedOnReload)
+        {
+            PackageInstallProgressItemState state = step.State == PackageInstallProgressItemState.Active
+                ? PackageInstallProgressItemState.Pending
+                : step.State;
+            string[] prerequisites = selfUpdateAppliedOnReload
+                ? step.PrerequisitePackageIds
+                    .Where(id => !PackageInstallerRuntimeIdentity.IsSelf(id))
+                    .ToArray()
+                : step.PrerequisitePackageIds.ToArray();
+
+            return new PackageOperationRecoveryStep(
+                step.PackageId,
+                step.DisplayName,
+                step.Channel,
+                step.TargetUrl,
+                step.IsDependency,
+                prerequisites,
+                step.RootPackageIds,
+                step.RootPaths,
+                step.DependencyReason,
+                state,
+                step.Message,
+                step.DetectedCurrentSource,
+                step.DetectedCurrentVersion,
+                step.DetectedCurrentIdentity);
+        }
+
+        private static bool IsResumableState(PackageInstallProgressItemState state)
+        {
+            return state == PackageInstallProgressItemState.Pending ||
+                   state == PackageInstallProgressItemState.Active;
+        }
+
+        private void RestoreOperation(PackageOperationRecoveryRecord record)
+        {
+            List<PackageDependencyInstallStep> planSteps = new List<PackageDependencyInstallStep>();
+            Dictionary<string, PackageDefinition> definitions =
+                new Dictionary<string, PackageDefinition>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (PackageOperationRecoveryStep recoveryStep in record.Steps)
+            {
+                PackageDefinition packageDefinition = CreateRecoveredPackageDefinition(recoveryStep);
+                definitions[recoveryStep.PackageId] = packageDefinition;
+                planSteps.Add(new PackageDependencyInstallStep(
+                    packageDefinition,
+                    recoveryStep.Channel,
+                    recoveryStep.IsDependency,
+                    recoveryStep.TargetUrl,
+                    recoveryStep.PrerequisitePackageIds,
+                    recoveryStep.RootPackageIds,
+                    recoveryStep.RootPaths,
+                    recoveryStep.DependencyReason,
+                    recoveryStep.DetectedCurrentSource,
+                    recoveryStep.DetectedCurrentVersion,
+                    recoveryStep.DetectedCurrentIdentity));
+            }
+
+            PackageDependencyInstallPlan plan = PackageDependencyInstallPlan.Restore(
+                record.OperationId,
+                record.RegistryFingerprint,
+                record.CreatedAtUtcTicks,
+                planSteps,
+                record.Messages,
+                record.RootRequests);
+            BeginOperation(
+                string.IsNullOrWhiteSpace(record.OperationName)
+                    ? "Resume Package Operation"
+                    : record.OperationName,
+                plan);
+
+            foreach (PackageOperationRecoveryStep recoveryStep in record.Steps)
+            {
+                PackageDependencyInstallStep step = plan.Steps.First(planStep =>
+                    string.Equals(
+                        planStep.PackageDefinition.PackageId,
+                        recoveryStep.PackageId,
+                        StringComparison.OrdinalIgnoreCase));
+                QueuedPackageInstall install = new QueuedPackageInstall(step);
+                _operationInstallsByPackageId[recoveryStep.PackageId] = install;
+
+                if (IsResumableState(recoveryStep.State))
+                {
+                    if (ExactTargetAlreadyInstalled != null &&
+                        ExactTargetAlreadyInstalled(
+                            recoveryStep.PackageId,
+                            recoveryStep.TargetUrl,
+                            recoveryStep.DetectedCurrentIdentity))
+                    {
+                        MarkProgressItem(
+                            definitions[recoveryStep.PackageId],
+                            PackageInstallProgressItemState.AlreadyCorrect,
+                            "Already at the saved exact target after refresh.");
+                        continue;
+                    }
+
+                    _installQueue.Add(install);
+                    _queuedOrInstallingPackageIds.Add(recoveryStep.PackageId);
+                    continue;
+                }
+
+                MarkProgressItem(
+                    definitions[recoveryStep.PackageId],
+                    recoveryStep.State,
+                    recoveryStep.Message);
+            }
+        }
+
+        private static PackageDefinition CreateRecoveredPackageDefinition(
+            PackageOperationRecoveryStep step)
+        {
+            string displayName = string.IsNullOrWhiteSpace(step.DisplayName)
+                ? step.PackageId
+                : step.DisplayName;
+            string developmentUrl = step.Channel == PackageChannel.Development
+                ? step.TargetUrl
+                : string.Empty;
+
+            return new PackageDefinition(
+                displayName,
+                step.PackageId,
+                step.TargetUrl,
+                string.Empty,
+                Array.Empty<string>(),
+                PackageType.Core,
+                developmentUrl,
+                category: "Tools");
         }
 
         private void NotifyStateChanged()
@@ -1023,18 +1865,28 @@ namespace Deucarian.PackageInstaller.Editor
 
         private sealed class QueuedPackageInstall
         {
-            public QueuedPackageInstall(PackageDefinition packageDefinition, PackageChannel channel, string url)
+            public QueuedPackageInstall(PackageDependencyInstallStep step)
             {
-                PackageDefinition = packageDefinition;
-                Channel = channel;
-                Url = url;
+                Step = step ?? throw new ArgumentNullException(nameof(step));
             }
 
-            public PackageDefinition PackageDefinition { get; }
+            public PackageDependencyInstallStep Step { get; }
 
-            public PackageChannel Channel { get; }
+            public PackageDefinition PackageDefinition => Step.PackageDefinition;
 
-            public string Url { get; }
+            public PackageChannel Channel => Step.Channel;
+
+            public string Url => Step.TargetUrl;
+
+            public bool IsDependency => Step.IsDependency;
+
+            public IReadOnlyList<string> PrerequisitePackageIds => Step.PrerequisitePackageIds;
+
+            public IReadOnlyList<string> RootPackageIds => Step.RootPackageIds;
+
+            public IReadOnlyList<string> RootPaths => Step.RootPaths;
+
+            public string DependencyReason => Step.DependencyReason;
         }
     }
 }

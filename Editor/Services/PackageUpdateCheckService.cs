@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -6,6 +7,7 @@ using System.IO;
 using System.Net;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using UnityEditor;
 using UnityEngine;
@@ -142,6 +144,7 @@ namespace Deucarian.PackageInstaller.Editor
     {
         private const int GitTimeoutMilliseconds = 15000;
         private const int PackageManifestTimeoutMilliseconds = 15000;
+        private const int MaximumConcurrentChecks = 4;
         private const double TargetedCheckDebounceSeconds = 0.15d;
 
         private static readonly Regex ShaRegex =
@@ -154,19 +157,32 @@ namespace Deucarian.PackageInstaller.Editor
             new Dictionary<string, TargetedUpdateCheckRequest>(StringComparer.OrdinalIgnoreCase);
         private static readonly Dictionary<string, TargetedUpdateCheckRequest> ActiveTargetedChecks =
             new Dictionary<string, TargetedUpdateCheckRequest>(StringComparer.OrdinalIgnoreCase);
-        private static readonly Dictionary<string, int> LatestTargetedCheckGenerations =
-            new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        private static readonly Dictionary<string, PackageCheckIntent> LatestCheckIntents =
+            new Dictionary<string, PackageCheckIntent>(StringComparer.OrdinalIgnoreCase);
         private readonly IReadOnlyList<string> _packageLockPaths;
         private readonly Action _sharedStateChangedHandler;
 
-        private static Task<PackageUpdateStatus[]> CheckTask;
-        private static IReadOnlyList<UpdateCheckItem> ActiveCheckItems = Array.Empty<UpdateCheckItem>();
-        private static int TargetedCheckGeneration;
+        private static Task<CompletedCheckResult[]> CheckTask;
+        private static IReadOnlyList<ScheduledUpdateCheck> ActiveCheckItems =
+            Array.Empty<ScheduledUpdateCheck>();
+        private static readonly ConcurrentQueue<CompletedCheckResult> CompletedCheckResults =
+            new ConcurrentQueue<CompletedCheckResult>();
+        private static readonly SemaphoreSlim CheckConcurrencyGate =
+            new SemaphoreSlim(MaximumConcurrentChecks, MaximumConcurrentChecks);
+        private static CancellationTokenSource CheckCancellation;
+        private static UpdateCheckRunContext SharedCheckContext;
+        private static int CheckGeneration;
+        private static int ActiveCheckGeneration;
+        private static int PublishedCheckResults;
+        private static long NextPackageIntentSequence;
+        private static readonly HashSet<long> IncrementallyPublishedIntentSequences =
+            new HashSet<long>();
         private static bool IsTargetedUpdateRegistered;
         private static string LastFailureMessageValue = string.Empty;
         private static string LastStatusMessageValue = string.Empty;
         private static event Action SharedStateChanged;
         internal static Func<PackageDefinition, PackageChannel, string, PackageVersionResult> GitPackageVersionResolverForTests;
+        internal static Func<string, CancellationToken, int, GitProcessResult> GitProcessRunnerForTests;
 
         public PackageUpdateCheckService(PackageDetectionService packageDetectionService)
         {
@@ -204,12 +220,16 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            List<UpdateCheckItem> checkItems = new List<UpdateCheckItem>();
+            List<ScheduledUpdateCheck> checkItems = new List<ScheduledUpdateCheck>();
 
             foreach (PackageDefinition packageDefinition in GetInstallablePackages(packageDefinitions))
             {
                 PackageChannel channel = channelSelector != null ? channelSelector(packageDefinition) : PackageChannel.Stable;
                 string selectedUrl = packageDefinition.GetUrl(channel);
+                PackageCheckIntent intent = RegisterPackageIntent(
+                    packageDefinition.PackageId,
+                    channel,
+                    selectedUrl);
 
                 if (channel == PackageChannel.Custom)
                 {
@@ -230,11 +250,13 @@ namespace Deucarian.PackageInstaller.Editor
                 Statuses[packageDefinition.PackageId] =
                     PackageUpdateStatus.Checking(packageDefinition, channel, selectedUrl);
 
-                checkItems.Add(CreateUpdateCheckItem(
-                    packageDefinition,
-                    channel,
-                    selectedUrl,
-                    packageInfo));
+                checkItems.Add(new ScheduledUpdateCheck(
+                    CreateUpdateCheckItem(
+                        packageDefinition,
+                        channel,
+                        selectedUrl,
+                        packageInfo),
+                    intent.Sequence));
             }
 
             LastFailureMessageValue = string.Empty;
@@ -247,7 +269,19 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             ActiveCheckItems = checkItems;
-            CheckTask = Task.Run(() => checkItems.Select(CheckItem).ToArray());
+            PublishedCheckResults = 0;
+            IncrementallyPublishedIntentSequences.Clear();
+            while (CompletedCheckResults.TryDequeue(out _))
+            {
+            }
+
+            JoinOrCreateSharedCheckDomain();
+            ActiveCheckGeneration = CheckGeneration;
+            CheckTask = RunCheckBatchAsync(
+                checkItems,
+                ActiveCheckGeneration,
+                CheckCancellation.Token,
+                SharedCheckContext);
 
             EditorApplication.update -= UpdateShared;
             EditorApplication.update += UpdateShared;
@@ -256,19 +290,54 @@ namespace Deucarian.PackageInstaller.Editor
 
         public bool CancelCurrentCheck()
         {
-            bool hadActiveCheck = IsChecking;
+            bool hadActiveCheck = IsAnyCheckRunning;
 
             if (hadActiveCheck)
             {
                 RestoreActiveCheckingStatusesToUnknown();
+                foreach (TargetedUpdateCheckRequest request in ActiveTargetedChecks.Values)
+                {
+                    RestoreTargetedCheckingStatusToUnknown(request);
+                }
+                foreach (TargetedUpdateCheckRequest request in PendingTargetedChecks.Values)
+                {
+                    RestoreTargetedCheckingStatusToUnknown(request);
+                }
+
+                CheckGeneration++;
+                CheckCancellation?.Cancel();
+                foreach (TargetedUpdateCheckRequest request in ActiveTargetedChecks.Values)
+                {
+                    request.Cancel();
+                }
             }
 
             CheckTask = null;
-            ActiveCheckItems = Array.Empty<UpdateCheckItem>();
+            ActiveCheckItems = Array.Empty<ScheduledUpdateCheck>();
+            PendingTargetedChecks.Clear();
+            ActiveTargetedChecks.Clear();
+            LatestCheckIntents.Clear();
+            PublishedCheckResults = 0;
+            IncrementallyPublishedIntentSequences.Clear();
+            while (CompletedCheckResults.TryDequeue(out _))
+            {
+            }
+            CheckCancellation?.Dispose();
+            CheckCancellation = null;
+            SharedCheckContext = null;
             LastFailureMessageValue = string.Empty;
             LastStatusMessageValue = "Update check canceled.";
+            if (hadActiveCheck)
+            {
+                PackageInstallerActivityService.Record(
+                    "Update Check",
+                    PackageInstallerActivitySeverity.Warning,
+                    LastStatusMessageValue,
+                    retryKind: PackageInstallerRetryKind.CheckUpdates);
+            }
 
             EditorApplication.update -= UpdateShared;
+            UnregisterTargetedUpdateIfIdle();
             NotifySharedStateChanged();
             return hadActiveCheck;
         }
@@ -285,6 +354,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (channel == PackageChannel.Custom)
             {
+                RegisterPackageIntent(packageId, channel, selectedUrl);
                 CancelTargetedCheck(packageId);
                 Statuses[packageId] = PackageUpdateStatus.Unknown(packageDefinition, channel);
                 NotifySharedStateChanged();
@@ -293,6 +363,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (!_packageDetectionService.TryGetInstalledPackage(packageId, out PackageManagerPackageInfo packageInfo))
             {
+                RegisterPackageIntent(packageId, channel, selectedUrl);
                 CancelTargetedCheck(packageId);
                 Statuses[packageId] = PackageUpdateStatus.NotInstalled(packageDefinition, channel, selectedUrl);
                 NotifySharedStateChanged();
@@ -311,13 +382,26 @@ namespace Deucarian.PackageInstaller.Editor
                     PendingTargetedChecks.Remove(packageId);
                 }
 
-                LatestTargetedCheckGenerations[packageId] = equivalentRequest.Generation;
                 Statuses[packageId] = PackageUpdateStatus.Checking(packageDefinition, channel, selectedUrl);
                 NotifySharedStateChanged();
                 return;
             }
 
-            int generation = ++TargetedCheckGeneration;
+            if (ActiveTargetedChecks.TryGetValue(packageId, out TargetedUpdateCheckRequest activeRequest) &&
+                !activeRequest.Matches(channel, selectedUrl))
+            {
+                activeRequest.Cancel();
+                ActiveTargetedChecks.Remove(packageId);
+            }
+
+            if (PendingTargetedChecks.TryGetValue(packageId, out TargetedUpdateCheckRequest pendingRequest))
+            {
+                pendingRequest.Cancel();
+                PendingTargetedChecks.Remove(packageId);
+            }
+
+            JoinOrCreateSharedCheckDomain();
+            PackageCheckIntent intent = RegisterPackageIntent(packageId, channel, selectedUrl);
             UpdateCheckItem item = CreateUpdateCheckItem(
                 packageDefinition,
                 channel,
@@ -326,9 +410,11 @@ namespace Deucarian.PackageInstaller.Editor
 
             PendingTargetedChecks[packageId] = new TargetedUpdateCheckRequest(
                 item,
-                generation,
-                EditorApplication.timeSinceStartup + TargetedCheckDebounceSeconds);
-            LatestTargetedCheckGenerations[packageId] = generation;
+                intent.Sequence,
+                CheckGeneration,
+                EditorApplication.timeSinceStartup + TargetedCheckDebounceSeconds,
+                CheckCancellation.Token,
+                SharedCheckContext);
             Statuses[packageId] = PackageUpdateStatus.Checking(packageDefinition, channel, selectedUrl);
 
             RegisterTargetedUpdate();
@@ -422,6 +508,7 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             CancelTargetedCheck(packageId);
+            LatestCheckIntents.Remove(packageId);
 
             if (Statuses.Remove(packageId))
             {
@@ -431,14 +518,46 @@ namespace Deucarian.PackageInstaller.Editor
 
         public void InvalidateAll()
         {
-            if (Statuses.Count == 0)
+            if (Statuses.Count == 0 &&
+                LatestCheckIntents.Count == 0 &&
+                !HasTargetedChecks &&
+                !IsChecking)
             {
                 return;
             }
 
+            bool hadRunningChecks = IsAnyCheckRunning;
+            if (hadRunningChecks)
+            {
+                CheckGeneration++;
+                ActiveCheckGeneration = CheckGeneration;
+                CheckCancellation?.Cancel();
+            }
+
+            foreach (TargetedUpdateCheckRequest activeRequest in ActiveTargetedChecks.Values)
+            {
+                activeRequest.Cancel();
+            }
+            foreach (TargetedUpdateCheckRequest pendingRequest in PendingTargetedChecks.Values)
+            {
+                pendingRequest.Cancel();
+            }
+
             Statuses.Clear();
+            CheckTask = null;
+            ActiveCheckItems = Array.Empty<ScheduledUpdateCheck>();
             PendingTargetedChecks.Clear();
-            LatestTargetedCheckGenerations.Clear();
+            ActiveTargetedChecks.Clear();
+            LatestCheckIntents.Clear();
+            PublishedCheckResults = 0;
+            IncrementallyPublishedIntentSequences.Clear();
+            while (CompletedCheckResults.TryDequeue(out _))
+            {
+            }
+            CheckCancellation?.Dispose();
+            CheckCancellation = null;
+            SharedCheckContext = null;
+            EditorApplication.update -= UpdateShared;
             UnregisterTargetedUpdateIfIdle();
             LastFailureMessageValue = string.Empty;
             LastStatusMessageValue = string.Empty;
@@ -447,7 +566,83 @@ namespace Deucarian.PackageInstaller.Editor
 
         public void Dispose()
         {
+            if (IsAnyCheckRunning)
+            {
+                CancelCurrentCheck();
+            }
             SharedStateChanged -= _sharedStateChangedHandler;
+        }
+
+        private static void JoinOrCreateSharedCheckDomain()
+        {
+            if (!IsAnyCheckRunning)
+            {
+                CheckGeneration++;
+                CheckCancellation?.Cancel();
+                CheckCancellation?.Dispose();
+                CheckCancellation = null;
+                SharedCheckContext = null;
+            }
+
+            if (CheckCancellation != null &&
+                !CheckCancellation.IsCancellationRequested &&
+                SharedCheckContext != null)
+            {
+                return;
+            }
+
+            CheckCancellation?.Dispose();
+            CheckCancellation = new CancellationTokenSource();
+            SharedCheckContext = new UpdateCheckRunContext(CheckCancellation.Token);
+        }
+
+        private static PackageCheckIntent RegisterPackageIntent(
+            string packageId,
+            PackageChannel channel,
+            string selectedUrl)
+        {
+            PackageCheckIntent intent = new PackageCheckIntent(
+                ++NextPackageIntentSequence,
+                channel,
+                selectedUrl);
+            LatestCheckIntents[packageId ?? string.Empty] = intent;
+            return intent;
+        }
+
+        private static bool IsCurrentPackageIntent(
+            string packageId,
+            long sequence,
+            PackageChannel channel,
+            string selectedUrl)
+        {
+            return !string.IsNullOrWhiteSpace(packageId) &&
+                   LatestCheckIntents.TryGetValue(packageId, out PackageCheckIntent latest) &&
+                   latest.Sequence == sequence &&
+                   latest.Channel == channel &&
+                   string.Equals(
+                       latest.SelectedUrl,
+                       selectedUrl ?? string.Empty,
+                       StringComparison.Ordinal);
+        }
+
+        private static void RestoreTargetedCheckingStatusToUnknown(TargetedUpdateCheckRequest request)
+        {
+            if (request == null || request.Item == null || request.Item.PackageDefinition == null)
+            {
+                return;
+            }
+
+            string packageId = request.Item.PackageDefinition.PackageId;
+            if (Statuses.TryGetValue(packageId, out PackageUpdateStatus status) &&
+                status != null &&
+                status.Kind == PackageUpdateStatusKind.Checking &&
+                status.Channel == request.Item.Channel &&
+                string.Equals(status.SelectedUrl, request.Item.SelectedUrl, StringComparison.Ordinal))
+            {
+                Statuses[packageId] = PackageUpdateStatus.Unknown(
+                    request.Item.PackageDefinition,
+                    request.Item.Channel);
+            }
         }
 
         private static IEnumerable<PackageDefinition> GetInstallablePackages(IEnumerable<PackageDefinition> packageDefinitions)
@@ -580,8 +775,20 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static PackageUpdateStatus CheckItem(UpdateCheckItem item)
         {
+            return CheckItem(
+                item,
+                CancellationToken.None,
+                new UpdateCheckRunContext(CancellationToken.None));
+        }
+
+        private static PackageUpdateStatus CheckItem(
+            UpdateCheckItem item,
+            CancellationToken cancellationToken,
+            UpdateCheckRunContext context)
+        {
             try
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 PackageInstallSourceType sourceType = item.SourceType == PackageInstallSourceType.Unknown
                     ? PackageInstallSourceUtility.Detect(
                         string.Empty,
@@ -592,7 +799,7 @@ namespace Deucarian.PackageInstaller.Editor
 
                 if (sourceType == PackageInstallSourceType.Registry)
                 {
-                    return CheckSourceMigrationItem(item);
+                    return CheckSourceMigrationItem(item, cancellationToken, context);
                 }
 
                 if (sourceType == PackageInstallSourceType.Local ||
@@ -642,7 +849,11 @@ namespace Deucarian.PackageInstaller.Editor
                         .WithPackageVersions(item.InstalledVersion, string.Empty);
                 }
 
-                if (!TryGetRemoteRevision(remoteUrl, reference, out string latestRevision, out string remoteMessage))
+                if (!context.TryGetRemoteRevision(
+                        remoteUrl,
+                        reference,
+                        out string latestRevision,
+                        out string remoteMessage))
                 {
                     return PackageUpdateStatus.Failed(
                         item.PackageDefinition,
@@ -653,7 +864,7 @@ namespace Deucarian.PackageInstaller.Editor
                 }
 
                 PackageVersionResult latestPackageVersionResult =
-                    ResolveGitPackageVersion(item, latestRevision);
+                    context.ResolveGitPackageVersion(item, latestRevision);
                 string latestPackageVersion = latestPackageVersionResult != null &&
                                               latestPackageVersionResult.Success
                     ? latestPackageVersionResult.Version
@@ -686,6 +897,10 @@ namespace Deucarian.PackageInstaller.Editor
                     "Installed revision differs from the selected channel.")
                     .WithPackageVersions(item.InstalledVersion, latestPackageVersion);
             }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
             catch (Exception exception)
             {
                 return PackageUpdateStatus.Failed(
@@ -697,8 +912,12 @@ namespace Deucarian.PackageInstaller.Editor
             }
         }
 
-        private static PackageUpdateStatus CheckSourceMigrationItem(UpdateCheckItem item)
+        private static PackageUpdateStatus CheckSourceMigrationItem(
+            UpdateCheckItem item,
+            CancellationToken cancellationToken,
+            UpdateCheckRunContext context)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             string installedVersion = TryGetInstalledRegistryVersion(item, out string registryVersion)
                 ? registryVersion
                 : item.InstalledVersion;
@@ -714,7 +933,11 @@ namespace Deucarian.PackageInstaller.Editor
                     out string reference,
                     out parseMessage))
             {
-                if (!TryGetRemoteRevision(remoteUrl, reference, out latestRevision, out string remoteMessage))
+                if (!context.TryGetRemoteRevision(
+                        remoteUrl,
+                        reference,
+                        out latestRevision,
+                        out string remoteMessage))
                 {
                     diagnostic = remoteMessage;
                 }
@@ -726,7 +949,8 @@ namespace Deucarian.PackageInstaller.Editor
                     : parseMessage;
             }
 
-            PackageVersionResult latestPackageVersionResult = ResolveGitPackageVersion(item, latestRevision);
+            PackageVersionResult latestPackageVersionResult =
+                context.ResolveGitPackageVersion(item, latestRevision);
             if (latestPackageVersionResult != null && latestPackageVersionResult.Success)
             {
                 latestVersion = latestPackageVersionResult.Version;
@@ -906,8 +1130,10 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static PackageVersionResult ResolveGitPackageVersion(
             UpdateCheckItem item,
-            string targetRevision)
+            string targetRevision,
+            CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             Func<PackageDefinition, PackageChannel, string, PackageVersionResult> resolver =
                 GitPackageVersionResolverForTests;
             if (resolver != null)
@@ -932,10 +1158,12 @@ namespace Deucarian.PackageInstaller.Editor
                 return PackageVersionResult.Fail("Could not resolve target package.json URL.");
             }
 
-            return FetchPackageVersion(packageJsonUrl);
+            return FetchPackageVersion(packageJsonUrl, cancellationToken);
         }
 
-        private static PackageVersionResult FetchPackageVersion(string packageJsonUrl)
+        private static PackageVersionResult FetchPackageVersion(
+            string packageJsonUrl,
+            CancellationToken cancellationToken)
         {
             if (string.IsNullOrWhiteSpace(packageJsonUrl))
             {
@@ -944,16 +1172,20 @@ namespace Deucarian.PackageInstaller.Editor
 
             try
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 HttpWebRequest request = (HttpWebRequest)WebRequest.Create(packageJsonUrl);
                 request.Method = "GET";
                 request.Timeout = PackageManifestTimeoutMilliseconds;
                 request.ReadWriteTimeout = PackageManifestTimeoutMilliseconds;
 
+                using (cancellationToken.Register(request.Abort))
                 using (WebResponse response = request.GetResponse())
                 using (Stream responseStream = response.GetResponseStream())
                 using (StreamReader reader = new StreamReader(responseStream))
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     string packageJson = reader.ReadToEnd();
+                    cancellationToken.ThrowIfCancellationRequested();
 
                     if (!PackageRegistryPackageNameValidator.TryReadPackageVersion(
                             packageJson,
@@ -970,6 +1202,10 @@ namespace Deucarian.PackageInstaller.Editor
                     return PackageVersionResult.Ok(packageVersion);
                 }
             }
+            catch (WebException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw new OperationCanceledException(cancellationToken);
+            }
             catch (Exception exception)
             {
                 return PackageVersionResult.Fail(
@@ -977,34 +1213,246 @@ namespace Deucarian.PackageInstaller.Editor
             }
         }
 
+        private static async Task<CompletedCheckResult[]> RunCheckBatchAsync(
+            IReadOnlyList<ScheduledUpdateCheck> checkItems,
+            int generation,
+            CancellationToken cancellationToken,
+            UpdateCheckRunContext context)
+        {
+            Task<CompletedCheckResult>[] tasks = checkItems
+                .Select(async scheduled =>
+                {
+                    PackageUpdateStatus status = await RunCheckWithinSharedBudgetAsync(
+                            scheduled.Item,
+                            cancellationToken,
+                            context)
+                        .ConfigureAwait(false);
+                    CompletedCheckResult completed = new CompletedCheckResult(
+                        generation,
+                        scheduled.IntentSequence,
+                        status);
+                    CompletedCheckResults.Enqueue(completed);
+                    return completed;
+                })
+                .ToArray();
+
+            return await Task.WhenAll(tasks).ConfigureAwait(false);
+        }
+
+        private static async Task<PackageUpdateStatus> RunCheckWithinSharedBudgetAsync(
+            UpdateCheckItem item,
+            CancellationToken cancellationToken,
+            UpdateCheckRunContext context)
+        {
+            await CheckConcurrencyGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return await Task.Run(
+                        () => CheckItem(item, cancellationToken, context),
+                        cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            finally
+            {
+                CheckConcurrencyGate.Release();
+            }
+        }
+
+        private sealed class UpdateCheckRunContext
+        {
+            private readonly CancellationToken _cancellationToken;
+            private readonly ConcurrentDictionary<string, Lazy<RemoteRevisionResult>> _remoteRevisions =
+                new ConcurrentDictionary<string, Lazy<RemoteRevisionResult>>(StringComparer.Ordinal);
+            private readonly ConcurrentDictionary<string, Lazy<PackageVersionResult>> _packageVersions =
+                new ConcurrentDictionary<string, Lazy<PackageVersionResult>>(StringComparer.Ordinal);
+
+            public UpdateCheckRunContext(CancellationToken cancellationToken)
+            {
+                _cancellationToken = cancellationToken;
+            }
+
+            public bool TryGetRemoteRevision(
+                string remoteUrl,
+                string reference,
+                out string revision,
+                out string message)
+            {
+                _cancellationToken.ThrowIfCancellationRequested();
+                string key = NormalizeProbeKey(remoteUrl) + "#" + NormalizeProbeKey(reference);
+                Lazy<RemoteRevisionResult> lookup = _remoteRevisions.GetOrAdd(
+                    key,
+                    _ => new Lazy<RemoteRevisionResult>(
+                        () =>
+                        {
+                            bool success = PackageUpdateCheckService.TryGetRemoteRevision(
+                                remoteUrl,
+                                reference,
+                                _cancellationToken,
+                                out string resolvedRevision,
+                                out string resolvedMessage);
+                            return new RemoteRevisionResult(success, resolvedRevision, resolvedMessage);
+                        },
+                        LazyThreadSafetyMode.ExecutionAndPublication));
+
+                RemoteRevisionResult result = lookup.Value;
+                revision = result.Revision;
+                message = result.Message;
+                return result.Success;
+            }
+
+            public PackageVersionResult ResolveGitPackageVersion(
+                UpdateCheckItem item,
+                string targetRevision)
+            {
+                _cancellationToken.ThrowIfCancellationRequested();
+                string key = NormalizeProbeKey(item != null ? item.SelectedUrl : string.Empty) +
+                             "#" + NormalizeProbeKey(targetRevision);
+                return _packageVersions.GetOrAdd(
+                        key,
+                        _ => new Lazy<PackageVersionResult>(
+                            () => PackageUpdateCheckService.ResolveGitPackageVersion(
+                                item,
+                                targetRevision,
+                                _cancellationToken),
+                            LazyThreadSafetyMode.ExecutionAndPublication))
+                    .Value;
+            }
+
+            private static string NormalizeProbeKey(string value) =>
+                (value ?? string.Empty).Trim().Replace('\\', '/');
+        }
+
+        private sealed class RemoteRevisionResult
+        {
+            public RemoteRevisionResult(bool success, string revision, string message)
+            {
+                Success = success;
+                Revision = revision ?? string.Empty;
+                Message = message ?? string.Empty;
+            }
+
+            public bool Success { get; }
+            public string Revision { get; }
+            public string Message { get; }
+        }
+
+        private sealed class CompletedCheckResult
+        {
+            public CompletedCheckResult(
+                int generation,
+                long intentSequence,
+                PackageUpdateStatus status)
+            {
+                Generation = generation;
+                IntentSequence = intentSequence;
+                Status = status;
+            }
+
+            public int Generation { get; }
+            public long IntentSequence { get; }
+            public PackageUpdateStatus Status { get; }
+        }
+
+        private static bool CanPublishCompletedResult(CompletedCheckResult completed)
+        {
+            return completed != null &&
+                   completed.Generation == ActiveCheckGeneration &&
+                   completed.Generation == CheckGeneration &&
+                   completed.Status != null &&
+                   IsCurrentPackageIntent(
+                       completed.Status.PackageId,
+                       completed.IntentSequence,
+                       completed.Status.Channel,
+                       completed.Status.SelectedUrl);
+        }
+
+        private static bool PublishCompletedResult(CompletedCheckResult completed)
+        {
+            if (!CanPublishCompletedResult(completed) ||
+                !IncrementallyPublishedIntentSequences.Add(completed.IntentSequence))
+            {
+                return false;
+            }
+
+            Statuses[completed.Status.PackageId] = completed.Status;
+            PublishedCheckResults++;
+
+            if (ShouldAlwaysLogStatus(completed.Status))
+            {
+                LogStatus(completed.Status);
+            }
+
+            return true;
+        }
+
         private static void UpdateShared()
         {
-            if (CheckTask == null || !CheckTask.IsCompleted)
+            bool publishedResult = false;
+            while (CompletedCheckResults.TryDequeue(out CompletedCheckResult completed))
+            {
+                publishedResult |= PublishCompletedResult(completed);
+            }
+
+            if (publishedResult)
+            {
+                LastStatusMessageValue = "Checked " + PublishedCheckResults + " of " +
+                                         ActiveCheckItems.Count + " packages...";
+                NotifySharedStateChanged();
+            }
+
+            if (CheckTask == null)
+            {
+                return;
+            }
+
+            if (!CheckTask.IsCompleted)
             {
                 return;
             }
 
             EditorApplication.update -= UpdateShared;
 
-            PackageUpdateStatus[] results;
+            CompletedCheckResult[] completedResults;
 
             try
             {
-                results = CheckTask.Result;
+                completedResults = CheckTask.GetAwaiter().GetResult();
+            }
+            catch (OperationCanceledException)
+            {
+                return;
             }
             catch (Exception exception)
             {
-                results = ActiveCheckItems
-                    .Select(item => PackageUpdateStatus.Failed(
-                        item.PackageDefinition,
-                        item.Channel,
-                        item.SelectedUrl,
-                        string.Empty,
-                        "Update check failed: " + exception.GetBaseException().Message))
+                completedResults = ActiveCheckItems
+                    .Select(scheduled => new CompletedCheckResult(
+                        ActiveCheckGeneration,
+                        scheduled.IntentSequence,
+                        PackageUpdateStatus.Failed(
+                            scheduled.Item.PackageDefinition,
+                            scheduled.Item.Channel,
+                            scheduled.Item.SelectedUrl,
+                            string.Empty,
+                            "Update check failed: " + exception.GetBaseException().Message)))
                     .ToArray();
             }
 
-            RecordCheckCompleted(results);
+            if (ActiveCheckGeneration != CheckGeneration)
+            {
+                return;
+            }
+
+            foreach (CompletedCheckResult completed in completedResults)
+            {
+                PublishCompletedResult(completed);
+            }
+
+            PackageUpdateStatus[] acceptedResults = completedResults
+                .Where(CanPublishCompletedResult)
+                .Select(completed => completed.Status)
+                .ToArray();
+            RecordCheckCompleted(acceptedResults);
         }
 
         private static void RegisterTargetedUpdate()
@@ -1038,6 +1486,12 @@ namespace Deucarian.PackageInstaller.Editor
             request = null;
 
             if (PendingTargetedChecks.TryGetValue(packageId, out TargetedUpdateCheckRequest pending) &&
+                pending.DomainGeneration == CheckGeneration &&
+                IsCurrentPackageIntent(
+                    packageId,
+                    pending.IntentSequence,
+                    pending.Item.Channel,
+                    pending.Item.SelectedUrl) &&
                 pending.Matches(channel, selectedUrl))
             {
                 request = pending;
@@ -1045,6 +1499,12 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             if (ActiveTargetedChecks.TryGetValue(packageId, out TargetedUpdateCheckRequest active) &&
+                active.DomainGeneration == CheckGeneration &&
+                IsCurrentPackageIntent(
+                    packageId,
+                    active.IntentSequence,
+                    active.Item.Channel,
+                    active.Item.SelectedUrl) &&
                 active.Matches(channel, selectedUrl))
             {
                 request = active;
@@ -1061,8 +1521,25 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            PendingTargetedChecks.Remove(packageId);
-            LatestTargetedCheckGenerations.Remove(packageId);
+            if (PendingTargetedChecks.TryGetValue(packageId, out TargetedUpdateCheckRequest pending))
+            {
+                pending.Cancel();
+                PendingTargetedChecks.Remove(packageId);
+            }
+            if (ActiveTargetedChecks.TryGetValue(packageId, out TargetedUpdateCheckRequest active))
+            {
+                active.Cancel();
+                ActiveTargetedChecks.Remove(packageId);
+            }
+
+            if (!IsAnyCheckRunning && CheckCancellation != null)
+            {
+                CheckGeneration++;
+                CheckCancellation.Cancel();
+                CheckCancellation.Dispose();
+                CheckCancellation = null;
+                SharedCheckContext = null;
+            }
             UnregisterTargetedUpdateIfIdle();
         }
 
@@ -1085,6 +1562,14 @@ namespace Deucarian.PackageInstaller.Editor
 
                 if (ActiveTargetedChecks.ContainsKey(packageId))
                 {
+                    continue;
+                }
+
+                if (request.DomainGeneration != CheckGeneration)
+                {
+                    PendingTargetedChecks.Remove(packageId);
+                    request.Cancel();
+                    RestoreTargetedCheckingStatusToUnknown(request);
                     continue;
                 }
 
@@ -1112,8 +1597,12 @@ namespace Deucarian.PackageInstaller.Editor
                 ActiveTargetedChecks.Remove(packageId);
                 PackageUpdateStatus status = GetTargetedResult(request);
 
-                if (LatestTargetedCheckGenerations.TryGetValue(packageId, out int latestGeneration) &&
-                    latestGeneration == request.Generation)
+                if (request.DomainGeneration == CheckGeneration &&
+                    IsCurrentPackageIntent(
+                        packageId,
+                        request.IntentSequence,
+                        request.Item.Channel,
+                        request.Item.SelectedUrl))
                 {
                     Statuses[packageId] = status;
 
@@ -1134,6 +1623,13 @@ namespace Deucarian.PackageInstaller.Editor
             try
             {
                 return request.Task.Result;
+            }
+            catch (AggregateException exception)
+                when (exception.InnerExceptions.Any(inner => inner is OperationCanceledException))
+            {
+                return PackageUpdateStatus.Unknown(
+                    request.Item.PackageDefinition,
+                    request.Item.Channel);
             }
             catch (Exception exception)
             {
@@ -1160,16 +1656,35 @@ namespace Deucarian.PackageInstaller.Editor
 
         internal static void ResetForTests()
         {
+            CheckCancellation?.Cancel();
+            CheckCancellation?.Dispose();
+            CheckCancellation = null;
+            SharedCheckContext = null;
+            foreach (TargetedUpdateCheckRequest request in ActiveTargetedChecks.Values)
+            {
+                request.Cancel();
+            }
+            foreach (TargetedUpdateCheckRequest request in PendingTargetedChecks.Values)
+            {
+                request.Cancel();
+            }
             Statuses.Clear();
             PendingTargetedChecks.Clear();
             ActiveTargetedChecks.Clear();
-            LatestTargetedCheckGenerations.Clear();
+            LatestCheckIntents.Clear();
             CheckTask = null;
-            ActiveCheckItems = Array.Empty<UpdateCheckItem>();
+            ActiveCheckItems = Array.Empty<ScheduledUpdateCheck>();
+            while (CompletedCheckResults.TryDequeue(out _))
+            {
+            }
             LastFailureMessageValue = string.Empty;
             LastStatusMessageValue = string.Empty;
-            TargetedCheckGeneration = 0;
+            CheckGeneration++;
+            ActiveCheckGeneration = CheckGeneration;
+            PublishedCheckResults = 0;
+            IncrementallyPublishedIntentSequences.Clear();
             GitPackageVersionResolverForTests = null;
+            GitProcessRunnerForTests = null;
             EditorApplication.update -= UpdateShared;
             EditorApplication.update -= UpdateTargetedChecks;
             IsTargetedUpdateRegistered = false;
@@ -1179,28 +1694,34 @@ namespace Deucarian.PackageInstaller.Editor
         {
             results = results ?? Array.Empty<PackageUpdateStatus>();
 
-            foreach (PackageUpdateStatus status in results)
-            {
-                Statuses[status.PackageId] = status;
-
-                if (ShouldAlwaysLogStatus(status))
-                {
-                    LogStatus(status);
-                }
-            }
-
             LastFailureMessageValue = GetFailureSummary(results);
             LastStatusMessageValue = GetCompletionSummary(results);
+            PackageInstallerActivityService.Record(
+                "Update Check",
+                string.IsNullOrWhiteSpace(LastFailureMessageValue)
+                    ? PackageInstallerActivitySeverity.Success
+                    : PackageInstallerActivitySeverity.Error,
+                string.IsNullOrWhiteSpace(LastFailureMessageValue)
+                    ? LastStatusMessageValue
+                    : LastFailureMessageValue,
+                LastStatusMessageValue,
+                retryKind: string.IsNullOrWhiteSpace(LastFailureMessageValue)
+                    ? PackageInstallerRetryKind.None
+                    : PackageInstallerRetryKind.CheckUpdates);
             PackageUpdateCheckPreferences.LastCheckedUtc = DateTime.UtcNow;
             CheckTask = null;
-            ActiveCheckItems = Array.Empty<UpdateCheckItem>();
+            ActiveCheckItems = Array.Empty<ScheduledUpdateCheck>();
+            PublishedCheckResults = 0;
+            IncrementallyPublishedIntentSequences.Clear();
             NotifySharedStateChanged();
         }
 
         private static void RestoreActiveCheckingStatusesToUnknown()
         {
-            foreach (UpdateCheckItem item in ActiveCheckItems ?? Array.Empty<UpdateCheckItem>())
+            foreach (ScheduledUpdateCheck scheduled in
+                     ActiveCheckItems ?? Array.Empty<ScheduledUpdateCheck>())
             {
+                UpdateCheckItem item = scheduled.Item;
                 if (item == null ||
                     item.PackageDefinition == null ||
                     string.IsNullOrWhiteSpace(item.PackageDefinition.PackageId))
@@ -1283,9 +1804,11 @@ namespace Deucarian.PackageInstaller.Editor
         private static bool TryGetRemoteRevision(
             string remoteUrl,
             string reference,
+            CancellationToken cancellationToken,
             out string revision,
             out string message)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             revision = string.Empty;
             message = string.Empty;
 
@@ -1297,7 +1820,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             string arguments = "ls-remote " + QuoteArgument(remoteUrl) + " " + QuoteArgument(reference);
 
-            if (!RunGit(arguments, out string output, out string error))
+            if (!RunGit(arguments, cancellationToken, out string output, out string error))
             {
                 message = error;
                 return false;
@@ -1318,10 +1841,45 @@ namespace Deucarian.PackageInstaller.Editor
             return false;
         }
 
-        private static bool RunGit(string arguments, out string output, out string error)
+        internal static bool TryGetRemoteRevisionForTests(
+            string remoteUrl,
+            string reference,
+            CancellationToken cancellationToken,
+            out string revision,
+            out string message)
         {
-            output = string.Empty;
-            error = string.Empty;
+            return TryGetRemoteRevision(
+                remoteUrl,
+                reference,
+                cancellationToken,
+                out revision,
+                out message);
+        }
+
+        private static bool RunGit(
+            string arguments,
+            CancellationToken cancellationToken,
+            out string output,
+            out string error)
+        {
+            Func<string, CancellationToken, int, GitProcessResult> runner =
+                GitProcessRunnerForTests;
+            GitProcessResult result = runner != null
+                ? runner(arguments, cancellationToken, GitTimeoutMilliseconds)
+                : RunOwnedGitProcess(arguments, cancellationToken, GitTimeoutMilliseconds);
+            output = result != null ? result.Output : string.Empty;
+            error = result != null
+                ? result.Error
+                : "git ls-remote returned no process result.";
+            return result != null && result.Success;
+        }
+
+        private static GitProcessResult RunOwnedGitProcess(
+            string arguments,
+            CancellationToken cancellationToken,
+            int timeoutMilliseconds)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
 
             using (Process process = new Process())
             {
@@ -1337,41 +1895,60 @@ namespace Deucarian.PackageInstaller.Editor
 
                 try
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     process.Start();
                 }
                 catch (Win32Exception)
                 {
-                    error = "Git executable was not found on PATH.";
-                    return false;
+                    return GitProcessResult.Fail("Git executable was not found on PATH.");
                 }
 
-                if (!process.WaitForExit(GitTimeoutMilliseconds))
+                using (cancellationToken.Register(() => TryKillProcess(process)))
                 {
-                    try
+                    if (!process.WaitForExit(timeoutMilliseconds))
                     {
-                        process.Kill();
+                        TryKillProcess(process);
+                        return GitProcessResult.Fail("git ls-remote timed out.");
                     }
-                    catch (InvalidOperationException)
-                    {
-                    }
-
-                    error = "git ls-remote timed out.";
-                    return false;
                 }
 
-                output = process.StandardOutput.ReadToEnd();
-                error = process.StandardError.ReadToEnd();
+                cancellationToken.ThrowIfCancellationRequested();
+
+                string output = process.StandardOutput.ReadToEnd();
+                string error = process.StandardError.ReadToEnd();
 
                 if (process.ExitCode == 0)
                 {
-                    return true;
+                    return GitProcessResult.Ok(output);
                 }
 
                 error = string.IsNullOrWhiteSpace(error)
                     ? "git ls-remote failed with exit code " + process.ExitCode + "."
                     : "git ls-remote failed: " + error.Trim();
 
-                return false;
+                return GitProcessResult.Fail(error, output);
+            }
+        }
+
+        private static void TryKillProcess(Process process)
+        {
+            if (process == null)
+            {
+                return;
+            }
+
+            try
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill();
+                }
+            }
+            catch (InvalidOperationException)
+            {
+            }
+            catch (Win32Exception)
+            {
             }
         }
 
@@ -1767,6 +2344,61 @@ namespace Deucarian.PackageInstaller.Editor
             }
         }
 
+        internal sealed class GitProcessResult
+        {
+            private GitProcessResult(bool success, string output, string error)
+            {
+                Success = success;
+                Output = output ?? string.Empty;
+                Error = error ?? string.Empty;
+            }
+
+            public bool Success { get; }
+
+            public string Output { get; }
+
+            public string Error { get; }
+
+            public static GitProcessResult Ok(string output)
+            {
+                return new GitProcessResult(true, output, string.Empty);
+            }
+
+            public static GitProcessResult Fail(string error, string output = null)
+            {
+                return new GitProcessResult(false, output, error);
+            }
+        }
+
+        private sealed class PackageCheckIntent
+        {
+            public PackageCheckIntent(
+                long sequence,
+                PackageChannel channel,
+                string selectedUrl)
+            {
+                Sequence = sequence;
+                Channel = channel;
+                SelectedUrl = selectedUrl ?? string.Empty;
+            }
+
+            public long Sequence { get; }
+            public PackageChannel Channel { get; }
+            public string SelectedUrl { get; }
+        }
+
+        private sealed class ScheduledUpdateCheck
+        {
+            public ScheduledUpdateCheck(UpdateCheckItem item, long intentSequence)
+            {
+                Item = item ?? throw new ArgumentNullException(nameof(item));
+                IntentSequence = intentSequence;
+            }
+
+            public UpdateCheckItem Item { get; }
+            public long IntentSequence { get; }
+        }
+
         private sealed class UpdateCheckItem
         {
             public UpdateCheckItem(
@@ -1828,27 +2460,46 @@ namespace Deucarian.PackageInstaller.Editor
 
         private sealed class TargetedUpdateCheckRequest
         {
+            private readonly UpdateCheckRunContext _context;
+
             public TargetedUpdateCheckRequest(
                 UpdateCheckItem item,
-                int generation,
-                double dueTime)
+                long intentSequence,
+                int domainGeneration,
+                double dueTime,
+                CancellationToken domainCancellationToken,
+                UpdateCheckRunContext context)
             {
                 Item = item;
-                Generation = generation;
+                IntentSequence = intentSequence;
+                DomainGeneration = domainGeneration;
                 DueTime = dueTime;
+                _context = context ?? throw new ArgumentNullException(nameof(context));
+                Cancellation = CancellationTokenSource.CreateLinkedTokenSource(
+                    domainCancellationToken);
             }
 
             public UpdateCheckItem Item { get; }
 
-            public int Generation { get; }
+            public long IntentSequence { get; }
+
+            public int DomainGeneration { get; }
 
             public double DueTime { get; }
 
             public Task<PackageUpdateStatus> Task { get; private set; }
 
+            private CancellationTokenSource Cancellation { get; }
+
             public void Start()
             {
-                Task = System.Threading.Tasks.Task.Run(() => CheckItem(Item));
+                CancellationToken token = Cancellation.Token;
+                Task = RunCheckWithinSharedBudgetAsync(Item, token, _context);
+            }
+
+            public void Cancel()
+            {
+                Cancellation?.Cancel();
             }
 
             public bool Matches(PackageChannel channel, string selectedUrl)
