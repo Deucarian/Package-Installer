@@ -1,0 +1,72 @@
+name: Unity EditMode Tests
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - develop
+      - main
+
+concurrency:
+  group: unity-editmode-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  checks: write
+
+jobs:
+  editmode:
+    name: Unity 2021.3 EditMode
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out package
+        uses: actions/checkout@v4
+
+      - name: Create disposable Unity project
+        shell: bash
+        run: |
+          mkdir -p UnityTestProject/Assets UnityTestProject/Packages/com.deucarian.package-installer UnityTestProject/ProjectSettings
+          git archive --format=tar HEAD | tar -xf - -C UnityTestProject/Packages/com.deucarian.package-installer
+          cat > UnityTestProject/Packages/manifest.json <<'JSON'
+          {
+            "dependencies": {
+              "com.deucarian.editor": "https://github.com/Deucarian/Editor.git#8f85a9c808b813781e1f6c7f6aa6414f6b596493",
+              "com.deucarian.logging": "https://github.com/Deucarian/Logging.git#683d88858942d2d3c551135cbf1384b4f71cdd75",
+              "com.unity.test-framework": "1.1.33"
+            },
+            "testables": [
+              "com.deucarian.package-installer"
+            ]
+          }
+          JSON
+          cat > UnityTestProject/ProjectSettings/ProjectVersion.txt <<'TEXT'
+          m_EditorVersion: 2021.3.45f1
+          TEXT
+
+      - name: Run Package Installer EditMode tests
+        id: unity-tests
+        uses: game-ci/unity-test-runner@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          projectPath: UnityTestProject
+          unityVersion: 2021.3.45f1
+          testMode: editmode
+          customParameters: -assemblyNames Deucarian.PackageInstaller.Editor.Tests
+          artifactsPath: artifacts
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
+          checkName: Package Installer EditMode (Unity 2021.3.45f1)
+
+      - name: Upload Unity test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unity-editmode-results
+          path: ${{ steps.unity-tests.outputs.artifactsPath }}
+          if-no-files-found: warn

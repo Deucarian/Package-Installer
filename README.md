@@ -6,7 +6,7 @@
 
 It is the Deucarian ecosystem front door for installing standalone packages, integration packages, suite packages, templates, and explicitly declared package samples from Package Registry metadata.
 
-Current package version: `1.1.61`.
+Current package version: `1.1.62`.
 
 ## When to use it
 
@@ -31,7 +31,7 @@ Open it from:
 Tools > Deucarian > Package Installer
 ```
 
-Select Stable or Development, choose a package, review its dependency plan, and click `Install`. Import samples only when the package detail view shows a sample you explicitly want.
+Select Stable or Development, choose a package, and click `Install`. Ordinary safe one-package actions start immediately; a contextual preflight appears only for multi-step, source-migration, downgrade, fallback, conflict, or destructive operations. Import samples only when the package detail view shows a sample you explicitly want.
 
 ## Deucarian Menu
 
@@ -91,7 +91,7 @@ The installer loads the bundled `PackageRegistry.json` first so it works offline
 
 `https://raw.githubusercontent.com/Deucarian/Package-Registry/main/packages.json`
 
-If the remote registry succeeds and validates, the window uses it. If it fails, the bundled registry stays active and the header shows that the remote registry failed.
+The installer then loads a validated last-known-good remote cache from `Library/Deucarian/PackageInstaller` when one exists and starts a fresh remote request. Invalid, canceled, timed-out, or offline responses never replace a valid cache. If neither cached nor fresh remote data is valid, the bundled registry stays active and the header explains the fallback.
 
 The registry is the source of truth for stable Git `#main` URLs and development Git `#develop` URLs. Git tags, GitHub releases, and npm/scoped-registry publication are deferred until a separate deliberate release wave.
 
@@ -191,7 +191,7 @@ Set `stableUrl` and, when available, `developmentUrl` to the UPM identifier or G
 
 Promoted packages in the bundled registry use stable Git `#main` URLs and development Git `#develop` URLs. For future pre-stable bootstrap packages whose GitHub repository does not yet have `main`, the bundled registry may intentionally set `stableUrl` equal to the verified `developmentUrl`.
 
-When an installed Git package can be matched to `#main` or `#develop`, including common forms such as `#refs/heads/main`, the installer infers the visible channel from the installed package reference. If the installed reference does not match a known channel, the row shows a Custom channel until the user selects Stable or Development.
+When an installed Git package matches a registered channel's normalized repository remote, optional package path, and ref together, including common ref forms such as `#refs/heads/main`, the installer infers the visible channel. Forks, local sources, and mismatched package paths remain Custom even if their branch is named `main` or `develop`.
 
 ## Samples and Extras
 
@@ -199,7 +199,7 @@ UPM packages can include `Samples~` folders, but Unity does not import those sam
 
 For installed packages, the installer resolves the package through Unity Package Manager metadata, reads its `package.json`, and displays entries from the `samples` array under the package detail view. Each row shows the sample `displayName`, `description`, import status, and an explicit import action.
 
-Sample imports are explicit. The installer first tries Unity's Package Manager sample import API, then falls back to a bounded copy from the installed package's `Samples~` folder into `Assets/Samples/<Package Display Name>/<Version>/<Sample Name>`.
+Sample imports are explicit. The installer first tries Unity's Package Manager sample import API. Its fallback copies into staging beneath `Library`, validates the complete file set and content, then atomically moves the staged sample into `Assets/Samples/<Package Display Name>/<Version>/<Sample Name>`. Failed or canceled imports clean their staging data and never expose a partial sample at the final destination.
 
 If a sample destination already exists, the installer shows it as already imported and does not overwrite it silently.
 
@@ -243,7 +243,17 @@ The installer shows step-based progress for package install, integration install
 
 Progress is counted by package steps because Unity Package Manager does not provide reliable download-byte progress for these Git package operations.
 
-Progress summaries list succeeded, failed, and skipped package steps so multi-package operations do not rely only on console logs.
+Progress summaries use one chronological activity/result stream with copyable details. They list succeeded, failed, skipped, blocked, and canceled steps so multi-package operations do not rely only on console logs.
+
+Failed prerequisites block their transitive dependents while unrelated requested roots continue. Cancellation lets the active Unity Package Manager request settle but submits no additional requests.
+
+Interrupted plans are stored project-locally beneath `Library/Deucarian/PackageInstaller`. After reload, the installer waits for installed-package and registry refreshes, then offers Resume, Restart, or Discard. Exact saved URLs are reusable only while the registry fingerprint still matches; registry drift requires review of a freshly resolved plan.
+
+## Ecosystem Graph UX
+
+The graph keeps its default toolbar compact and progressively discloses package, group, channel, and attention actions only where they apply. Existing controls wrap at wide, compact, and narrow widths without adding permanent toolbar controls.
+
+Packages, groups, summaries, breadcrumbs, and back targets support keyboard focus. Enter or Space activates the focused target, while Escape clears search before backing out of package or group focus. Hover and keyboard focus share route preview behavior, and related-node previews isolate the route to the selected package. Missing registry relationships are diagnostic nodes, and dense relation sets use adaptive wrapping plus a `+N` overflow summary instead of overlapping cards.
 
 ## Integration Packages
 
@@ -307,7 +317,7 @@ Keeping the installer editor-only ensures:
 
 ## Versioning
 
-Current package version: `1.1.61`.
+Current package version: `1.1.62`.
 
 Branch strategy:
 
