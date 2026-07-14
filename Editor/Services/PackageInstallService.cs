@@ -72,11 +72,13 @@ namespace Deucarian.PackageInstaller.Editor
             bool isDependency,
             IEnumerable<string> rootPackageIds,
             PackageInstallProgressItemState state,
-            string message)
+            string message,
+            PackageChannel? requestedChannel = null)
         {
             PackageId = packageId ?? string.Empty;
             DisplayName = displayName ?? string.Empty;
             Channel = channel;
+            RequestedChannel = requestedChannel ?? channel;
             TargetUrl = targetUrl ?? string.Empty;
             IsDependency = isDependency;
             RootPackageIds = Array.AsReadOnly((rootPackageIds ?? Array.Empty<string>())
@@ -90,6 +92,7 @@ namespace Deucarian.PackageInstaller.Editor
         public string PackageId { get; }
         public string DisplayName { get; }
         public PackageChannel Channel { get; }
+        public PackageChannel RequestedChannel { get; }
         public string TargetUrl { get; }
         public bool IsDependency { get; }
         public IReadOnlyList<string> RootPackageIds { get; }
@@ -281,7 +284,7 @@ namespace Deucarian.PackageInstaller.Editor
             return loadedLegacy;
         }
 
-        public bool ResumeSavedOperation()
+        public bool ResumeSavedOperation(string currentRegistryFingerprint)
         {
             if (IsBusy)
             {
@@ -306,6 +309,12 @@ namespace Deucarian.PackageInstaller.Editor
                 return false;
             }
 
+            if (!CanReuseSavedTargets(recoveryRecord, currentRegistryFingerprint))
+            {
+                ReportUnsafeSavedTargetReuse(recoveryRecord.RegistryFingerprint);
+                return false;
+            }
+
             RestoreOperation(recoveryRecord);
 
             StartNextRequestIfNeeded();
@@ -316,7 +325,7 @@ namespace Deucarian.PackageInstaller.Editor
             return IsBusy || completedDuringReconciliation;
         }
 
-        public bool RestartSavedOperation()
+        public bool RestartSavedOperation(string currentRegistryFingerprint)
         {
             if (IsBusy)
             {
@@ -335,6 +344,12 @@ namespace Deucarian.PackageInstaller.Editor
                 return false;
             }
 
+            if (!CanReuseSavedTargets(recoveryRecord, currentRegistryFingerprint))
+            {
+                ReportUnsafeSavedTargetReuse(recoveryRecord.RegistryFingerprint);
+                return false;
+            }
+
             PackageOperationRecoveryStep[] restartedSteps = recoveryRecord.Steps
                 .Select(step => new PackageOperationRecoveryStep(
                     step.PackageId,
@@ -350,7 +365,8 @@ namespace Deucarian.PackageInstaller.Editor
                     string.Empty,
                     step.DetectedCurrentSource,
                     step.DetectedCurrentVersion,
-                    step.DetectedCurrentIdentity))
+                    step.DetectedCurrentIdentity,
+                    step.RequestedChannel))
                 .ToArray();
             PackageOperationRecoveryRecord restartedRecord = new PackageOperationRecoveryRecord(
                 Guid.NewGuid().ToString("N"),
@@ -380,6 +396,33 @@ namespace Deucarian.PackageInstaller.Editor
             }
             NotifyStateChanged();
             return IsBusy || completedDuringReconciliation;
+        }
+
+        internal static bool CanReuseSavedTargets(
+            PackageOperationRecoveryRecord recoveryRecord,
+            string currentRegistryFingerprint)
+        {
+            return recoveryRecord != null &&
+                   !string.IsNullOrWhiteSpace(recoveryRecord.RegistryFingerprint) &&
+                   !string.IsNullOrWhiteSpace(currentRegistryFingerprint) &&
+                   string.Equals(
+                       recoveryRecord.RegistryFingerprint,
+                       currentRegistryFingerprint,
+                       StringComparison.Ordinal);
+        }
+
+        private void ReportUnsafeSavedTargetReuse(string savedRegistryFingerprint)
+        {
+            _lastErrorMessage = string.IsNullOrWhiteSpace(savedRegistryFingerprint)
+                ? "The saved operation has no registry fingerprint and must be replanned before its exact URLs can be reused."
+                : "The registry fingerprint changed; the saved operation must be replanned before its exact URLs can be reused.";
+            PackageInstallerLog.Install.Warning(_lastErrorMessage);
+            PackageInstallerActivityService.Record(
+                "Packages",
+                PackageInstallerActivitySeverity.Warning,
+                _lastErrorMessage,
+                retryKind: PackageInstallerRetryKind.ResumeOperation);
+            NotifyStateChanged();
         }
 
         private bool CompleteRecoveredOperationWithoutRequestIfNeeded()
@@ -1287,7 +1330,8 @@ namespace Deucarian.PackageInstaller.Editor
                     install != null && install.IsDependency,
                     install != null ? install.RootPackageIds : Array.Empty<string>(),
                     progress.State,
-                    progress.Message));
+                    progress.Message,
+                    install != null ? install.Step.RequestedChannel : PackageChannel.Stable));
             }
 
             List<string> affectedRootIds = new List<string>();
@@ -1316,13 +1360,13 @@ namespace Deucarian.PackageInstaller.Editor
                     : _operationInstallsByPackageId.TryGetValue(
                         rootId,
                         out QueuedPackageInstall rootInstall)
-                        ? rootInstall.Channel
+                        ? rootInstall.Step.RequestedChannel
                         : _operationInstallsByPackageId.Values
                             .Where(install => install != null &&
                                               install.RootPackageIds.Contains(
                                                   rootId,
                                                   StringComparer.OrdinalIgnoreCase))
-                            .Select(install => install.Channel)
+                            .Select(install => install.Step.RequestedChannel)
                             .DefaultIfEmpty(PackageChannel.Stable)
                             .First();
                 restartRoots.Add(new PackageOperationRootRequest(rootId, channel));
@@ -1518,7 +1562,8 @@ namespace Deucarian.PackageInstaller.Editor
                         item.Message,
                         install.Step.DetectedCurrentSource,
                         install.Step.DetectedCurrentVersion,
-                        install.Step.DetectedCurrentIdentity);
+                        install.Step.DetectedCurrentIdentity,
+                        install.Step.RequestedChannel);
                 })
                 .ToArray();
 
@@ -1754,7 +1799,8 @@ namespace Deucarian.PackageInstaller.Editor
                 step.Message,
                 step.DetectedCurrentSource,
                 step.DetectedCurrentVersion,
-                step.DetectedCurrentIdentity);
+                step.DetectedCurrentIdentity,
+                step.RequestedChannel);
         }
 
         private static bool IsResumableState(PackageInstallProgressItemState state)
@@ -1784,7 +1830,8 @@ namespace Deucarian.PackageInstaller.Editor
                     recoveryStep.DependencyReason,
                     recoveryStep.DetectedCurrentSource,
                     recoveryStep.DetectedCurrentVersion,
-                    recoveryStep.DetectedCurrentIdentity));
+                    recoveryStep.DetectedCurrentIdentity,
+                    recoveryStep.RequestedChannel));
             }
 
             PackageDependencyInstallPlan plan = PackageDependencyInstallPlan.Restore(

@@ -1208,6 +1208,361 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void FullUpdateCheckDeduplicatesNormalizedRemoteAndReferenceAliases()
+        {
+            int gitCalls = 0;
+            int manifestCalls = 0;
+            string probedGitArguments = string.Empty;
+            string requestedManifestUrl = string.Empty;
+            PackageDefinition first = new PackageDefinition(
+                "First Alias",
+                "com.deucarian.first-alias",
+                "git+https://GitHub.com/Deucarian/Shared.git?path=/Packages/Shared#refs/heads/main",
+                "First alias package.");
+            PackageDefinition second = new PackageDefinition(
+                "Second Alias",
+                "com.deucarian.second-alias",
+                "git@github.com:deucarian/shared.git?path=Packages/Shared#origin/main",
+                "Second alias package.");
+            PackageUpdateCheckService.GitProcessRunnerForTests = (arguments, __, ___) =>
+            {
+                Interlocked.Increment(ref gitCalls);
+                probedGitArguments = arguments;
+                Thread.Sleep(25);
+                return PackageUpdateCheckService.GitProcessResult.Ok(
+                    StableRevision + "\trefs/heads/main\n");
+            };
+            PackageRegistryRemoteFetchDelegate fetcher = (url, _, __) =>
+            {
+                Interlocked.Increment(ref manifestCalls);
+                requestedManifestUrl = url;
+                Thread.Sleep(25);
+                return Task.FromResult(new PackageRegistryRemoteFetchResponse(
+                    "{\"name\":\"com.deucarian.shared\",\"version\":\"1.2.3\"}"));
+            };
+
+            using (PackageDetectionService detectionService = new PackageDetectionService())
+            using (PackageUpdateCheckService updateCheckService = new PackageUpdateCheckService(
+                       detectionService,
+                       fetcher,
+                       TimeSpan.FromSeconds(1)))
+            {
+                InstallRegistryPackagesForTests(detectionService, first, second);
+
+                updateCheckService.CheckForUpdates(
+                    new[] { first, second },
+                    _ => PackageChannel.Stable);
+                PumpFullCheckUntilIdle(updateCheckService);
+            }
+
+            Assert.AreEqual(1, gitCalls);
+            Assert.AreEqual(1, manifestCalls);
+            StringAssert.Contains("\"main\"", probedGitArguments);
+            StringAssert.DoesNotContain("refs/heads/main", probedGitArguments);
+            StringAssert.DoesNotContain("origin/main", probedGitArguments);
+            Assert.AreEqual(
+                "https://raw.githubusercontent.com/deucarian/shared/" +
+                StableRevision + "/Packages/Shared/package.json",
+                requestedManifestUrl);
+        }
+
+        [Test]
+        public void SharedRemoteWithDifferentPackagePathsDeduplicatesOnlyRevisionProbe()
+        {
+            int gitCalls = 0;
+            int manifestCalls = 0;
+            PackageDefinition first = new PackageDefinition(
+                "First Path",
+                "com.deucarian.first-path",
+                "https://github.com/Deucarian/Shared.git?path=/Packages/First#main",
+                "First path package.");
+            PackageDefinition second = new PackageDefinition(
+                "Second Path",
+                "com.deucarian.second-path",
+                "git@github.com:deucarian/shared.git?path=/Packages/Second#refs/heads/main",
+                "Second path package.");
+            PackageUpdateCheckService.GitProcessRunnerForTests = (_, __, ___) =>
+            {
+                Interlocked.Increment(ref gitCalls);
+                Thread.Sleep(25);
+                return PackageUpdateCheckService.GitProcessResult.Ok(
+                    StableRevision + "\trefs/heads/main\n");
+            };
+            PackageUpdateCheckService.GitPackageVersionResolverForTests = (package, __, ___) =>
+            {
+                Interlocked.Increment(ref manifestCalls);
+                Thread.Sleep(25);
+                string packageVersion = string.Equals(
+                    package.PackageId,
+                    first.PackageId,
+                    StringComparison.Ordinal)
+                    ? "1.2.3"
+                    : "4.5.6";
+                return PackageUpdateCheckService.PackageVersionResult.Ok(packageVersion);
+            };
+
+            using (PackageDetectionService detectionService = new PackageDetectionService())
+            using (PackageUpdateCheckService updateCheckService = new PackageUpdateCheckService(detectionService))
+            {
+                InstallRegistryPackagesForTests(detectionService, first, second);
+
+                updateCheckService.CheckForUpdates(
+                    new[] { first, second },
+                    _ => PackageChannel.Stable);
+                PumpFullCheckUntilIdle(updateCheckService);
+
+                Assert.AreEqual(
+                    "1.2.3",
+                    updateCheckService.GetStatus(first, PackageChannel.Stable).LatestVersion);
+                Assert.AreEqual(
+                    "4.5.6",
+                    updateCheckService.GetStatus(second, PackageChannel.Stable).LatestVersion);
+            }
+
+            Assert.AreEqual(1, gitCalls);
+            Assert.AreEqual(2, manifestCalls);
+        }
+
+        [Test]
+        public void CaseDistinctGitReferencesDoNotDeduplicateRemoteProbe()
+        {
+            int gitCalls = 0;
+            int manifestCalls = 0;
+            PackageDefinition upper = new PackageDefinition(
+                "Upper Reference",
+                "com.deucarian.upper-reference",
+                "https://github.com/Deucarian/Shared.git?path=/Packages/Shared#refs/heads/Feature/X",
+                "Upper reference package.");
+            PackageDefinition lower = new PackageDefinition(
+                "Lower Reference",
+                "com.deucarian.lower-reference",
+                "https://github.com/deucarian/shared.git?path=/Packages/Shared#refs/heads/feature/x",
+                "Lower reference package.");
+            PackageUpdateCheckService.GitProcessRunnerForTests = (arguments, __, ___) =>
+            {
+                Interlocked.Increment(ref gitCalls);
+                string revision = arguments.IndexOf("Feature/X", StringComparison.Ordinal) >= 0
+                    ? StableRevision
+                    : DevelopmentRevision;
+                return PackageUpdateCheckService.GitProcessResult.Ok(
+                    revision + "\trefs/heads/feature\n");
+            };
+            PackageUpdateCheckService.GitPackageVersionResolverForTests = (_, __, ___) =>
+            {
+                Interlocked.Increment(ref manifestCalls);
+                return PackageUpdateCheckService.PackageVersionResult.Ok("1.2.3");
+            };
+
+            using (PackageDetectionService detectionService = new PackageDetectionService())
+            using (PackageUpdateCheckService updateCheckService = new PackageUpdateCheckService(detectionService))
+            {
+                InstallRegistryPackagesForTests(detectionService, upper, lower);
+
+                updateCheckService.CheckForUpdates(
+                    new[] { upper, lower },
+                    _ => PackageChannel.Stable);
+                PumpFullCheckUntilIdle(updateCheckService);
+            }
+
+            Assert.AreEqual(2, gitCalls);
+            Assert.AreEqual(2, manifestCalls);
+        }
+
+        [Test]
+        public void InjectedManifestFetcherSuppliesLatestVersionAndReceivesRequestContext()
+        {
+            PackageDefinition package = CreatePackageWithRevisionChannels();
+            string requestedUrl = string.Empty;
+            TimeSpan requestedTimeout = TimeSpan.Zero;
+            bool tokenWasCanceled = true;
+            TimeSpan configuredTimeout = TimeSpan.FromMilliseconds(750);
+            PackageRegistryRemoteFetchDelegate fetcher = (url, cancellationToken, timeout) =>
+            {
+                requestedUrl = url;
+                requestedTimeout = timeout;
+                tokenWasCanceled = cancellationToken.IsCancellationRequested;
+                return Task.FromResult(new PackageRegistryRemoteFetchResponse(
+                    "{\"name\":\"com.deucarian.object-loading\",\"version\":\"2.3.4\"}"));
+            };
+
+            using (PackageDetectionService detectionService = new PackageDetectionService())
+            using (PackageUpdateCheckService updateCheckService = new PackageUpdateCheckService(
+                       detectionService,
+                       fetcher,
+                       configuredTimeout))
+            {
+                InstallRegistryPackagesForTests(detectionService, package);
+
+                updateCheckService.CheckForUpdates(
+                    new[] { package },
+                    _ => PackageChannel.Stable);
+                PumpFullCheckUntilIdle(updateCheckService);
+
+                PackageUpdateStatus status = updateCheckService.GetStatus(
+                    package,
+                    PackageChannel.Stable);
+                Assert.AreEqual(PackageUpdateStatusKind.SourceMigrationAvailable, status.Kind);
+                Assert.AreEqual("2.3.4", status.LatestVersion);
+            }
+
+            Assert.AreEqual(
+                "https://raw.githubusercontent.com/deucarian/object-loading/" +
+                StableRevision + "/package.json",
+                requestedUrl);
+            Assert.AreEqual(configuredTimeout, requestedTimeout);
+            Assert.IsFalse(tokenWasCanceled);
+        }
+
+        [Test]
+        public void InjectedManifestFetcherFailureRemainsAnActionableMigrationDiagnostic()
+        {
+            PackageDefinition package = CreatePackageWithRevisionChannels();
+            PackageRegistryRemoteFetchDelegate fetcher = (_, __, ___) =>
+            {
+                TaskCompletionSource<PackageRegistryRemoteFetchResponse> completion =
+                    new TaskCompletionSource<PackageRegistryRemoteFetchResponse>();
+                completion.SetException(new InvalidOperationException("Synthetic manifest failure."));
+                return completion.Task;
+            };
+
+            using (PackageDetectionService detectionService = new PackageDetectionService())
+            using (PackageUpdateCheckService updateCheckService = new PackageUpdateCheckService(
+                       detectionService,
+                       fetcher,
+                       TimeSpan.FromSeconds(1)))
+            {
+                InstallRegistryPackagesForTests(detectionService, package);
+
+                updateCheckService.CheckForUpdates(
+                    new[] { package },
+                    _ => PackageChannel.Stable);
+                PumpFullCheckUntilIdle(updateCheckService);
+
+                PackageUpdateStatus status = updateCheckService.GetStatus(
+                    package,
+                    PackageChannel.Stable);
+                Assert.AreEqual(PackageUpdateStatusKind.SourceMigrationAvailable, status.Kind);
+                StringAssert.Contains("Target metadata was unavailable", status.Message);
+                StringAssert.Contains("Synthetic manifest failure", status.Message);
+            }
+        }
+
+        [Test]
+        public void InjectedManifestFetcherTimeoutCancelsOwnedTokenAndReportsDiagnostic()
+        {
+            PackageDefinition package = CreatePackageWithRevisionChannels();
+            using (ManualResetEventSlim timeoutCancellationObserved = new ManualResetEventSlim(false))
+            {
+                PackageRegistryRemoteFetchDelegate fetcher = (_, cancellationToken, __) =>
+                {
+                    TaskCompletionSource<PackageRegistryRemoteFetchResponse> completion =
+                        new TaskCompletionSource<PackageRegistryRemoteFetchResponse>();
+                    cancellationToken.Register(() =>
+                    {
+                        timeoutCancellationObserved.Set();
+                        completion.TrySetCanceled();
+                    });
+                    return completion.Task;
+                };
+
+                using (PackageDetectionService detectionService = new PackageDetectionService())
+                using (PackageUpdateCheckService updateCheckService = new PackageUpdateCheckService(
+                           detectionService,
+                           fetcher,
+                           TimeSpan.FromMilliseconds(50)))
+                {
+                    InstallRegistryPackagesForTests(detectionService, package);
+
+                    updateCheckService.CheckForUpdates(
+                        new[] { package },
+                        _ => PackageChannel.Stable);
+                    PumpFullCheckUntilIdle(updateCheckService);
+
+                    PackageUpdateStatus status = updateCheckService.GetStatus(
+                        package,
+                        PackageChannel.Stable);
+                    Assert.AreEqual(PackageUpdateStatusKind.SourceMigrationAvailable, status.Kind);
+                    StringAssert.Contains("timed out", status.Message.ToLowerInvariant());
+                }
+
+                Assert.IsTrue(timeoutCancellationObserved.Wait(TimeSpan.FromSeconds(2)));
+            }
+        }
+
+        [Test]
+        public void CancelingManifestFetchCancelsTokenAndLateResponseCannotOverwriteNewerStatus()
+        {
+            PackageDefinition package = CreatePackageWithRevisionChannels();
+            TaskCompletionSource<PackageRegistryRemoteFetchResponse> stableCompletion =
+                new TaskCompletionSource<PackageRegistryRemoteFetchResponse>();
+            using (ManualResetEventSlim stableStarted = new ManualResetEventSlim(false))
+            {
+                CancellationToken stableToken = CancellationToken.None;
+                PackageRegistryRemoteFetchDelegate fetcher = (url, cancellationToken, __) =>
+                {
+                    if (url.IndexOf(StableRevision, StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        stableToken = cancellationToken;
+                        stableStarted.Set();
+                        return stableCompletion.Task;
+                    }
+
+                    return Task.FromResult(new PackageRegistryRemoteFetchResponse(
+                        "{\"name\":\"com.deucarian.object-loading\",\"version\":\"2.0.0-dev.1\"}"));
+                };
+
+                try
+                {
+                    using (PackageDetectionService detectionService = new PackageDetectionService())
+                    using (PackageUpdateCheckService updateCheckService = new PackageUpdateCheckService(
+                               detectionService,
+                               fetcher,
+                               TimeSpan.FromSeconds(5)))
+                    {
+                        InstallRegistryPackagesForTests(detectionService, package);
+
+                        updateCheckService.CheckForUpdates(
+                            new[] { package },
+                            _ => PackageChannel.Stable);
+                        Assert.IsTrue(stableStarted.Wait(TimeSpan.FromSeconds(2)));
+
+                        Assert.IsTrue(updateCheckService.CancelCurrentCheck());
+                        Assert.IsTrue(SpinWait.SpinUntil(
+                            () => stableToken.IsCancellationRequested,
+                            TimeSpan.FromSeconds(2)));
+
+                        updateCheckService.CheckForUpdates(
+                            new[] { package },
+                            _ => PackageChannel.Development);
+                        PumpFullCheckUntilIdle(updateCheckService);
+
+                        PackageUpdateStatus newerStatus = updateCheckService.GetStatus(
+                            package,
+                            PackageChannel.Development);
+                        Assert.AreEqual(PackageUpdateStatusKind.SourceMigrationAvailable, newerStatus.Kind);
+                        Assert.AreEqual("2.0.0-dev.1", newerStatus.LatestVersion);
+
+                        stableCompletion.TrySetResult(new PackageRegistryRemoteFetchResponse(
+                            "{\"name\":\"com.deucarian.object-loading\",\"version\":\"9.9.9\"}"));
+                        Thread.Sleep(75);
+                        PackageUpdateCheckService.UpdateSharedForTests();
+
+                        PackageUpdateStatus finalStatus = updateCheckService.GetStatus(
+                            package,
+                            PackageChannel.Development);
+                        Assert.AreEqual(PackageUpdateStatusKind.SourceMigrationAvailable, finalStatus.Kind);
+                        Assert.AreEqual("2.0.0-dev.1", finalStatus.LatestVersion);
+                    }
+                }
+                finally
+                {
+                    stableCompletion.TrySetResult(new PackageRegistryRemoteFetchResponse(
+                        "{\"name\":\"com.deucarian.object-loading\",\"version\":\"9.9.9\"}"));
+                }
+            }
+        }
+
+        [Test]
         public void TargetedStableToDevelopmentCheckMarksCheckingThenMigrationAvailable()
         {
             PackageDefinition packageDefinition = CreatePackageWithRevisionChannels();
@@ -1390,6 +1745,20 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                     ".git#" + DevelopmentRevision,
                     category: "Core"))
                 .ToArray();
+        }
+
+        private static void InstallRegistryPackagesForTests(
+            PackageDetectionService detectionService,
+            params PackageDefinition[] packages)
+        {
+            foreach (PackageDefinition package in packages ?? Array.Empty<PackageDefinition>())
+            {
+                detectionService.ReplaceInstalledPackageForTests(
+                    package.PackageId,
+                    "1.2.0",
+                    PackageInstallSourceType.Registry,
+                    "1.2.0");
+            }
         }
 
         private static void PumpTargetedChecksUntilIdle()

@@ -22,11 +22,13 @@ namespace Deucarian.PackageInstaller.Editor
             string message,
             string detectedCurrentSource = null,
             string detectedCurrentVersion = null,
-            string detectedCurrentIdentity = null)
+            string detectedCurrentIdentity = null,
+            PackageChannel? requestedChannel = null)
         {
             PackageId = packageId ?? string.Empty;
             DisplayName = displayName ?? string.Empty;
             Channel = channel;
+            RequestedChannel = requestedChannel ?? channel;
             TargetUrl = targetUrl ?? string.Empty;
             IsDependency = isDependency;
             PrerequisitePackageIds = ToArray(prerequisitePackageIds);
@@ -45,6 +47,8 @@ namespace Deucarian.PackageInstaller.Editor
         public string DisplayName { get; }
 
         public PackageChannel Channel { get; }
+
+        public PackageChannel RequestedChannel { get; }
 
         public string TargetUrl { get; }
 
@@ -165,7 +169,9 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 if (seen.Add(step.PackageId))
                 {
-                    normalized.Add(new PackageOperationRootRequest(step.PackageId, step.Channel));
+                    normalized.Add(new PackageOperationRootRequest(
+                        step.PackageId,
+                        step.RequestedChannel));
                 }
             }
 
@@ -175,7 +181,9 @@ namespace Deucarian.PackageInstaller.Editor
                 {
                     if (seen.Add(rootPackageId))
                     {
-                        normalized.Add(new PackageOperationRootRequest(rootPackageId, step.Channel));
+                        normalized.Add(new PackageOperationRootRequest(
+                            rootPackageId,
+                            step.RequestedChannel));
                     }
                 }
             }
@@ -186,7 +194,8 @@ namespace Deucarian.PackageInstaller.Editor
 
     internal sealed class PackageOperationStateRepository
     {
-        internal const int CurrentSchemaVersion = 2;
+        internal const int CurrentSchemaVersion = 3;
+        private const int MinimumSupportedSchemaVersion = 2;
         private const string RelativeStatePath = "Library/Deucarian/PackageInstaller/pending-operation.json";
 
         private readonly string _statePath;
@@ -227,7 +236,8 @@ namespace Deucarian.PackageInstaller.Editor
                     return false;
                 }
 
-                if (storage.schemaVersion != CurrentSchemaVersion)
+                if (storage.schemaVersion < MinimumSupportedSchemaVersion ||
+                    storage.schemaVersion > CurrentSchemaVersion)
                 {
                     errorMessage = "Unsupported pending package operation schemaVersion: " +
                                    storage.schemaVersion + ".";
@@ -328,10 +338,33 @@ namespace Deucarian.PackageInstaller.Editor
                         return false;
                     }
 
+                    PackageChannel resolvedChannel = (PackageChannel)step.channel;
+                    int requestedChannelValue;
+                    if (storage.schemaVersion >= 3)
+                    {
+                        requestedChannelValue = step.requestedChannel;
+                    }
+                    else
+                    {
+                        PackageChannel? legacyRequestedChannel = rootRequests
+                            .Where(root => rootPackageIds.Contains(
+                                root.PackageId,
+                                StringComparer.OrdinalIgnoreCase))
+                            .Select(root => (PackageChannel?)root.Channel)
+                            .FirstOrDefault(channel => channel != resolvedChannel);
+                        requestedChannelValue = (int)(legacyRequestedChannel ?? resolvedChannel);
+                    }
+                    if (!Enum.IsDefined(typeof(PackageChannel), requestedChannelValue))
+                    {
+                        errorMessage = "Pending package operation step " + packageId +
+                                       " has an invalid requested channel.";
+                        return false;
+                    }
+
                     steps.Add(new PackageOperationRecoveryStep(
                         packageId,
                         step.displayName,
-                        (PackageChannel)step.channel,
+                        resolvedChannel,
                         step.targetUrl.Trim(),
                         step.isDependency,
                         prerequisitePackageIds,
@@ -342,7 +375,8 @@ namespace Deucarian.PackageInstaller.Editor
                         step.message,
                         step.detectedCurrentSource,
                         step.detectedCurrentVersion,
-                        step.detectedCurrentIdentity));
+                        step.detectedCurrentIdentity,
+                        (PackageChannel)requestedChannelValue));
                 }
 
                 if (steps.Count == 0)
@@ -504,6 +538,7 @@ namespace Deucarian.PackageInstaller.Editor
                 packageId = step.PackageId,
                 displayName = step.DisplayName,
                 channel = (int)step.Channel,
+                requestedChannel = (int)step.RequestedChannel,
                 targetUrl = step.TargetUrl,
                 isDependency = step.IsDependency,
                 prerequisitePackageIds = step.PrerequisitePackageIds.ToArray(),
@@ -598,6 +633,7 @@ namespace Deucarian.PackageInstaller.Editor
                 if (step == null || string.IsNullOrWhiteSpace(step.PackageId) ||
                     string.IsNullOrWhiteSpace(step.TargetUrl) ||
                     !Enum.IsDefined(typeof(PackageChannel), step.Channel) ||
+                    !Enum.IsDefined(typeof(PackageChannel), step.RequestedChannel) ||
                     !Enum.IsDefined(typeof(PackageInstallProgressItemState), step.State) ||
                     !stepIds.Add(step.PackageId))
                 {
@@ -669,6 +705,7 @@ namespace Deucarian.PackageInstaller.Editor
             public string packageId;
             public string displayName;
             public int channel;
+            public int requestedChannel;
             public string targetUrl;
             public bool isDependency;
             public string[] prerequisitePackageIds;

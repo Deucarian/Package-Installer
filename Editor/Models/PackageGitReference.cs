@@ -22,6 +22,62 @@ namespace Deucarian.PackageInstaller.Editor
 
         public string ReferenceName { get; }
 
+        public string RepositoryReferenceIdentity =>
+            BuildReferenceIdentity(includePackagePath: false);
+
+        public string PackageReferenceIdentity =>
+            BuildReferenceIdentity(includePackagePath: true);
+
+        public PackageGitReference WithReferenceName(string referenceName)
+        {
+            string normalizedReferenceName = NormalizeReferenceName(referenceName);
+            return string.IsNullOrWhiteSpace(normalizedReferenceName)
+                ? this
+                : new PackageGitReference(
+                    RepositoryIdentity,
+                    PackagePath,
+                    normalizedReferenceName);
+        }
+
+        public bool TryCreateGitHubPackageJsonUrl(
+            string referenceNameOverride,
+            out string packageJsonUrl)
+        {
+            packageJsonUrl = string.Empty;
+            PackageGitReference effectiveReference = WithReferenceName(referenceNameOverride);
+            string repositoryIdentity = (effectiveReference.RepositoryIdentity ?? string.Empty)
+                .ToLowerInvariant();
+            int pathIndex = repositoryIdentity.IndexOf('/');
+
+            if (pathIndex <= 0 ||
+                pathIndex == repositoryIdentity.Length - 1 ||
+                !string.Equals(
+                    repositoryIdentity.Substring(0, pathIndex),
+                    "github.com",
+                    StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            string repositoryPath = repositoryIdentity.Substring(pathIndex + 1);
+            string manifestPath = string.IsNullOrWhiteSpace(effectiveReference.PackagePath)
+                ? "package.json"
+                : effectiveReference.PackagePath + "/package.json";
+            string referenceName = NormalizeReferenceIdentity(effectiveReference.ReferenceName);
+
+            if (string.IsNullOrWhiteSpace(repositoryPath) ||
+                string.IsNullOrWhiteSpace(referenceName))
+            {
+                return false;
+            }
+
+            packageJsonUrl = "https://raw.githubusercontent.com/" +
+                             repositoryPath + "/" +
+                             referenceName + "/" +
+                             manifestPath;
+            return true;
+        }
+
         public static bool TryParse(string value, out PackageGitReference packageReference)
         {
             packageReference = default(PackageGitReference);
@@ -83,6 +139,44 @@ namespace Deucarian.PackageInstaller.Editor
                        StringComparison.OrdinalIgnoreCase) &&
                    string.Equals(PackagePath, other.PackagePath, StringComparison.Ordinal) &&
                    string.Equals(ReferenceName, other.ReferenceName, StringComparison.Ordinal);
+        }
+
+        private string BuildReferenceIdentity(bool includePackagePath)
+        {
+            string repositoryIdentity = (RepositoryIdentity ?? string.Empty).ToLowerInvariant();
+            string referenceIdentity = NormalizeReferenceIdentity(ReferenceName);
+            return includePackagePath
+                ? repositoryIdentity + "\n" + (PackagePath ?? string.Empty) + "\n" + referenceIdentity
+                : repositoryIdentity + "\n" + referenceIdentity;
+        }
+
+        private static string NormalizeReferenceIdentity(string referenceName)
+        {
+            string normalized = NormalizeReferenceName(referenceName);
+            return IsHexRevision(normalized)
+                ? normalized.ToLowerInvariant()
+                : normalized;
+        }
+
+        private static bool IsHexRevision(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value) || value.Length < 7 || value.Length > 40)
+            {
+                return false;
+            }
+
+            foreach (char character in value)
+            {
+                bool isDigit = character >= '0' && character <= '9';
+                bool isLowerHex = character >= 'a' && character <= 'f';
+                bool isUpperHex = character >= 'A' && character <= 'F';
+                if (!isDigit && !isLowerHex && !isUpperHex)
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         private static bool TryNormalizeRepositoryIdentity(

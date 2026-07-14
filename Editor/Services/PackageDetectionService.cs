@@ -2,8 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
-using UnityEditor.PackageManager;
-using UnityEditor.PackageManager.Requests;
 using UnityEngine;
 using PackageManagerPackageInfo = UnityEditor.PackageManager.PackageInfo;
 
@@ -23,14 +21,22 @@ namespace Deucarian.PackageInstaller.Editor
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private readonly IReadOnlyList<string> _packageLockPaths;
         private readonly PackageInstallerStateRepository _stateRepository;
+        private readonly IPackageListClient _packageListClient;
 
-        private ListRequest _listRequest;
+        private IPackageListRequest _listRequest;
         private bool _refreshRetryScheduled;
         private bool _manifestRefreshCheckScheduled;
         private string _lastManifestStateSignature;
 
         public PackageDetectionService()
+            : this(new UnityPackageListClient())
         {
+        }
+
+        internal PackageDetectionService(IPackageListClient packageListClient)
+        {
+            _packageListClient = packageListClient ??
+                                 throw new ArgumentNullException(nameof(packageListClient));
             _packageLockPaths = GetPackageLockPaths();
             _stateRepository = new PackageInstallerStateRepository();
             _lastManifestStateSignature = _stateRepository.GetManifestStateSignature();
@@ -41,7 +47,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         public event Action RefreshCompleted;
 
-        public bool IsRefreshing => _listRequest != null && !_listRequest.IsCompleted;
+        public bool IsRefreshing => _listRequest != null;
 
         public bool HasSuccessfulRefresh { get; private set; }
 
@@ -58,7 +64,14 @@ namespace Deucarian.PackageInstaller.Editor
             try
             {
                 HasSuccessfulRefresh = false;
-                _listRequest = Client.List(true, true);
+                _listRequest = _packageListClient.List(
+                    offlineMode: true,
+                    includeIndirectDependencies: true);
+                if (_listRequest == null)
+                {
+                    throw new InvalidOperationException("Package Manager returned no list request.");
+                }
+
                 EditorApplication.update -= Update;
                 EditorApplication.update += Update;
                 NotifyStateChanged();
@@ -376,7 +389,7 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            if (_listRequest.Status == StatusCode.Success)
+            if (_listRequest.IsSuccess)
             {
                 HasSuccessfulRefresh = true;
                 _installedPackages.Clear();
@@ -385,7 +398,8 @@ namespace Deucarian.PackageInstaller.Editor
                 _installedPackageVersions.Clear();
                 _installedPackageHashes.Clear();
 
-                foreach (PackageManagerPackageInfo packageInfo in _listRequest.Result)
+                foreach (PackageManagerPackageInfo packageInfo in
+                         _listRequest.Packages ?? Array.Empty<PackageManagerPackageInfo>())
                 {
                     if (packageInfo != null && !string.IsNullOrWhiteSpace(packageInfo.name))
                     {
@@ -437,9 +451,9 @@ namespace Deucarian.PackageInstaller.Editor
             }
             else
             {
-                string errorMessage = _listRequest.Error != null
-                    ? _listRequest.Error.message
-                    : "Package Manager returned an unknown error.";
+                string errorMessage = string.IsNullOrWhiteSpace(_listRequest.ErrorMessage)
+                    ? "Package Manager returned an unknown error."
+                    : _listRequest.ErrorMessage;
 
                 PackageInstallerLog.Registry.Error("Failed to refresh installed-package state: " + errorMessage);
                 HasSuccessfulRefresh = false;
@@ -455,6 +469,11 @@ namespace Deucarian.PackageInstaller.Editor
             EditorApplication.update -= Update;
             NotifyStateChanged();
             RefreshCompleted?.Invoke();
+        }
+
+        internal void UpdateForTests()
+        {
+            Update();
         }
 
         private void NotifyStateChanged()

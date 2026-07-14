@@ -275,7 +275,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
             using (PackageInstallService resumedService = new PackageInstallService())
             {
-                Assert.IsFalse(resumedService.ResumeSavedOperation());
+                Assert.IsFalse(resumedService.ResumeSavedOperation("registry-fingerprint"));
             }
 
             Assert.AreEqual(

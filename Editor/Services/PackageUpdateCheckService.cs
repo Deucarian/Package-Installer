@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
-using System.Net;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -151,6 +150,8 @@ namespace Deucarian.PackageInstaller.Editor
             new Regex("(?<![0-9a-fA-F])([0-9a-fA-F]{40})(?![0-9a-fA-F])", RegexOptions.Compiled);
 
         private readonly PackageDetectionService _packageDetectionService;
+        private readonly PackageRegistryRemoteFetchDelegate _packageManifestFetcher;
+        private readonly TimeSpan _packageManifestTimeout;
         private static readonly Dictionary<string, PackageUpdateStatus> Statuses =
             new Dictionary<string, PackageUpdateStatus>(StringComparer.OrdinalIgnoreCase);
         private static readonly Dictionary<string, TargetedUpdateCheckRequest> PendingTargetedChecks =
@@ -185,8 +186,23 @@ namespace Deucarian.PackageInstaller.Editor
         internal static Func<string, CancellationToken, int, GitProcessResult> GitProcessRunnerForTests;
 
         public PackageUpdateCheckService(PackageDetectionService packageDetectionService)
+            : this(
+                packageDetectionService,
+                PackageRegistryRemoteFetch.FetchAsync,
+                TimeSpan.FromMilliseconds(PackageManifestTimeoutMilliseconds))
+        {
+        }
+
+        internal PackageUpdateCheckService(
+            PackageDetectionService packageDetectionService,
+            PackageRegistryRemoteFetchDelegate packageManifestFetcher,
+            TimeSpan packageManifestTimeout)
         {
             _packageDetectionService = packageDetectionService ?? throw new ArgumentNullException(nameof(packageDetectionService));
+            _packageManifestFetcher = packageManifestFetcher ?? PackageRegistryRemoteFetch.FetchAsync;
+            _packageManifestTimeout = packageManifestTimeout > TimeSpan.Zero
+                ? packageManifestTimeout
+                : TimeSpan.FromMilliseconds(PackageManifestTimeoutMilliseconds);
             _packageLockPaths = GetPackageLockPaths();
             _sharedStateChangedHandler = NotifyStateChanged;
             SharedStateChanged += _sharedStateChangedHandler;
@@ -573,7 +589,7 @@ namespace Deucarian.PackageInstaller.Editor
             SharedStateChanged -= _sharedStateChangedHandler;
         }
 
-        private static void JoinOrCreateSharedCheckDomain()
+        private void JoinOrCreateSharedCheckDomain()
         {
             if (!IsAnyCheckRunning)
             {
@@ -593,7 +609,10 @@ namespace Deucarian.PackageInstaller.Editor
 
             CheckCancellation?.Dispose();
             CheckCancellation = new CancellationTokenSource();
-            SharedCheckContext = new UpdateCheckRunContext(CheckCancellation.Token);
+            SharedCheckContext = new UpdateCheckRunContext(
+                CheckCancellation.Token,
+                _packageManifestFetcher,
+                _packageManifestTimeout);
         }
 
         private static PackageCheckIntent RegisterPackageIntent(
@@ -778,7 +797,10 @@ namespace Deucarian.PackageInstaller.Editor
             return CheckItem(
                 item,
                 CancellationToken.None,
-                new UpdateCheckRunContext(CancellationToken.None));
+                new UpdateCheckRunContext(
+                    CancellationToken.None,
+                    PackageRegistryRemoteFetch.FetchAsync,
+                    TimeSpan.FromMilliseconds(PackageManifestTimeoutMilliseconds)));
         }
 
         private static PackageUpdateStatus CheckItem(
@@ -1131,7 +1153,9 @@ namespace Deucarian.PackageInstaller.Editor
         private static PackageVersionResult ResolveGitPackageVersion(
             UpdateCheckItem item,
             string targetRevision,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            PackageRegistryRemoteFetchDelegate packageManifestFetcher,
+            TimeSpan packageManifestTimeout)
         {
             cancellationToken.ThrowIfCancellationRequested();
             Func<PackageDefinition, PackageChannel, string, PackageVersionResult> resolver =
@@ -1150,20 +1174,35 @@ namespace Deucarian.PackageInstaller.Editor
                 ? string.Empty
                 : targetRevision.Trim();
 
-            if (!PackageRegistryPackageNameValidator.TryCreateGitHubPackageJsonUrl(
+            string packageJsonUrl = string.Empty;
+            bool resolvedPackageJsonUrl =
+                PackageGitReference.TryParse(
+                    item.SelectedUrl,
+                    out PackageGitReference packageReference) &&
+                packageReference.TryCreateGitHubPackageJsonUrl(
+                    referenceOverride,
+                    out packageJsonUrl);
+            if (!resolvedPackageJsonUrl &&
+                !PackageRegistryPackageNameValidator.TryCreateGitHubPackageJsonUrl(
                     item.SelectedUrl,
                     referenceOverride,
-                    out string packageJsonUrl))
+                    out packageJsonUrl))
             {
                 return PackageVersionResult.Fail("Could not resolve target package.json URL.");
             }
 
-            return FetchPackageVersion(packageJsonUrl, cancellationToken);
+            return FetchPackageVersion(
+                packageJsonUrl,
+                cancellationToken,
+                packageManifestFetcher,
+                packageManifestTimeout);
         }
 
         private static PackageVersionResult FetchPackageVersion(
             string packageJsonUrl,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            PackageRegistryRemoteFetchDelegate packageManifestFetcher,
+            TimeSpan packageManifestTimeout)
         {
             if (string.IsNullOrWhiteSpace(packageJsonUrl))
             {
@@ -1173,38 +1212,34 @@ namespace Deucarian.PackageInstaller.Editor
             try
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                HttpWebRequest request = (HttpWebRequest)WebRequest.Create(packageJsonUrl);
-                request.Method = "GET";
-                request.Timeout = PackageManifestTimeoutMilliseconds;
-                request.ReadWriteTimeout = PackageManifestTimeoutMilliseconds;
+                PackageRegistryRemoteFetchResponse response =
+                    PackageRegistryRemoteFetch.ExecuteAsync(
+                            packageManifestFetcher ?? PackageRegistryRemoteFetch.FetchAsync,
+                            packageJsonUrl,
+                            cancellationToken,
+                            packageManifestTimeout)
+                        .GetAwaiter()
+                        .GetResult();
+                cancellationToken.ThrowIfCancellationRequested();
+                string packageJson = response != null ? response.Content : string.Empty;
 
-                using (cancellationToken.Register(request.Abort))
-                using (WebResponse response = request.GetResponse())
-                using (Stream responseStream = response.GetResponseStream())
-                using (StreamReader reader = new StreamReader(responseStream))
+                if (!PackageRegistryPackageNameValidator.TryReadPackageVersion(
+                        packageJson,
+                        out string packageVersion))
                 {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    string packageJson = reader.ReadToEnd();
-                    cancellationToken.ThrowIfCancellationRequested();
-
-                    if (!PackageRegistryPackageNameValidator.TryReadPackageVersion(
-                            packageJson,
-                            out string packageVersion))
-                    {
-                        return PackageVersionResult.Fail("Target package.json did not include a version.");
-                    }
-
-                    if (!PackageInstallSourceUtility.LooksLikeStableOrPrereleaseVersion(packageVersion))
-                    {
-                        return PackageVersionResult.Fail("Target package.json version is not valid SemVer.");
-                    }
-
-                    return PackageVersionResult.Ok(packageVersion);
+                    return PackageVersionResult.Fail("Target package.json did not include a version.");
                 }
+
+                if (!PackageInstallSourceUtility.LooksLikeStableOrPrereleaseVersion(packageVersion))
+                {
+                    return PackageVersionResult.Fail("Target package.json version is not valid SemVer.");
+                }
+
+                return PackageVersionResult.Ok(packageVersion);
             }
-            catch (WebException) when (cancellationToken.IsCancellationRequested)
+            catch (OperationCanceledException)
             {
-                throw new OperationCanceledException(cancellationToken);
+                throw;
             }
             catch (Exception exception)
             {
@@ -1262,14 +1297,23 @@ namespace Deucarian.PackageInstaller.Editor
         private sealed class UpdateCheckRunContext
         {
             private readonly CancellationToken _cancellationToken;
+            private readonly PackageRegistryRemoteFetchDelegate _packageManifestFetcher;
+            private readonly TimeSpan _packageManifestTimeout;
             private readonly ConcurrentDictionary<string, Lazy<RemoteRevisionResult>> _remoteRevisions =
                 new ConcurrentDictionary<string, Lazy<RemoteRevisionResult>>(StringComparer.Ordinal);
             private readonly ConcurrentDictionary<string, Lazy<PackageVersionResult>> _packageVersions =
                 new ConcurrentDictionary<string, Lazy<PackageVersionResult>>(StringComparer.Ordinal);
 
-            public UpdateCheckRunContext(CancellationToken cancellationToken)
+            public UpdateCheckRunContext(
+                CancellationToken cancellationToken,
+                PackageRegistryRemoteFetchDelegate packageManifestFetcher,
+                TimeSpan packageManifestTimeout)
             {
                 _cancellationToken = cancellationToken;
+                _packageManifestFetcher = packageManifestFetcher ?? PackageRegistryRemoteFetch.FetchAsync;
+                _packageManifestTimeout = packageManifestTimeout > TimeSpan.Zero
+                    ? packageManifestTimeout
+                    : TimeSpan.FromMilliseconds(PackageManifestTimeoutMilliseconds);
             }
 
             public bool TryGetRemoteRevision(
@@ -1279,7 +1323,10 @@ namespace Deucarian.PackageInstaller.Editor
                 out string message)
             {
                 _cancellationToken.ThrowIfCancellationRequested();
-                string key = NormalizeProbeKey(remoteUrl) + "#" + NormalizeProbeKey(reference);
+                string key = CreateRemoteRevisionProbeKey(
+                    remoteUrl,
+                    reference,
+                    out string normalizedReference);
                 Lazy<RemoteRevisionResult> lookup = _remoteRevisions.GetOrAdd(
                     key,
                     _ => new Lazy<RemoteRevisionResult>(
@@ -1287,7 +1334,7 @@ namespace Deucarian.PackageInstaller.Editor
                         {
                             bool success = PackageUpdateCheckService.TryGetRemoteRevision(
                                 remoteUrl,
-                                reference,
+                                normalizedReference,
                                 _cancellationToken,
                                 out string resolvedRevision,
                                 out string resolvedMessage);
@@ -1306,17 +1353,52 @@ namespace Deucarian.PackageInstaller.Editor
                 string targetRevision)
             {
                 _cancellationToken.ThrowIfCancellationRequested();
-                string key = NormalizeProbeKey(item != null ? item.SelectedUrl : string.Empty) +
-                             "#" + NormalizeProbeKey(targetRevision);
+                string key = CreatePackageManifestProbeKey(item, targetRevision);
                 return _packageVersions.GetOrAdd(
                         key,
                         _ => new Lazy<PackageVersionResult>(
                             () => PackageUpdateCheckService.ResolveGitPackageVersion(
                                 item,
                                 targetRevision,
-                                _cancellationToken),
+                                _cancellationToken,
+                                _packageManifestFetcher,
+                                _packageManifestTimeout),
                             LazyThreadSafetyMode.ExecutionAndPublication))
                     .Value;
+            }
+
+            private static string CreateRemoteRevisionProbeKey(
+                string remoteUrl,
+                string reference,
+                out string normalizedReference)
+            {
+                if (PackageGitReference.TryParse(
+                        (remoteUrl ?? string.Empty).Trim() + "#" + (reference ?? string.Empty).Trim(),
+                        out PackageGitReference packageReference))
+                {
+                    normalizedReference = packageReference.ReferenceName;
+                    return packageReference.RepositoryReferenceIdentity;
+                }
+
+                normalizedReference = (reference ?? string.Empty).Trim();
+                return NormalizeProbeKey(remoteUrl) + "#" + NormalizeProbeKey(reference);
+            }
+
+            private static string CreatePackageManifestProbeKey(
+                UpdateCheckItem item,
+                string targetRevision)
+            {
+                string selectedUrl = item != null ? item.SelectedUrl : string.Empty;
+                if (PackageGitReference.TryParse(
+                        selectedUrl,
+                        out PackageGitReference packageReference))
+                {
+                    return packageReference
+                        .WithReferenceName(targetRevision)
+                        .PackageReferenceIdentity;
+                }
+
+                return NormalizeProbeKey(selectedUrl) + "#" + NormalizeProbeKey(targetRevision);
             }
 
             private static string NormalizeProbeKey(string value) =>
