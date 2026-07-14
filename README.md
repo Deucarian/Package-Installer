@@ -281,7 +281,7 @@ The Package Installer now shows only the Integration package IDs. Remove or repl
 
 Current Integration repository URLs use Integration repository names. The old Bridge package IDs above remain listed only for manifest migration.
 
-When removing a package, the installer warns and disables removal if another installed registered package depends on it. Remove the dependent integration package first to avoid silently breaking the project.
+When removing a package, the installer warns if another installed package depends on it. It resolves reverse dependencies from current Unity Package Manager/package-lock data first and uses registry relationships only as a fallback. Removal remains available after explicit confirmation so you can resolve unusual project states, but remove the dependents first unless the breakage is intentional.
 
 ## Public API
 
@@ -295,7 +295,7 @@ Tools/Deucarian/Package Installer
 
 The implementation is split into internal editor classes:
 
-- `PackageInstallerWindow`: IMGUI window and coordination.
+- `PackageInstallerWindow`: UI Toolkit editor shell and coordination, with IMGUI containers for the package list and graph details.
 - `PackageInstallerStateRepository`: project-scoped selected-channel state shared with Bootstrap and manifest/package-lock invalidation signatures.
 - `PackageRegistryProvider`, `PackageRegistryLoader`, and `PackageRegistryValidator`: bundled and remote registry loading.
 - `PackageDefinition`, `PackageChannel`, and `PackageExtraDefinition`: installer data models.
@@ -347,7 +347,7 @@ After installing, updating, or removing a package, the installer refreshes insta
 
 - Package list looks stale: close and reopen the Package Installer window, then refresh the remote registry if network access is available.
 - Install or update is blocked: check the selected channel, package dependency list, and Unity Package Manager console output for the first failed package in the dependency-first plan.
-- A remove button is disabled: another installed registered package depends on that package; remove the dependent integration or suite package first.
+- A removal warning lists installed dependents: remove those dependents first, or deliberately confirm removal if you are repairing an unusual project state.
 - Update status is unknown: the installed package may be embedded, local/file-based, missing Git metadata, or unavailable from the current network.
 - Package Installer shows `Reload pending`: fix any Console compilation errors, then use `Retry Script Reload` so Unity can load the resolved installer assembly.
 - A registry-installed Package Installer shows `Source migration available`: install/open Bootstrap and use `Tools > Deucarian > Bootstrap > Open Bootstrapper`; Package Installer does not self-migrate silently.
