@@ -506,6 +506,60 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual(650f, PackageInstallerWindow.MinWindowSizeForTests.y);
         }
 
+        [TestCase(1280f, 410f, 410f, true)]
+        [TestCase(1040f, 350f, 350f, true)]
+        [TestCase(820f, 800f, 800f, false)]
+        public void Window_GraphDetailsWidthUsesMeasuredPaneForActionLayout(
+            float windowWidth,
+            float measuredContentWidth,
+            float expectedContentWidth,
+            bool expectedStackedActions)
+        {
+            float detailsContentWidth = PackageInstallerWindow.ResolveDetailsContentWidthForTests(
+                windowWidth,
+                true,
+                measuredContentWidth);
+
+            Assert.AreEqual(expectedContentWidth, detailsContentWidth);
+            Assert.AreEqual(
+                expectedStackedActions,
+                PackageInstallerWindow.ShouldStackDetailsActionsForTests(detailsContentWidth));
+        }
+
+        [Test]
+        public void Window_DetailsWidthFallsBackForListAndUnresolvedGraphLayout()
+        {
+            const float windowWidth = 1280f;
+            const float expectedFallbackWidth = 884f;
+
+            Assert.AreEqual(
+                expectedFallbackWidth,
+                PackageInstallerWindow.ResolveDetailsContentWidthForTests(
+                    windowWidth,
+                    false,
+                    410f));
+            Assert.AreEqual(
+                expectedFallbackWidth,
+                PackageInstallerWindow.ResolveDetailsContentWidthForTests(
+                    windowWidth,
+                    true,
+                    0f));
+            Assert.AreEqual(
+                expectedFallbackWidth,
+                PackageInstallerWindow.ResolveDetailsContentWidthForTests(
+                    windowWidth,
+                    true,
+                    float.NaN));
+            Assert.AreEqual(
+                expectedFallbackWidth,
+                PackageInstallerWindow.ResolveDetailsContentWidthForTests(
+                    windowWidth,
+                    true,
+                    float.PositiveInfinity));
+            Assert.IsFalse(
+                PackageInstallerWindow.ShouldStackDetailsActionsForTests(expectedFallbackWidth));
+        }
+
         [Test]
         public void Window_DetailsGroupRowsActivateOnlyFromFocusedKeyboardControls()
         {
