@@ -326,9 +326,11 @@ namespace Deucarian.PackageInstaller.Editor
                 packageDefinition.PackageId,
                 out packageReference);
 
-            if (TryGetInstalledPackageSourceType(
-                    packageDefinition.PackageId,
-                    out PackageInstallSourceType sourceType) &&
+            bool hasInstalledSourceType = TryGetInstalledPackageSourceType(
+                packageDefinition.PackageId,
+                out PackageInstallSourceType sourceType);
+
+            if (hasInstalledSourceType &&
                 sourceType == PackageInstallSourceType.Registry)
             {
                 if (TryGetInstalledPackageVersion(
@@ -343,6 +345,15 @@ namespace Deucarian.PackageInstaller.Editor
                     channel = PackageChannel.Stable;
                 }
 
+                return true;
+            }
+
+            if (hasInstalledSourceType &&
+                (sourceType == PackageInstallSourceType.Local ||
+                 sourceType == PackageInstallSourceType.Embedded))
+            {
+                packageReference = packageReference ?? string.Empty;
+                channel = PackageChannel.Custom;
                 return true;
             }
 

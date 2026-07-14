@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
 using UnityEngine;
@@ -125,6 +126,53 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void OperationPlanAndStepCollectionsAreImmutableSnapshots()
+        {
+            PackageDefinition package = CreatePackage(
+                "Immutable Root",
+                "com.deucarian.immutable-root",
+                "Immutable operation model test.");
+            string[] prerequisiteIds = { "com.deucarian.prerequisite" };
+            string[] rootIds = { package.PackageId };
+            string[] rootPaths = { package.DisplayName };
+            PackageDependencyInstallStep step = new PackageDependencyInstallStep(
+                package,
+                PackageChannel.Stable,
+                isDependency: false,
+                prerequisitePackageIds: prerequisiteIds,
+                rootPackageIds: rootIds,
+                rootPaths: rootPaths);
+            PackageDependencyInstallStep[] steps = { step };
+            string[] messages = { "Original message" };
+            PackageDependencyInstallPlan plan = PackageDependencyInstallPlan.Success(
+                steps,
+                messages);
+
+            prerequisiteIds[0] = "com.deucarian.changed";
+            rootIds[0] = "com.deucarian.changed-root";
+            rootPaths[0] = "Changed Root";
+            steps[0] = null;
+            messages[0] = "Changed message";
+
+            CollectionAssert.AreEqual(
+                new[] { "com.deucarian.prerequisite" },
+                step.PrerequisitePackageIds);
+            CollectionAssert.AreEqual(new[] { package.PackageId }, step.RootPackageIds);
+            CollectionAssert.AreEqual(new[] { package.DisplayName }, step.RootPaths);
+            Assert.AreSame(step, plan.Steps.Single());
+            CollectionAssert.AreEqual(new[] { "Original message" }, plan.Messages);
+            Assert.IsFalse(step.PrerequisitePackageIds is string[]);
+            Assert.IsFalse(plan.Steps is PackageDependencyInstallStep[]);
+            Assert.IsFalse(plan.Messages is string[]);
+            Assert.Throws<NotSupportedException>(() =>
+                ((IList<string>)step.PrerequisitePackageIds)[0] = "mutated");
+            Assert.Throws<NotSupportedException>(() =>
+                ((IList<PackageDependencyInstallStep>)plan.Steps)[0] = null);
+            Assert.Throws<NotSupportedException>(() =>
+                ((IList<string>)plan.Messages)[0] = "mutated");
+        }
+
+        [Test]
         public void AlreadyInstalledDependencyIsSkipped()
         {
             using (PlanFixture fixture = PlanFixture.CreateDefault())
@@ -231,6 +279,154 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 StringAssert.Contains("Development Root -> Shared", plan.ErrorMessage);
                 StringAssert.Contains("#main", plan.ErrorMessage);
                 StringAssert.Contains("#develop", plan.ErrorMessage);
+            }
+        }
+
+        [Test]
+        public void SharedDependencyConflictIncludesEveryPriorRootPath()
+        {
+            PackageDefinition shared = CreatePackage(
+                "Shared",
+                "com.deucarian.shared",
+                "Shared dependency.",
+                developmentUrl: "https://github.com/Deucarian/Shared.git#develop");
+            PackageDefinition firstStableRoot = CreatePackage(
+                "First Stable Root",
+                "com.deucarian.first-stable-root",
+                "First stable root.",
+                new[] { shared.PackageId });
+            PackageDefinition secondStableRoot = CreatePackage(
+                "Second Stable Root",
+                "com.deucarian.second-stable-root",
+                "Second stable root.",
+                new[] { shared.PackageId });
+            PackageDefinition developmentRoot = CreatePackage(
+                "Development Root",
+                "com.deucarian.development-root",
+                "Development root.",
+                new[] { shared.PackageId },
+                developmentUrl: "https://github.com/Deucarian/Development-Root.git#develop");
+
+            using (PlanFixture fixture = new PlanFixture(
+                       shared,
+                       firstStableRoot,
+                       secondStableRoot,
+                       developmentRoot))
+            {
+                PackageDependencyInstallPlan plan = fixture.Installer.CreateInstallPlan(
+                    new[] { firstStableRoot, secondStableRoot, developmentRoot },
+                    package => package.PackageId == developmentRoot.PackageId
+                        ? PackageChannel.Development
+                        : PackageChannel.Stable,
+                    includeInstalledRequestedPackages: false);
+
+                Assert.IsFalse(plan.IsValid);
+                Assert.IsTrue(plan.HasConflict);
+                StringAssert.Contains("First Stable Root -> Shared", plan.ErrorMessage);
+                StringAssert.Contains("Second Stable Root -> Shared", plan.ErrorMessage);
+                StringAssert.Contains("Development Root -> Shared", plan.ErrorMessage);
+            }
+        }
+
+        [Test]
+        public void AlreadyCorrectSharedDependencyDoesNotCreateFalseTargetConflict()
+        {
+            PackageDefinition shared = CreatePackage(
+                "Shared",
+                "com.deucarian.shared",
+                "Shared dependency.",
+                developmentUrl: "https://github.com/Deucarian/Shared.git#develop");
+            PackageDefinition stableRoot = CreatePackage(
+                "Stable Root",
+                "com.deucarian.stable-root",
+                "Stable root.",
+                new[] { shared.PackageId });
+            PackageDefinition developmentRoot = CreatePackage(
+                "Development Root",
+                "com.deucarian.development-root",
+                "Development root.",
+                new[] { shared.PackageId },
+                developmentUrl: "https://github.com/Deucarian/Development-Root.git#develop");
+
+            using (PlanFixture fixture = new PlanFixture(shared, stableRoot, developmentRoot))
+            {
+                fixture.DetectionService.ReplaceInstalledPackageForTests(
+                    shared.PackageId,
+                    shared.DevelopmentUrl,
+                    PackageInstallSourceType.Git);
+
+                PackageDependencyInstallPlan plan = fixture.Installer.CreateInstallPlan(
+                    new[] { stableRoot, developmentRoot },
+                    package => package.PackageId == developmentRoot.PackageId
+                        ? PackageChannel.Development
+                        : PackageChannel.Stable,
+                    includeInstalledRequestedPackages: false);
+
+                Assert.IsTrue(plan.IsValid, plan.ErrorMessage);
+                Assert.IsFalse(plan.HasConflict);
+                Assert.IsFalse(plan.Steps.Any(step =>
+                    step.PackageDefinition.PackageId == shared.PackageId));
+            }
+        }
+
+        [Test]
+        public void InvalidConflictUsesContextualReviewBeforePlannerFailure()
+        {
+            PackageDefinition shared = CreatePackage(
+                "Shared",
+                "com.deucarian.shared",
+                "Shared dependency.",
+                developmentUrl: "https://github.com/Deucarian/Shared.git#develop");
+            PackageDefinition stableRoot = CreatePackage(
+                "Stable Root",
+                "com.deucarian.stable-root",
+                "Stable root.",
+                new[] { shared.PackageId });
+            PackageDefinition developmentRoot = CreatePackage(
+                "Development Root",
+                "com.deucarian.development-root",
+                "Development root.",
+                new[] { shared.PackageId },
+                developmentUrl: "https://github.com/Deucarian/Development-Root.git#develop");
+
+            PackageInstallerActivityService.ClearForTests();
+            try
+            {
+                using (PlanFixture fixture = new PlanFixture(shared, stableRoot, developmentRoot))
+                {
+                    Func<PackageDefinition, PackageChannel> channelSelector = package =>
+                        package.PackageId == developmentRoot.PackageId
+                            ? PackageChannel.Development
+                            : PackageChannel.Stable;
+                    PackageDependencyInstallPlan preview = fixture.Installer.CreateInstallPlan(
+                        new[] { stableRoot, developmentRoot },
+                        channelSelector,
+                        includeInstalledRequestedPackages: false);
+                    PackageDependencyInstallPlan reviewedPlan = null;
+                    fixture.Installer.PreflightConfirmation = (plan, operationName) =>
+                    {
+                        reviewedPlan = plan;
+                        Assert.AreEqual("Install conflicting roots", operationName);
+                        return false;
+                    };
+
+                    LogAssert.Expect(
+                        LogType.Error,
+                        "[PackageInstaller.Install] " + preview.ErrorMessage);
+                    fixture.Installer.InstallManyWithDependencies(
+                        new[] { stableRoot, developmentRoot },
+                        channelSelector,
+                        "Install conflicting roots");
+
+                    Assert.AreEqual(preview.ErrorMessage, reviewedPlan?.ErrorMessage);
+                    Assert.IsNotNull(reviewedPlan);
+                    Assert.IsFalse(reviewedPlan.IsValid);
+                    Assert.IsTrue(reviewedPlan.HasConflict);
+                }
+            }
+            finally
+            {
+                PackageInstallerActivityService.ClearForTests();
             }
         }
 

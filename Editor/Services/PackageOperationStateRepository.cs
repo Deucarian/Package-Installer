@@ -31,9 +31,9 @@ namespace Deucarian.PackageInstaller.Editor
             RequestedChannel = requestedChannel ?? channel;
             TargetUrl = targetUrl ?? string.Empty;
             IsDependency = isDependency;
-            PrerequisitePackageIds = ToArray(prerequisitePackageIds);
-            RootPackageIds = ToArray(rootPackageIds);
-            RootPaths = ToArray(rootPaths);
+            PrerequisitePackageIds = ToReadOnlyList(prerequisitePackageIds);
+            RootPackageIds = ToReadOnlyList(rootPackageIds);
+            RootPaths = ToReadOnlyList(rootPaths);
             DependencyReason = dependencyReason ?? string.Empty;
             State = state;
             Message = message ?? string.Empty;
@@ -72,13 +72,13 @@ namespace Deucarian.PackageInstaller.Editor
 
         public string DetectedCurrentIdentity { get; }
 
-        private static string[] ToArray(IEnumerable<string> values)
+        private static IReadOnlyList<string> ToReadOnlyList(IEnumerable<string> values)
         {
-            return (values ?? Array.Empty<string>())
+            return Array.AsReadOnly((values ?? Array.Empty<string>())
                 .Where(value => !string.IsNullOrWhiteSpace(value))
                 .Select(value => value.Trim())
                 .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToArray();
+                .ToArray());
         }
     }
 
@@ -99,14 +99,14 @@ namespace Deucarian.PackageInstaller.Editor
             RegistryFingerprint = registryFingerprint ?? string.Empty;
             CreatedAtUtcTicks = createdAtUtcTicks;
             UpdatedAtUtcTicks = updatedAtUtcTicks;
-            Steps = (steps ?? Array.Empty<PackageOperationRecoveryStep>())
+            Steps = Array.AsReadOnly((steps ?? Array.Empty<PackageOperationRecoveryStep>())
                 .Where(step => step != null)
-                .ToArray();
+                .ToArray());
             RootRequests = NormalizeRootRequests(rootRequests, Steps);
-            Messages = (messages ?? Array.Empty<string>())
+            Messages = Array.AsReadOnly((messages ?? Array.Empty<string>())
                 .Where(message => !string.IsNullOrWhiteSpace(message))
                 .Select(message => message.Trim())
-                .ToArray();
+                .ToArray());
         }
 
         public string OperationId { get; }

@@ -2408,8 +2408,9 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Label context = FindByClass(view, "dpi-ecosystem-graph__hidden-related")
                 .OfType<Label>()
                 .Single();
-            Assert.AreEqual("Focus includes all direct relations", context.text);
-            StringAssert.Contains("keeps every direct relationship visible", context.tooltip);
+            Assert.AreEqual("Focus includes direct relations", context.text);
+            StringAssert.Contains("dense extras may be summarized behind a +N overflow summary", context.tooltip);
+            StringAssert.DoesNotContain("every direct relationship visible", context.tooltip);
         }
 
         [Test]
@@ -4588,11 +4589,20 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             PackageGraphOverflowSummaryElement summary = FindByClass(view, "dpi-graph-overflow-summary")
                 .OfType<PackageGraphOverflowSummaryElement>()
                 .Single();
+            Label focusContext = FindByClass(view, "dpi-ecosystem-graph__hidden-related")
+                .OfType<Label>()
+                .Single();
             string previousClipboard = EditorGUIUtility.systemCopyBuffer;
 
             try
             {
                 EditorGUIUtility.systemCopyBuffer = string.Empty;
+                Assert.AreEqual("Focus includes direct relations (1 summarized)", focusContext.text);
+                StringAssert.Contains(
+                    "1 dense direct relationship is summarized behind the +N overflow summary",
+                    focusContext.tooltip);
+                StringAssert.DoesNotContain("every direct relationship visible", focusContext.tooltip);
+                Assert.AreEqual(DisplayStyle.Flex, focusContext.style.display.value);
                 Assert.IsTrue(summary.focusable);
                 Assert.AreEqual(0, summary.tabIndex);
                 Assert.AreEqual(PickingMode.Position, summary.pickingMode);
