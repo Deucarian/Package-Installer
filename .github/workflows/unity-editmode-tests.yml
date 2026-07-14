@@ -41,6 +41,7 @@ jobs:
     env:
       UNITY_EDITOR: /opt/unity/2021.3.45f1/Editor/Unity
       TEMP_NAME: package-installer-${{ github.run_id }}-${{ github.run_attempt }}
+      PACKAGE_REVISION: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || github.sha }}
 
     steps:
       - name: Prepare disposable paths
@@ -95,15 +96,15 @@ jobs:
           rm -rf -- "$TEMP_ROOT"
           mkdir -p \
             "$PROJECT_PATH/Assets" \
-            "$PROJECT_PATH/Packages/com.deucarian.package-installer" \
+            "$PROJECT_PATH/Packages" \
             "$PROJECT_PATH/ProjectSettings" \
             "$ARTIFACTS_PATH"
-          git archive --format=tar HEAD | tar -xf - -C "$PROJECT_PATH/Packages/com.deucarian.package-installer"
-          cat > "$PROJECT_PATH/Packages/manifest.json" <<'JSON'
+          cat > "$PROJECT_PATH/Packages/manifest.json" <<JSON
           {
             "dependencies": {
               "com.deucarian.editor": "https://github.com/Deucarian/Editor.git#409118eb502d201ebbe0e07fa2d9b8270abe54f3",
               "com.deucarian.logging": "https://github.com/Deucarian/Logging.git#683d88858942d2d3c551135cbf1384b4f71cdd75",
+              "com.deucarian.package-installer": "https://github.com/Deucarian/Package-Installer.git#${PACKAGE_REVISION}",
               "com.unity.test-framework": "1.1.33"
             },
             "testables": [
@@ -184,6 +185,50 @@ jobs:
           set -e
 
           echo "status=$unity_status" >> "$GITHUB_OUTPUT"
+
+      - name: Validate Git package sources
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          project_path = Path(os.environ["PROJECT_PATH"])
+          manifest = json.loads((project_path / "Packages" / "manifest.json").read_text())
+          lock = json.loads((project_path / "Packages" / "packages-lock.json").read_text())
+          expected = {
+              "com.deucarian.editor": "https://github.com/Deucarian/Editor.git#409118eb502d201ebbe0e07fa2d9b8270abe54f3",
+              "com.deucarian.logging": "https://github.com/Deucarian/Logging.git#683d88858942d2d3c551135cbf1384b4f71cdd75",
+              "com.deucarian.package-installer": (
+                  "https://github.com/Deucarian/Package-Installer.git#"
+                  + os.environ["PACKAGE_REVISION"]
+              ),
+          }
+
+          for package_id, expected_url in expected.items():
+              actual_url = manifest["dependencies"].get(package_id)
+              if actual_url != expected_url:
+                  raise SystemExit(
+                      f"{package_id} manifest source mismatch: {actual_url!r} != {expected_url!r}."
+                  )
+
+              entry = lock["dependencies"].get(package_id, {})
+              if entry.get("source") != "git" or entry.get("version") != expected_url:
+                  raise SystemExit(
+                      f"{package_id} did not resolve from the expected Git source: {entry!r}."
+                  )
+
+              expected_hash = expected_url.rsplit("#", 1)[1]
+              if entry.get("hash") != expected_hash:
+                  raise SystemExit(
+                      f"{package_id} resolved {entry.get('hash')!r}, expected {expected_hash!r}."
+                  )
+
+          print("Package Installer, Editor, and Logging resolved from their exact Git revisions.")
+          PY
 
       - name: Validate Unity test results
         if: always()

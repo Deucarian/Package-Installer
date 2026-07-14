@@ -6,7 +6,7 @@
 
 It is the Deucarian ecosystem front door for installing standalone packages, integration packages, suite packages, templates, and explicitly declared package samples from Package Registry metadata.
 
-Current package version: `1.1.62`.
+Current package version: `1.1.63`.
 
 ## When to use it
 
@@ -231,7 +231,7 @@ Unknown Git revisions are shown as "Cannot determine update" while the package r
 
 The installer can also check for updates automatically when Unity starts and when the Package Installer window opens. Startup checks wait until Unity is not compiling or updating, run at most once per editor session, cache their statuses, and log actionable results plus a completion summary without opening a modal or installing anything. Window-open checks are throttled so reopening the window does not repeatedly hit remotes. These settings are stored in `EditorPrefs` and can be toggled from the window header.
 
-`Update` and `Update All Installed Packages` reuse Unity Package Manager installation through `Client.Add` with the selected channel URL after dependency-first planning has installed any missing registered Deucarian dependencies.
+`Update` and the contextual `Update all (N)` action reuse Unity Package Manager installation through `Client.Add` with the selected channel URL after dependency-first planning has installed any missing registered Deucarian dependencies. After `Check Updates` finds actionable updates, return to the root `Deucarian` / `Ecosystem Overview` context to use `Update all (N)`.
 
 The installer package itself is included in update discovery when it is installed in the current project. Multi-package operations place Package Installer last. After a successful self-update, the installer persists the source assembly version and module identity across domain reloads; if Unity Package Manager resolved the new package while the previous assembly is still running, the row shows `Reload pending` with a `Retry Script Reload` action.
 
@@ -252,6 +252,8 @@ Interrupted plans are stored project-locally beneath `Library/Deucarian/PackageI
 ## Ecosystem Graph UX
 
 The graph keeps its default toolbar compact and progressively discloses package, group, channel, and attention actions only where they apply. Existing controls wrap at wide, compact, and narrow widths without adding permanent toolbar controls.
+
+Ecosystem Graph is currently the only enabled view. List View remains implemented internally but its toggle is hidden and any stale List View request resolves back to Ecosystem Graph.
 
 Packages, groups, summaries, breadcrumbs, and back targets support keyboard focus. Enter or Space activates the focused target, while Escape clears search before backing out of package or group focus. Hover and keyboard focus share route preview behavior, and related-node previews isolate the route to the selected package. Missing registry relationships are diagnostic nodes, and dense relation sets use adaptive wrapping plus a `+N` overflow summary instead of overlapping cards.
 
@@ -317,7 +319,7 @@ Keeping the installer editor-only ensures:
 
 ## Versioning
 
-Current package version: `1.1.62`.
+Current package version: `1.1.63`.
 
 Branch strategy:
 

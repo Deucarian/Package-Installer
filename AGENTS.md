@@ -74,11 +74,14 @@ python C:/Repositories/Package-Registry/Tools/deucarian_package_validator.py --r
 
 Also run existing repository tests when changing code or asmdefs. Documentation-only updates should still run `git diff --check`.
 
+All Package Installer development, test, review, and validation Unity projects must reference Deucarian packages through canonical Git URLs. Never use `file:` or embedded package sources. For unmerged work, push the feature branch first and point the disposable Unity host at that Git branch or commit.
+
 ## Codex Guidance
 
 - Inspect current files before changing anything.
 - Work on `develop`; do not edit or merge `main` unless the task is promotion-only.
 - Do not edit `Library/PackageCache`.
+- Every package-content change destined for `develop` or `main` must include an increment to `package.json` and the embedded runtime identity version; never reuse a version for changed package content.
 - Do not guess package versions or dependency versions.
 - Do not add package dependencies casually; update asmdefs, `package.json`, `deucarian-package.json`, Package Registry, and fallback catalogs together when a dependency is truly required.
 - Do not create local copies of shared helpers.
