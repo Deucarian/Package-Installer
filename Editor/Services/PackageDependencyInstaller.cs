@@ -15,7 +15,8 @@ namespace Deucarian.PackageInstaller.Editor
         Downgrade = 1 << 2,
         ChannelFallback = 1 << 3,
         Conflict = 1 << 4,
-        Destructive = 1 << 5
+        Destructive = 1 << 5,
+        Bulk = 1 << 6
     }
 
     internal sealed class PackageDependencyInstallStep
@@ -31,10 +32,12 @@ namespace Deucarian.PackageInstaller.Editor
             string dependencyReason = null,
             string detectedCurrentSource = null,
             string detectedCurrentVersion = null,
-            string detectedCurrentIdentity = null)
+            string detectedCurrentIdentity = null,
+            PackageChannel? requestedChannel = null)
         {
             PackageDefinition = packageDefinition ?? throw new ArgumentNullException(nameof(packageDefinition));
             Channel = channel;
+            RequestedChannel = requestedChannel ?? channel;
             IsDependency = isDependency;
             TargetUrl = string.IsNullOrWhiteSpace(targetUrl)
                 ? packageDefinition.GetUrl(channel)
@@ -51,6 +54,8 @@ namespace Deucarian.PackageInstaller.Editor
         public PackageDefinition PackageDefinition { get; }
 
         public PackageChannel Channel { get; }
+
+        public PackageChannel RequestedChannel { get; }
 
         public bool IsDependency { get; }
 
@@ -104,10 +109,14 @@ namespace Deucarian.PackageInstaller.Editor
                 : operationId;
             RegistryFingerprint = registryFingerprint ?? string.Empty;
             CreatedAtUtcTicks = createdAtUtcTicks > 0 ? createdAtUtcTicks : DateTime.UtcNow.Ticks;
+            RootRequests = NormalizeRootRequests(rootRequests, Steps);
             Risks = Steps.Count > 1
                 ? risks | PackageOperationRisk.MultiStep
                 : risks;
-            RootRequests = NormalizeRootRequests(rootRequests, Steps);
+            if (RootRequests.Count > 1)
+            {
+                Risks |= PackageOperationRisk.Bulk;
+            }
 
             _channelsByPackageId = Steps
                 .GroupBy(step => step.PackageDefinition.PackageId, StringComparer.OrdinalIgnoreCase)
@@ -136,6 +145,8 @@ namespace Deucarian.PackageInstaller.Editor
         public IReadOnlyList<PackageOperationRootRequest> RootRequests { get; }
 
         public bool IsMultiStep => (Risks & PackageOperationRisk.MultiStep) != 0;
+
+        public bool IsBulk => (Risks & PackageOperationRisk.Bulk) != 0;
 
         public bool HasMigrationRisk =>
             (Risks & PackageOperationRisk.SourceOrChannelMigration) != 0;
@@ -274,7 +285,7 @@ namespace Deucarian.PackageInstaller.Editor
                 {
                     normalized.Add(new PackageOperationRootRequest(
                         step.PackageDefinition.PackageId,
-                        step.Channel));
+                        step.RequestedChannel));
                 }
             }
 
@@ -284,7 +295,9 @@ namespace Deucarian.PackageInstaller.Editor
                 {
                     if (seen.Add(rootPackageId))
                     {
-                        normalized.Add(new PackageOperationRootRequest(rootPackageId, step.Channel));
+                        normalized.Add(new PackageOperationRootRequest(
+                            rootPackageId,
+                            step.RequestedChannel));
                     }
                 }
             }
@@ -880,7 +893,8 @@ namespace Deucarian.PackageInstaller.Editor
                     isDependency,
                     rootPackageId,
                     rootPath,
-                    dependencyReason);
+                    dependencyReason,
+                    requestedChannel);
                 isPlanned = true;
 
                 if (isDependency)
@@ -903,6 +917,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             PackageDependencyInstallStepBuilder builder = new PackageDependencyInstallStepBuilder(
                 packageDefinition,
+                requestedChannel,
                 packageChannel,
                 packageUrl,
                 isDependency,
@@ -1209,6 +1224,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             public PackageDependencyInstallStepBuilder(
                 PackageDefinition packageDefinition,
+                PackageChannel requestedChannel,
                 PackageChannel channel,
                 string targetUrl,
                 bool isDependency,
@@ -1220,18 +1236,26 @@ namespace Deucarian.PackageInstaller.Editor
                 string detectedCurrentIdentity)
             {
                 PackageDefinition = packageDefinition;
+                RequestedChannel = requestedChannel;
                 Channel = channel;
                 TargetUrl = targetUrl ?? string.Empty;
                 IsDependency = isDependency;
                 DetectedCurrentSource = detectedCurrentSource ?? string.Empty;
                 DetectedCurrentVersion = detectedCurrentVersion ?? string.Empty;
                 DetectedCurrentIdentity = detectedCurrentIdentity ?? string.Empty;
-                MergeContext(isDependency, rootPackageId, rootPath, dependencyReason);
+                MergeContext(
+                    isDependency,
+                    rootPackageId,
+                    rootPath,
+                    dependencyReason,
+                    requestedChannel);
             }
 
             public PackageDefinition PackageDefinition { get; }
 
             public PackageChannel Channel { get; }
+
+            public PackageChannel RequestedChannel { get; private set; }
 
             public string TargetUrl { get; }
 
@@ -1252,9 +1276,14 @@ namespace Deucarian.PackageInstaller.Editor
                 bool isDependency,
                 string rootPackageId,
                 string rootPath,
-                string dependencyReason)
+                string dependencyReason,
+                PackageChannel requestedChannel)
             {
                 IsDependency = IsDependency && isDependency;
+                if ((int)requestedChannel > (int)RequestedChannel)
+                {
+                    RequestedChannel = requestedChannel;
+                }
                 AddUnique(_rootPackageIds, rootPackageId);
                 AddUnique(_rootPaths, rootPath);
                 AddUnique(_dependencyReasons, dependencyReason);
@@ -1273,7 +1302,8 @@ namespace Deucarian.PackageInstaller.Editor
                     string.Join(" ", _dependencyReasons.ToArray()),
                     DetectedCurrentSource,
                     DetectedCurrentVersion,
-                    DetectedCurrentIdentity);
+                    DetectedCurrentIdentity,
+                    RequestedChannel);
             }
 
             private static void AddUnique(ICollection<string> values, string value)

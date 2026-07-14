@@ -433,7 +433,14 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             ControlledPackageInstallClient readerClient = new ControlledPackageInstallClient();
             using (PackageInstallService reader = new PackageInstallService(readerClient, repository))
             {
-                Assert.IsTrue(reader.ResumeSavedOperation());
+                LogAssert.Expect(
+                    LogType.Warning,
+                    "[PackageInstaller.Install] The registry fingerprint changed; the saved operation must be replanned before its exact URLs can be reused.");
+                Assert.IsFalse(reader.ResumeSavedOperation("different-registry-fingerprint"));
+                CollectionAssert.IsEmpty(readerClient.AddedUrls);
+                Assert.IsTrue(File.Exists(repository.StatePathForTests));
+
+                Assert.IsTrue(reader.ResumeSavedOperation("fingerprint-before-registry-change"));
                 CollectionAssert.AreEqual(new[] { exactTarget }, readerClient.AddedUrls);
                 Assert.AreEqual(exactTarget, reader.CurrentUrl);
 
@@ -466,7 +473,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 reader.ExactTargetAlreadyInstalled = (packageId, targetUrl, previousIdentity) =>
                     packageId == package.PackageId && targetUrl == package.StableUrl;
 
-                Assert.IsTrue(reader.ResumeSavedOperation());
+                Assert.IsTrue(reader.ResumeSavedOperation("registry-fingerprint"));
                 CollectionAssert.IsEmpty(readerClient.AddedUrls);
                 Assert.AreEqual(
                     PackageInstallProgressItemState.AlreadyCorrect,
@@ -502,7 +509,14 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             ControlledPackageInstallClient restartClient = new ControlledPackageInstallClient();
             using (PackageInstallService restarted = new PackageInstallService(restartClient, repository))
             {
-                Assert.IsTrue(restarted.RestartSavedOperation());
+                LogAssert.Expect(
+                    LogType.Warning,
+                    "[PackageInstaller.Install] The registry fingerprint changed; the saved operation must be replanned before its exact URLs can be reused.");
+                Assert.IsFalse(restarted.RestartSavedOperation("different-registry-fingerprint"));
+                CollectionAssert.IsEmpty(restartClient.AddedUrls);
+                Assert.IsTrue(File.Exists(repository.StatePathForTests));
+
+                Assert.IsTrue(restarted.RestartSavedOperation("registry-fingerprint"));
                 CollectionAssert.AreEqual(new[] { first.StableUrl }, restartClient.AddedUrls);
                 Assert.IsTrue(restarted.CancelCurrentOperation());
                 restartClient.Requests[0].CompleteSuccess(first.PackageId, "1.0.0");
@@ -597,6 +611,54 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void BulkRootsWithOnePendingSharedDependencyRequireAcceptedPreflight()
+        {
+            PackageDefinition shared = CreatePackage(
+                "Bulk Shared",
+                "com.deucarian.bulk-shared");
+            PackageDefinition firstRoot = CreatePackage(
+                "Bulk First",
+                "com.deucarian.bulk-first",
+                new[] { shared.PackageId });
+            PackageDefinition secondRoot = CreatePackage(
+                "Bulk Second",
+                "com.deucarian.bulk-second",
+                new[] { shared.PackageId });
+            ControlledPackageInstallClient client = new ControlledPackageInstallClient();
+            PackageOperationStateRepository repository =
+                new PackageOperationStateRepository(_temporaryProjectRoot);
+
+            using (PackageInstallService service = new PackageInstallService(client, repository))
+            using (PackageDetectionService detection = new PackageDetectionService())
+            {
+                detection.ReplaceInstalledPackageNamesForTests(
+                    new[] { firstRoot.PackageId, secondRoot.PackageId });
+                PackageDependencyInstaller installer = new PackageDependencyInstaller(
+                    service,
+                    detection,
+                    () => new[] { shared, firstRoot, secondRoot });
+                int confirmationCount = 0;
+                installer.PreflightConfirmation = (plan, _) =>
+                {
+                    confirmationCount++;
+                    Assert.AreEqual(1, plan.Steps.Count);
+                    Assert.IsTrue(plan.IsBulk);
+                    Assert.IsFalse(plan.IsMultiStep);
+                    return false;
+                };
+
+                installer.InstallManyWithDependencies(
+                    new[] { firstRoot, secondRoot },
+                    _ => PackageChannel.Stable,
+                    "Bulk roots");
+
+                Assert.AreEqual(1, confirmationCount);
+                CollectionAssert.IsEmpty(client.AddedUrls);
+                Assert.IsFalse(service.IsBusy);
+            }
+        }
+
+        [Test]
         public void PlannerFailureOffersRetryAndReplansFromCurrentRegistry()
         {
             PackageDefinition dependency = CreatePackage(
@@ -632,11 +694,33 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 CollectionAssert.IsEmpty(client.AddedUrls);
 
                 registeredPackages.Add(dependency);
+                detection.ReplaceInstalledPackageForTests(
+                    dependency.PackageId,
+                    dependency.DevelopmentUrl,
+                    PackageInstallSourceType.Git);
                 Assert.IsTrue(installer.RetryLastPlannerFailure());
 
                 Assert.IsFalse(installer.CanRetryLastPlannerFailure);
-                CollectionAssert.AreEqual(new[] { dependency.DevelopmentUrl }, client.AddedUrls);
+                CollectionAssert.AreEqual(new[] { root.DevelopmentUrl }, client.AddedUrls);
             }
+        }
+
+        [TestCase(false, false, false, false)]
+        [TestCase(true, true, false, false)]
+        [TestCase(true, false, true, false)]
+        [TestCase(true, false, false, true)]
+        public void PlannerRetryRefreshReadinessWaitsForBothRefreshes(
+            bool pending,
+            bool registryRefreshing,
+            bool detectionRefreshing,
+            bool expected)
+        {
+            Assert.AreEqual(
+                expected,
+                PackageInstallerWindow.IsPlannerRetryRefreshReadyForTests(
+                    pending,
+                    registryRefreshing,
+                    detectionRefreshing));
         }
 
         [Test]
@@ -651,11 +735,11 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.IsTrue(repository.Save(second, out string secondError), secondError);
             Assert.IsTrue(repository.TryLoad(out PackageOperationRecoveryRecord loaded, out string loadError), loadError);
 
-            Assert.AreEqual(2, PackageOperationStateRepository.CurrentSchemaVersion);
+            Assert.AreEqual(3, PackageOperationStateRepository.CurrentSchemaVersion);
             Assert.AreEqual("https://example.com/second.git#main", loaded.Steps.Single().TargetUrl);
             Assert.IsTrue(loaded.CanResume);
             Assert.IsTrue(loaded.CanRestart);
-            StringAssert.Contains("\"schemaVersion\": 2", File.ReadAllText(repository.StatePathForTests));
+            StringAssert.Contains("\"schemaVersion\": 3", File.ReadAllText(repository.StatePathForTests));
             CollectionAssert.IsEmpty(
                 Directory.GetFiles(Path.GetDirectoryName(repository.StatePathForTests), "*.tmp"));
         }
@@ -666,7 +750,9 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             PackageOperationStateRepository repository =
                 new PackageOperationStateRepository(_temporaryProjectRoot);
             PackageOperationRecoveryRecord source = CreateRecoveryRecord(
-                "https://example.com/dependency.git#main");
+                "https://example.com/dependency.git#main",
+                PackageChannel.Development);
+            Assert.AreEqual(PackageChannel.Development, source.RootRequests.Single().Channel);
             PackageOperationRecoveryRecord record = new PackageOperationRecoveryRecord(
                 source.OperationId,
                 source.OperationName,
@@ -686,7 +772,34 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.IsTrue(repository.TryLoad(out PackageOperationRecoveryRecord loaded, out string loadError), loadError);
 
             Assert.AreEqual(PackageChannel.Stable, loaded.Steps.Single().Channel);
+            Assert.AreEqual(PackageChannel.Development, loaded.Steps.Single().RequestedChannel);
             Assert.AreEqual(PackageChannel.Development, loaded.RootRequests.Single().Channel);
+            StringAssert.Contains(
+                "\"requestedChannel\": 1",
+                File.ReadAllText(repository.StatePathForTests));
+            Assert.AreEqual(
+                PackageChannel.Development,
+                PackageInstallerWindow.GetRecoveryRequestedChannelForTests(
+                    loaded,
+                    loaded.RootRequests.Single().PackageId,
+                    PackageChannel.Stable));
+        }
+
+        [Test]
+        public void RecoveryRepositorySchemaTwoInfersRequestedChannelFromRootRequest()
+        {
+            PackageOperationStateRepository repository =
+                new PackageOperationStateRepository(_temporaryProjectRoot);
+            WriteRecoveryJson(
+                repository,
+                SingleRecoveryStepJson(0, 0),
+                rootChannel: 1);
+
+            Assert.IsTrue(repository.TryLoad(
+                out PackageOperationRecoveryRecord loaded,
+                out string errorMessage), errorMessage);
+            Assert.AreEqual(PackageChannel.Stable, loaded.Steps.Single().Channel);
+            Assert.AreEqual(PackageChannel.Development, loaded.Steps.Single().RequestedChannel);
         }
 
         [TestCase(99, 0)]
@@ -699,6 +812,20 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
             Assert.IsFalse(repository.TryLoad(out _, out string errorMessage));
             StringAssert.Contains("invalid", errorMessage.ToLowerInvariant());
+        }
+
+        [Test]
+        public void RecoveryRepositoryRejectsInvalidRequestedChannelInCurrentSchema()
+        {
+            PackageOperationStateRepository repository =
+                new PackageOperationStateRepository(_temporaryProjectRoot);
+            WriteRecoveryJson(
+                repository,
+                SingleRecoveryStepJson(0, 0, requestedChannel: 99),
+                schemaVersion: PackageOperationStateRepository.CurrentSchemaVersion);
+
+            Assert.IsFalse(repository.TryLoad(out _, out string errorMessage));
+            StringAssert.Contains("invalid requested channel", errorMessage);
         }
 
         [Test]
@@ -827,10 +954,13 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                     targetUrl: package.StableUrl,
                     rootPackageIds: new[] { package.PackageId },
                     rootPaths: new[] { package.DisplayName })),
-                Array.Empty<string>());
+                Array.Empty<string>(),
+                registryFingerprint: "registry-fingerprint");
         }
 
-        private static PackageOperationRecoveryRecord CreateRecoveryRecord(string targetUrl)
+        private static PackageOperationRecoveryRecord CreateRecoveryRecord(
+            string targetUrl,
+            PackageChannel? requestedChannel = null)
         {
             return new PackageOperationRecoveryRecord(
                 Guid.NewGuid().ToString("N"),
@@ -851,7 +981,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                         rootPaths: new[] { "Recovery Test" },
                         dependencyReason: string.Empty,
                         state: PackageInstallProgressItemState.Pending,
-                        message: string.Empty)
+                        message: string.Empty,
+                        requestedChannel: requestedChannel)
                 },
                 Array.Empty<string>());
         }
@@ -859,12 +990,16 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         private static string SingleRecoveryStepJson(
             int channel,
             int state,
-            string prerequisitePackageIds = "[]")
+            string prerequisitePackageIds = "[]",
+            int? requestedChannel = null)
         {
             return "{" +
                    "\"packageId\":\"com.deucarian.recovery-test\"," +
                    "\"displayName\":\"Recovery Test\"," +
                    "\"channel\":" + channel + "," +
+                   (requestedChannel.HasValue
+                       ? "\"requestedChannel\":" + requestedChannel.Value + ","
+                       : string.Empty) +
                    "\"targetUrl\":\"https://example.com/recovery.git#main\"," +
                    "\"prerequisitePackageIds\":" + prerequisitePackageIds + "," +
                    "\"rootPackageIds\":[\"com.deucarian.recovery-test\"]," +
@@ -874,19 +1009,21 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
         private static void WriteRecoveryJson(
             PackageOperationStateRepository repository,
-            string stepsJson)
+            string stepsJson,
+            int rootChannel = 0,
+            int schemaVersion = 2)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(repository.StatePathForTests));
             File.WriteAllText(
                 repository.StatePathForTests,
                 "{" +
-                "\"schemaVersion\":2," +
+                "\"schemaVersion\":" + schemaVersion + "," +
                 "\"operationId\":\"operation-id\"," +
                 "\"operationName\":\"Recovery test\"," +
                 "\"registryFingerprint\":\"registry-fingerprint\"," +
                 "\"rootRequests\":[{" +
                 "\"packageId\":\"com.deucarian.recovery-test\"," +
-                "\"channel\":0}]," +
+                "\"channel\":" + rootChannel + "}]," +
                 "\"steps\":[" + stepsJson + "]" +
                 "}");
         }

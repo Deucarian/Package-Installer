@@ -293,6 +293,10 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 Assert.IsTrue(plan.IsValid, plan.ErrorMessage);
                 Assert.AreEqual(PackageChannel.Stable, plan.GetChannel(fixture.Editor));
                 Assert.AreEqual(PackageChannel.Development, plan.GetChannel(fixture.Logging));
+                PackageDependencyInstallStep editorStep = plan.Steps.Single(step =>
+                    step.PackageDefinition.PackageId == fixture.Editor.PackageId);
+                Assert.AreEqual(PackageChannel.Development, editorStep.RequestedChannel);
+                Assert.AreEqual(PackageChannel.Stable, editorStep.Channel);
                 Assert.IsTrue(plan.HasChannelFallback);
                 Assert.IsTrue(plan.RequiresPreflight);
                 StringAssert.Contains(
@@ -319,6 +323,46 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 Assert.IsTrue(plan.IsValid, plan.ErrorMessage);
                 Assert.IsFalse(plan.RequiresPreflight);
                 Assert.IsFalse(plan.IsMultiStep);
+            }
+        }
+
+        [Test]
+        public void MultipleRootsRequirePreflightEvenWhenOnlyOneSharedDependencyIsPending()
+        {
+            PackageDefinition shared = CreatePackage(
+                "Shared Dependency",
+                "com.deucarian.shared-dependency",
+                "Shared dependency.");
+            PackageDefinition firstRoot = CreatePackage(
+                "First Root",
+                "com.deucarian.first-root",
+                "First root.",
+                new[] { shared.PackageId });
+            PackageDefinition secondRoot = CreatePackage(
+                "Second Root",
+                "com.deucarian.second-root",
+                "Second root.",
+                new[] { shared.PackageId });
+
+            using (PlanFixture fixture = new PlanFixture(shared, firstRoot, secondRoot))
+            {
+                fixture.DetectionService.ReplaceInstalledPackageNamesForTests(
+                    new[] { firstRoot.PackageId, secondRoot.PackageId });
+
+                PackageDependencyInstallPlan plan = fixture.Installer.CreateInstallPlan(
+                    new[] { firstRoot, secondRoot },
+                    _ => PackageChannel.Stable,
+                    includeInstalledRequestedPackages: false);
+
+                Assert.IsTrue(plan.IsValid, plan.ErrorMessage);
+                Assert.AreEqual(1, plan.Steps.Count);
+                Assert.AreEqual(2, plan.RootRequests.Count);
+                Assert.IsFalse(plan.IsMultiStep);
+                Assert.IsTrue(plan.IsBulk);
+                Assert.IsTrue(plan.RequiresPreflight);
+                CollectionAssert.AreEquivalent(
+                    new[] { firstRoot.PackageId, secondRoot.PackageId },
+                    plan.Steps.Single().RootPackageIds);
             }
         }
 

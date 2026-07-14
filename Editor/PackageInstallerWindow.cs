@@ -298,6 +298,7 @@ namespace Deucarian.PackageInstaller.Editor
         private bool _operationDetailsExpanded;
         private bool _promptSavedOperationAfterDetectionRefresh;
         private PackageOperationTerminalSnapshot _terminalOperationRetryAfterRefresh;
+        private bool _plannerFailureRetryAfterRefresh;
         private InstallerViewMode _viewMode = DefaultInstallerViewMode;
         private PackageChannel _lastObservedProjectChannel = PackageChannel.Stable;
         private long _lastObservedProjectChannelChangedAtUtcTicks;
@@ -1388,7 +1389,9 @@ namespace Deucarian.PackageInstaller.Editor
                     _packageDetectionService?.Refresh();
                     break;
                 case PackageInstallerRetryKind.ReplanOperation:
-                    _packageDependencyInstaller?.RetryLastPlannerFailure();
+                    _plannerFailureRetryAfterRefresh = true;
+                    PackageRegistryProvider.RefreshRemote();
+                    _packageDetectionService?.Refresh();
                     break;
             }
         }
@@ -3998,9 +4001,11 @@ namespace Deucarian.PackageInstaller.Editor
 
             List<string> riskLabels = new List<string>();
             if (plan.IsMultiStep) riskLabels.Add("multiple package steps");
+            if (plan.IsBulk) riskLabels.Add("multiple requested packages");
             if (plan.HasMigrationRisk) riskLabels.Add("source/channel migration");
             if (plan.HasDowngradeRisk) riskLabels.Add("possible downgrade");
             if (plan.HasChannelFallback) riskLabels.Add("channel fallback");
+            if (plan.HasConflict) riskLabels.Add("channel conflict");
             if (plan.HasDestructiveRisk) riskLabels.Add("destructive reinstall/remove behavior");
 
             List<string> lines = new List<string>
@@ -4011,9 +4016,13 @@ namespace Deucarian.PackageInstaller.Editor
             };
             foreach (PackageDependencyInstallStep step in plan.Steps)
             {
+                string channelLabel = step.RequestedChannel == step.Channel
+                    ? GetChannelLabel(step.Channel)
+                    : GetChannelLabel(step.RequestedChannel) + " requested -> " +
+                      GetChannelLabel(step.Channel) + " target";
                 lines.Add(
                     "- " + step.PackageDefinition.DisplayName +
-                    " [" + GetChannelLabel(step.Channel) + "]" +
+                    " [" + channelLabel + "]" +
                     (step.IsDependency ? " - dependency" : string.Empty));
                 lines.Add("  " + step.TargetUrl);
             }
@@ -6439,6 +6448,7 @@ namespace Deucarian.PackageInstaller.Editor
                    (_packageDetectionService != null && _packageDetectionService.IsRefreshing) ||
                    (_packageUpdateCheckService != null && _packageUpdateCheckService.IsChecking) ||
                    (_packageSampleImportService != null && _packageSampleImportService.IsBusy) ||
+                   _plannerFailureRetryAfterRefresh ||
                    IsActiveActionStillBusy();
         }
 
@@ -6597,6 +6607,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             TryPromptForSavedOperationRecovery();
             TryRestartTerminalOperationAfterRefresh();
+            TryRetryPlannerFailureAfterRefresh();
 
             TryRunDeferredUpdateCheck();
             ClearActiveActionIfIdle();
@@ -6670,6 +6681,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             TryPromptForSavedOperationRecovery();
             TryRestartTerminalOperationAfterRefresh();
+            TryRetryPlannerFailureAfterRefresh();
 
             TryRunDeferredUpdateCheck();
             ClearActiveActionIfIdle();
@@ -6738,6 +6750,42 @@ namespace Deucarian.PackageInstaller.Editor
                     ? "Package Operation"
                     : snapshot.OperationName));
             UpdateViewVisibility();
+        }
+
+        private void TryRetryPlannerFailureAfterRefresh()
+        {
+            if (!IsPlannerRetryRefreshReadyForTests(
+                    _plannerFailureRetryAfterRefresh,
+                    PackageRegistryProvider.IsRemoteRefreshing,
+                    _packageDetectionService != null && _packageDetectionService.IsRefreshing))
+            {
+                return;
+            }
+
+            _plannerFailureRetryAfterRefresh = false;
+            if (_packageDetectionService != null &&
+                !_packageDetectionService.HasSuccessfulRefresh)
+            {
+                const string message =
+                    "The package plan was not retried because installed-package refresh failed. Retry the plan to refresh again.";
+                PackageInstallerLog.Install.Warning(message);
+                PackageInstallerActivityService.Record(
+                    "Planner",
+                    PackageInstallerActivitySeverity.Warning,
+                    message,
+                    retryKind: PackageInstallerRetryKind.ReplanOperation);
+                return;
+            }
+
+            _packageDependencyInstaller?.RetryLastPlannerFailure();
+        }
+
+        internal static bool IsPlannerRetryRefreshReadyForTests(
+            bool retryPending,
+            bool registryRefreshing,
+            bool detectionRefreshing)
+        {
+            return retryPending && !registryRefreshing && !detectionRefreshing;
         }
 
         internal static PackageDependencyInstallPlan CreateFreshTerminalRetryPlanForTests(
@@ -6883,7 +6931,7 @@ namespace Deucarian.PackageInstaller.Editor
             if (freshPlan.RequiresPreflight)
             {
                 lines.Add(string.Empty);
-                lines.Add("This plan requires review because it is multi-step or carries migration, fallback, downgrade, conflict, or destructive risk.");
+                lines.Add("This plan requires review because it is bulk, multi-step, or carries migration, fallback, downgrade, conflict, or destructive risk.");
             }
 
             return string.Join("\n", lines.Where(line => line != null).ToArray()).Trim();
@@ -7002,16 +7050,16 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 if (recovery.CanResume)
                 {
-                    _packageInstallService.ResumeSavedOperation();
+                    _packageInstallService.ResumeSavedOperation(freshPlan.RegistryFingerprint);
                 }
                 else
                 {
-                    _packageInstallService.RestartSavedOperation();
+                    _packageInstallService.RestartSavedOperation(freshPlan.RegistryFingerprint);
                 }
             }
             else if (recoveryChoice == 1)
             {
-                _packageInstallService.RestartSavedOperation();
+                _packageInstallService.RestartSavedOperation(freshPlan.RegistryFingerprint);
             }
             else if (recoveryChoice == 2)
             {
@@ -7047,21 +7095,52 @@ namespace Deucarian.PackageInstaller.Editor
                         : null)
                 .Where(definition => definition != null)
                 .ToArray();
-            Dictionary<string, PackageChannel> channels = recovery.Steps
-                .GroupBy(step => step.PackageId, StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(
-                    group => group.Key,
-                    group => group.First().Channel,
-                    StringComparer.OrdinalIgnoreCase);
-
             return roots.Length == 0 || roots.Length != rootIds.Count
                 ? null
                 : _packageDependencyInstaller.CreateInstallPlan(
                     roots,
-                    package => channels.TryGetValue(package.PackageId, out PackageChannel channel)
-                        ? channel
-                        : GetSelectedChannel(package),
+                    package => GetRecoveryRequestedChannel(
+                        recovery,
+                        package.PackageId,
+                        GetSelectedChannel(package)),
                     includeInstalledRequestedPackages: true);
+        }
+
+        internal static PackageChannel GetRecoveryRequestedChannelForTests(
+            PackageOperationRecoveryRecord recovery,
+            string rootPackageId,
+            PackageChannel fallback)
+        {
+            return GetRecoveryRequestedChannel(recovery, rootPackageId, fallback);
+        }
+
+        private static PackageChannel GetRecoveryRequestedChannel(
+            PackageOperationRecoveryRecord recovery,
+            string rootPackageId,
+            PackageChannel fallback)
+        {
+            if (recovery == null || string.IsNullOrWhiteSpace(rootPackageId))
+            {
+                return fallback;
+            }
+
+            PackageOperationRootRequest rootRequest = recovery.RootRequests.FirstOrDefault(root =>
+                root != null && string.Equals(
+                    root.PackageId,
+                    rootPackageId,
+                    StringComparison.OrdinalIgnoreCase));
+            if (rootRequest != null)
+            {
+                return rootRequest.Channel;
+            }
+
+            return recovery.Steps
+                .Where(step => step.RootPackageIds.Contains(
+                    rootPackageId,
+                    StringComparer.OrdinalIgnoreCase))
+                .Select(step => step.RequestedChannel)
+                .DefaultIfEmpty(fallback)
+                .First();
         }
 
         internal static string FormatRecoveryPlanDeltaForTests(
@@ -7142,7 +7221,7 @@ namespace Deucarian.PackageInstaller.Editor
             if (freshPlan.RequiresPreflight)
             {
                 lines.Add(string.Empty);
-                lines.Add("Attention: this plan is multi-step or carries migration, fallback, downgrade, conflict, or destructive risk.");
+                lines.Add("Attention: this plan is bulk, multi-step, or carries migration, fallback, downgrade, conflict, or destructive risk.");
             }
 
             return string.Join("\n", lines.Where(line => line != null).ToArray()).Trim();
@@ -7159,15 +7238,11 @@ namespace Deucarian.PackageInstaller.Editor
             PackageOperationRecoveryRecord recovery,
             PackageDependencyInstallPlan freshPlan)
         {
-            return recovery != null &&
-                   freshPlan != null &&
+            return freshPlan != null &&
                    freshPlan.IsValid &&
-                   !string.IsNullOrWhiteSpace(recovery.RegistryFingerprint) &&
-                   !string.IsNullOrWhiteSpace(freshPlan.RegistryFingerprint) &&
-                   string.Equals(
-                       recovery.RegistryFingerprint,
-                       freshPlan.RegistryFingerprint,
-                       StringComparison.Ordinal);
+                   PackageInstallService.CanReuseSavedTargets(
+                       recovery,
+                       freshPlan.RegistryFingerprint);
         }
 
         private void TrackPendingUpdateStatusInvalidations(IEnumerable<PackageDefinition> packageDefinitions)

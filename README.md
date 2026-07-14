@@ -31,7 +31,7 @@ Open it from:
 Tools > Deucarian > Package Installer
 ```
 
-Select Stable or Development, choose a package, and click `Install`. Ordinary safe one-package actions start immediately; a contextual preflight appears only for multi-step, source-migration, downgrade, fallback, conflict, or destructive operations. Import samples only when the package detail view shows a sample you explicitly want.
+Select Stable or Development, choose a package, and click `Install`. Ordinary safe one-package actions start immediately; a contextual preflight appears only for bulk, multi-step, source-migration, downgrade, fallback, conflict, or destructive operations. Import samples only when the package detail view shows a sample you explicitly want.
 
 ## Deucarian Menu
 
