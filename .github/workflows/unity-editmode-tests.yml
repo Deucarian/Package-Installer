@@ -102,7 +102,7 @@ jobs:
           cat > "$PROJECT_PATH/Packages/manifest.json" <<'JSON'
           {
             "dependencies": {
-              "com.deucarian.editor": "https://github.com/Deucarian/Editor.git#8f85a9c808b813781e1f6c7f6aa6414f6b596493",
+              "com.deucarian.editor": "https://github.com/Deucarian/Editor.git#409118eb502d201ebbe0e07fa2d9b8270abe54f3",
               "com.deucarian.logging": "https://github.com/Deucarian/Logging.git#683d88858942d2d3c551135cbf1384b4f71cdd75",
               "com.unity.test-framework": "1.1.33"
             },
