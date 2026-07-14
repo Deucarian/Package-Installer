@@ -12,6 +12,9 @@
     "type": "git",
     "url": "https://github.com/Deucarian/Package-Installer.git"
   },
+  "documentationUrl": "https://github.com/Deucarian/Package-Installer/blob/main/README.md",
+  "changelogUrl": "https://github.com/Deucarian/Package-Installer/blob/main/CHANGELOG.md",
+  "licensesUrl": "https://github.com/Deucarian/Package-Installer/blob/main/LICENSE.md",
   "keywords": [
     "upm",
     "editor",
