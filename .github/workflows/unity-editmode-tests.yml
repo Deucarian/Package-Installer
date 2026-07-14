@@ -115,14 +115,60 @@ jobs:
           m_EditorVersion: 2021.3.45f1
           TEXT
 
+      - name: Prepare Unity OpenSSL 1.1 compatibility
+        shell: bash
+        env:
+          OPENSSL11_URL: https://security.debian.org/debian-security/pool/updates/main/o/openssl/libssl1.1_1.1.1w-0%2Bdeb11u8_amd64.deb
+          OPENSSL11_SHA256: dcc68a543de6cb955a57077b66dcdb15f61d1e31e072f2c6cc4082c37da1b00d
+        run: |
+          set -euo pipefail
+
+          deb="$TEMP_ROOT/libssl1.1.deb"
+          root="$TEMP_ROOT/openssl11"
+
+          curl \
+            --fail \
+            --show-error \
+            --silent \
+            --location \
+            --proto '=https' \
+            --tlsv1.2 \
+            --retry 4 \
+            --retry-all-errors \
+            --output "$deb" \
+            "$OPENSSL11_URL"
+
+          printf '%s  %s\n' "$OPENSSL11_SHA256" "$deb" |
+            sha256sum --check --strict
+
+          test "$(dpkg-deb --field "$deb" Package)" = "libssl1.1"
+          test "$(dpkg-deb --field "$deb" Version)" = "1.1.1w-0+deb11u8"
+          test "$(dpkg-deb --field "$deb" Architecture)" = "amd64"
+
+          dpkg-deb --extract "$deb" "$root"
+
+          libdir="$root/usr/lib/x86_64-linux-gnu"
+          test -r "$libdir/libcrypto.so.1.1"
+          test -r "$libdir/libssl.so.1.1"
+
+          printf 'UNITY_OPENSSL11_LIBDIR=%s\n' "$libdir" >> "$GITHUB_ENV"
+
       - name: Run Package Installer EditMode tests
         id: unity-tests
         shell: bash
         run: |
           set -euo pipefail
 
+          unity_ld_path="$UNITY_OPENSSL11_LIBDIR"
+          if [[ -n "${LD_LIBRARY_PATH:-}" ]]; then
+            unity_ld_path="$unity_ld_path:$LD_LIBRARY_PATH"
+          fi
+
           set +e
-          "$UNITY_EDITOR" \
+          env \
+            LD_LIBRARY_PATH="$unity_ld_path" \
+            CLR_OPENSSL_VERSION_OVERRIDE=1.1 \
+            "$UNITY_EDITOR" \
             -batchmode \
             -nographics \
             -accept-apiupdate \
