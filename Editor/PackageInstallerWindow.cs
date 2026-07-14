@@ -184,6 +184,7 @@ namespace Deucarian.PackageInstaller.Editor
         }
 
         private const InstallerViewMode DefaultInstallerViewMode = InstallerViewMode.EcosystemGraph;
+        private static readonly bool ListViewEnabled = false;
 
         private enum SelectionKind
         {
@@ -261,6 +262,19 @@ namespace Deucarian.PackageInstaller.Editor
             public string Label { get; }
 
             public bool Enabled { get; }
+        }
+
+        internal readonly struct EcosystemOverviewAction
+        {
+            public EcosystemOverviewAction(PackageInstallerActionKind kind, string label)
+            {
+                Kind = kind;
+                Label = label ?? string.Empty;
+            }
+
+            public PackageInstallerActionKind Kind { get; }
+
+            public string Label { get; }
         }
 
         private PackageInstallService _packageInstallService;
@@ -418,7 +432,11 @@ namespace Deucarian.PackageInstaller.Editor
             return PackageGraphNavigationState.Package(packageId, GetGraphPackageGroupId(graph, packageId));
         }
 
-        internal static IReadOnlyList<string> ViewToggleOrderForTests => new[] { "Ecosystem Graph", "List View" };
+        internal static IReadOnlyList<string> ViewToggleOrderForTests =>
+            GetEnabledInstallerViewModes().Select(GetInstallerViewModeLabel).ToArray();
+
+        internal static bool ListViewRequestResolvesToEcosystemGraphForTests =>
+            ResolveInstallerViewMode(InstallerViewMode.List) == InstallerViewMode.EcosystemGraph;
 
         internal static PackageInstallerActionButtonState GetActionButtonStateForTests(
             PackageInstallerActionKind buttonKind,
@@ -499,6 +517,12 @@ namespace Deucarian.PackageInstaller.Editor
         internal static bool ShouldShowEcosystemAttentionForTests(int attentionCount)
         {
             return ShouldShowEcosystemAttention(attentionCount);
+        }
+
+        internal static IReadOnlyList<EcosystemOverviewAction> CreateEcosystemOverviewActionsForTests(
+            int updateCount)
+        {
+            return CreateEcosystemOverviewActions(updateCount);
         }
 
         internal static string FormatGlobalChannelButtonLabelForTests(PackageChannelSelection selection)
@@ -587,6 +611,7 @@ namespace Deucarian.PackageInstaller.Editor
         {
             titleContent = new GUIContent(WindowTitle);
             minSize = new Vector2(MinWindowWidth, MinWindowHeight);
+            _viewMode = ResolveInstallerViewMode(_viewMode);
 
             _stateRepository = new PackageInstallerStateRepository();
             PackageChannelSelection projectChannelSelection = _stateRepository.GetProjectChannelSelection();
@@ -827,10 +852,21 @@ namespace Deucarian.PackageInstaller.Editor
             VisualElement toolbar = DeucarianEditorVisualShell.CreateToolbarRow();
             toolbar.AddToClassList("dpi-view-toolbar");
 
-            _graphViewButton = CreateViewToggleButton("Ecosystem Graph", InstallerViewMode.EcosystemGraph);
-            _listViewButton = CreateViewToggleButton("List View", InstallerViewMode.List);
-            toolbar.Add(_graphViewButton);
-            toolbar.Add(_listViewButton);
+            foreach (InstallerViewMode viewMode in GetEnabledInstallerViewModes())
+            {
+                Button viewButton = CreateViewToggleButton(GetInstallerViewModeLabel(viewMode), viewMode);
+
+                if (viewMode == InstallerViewMode.EcosystemGraph)
+                {
+                    _graphViewButton = viewButton;
+                }
+                else
+                {
+                    _listViewButton = viewButton;
+                }
+
+                toolbar.Add(viewButton);
+            }
 
             _viewSummaryLabel = new Label();
             _viewSummaryLabel.AddToClassList("dpi-view-toolbar__summary");
@@ -855,6 +891,18 @@ namespace Deucarian.PackageInstaller.Editor
             Button button = new Button(() => SetViewMode(viewMode)) { text = text };
             button.AddToClassList("deucarian-toggle-button");
             return button;
+        }
+
+        private static InstallerViewMode[] GetEnabledInstallerViewModes()
+        {
+            return ListViewEnabled
+                ? new[] { InstallerViewMode.EcosystemGraph, InstallerViewMode.List }
+                : new[] { InstallerViewMode.EcosystemGraph };
+        }
+
+        private static string GetInstallerViewModeLabel(InstallerViewMode viewMode)
+        {
+            return viewMode == InstallerViewMode.List ? "List View" : "Ecosystem Graph";
         }
 
         private Button CreateGlobalChannelOverrideButton()
@@ -1812,7 +1860,7 @@ namespace Deucarian.PackageInstaller.Editor
         private void SetViewMode(InstallerViewMode viewMode)
         {
             bool wasGraphMode = _viewMode == InstallerViewMode.EcosystemGraph;
-            _viewMode = viewMode;
+            _viewMode = ResolveInstallerViewMode(viewMode);
             UpdateViewVisibility();
 
             if (_viewMode == InstallerViewMode.EcosystemGraph)
@@ -1826,6 +1874,13 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             Repaint();
+        }
+
+        private static InstallerViewMode ResolveInstallerViewMode(InstallerViewMode requestedViewMode)
+        {
+            return ListViewEnabled || requestedViewMode != InstallerViewMode.List
+                ? requestedViewMode
+                : DefaultInstallerViewMode;
         }
 
         private bool ShouldCheckForUpdatesOnGraphOpen()
@@ -3410,11 +3465,12 @@ namespace Deucarian.PackageInstaller.Editor
                 ? Array.Empty<PackageGraphNode>()
                 : graph.Nodes.Where(node => node != null && node.IsRegistered).ToArray();
             int installedCount = nodes.Count(node => node.IsInstalled);
-            int updateCount = nodes.Count(node => node.Status == PackageGraphNodeStatus.UpdateAvailable);
+            int updateCount = GetPackagesWithUpdates().Length;
             int attentionCount = nodes.Count(node =>
                 node.Status == PackageGraphNodeStatus.Missing ||
                 node.Status == PackageGraphNodeStatus.Warning);
             int notInstalledCount = Math.Max(0, nodes.Length - installedCount);
+            EcosystemOverviewAction[] actions = CreateEcosystemOverviewActions(updateCount);
 
             DrawPanel("Ecosystem Overview", () =>
             {
@@ -3439,6 +3495,26 @@ namespace Deucarian.PackageInstaller.Editor
                 DrawKeyValueRow("Registry", PackageRegistryProvider.StatusMessage);
                 DrawKeyValueRow("Filters", GetActiveFilterSummary());
             }, GUILayout.ExpandWidth(true));
+
+            if (actions.Length > 0)
+            {
+                DrawPanel("Actions", () =>
+                {
+                    using (new EditorGUI.DisabledScope(IsAnyOperationBusy()))
+                    {
+                        foreach (EcosystemOverviewAction action in actions)
+                        {
+                            if (GUILayout.Button(
+                                    action.Label,
+                                    _secondaryButtonStyle,
+                                    GUILayout.Height(28f)))
+                            {
+                                HandleActionButton(action.Kind);
+                            }
+                        }
+                    }
+                }, GUILayout.ExpandWidth(true));
+            }
         }
 
         private void DrawEcosystemOverviewGroupsPanel()
@@ -3561,6 +3637,18 @@ namespace Deucarian.PackageInstaller.Editor
         private static bool ShouldShowEcosystemAttention(int attentionCount)
         {
             return attentionCount > 0;
+        }
+
+        private static EcosystemOverviewAction[] CreateEcosystemOverviewActions(int updateCount)
+        {
+            return updateCount > 0
+                ? new[]
+                {
+                    new EcosystemOverviewAction(
+                        PackageInstallerActionKind.UpdateAll,
+                        "Update all (" + updateCount + ")")
+                }
+                : Array.Empty<EcosystemOverviewAction>();
         }
 
         private static bool ShouldDrawGraphNavigationBeforeContext(

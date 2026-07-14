@@ -14,12 +14,13 @@ namespace Deucarian.PackageInstaller.Editor.Tests
     internal sealed class PackageGraphBuilderTests
     {
         [Test]
-        public void Window_DefaultsToEcosystemGraphAndOrdersToggleFirst()
+        public void Window_ExposesOnlyEcosystemGraphAndCoercesListRequests()
         {
             Assert.IsTrue(PackageInstallerWindow.DefaultsToEcosystemGraphForTests);
             CollectionAssert.AreEqual(
-                new[] { "Ecosystem Graph", "List View" },
+                new[] { "Ecosystem Graph" },
                 PackageInstallerWindow.ViewToggleOrderForTests.ToArray());
+            Assert.IsTrue(PackageInstallerWindow.ListViewRequestResolvesToEcosystemGraphForTests);
         }
 
         [Test]
@@ -99,6 +100,18 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual("Update All", withoutUpdates.Label);
             Assert.IsFalse(withoutUpdates.Enabled);
             Assert.IsTrue(withUpdates.Enabled);
+        }
+
+        [Test]
+        public void Window_EcosystemUpdateAllIsVisibleOnlyWhenUpdatesExist()
+        {
+            Assert.IsEmpty(PackageInstallerWindow.CreateEcosystemOverviewActionsForTests(0));
+
+            PackageInstallerWindow.EcosystemOverviewAction action =
+                PackageInstallerWindow.CreateEcosystemOverviewActionsForTests(3).Single();
+
+            Assert.AreEqual(PackageInstallerWindow.PackageInstallerActionKind.UpdateAll, action.Kind);
+            Assert.AreEqual("Update all (3)", action.Label);
         }
 
         [Test]
