@@ -78,12 +78,21 @@ namespace Deucarian.PackageInstaller.Editor
         public const string CacheFileName = "registry-cache-v1.json";
 
         private readonly string _cachePath;
+        private readonly PackageInstallerAtomicFileCommitter _atomicCommitter;
 
         public PackageRegistryCache(string cachePath = null)
+            : this(cachePath, null)
+        {
+        }
+
+        internal PackageRegistryCache(
+            string cachePath,
+            PackageInstallerAtomicFileCommitter atomicCommitter)
         {
             _cachePath = string.IsNullOrWhiteSpace(cachePath)
                 ? GetDefaultCachePath()
                 : Path.GetFullPath(cachePath);
+            _atomicCommitter = atomicCommitter ?? PackageInstallerAtomicFileCommitter.Shared;
         }
 
         internal string CachePath => _cachePath;
@@ -215,15 +224,10 @@ namespace Deucarian.PackageInstaller.Editor
                 Action commit = () =>
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-
-                    if (File.Exists(_cachePath))
-                    {
-                        File.Replace(tempPath, _cachePath, null);
-                    }
-                    else
-                    {
-                        File.Move(tempPath, _cachePath);
-                    }
+                    _atomicCommitter.Commit(
+                        tempPath,
+                        _cachePath,
+                        () => cancellationToken.ThrowIfCancellationRequested());
                 };
 
                 if (commitGuard != null && !commitGuard.TryCommit(commit))
