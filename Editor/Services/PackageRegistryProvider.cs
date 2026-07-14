@@ -24,6 +24,12 @@ namespace Deucarian.PackageInstaller.Editor
         private static bool _bundledLoaded;
         private static bool _remoteRefreshStarted;
 
+        static PackageRegistryProvider()
+        {
+            EditorApplication.quitting -= OnEditorQuitting;
+            EditorApplication.quitting += OnEditorQuitting;
+        }
+
         public static event Action RegistryChanged;
 
         public static IReadOnlyList<PackageDefinition> All
@@ -107,6 +113,11 @@ namespace Deucarian.PackageInstaller.Editor
             _remoteRefreshGeneration++;
             EditorApplication.update -= UpdateRemoteRefresh;
             return true;
+        }
+
+        internal static void NotifyEditorQuittingForTests()
+        {
+            OnEditorQuitting();
         }
 
         public static IReadOnlyList<PackageDefinition> GetPackagesByCategory(string category)
@@ -277,6 +288,11 @@ namespace Deucarian.PackageInstaller.Editor
 
             EditorApplication.update -= UpdateRemoteRefresh;
             EditorApplication.update += UpdateRemoteRefresh;
+        }
+
+        private static void OnEditorQuitting()
+        {
+            CancelRemoteRefresh();
         }
 
         private static void EnsureBundledLoaded()

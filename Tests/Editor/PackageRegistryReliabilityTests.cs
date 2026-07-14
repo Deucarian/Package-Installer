@@ -321,6 +321,49 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void EditorQuitCancelsOwnedRemoteRefresh()
+        {
+            RunAsync(async () =>
+            {
+                CancellationToken observedToken = CancellationToken.None;
+                TaskCompletionSource<bool> cancellationObserved = new TaskCompletionSource<bool>();
+                PackageRegistryRemoteFetchDelegate pendingFetcher = async (url, token, timeout) =>
+                {
+                    observedToken = token;
+                    try
+                    {
+                        await Task.Delay(Timeout.Infinite, token).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        cancellationObserved.TrySetResult(true);
+                        throw;
+                    }
+
+                    return new PackageRegistryRemoteFetchResponse(string.Empty);
+                };
+                PackageRegistryLoader loader = new PackageRegistryLoader(
+                    pendingFetcher,
+                    PackageRegistryLoader.RemoteRegistryUrl,
+                    CreateManifestFetcher(),
+                    CreateCachePath(),
+                    TimeSpan.FromSeconds(10));
+                PackageRegistryProvider.SetLoaderForTests(loader);
+
+                PackageRegistryProvider.EnsureLoaded();
+                Assert.IsTrue(PackageRegistryProvider.IsRemoteRefreshing);
+                Assert.IsTrue(observedToken.CanBeCanceled);
+                PackageRegistryProvider.NotifyEditorQuittingForTests();
+                await WaitUntilAsync(() => cancellationObserved.Task.IsCompleted)
+                    .ConfigureAwait(false);
+
+                Assert.IsTrue(observedToken.IsCancellationRequested);
+                Assert.IsFalse(PackageRegistryProvider.IsRemoteRefreshing);
+                Assert.IsFalse(PackageRegistryProvider.CancelRemoteRefresh());
+            });
+        }
+
+        [Test]
         public void ManifestValidationNeverExceedsFourConcurrentFetches()
         {
             RunAsync(async () =>

@@ -8,6 +8,7 @@
 - Added failure propagation, independent-root continuation, request-boundary cancellation, exact-target recovery records, and explicit Resume, Restart, and Discard handling after assembly reloads.
 - Retried transient atomic file-replacement collisions for recovery and registry-cache state without deleting a valid destination.
 - Hardened registry and update networking with validated last-known-good caching, bounded concurrency, request timeouts, cancellation, deduplication, and stale-generation suppression.
+- Cancel installer-owned remote registry refreshes when the Unity editor quits so network continuations cannot outlive Mono shutdown.
 - Tightened installed-source channel detection to match the normalized Git remote, package path, and ref together, and added registry self-dependency and cycle rejection.
 - Staged fallback sample imports beneath `Library`, fully validated them before an atomic move into `Assets`, and guaranteed cleanup without overwriting existing imports.
 - Improved package-specific graph behavior for responsive widths, keyboard navigation, focus/search restoration, route isolation, transient Checking state, missing relationships, and dense-relation overflow.
