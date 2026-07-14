@@ -247,6 +247,52 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void LocalInstalledPackageWithOfficialMainReferenceUsesCustomChannel()
+        {
+            PackageDefinition packageDefinition = CreatePackage();
+
+            using (PackageDetectionService detectionService = new PackageDetectionService())
+            {
+                detectionService.ReplaceInstalledPackageForTests(
+                    packageDefinition.PackageId,
+                    packageDefinition.StableUrl,
+                    PackageInstallSourceType.Local);
+
+                bool found = detectionService.TryGetInstalledPackageChannel(
+                    packageDefinition,
+                    out PackageChannel channel,
+                    out string packageReference);
+
+                Assert.IsTrue(found);
+                Assert.AreEqual(PackageChannel.Custom, channel);
+                Assert.AreEqual(packageDefinition.StableUrl, packageReference);
+            }
+        }
+
+        [Test]
+        public void EmbeddedInstalledPackageWithOfficialMainReferenceUsesCustomChannel()
+        {
+            PackageDefinition packageDefinition = CreatePackage();
+
+            using (PackageDetectionService detectionService = new PackageDetectionService())
+            {
+                detectionService.ReplaceInstalledPackageForTests(
+                    packageDefinition.PackageId,
+                    packageDefinition.StableUrl,
+                    PackageInstallSourceType.Embedded);
+
+                bool found = detectionService.TryGetInstalledPackageChannel(
+                    packageDefinition,
+                    out PackageChannel channel,
+                    out string packageReference);
+
+                Assert.IsTrue(found);
+                Assert.AreEqual(PackageChannel.Custom, channel);
+                Assert.AreEqual(packageDefinition.StableUrl, packageReference);
+            }
+        }
+
+        [Test]
         public void SourceDetectorClassifiesKnownUnitySources()
         {
             Assert.AreEqual(

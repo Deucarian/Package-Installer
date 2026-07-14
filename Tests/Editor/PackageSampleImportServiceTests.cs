@@ -198,6 +198,83 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
         }
 
+        [Test]
+        public void SampleSourcePathAllowsTraversalThatRemainsInsideSamplesRoot()
+        {
+            string packageRoot = Path.Combine(_root, "InstalledPackage");
+            string expectedSource = Path.Combine(packageRoot, "Samples~", "Playable");
+            Directory.CreateDirectory(expectedSource);
+
+            bool resolved = PackageSampleImportService.TryResolveSampleSourcePathForTests(
+                packageRoot,
+                "Samples~/Nested/../Playable",
+                out string sourcePath,
+                out string message);
+
+            Assert.IsTrue(resolved, message);
+            Assert.AreEqual(Path.GetFullPath(expectedSource), sourcePath);
+            Assert.IsEmpty(message);
+        }
+
+        [Test]
+        public void SampleSourcePathCanonicalizesAcceptedSamplesRootCasing()
+        {
+            string packageRoot = Path.Combine(_root, "InstalledPackage");
+            string expectedSource = Path.Combine(packageRoot, "Samples~", "Playable");
+            Directory.CreateDirectory(expectedSource);
+
+            bool resolved = PackageSampleImportService.TryResolveSampleSourcePathForTests(
+                packageRoot,
+                "samples~/Playable",
+                out string sourcePath,
+                out string message);
+
+            Assert.IsTrue(resolved, message);
+            Assert.AreEqual(Path.GetFullPath(expectedSource), sourcePath);
+            Assert.IsEmpty(message);
+        }
+
+        [TestCase("Samples~/../Editor")]
+        [TestCase("Samples~/Nested/../../Editor")]
+        public void SampleSourcePathRejectsTraversalOutsideSamplesRoot(string samplePath)
+        {
+            string packageRoot = Path.Combine(_root, "InstalledPackage");
+            Directory.CreateDirectory(Path.Combine(packageRoot, "Samples~", "Nested"));
+            Directory.CreateDirectory(Path.Combine(packageRoot, "Editor"));
+
+            bool resolved = PackageSampleImportService.TryResolveSampleSourcePathForTests(
+                packageRoot,
+                samplePath,
+                out string sourcePath,
+                out string message);
+
+            Assert.IsFalse(resolved);
+            Assert.IsEmpty(sourcePath);
+            StringAssert.Contains("outside the installed package's Samples~ folder", message);
+        }
+
+        [Test]
+        public void DestinationAssetPathCanonicalizesRootCasingAndContainedTraversal()
+        {
+            bool resolved = PackageSampleImportService.TryCanonicalizeDestinationAssetPathForTests(
+                "assets/Nested/../Samples/Example",
+                out string canonicalAssetPath);
+
+            Assert.IsTrue(resolved);
+            Assert.AreEqual("Assets/Samples/Example", canonicalAssetPath);
+        }
+
+        [Test]
+        public void DestinationAssetPathRejectsCaseVariantEscapeFromAssetsRoot()
+        {
+            bool resolved = PackageSampleImportService.TryCanonicalizeDestinationAssetPathForTests(
+                "Assets/../assets/Escape",
+                out string canonicalAssetPath);
+
+            Assert.IsFalse(resolved);
+            Assert.IsEmpty(canonicalAssetPath);
+        }
+
         private void AssertNoStagedOperations()
         {
             if (!Directory.Exists(_staging))

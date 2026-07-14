@@ -943,6 +943,184 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             StringAssert.Contains(freshTarget, delta);
         }
 
+        [Test]
+        public void Recovery_RegistryDriftDeltaShowsDependencyGraphChangesWithoutTargetChange()
+        {
+            PackageDefinition package = CreatePackage(
+                "Recovery Test",
+                "com.deucarian.recovery-test");
+            PackageOperationRecoveryRecord recovery = new PackageOperationRecoveryRecord(
+                Guid.NewGuid().ToString("N"),
+                "Recovery test",
+                "old-registry-fingerprint",
+                DateTime.UtcNow.Ticks,
+                DateTime.UtcNow.Ticks,
+                new[]
+                {
+                    new PackageOperationRecoveryStep(
+                        package.PackageId,
+                        package.DisplayName,
+                        PackageChannel.Stable,
+                        package.StableUrl,
+                        isDependency: false,
+                        prerequisitePackageIds: Array.Empty<string>(),
+                        rootPackageIds: new[] { package.PackageId },
+                        rootPaths: new[] { package.DisplayName },
+                        dependencyReason: string.Empty,
+                        state: PackageInstallProgressItemState.Pending,
+                        message: string.Empty,
+                        requestedChannel: PackageChannel.Stable)
+                },
+                Array.Empty<string>());
+            PackageDependencyInstallPlan freshPlan = PackageDependencyInstallPlan.Success(
+                new[]
+                {
+                    new PackageDependencyInstallStep(
+                        package,
+                        PackageChannel.Stable,
+                        isDependency: true,
+                        targetUrl: package.StableUrl,
+                        prerequisitePackageIds: new[] { "com.deucarian.new-prerequisite" },
+                        rootPackageIds: new[] { "com.deucarian.new-root" },
+                        rootPaths: new[] { "New Root -> Recovery Test" },
+                        dependencyReason: "Required by New Root.",
+                        requestedChannel: PackageChannel.Development)
+                },
+                Array.Empty<string>(),
+                registryFingerprint: "fresh-registry-fingerprint");
+
+            string delta = PackageInstallerWindow.FormatRecoveryPlanDeltaForTests(
+                recovery,
+                freshPlan);
+
+            StringAssert.Contains("Changed: Recovery Test", delta);
+            StringAssert.Contains("requested channel: Stable -> Development", delta);
+            StringAssert.Contains("role: requested root -> dependency", delta);
+            StringAssert.Contains("prerequisites: (none) -> com.deucarian.new-prerequisite", delta);
+            StringAssert.Contains(
+                "root packages: com.deucarian.recovery-test -> com.deucarian.new-root",
+                delta);
+            StringAssert.Contains(
+                "root paths: Recovery Test -> New Root -> Recovery Test",
+                delta);
+            StringAssert.Contains("dependency reason: (none) -> Required by New Root.", delta);
+            StringAssert.DoesNotContain("target:", delta);
+        }
+
+        [Test]
+        public void Recovery_RegistryDriftDeltaShowsDetectedInstalledStateChangesWithoutTargetChange()
+        {
+            PackageDefinition package = CreatePackage(
+                "Recovery Test",
+                "com.deucarian.recovery-test");
+            PackageOperationRecoveryRecord recovery = new PackageOperationRecoveryRecord(
+                Guid.NewGuid().ToString("N"),
+                "Recovery test",
+                "old-registry-fingerprint",
+                DateTime.UtcNow.Ticks,
+                DateTime.UtcNow.Ticks,
+                new[]
+                {
+                    new PackageOperationRecoveryStep(
+                        package.PackageId,
+                        package.DisplayName,
+                        PackageChannel.Stable,
+                        package.StableUrl,
+                        isDependency: false,
+                        prerequisitePackageIds: Array.Empty<string>(),
+                        rootPackageIds: new[] { package.PackageId },
+                        rootPaths: new[] { package.DisplayName },
+                        dependencyReason: string.Empty,
+                        state: PackageInstallProgressItemState.Pending,
+                        message: string.Empty,
+                        detectedCurrentSource: "Git",
+                        detectedCurrentVersion: "1.1.61",
+                        detectedCurrentIdentity: "git-old",
+                        requestedChannel: PackageChannel.Stable)
+                },
+                Array.Empty<string>());
+            PackageDependencyInstallPlan freshPlan = PackageDependencyInstallPlan.Success(
+                new[]
+                {
+                    new PackageDependencyInstallStep(
+                        package,
+                        PackageChannel.Stable,
+                        isDependency: false,
+                        targetUrl: package.StableUrl,
+                        rootPackageIds: new[] { package.PackageId },
+                        rootPaths: new[] { package.DisplayName },
+                        detectedCurrentSource: "Registry",
+                        detectedCurrentVersion: "1.1.62",
+                        detectedCurrentIdentity: "registry-new",
+                        requestedChannel: PackageChannel.Stable)
+                },
+                Array.Empty<string>(),
+                registryFingerprint: "fresh-registry-fingerprint");
+
+            string delta = PackageInstallerWindow.FormatRecoveryPlanDeltaForTests(
+                recovery,
+                freshPlan);
+
+            StringAssert.Contains("Changed: Recovery Test", delta);
+            StringAssert.Contains("detected source: Git -> Registry", delta);
+            StringAssert.Contains("detected version: 1.1.61 -> 1.1.62", delta);
+            StringAssert.Contains("detected identity: git-old -> registry-new", delta);
+            StringAssert.DoesNotContain("target:", delta);
+        }
+
+        [Test]
+        public void RecoveryModelsExposeImmutableSnapshotCollections()
+        {
+            string[] prerequisiteIds = { "com.deucarian.prerequisite" };
+            string[] rootIds = { "com.deucarian.root" };
+            string[] rootPaths = { "Root -> Recovery" };
+            PackageOperationRecoveryStep step = new PackageOperationRecoveryStep(
+                "com.deucarian.recovery-test",
+                "Recovery Test",
+                PackageChannel.Stable,
+                "https://github.com/Deucarian/Recovery-Test.git#main",
+                isDependency: true,
+                prerequisitePackageIds: prerequisiteIds,
+                rootPackageIds: rootIds,
+                rootPaths: rootPaths,
+                dependencyReason: "Required by Root.",
+                state: PackageInstallProgressItemState.Pending,
+                message: string.Empty);
+            PackageOperationRecoveryStep[] steps = { step };
+            string[] messages = { "Original message" };
+            PackageOperationRecoveryRecord record = new PackageOperationRecoveryRecord(
+                Guid.NewGuid().ToString("N"),
+                "Recovery test",
+                "registry-fingerprint",
+                DateTime.UtcNow.Ticks,
+                DateTime.UtcNow.Ticks,
+                steps,
+                messages);
+
+            prerequisiteIds[0] = "com.deucarian.changed";
+            rootIds[0] = "com.deucarian.changed-root";
+            rootPaths[0] = "Changed Path";
+            steps[0] = null;
+            messages[0] = "Changed message";
+
+            CollectionAssert.AreEqual(
+                new[] { "com.deucarian.prerequisite" },
+                step.PrerequisitePackageIds);
+            CollectionAssert.AreEqual(new[] { "com.deucarian.root" }, step.RootPackageIds);
+            CollectionAssert.AreEqual(new[] { "Root -> Recovery" }, step.RootPaths);
+            Assert.AreSame(step, record.Steps.Single());
+            CollectionAssert.AreEqual(new[] { "Original message" }, record.Messages);
+            Assert.IsFalse(step.PrerequisitePackageIds is string[]);
+            Assert.IsFalse(record.Steps is PackageOperationRecoveryStep[]);
+            Assert.IsFalse(record.Messages is string[]);
+            Assert.Throws<NotSupportedException>(() =>
+                ((IList<string>)step.PrerequisitePackageIds)[0] = "mutated");
+            Assert.Throws<NotSupportedException>(() =>
+                ((IList<PackageOperationRecoveryStep>)record.Steps)[0] = null);
+            Assert.Throws<NotSupportedException>(() =>
+                ((IList<string>)record.Messages)[0] = "mutated");
+        }
+
         private static PackageDependencyInstallPlan CreateIndependentPlan(
             params PackageDefinition[] packages)
         {

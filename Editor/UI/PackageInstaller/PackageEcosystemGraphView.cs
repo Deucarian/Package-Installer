@@ -1124,15 +1124,31 @@ namespace Deucarian.PackageInstaller.Editor
                 : counts.VisibleCount + " visible";
             bool packageFocusShowsFullEgo = _canvas != null &&
                                             _canvas.LayoutMode == PackageGraphLayoutMode.Focus;
+            int summarizedDirectRelationshipCount = _canvas != null
+                ? _canvas.SummarizedDirectRelationshipCount
+                : 0;
             bool showFocusContext = packageFocusShowsFullEgo &&
-                                    (!_filterState.IsDefault || _hiddenRelatedCount > 0);
+                                    (!_filterState.IsDefault ||
+                                     _hiddenRelatedCount > 0 ||
+                                     summarizedDirectRelationshipCount > 0);
             _hiddenRelatedLabel.text = showFocusContext
-                ? "Focus includes all direct relations"
+                ? (summarizedDirectRelationshipCount > 0
+                    ? "Focus includes direct relations (" +
+                      summarizedDirectRelationshipCount +
+                      " summarized)"
+                    : "Focus includes direct relations")
                 : (!_filterState.HasSearch && _hiddenRelatedCount > 0
                     ? _hiddenRelatedCount + " related hidden by filters"
                     : string.Empty);
             _hiddenRelatedLabel.tooltip = showFocusContext
-                ? "Search and visibility filters are preserved, but package focus keeps every direct relationship visible."
+                ? (summarizedDirectRelationshipCount > 0
+                    ? "Search and visibility filters are preserved. All direct relationships remain represented; " +
+                      summarizedDirectRelationshipCount +
+                      " dense direct " +
+                      (summarizedDirectRelationshipCount == 1 ? "relationship is" : "relationships are") +
+                      " summarized behind the +N overflow summary."
+                    : "Search and visibility filters are preserved. Direct relationships remain represented; " +
+                      "dense extras may be summarized behind a +N overflow summary when needed.")
                 : string.Empty;
             _hiddenRelatedLabel.style.display = !string.IsNullOrWhiteSpace(_hiddenRelatedLabel.text)
                 ? DisplayStyle.Flex
@@ -3111,6 +3127,10 @@ namespace Deucarian.PackageInstaller.Editor
         public PackageGraphLayoutMode LayoutMode => _layoutResult != null ? _layoutResult.Mode : PackageGraphLayoutMode.Overview;
 
         public int RenderedPackageCount => _visibleGraph != null ? _visibleGraph.Nodes.Count : 0;
+
+        public int SummarizedDirectRelationshipCount => _layoutResult != null
+            ? _layoutResult.OverflowSummaries.Sum(summary => summary.HiddenCount)
+            : 0;
 
         public bool InteractionsLocked => _interactionsLocked;
 

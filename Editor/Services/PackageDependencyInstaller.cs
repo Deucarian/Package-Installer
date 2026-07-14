@@ -77,11 +77,11 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static IReadOnlyList<string> ToReadOnlyList(IEnumerable<string> values)
         {
-            return (values ?? Array.Empty<string>())
+            return Array.AsReadOnly((values ?? Array.Empty<string>())
                 .Where(value => !string.IsNullOrWhiteSpace(value))
                 .Select(value => value.Trim())
                 .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToArray();
+                .ToArray());
         }
     }
 
@@ -101,8 +101,9 @@ namespace Deucarian.PackageInstaller.Editor
             IEnumerable<PackageOperationRootRequest> rootRequests)
         {
             IsValid = isValid;
-            Steps = (steps ?? Array.Empty<PackageDependencyInstallStep>()).ToArray();
-            Messages = (messages ?? Array.Empty<string>()).ToArray();
+            Steps = Array.AsReadOnly(
+                (steps ?? Array.Empty<PackageDependencyInstallStep>()).ToArray());
+            Messages = Array.AsReadOnly((messages ?? Array.Empty<string>()).ToArray());
             ErrorMessage = errorMessage ?? string.Empty;
             OperationId = string.IsNullOrWhiteSpace(operationId)
                 ? Guid.NewGuid().ToString("N")
@@ -651,6 +652,13 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (!installPlan.IsValid)
             {
+                if (installPlan.HasConflict && PreflightConfirmation != null)
+                {
+                    // Conflicts cannot be executed, but they still use the contextual
+                    // review surface so every affected root path is visible in place.
+                    PreflightConfirmation(installPlan, operationName);
+                }
+
                 _lastPlannerRetryRequest = installPlan.RootRequests.Count > 0
                     ? new PackagePlannerRetryRequest(
                         installPlan.RootRequests,
@@ -793,24 +801,6 @@ namespace Deucarian.PackageInstaller.Editor
 
             string rootPath = FormatPath(visitStack);
 
-            if (planningTargets.TryGetValue(
-                    packageDefinition.PackageId,
-                    out PackagePlanningTarget existingTarget) &&
-                !string.Equals(existingTarget.TargetUrl, packageUrl, StringComparison.Ordinal))
-            {
-                errorMessage = "Conflicting package targets for " + packageDefinition.DisplayName +
-                               ": " + existingTarget.RootPath + " requests " +
-                               existingTarget.Channel + " (" + existingTarget.TargetUrl + "), while " +
-                               rootPath + " requests " + packageChannel + " (" + packageUrl + ").";
-                return false;
-            }
-
-            if (existingTarget == null)
-            {
-                planningTargets[packageDefinition.PackageId] =
-                    new PackagePlanningTarget(packageChannel, packageUrl, rootPath);
-            }
-
             visitingPackageIds.Add(packageDefinition.PackageId);
 
             foreach (string dependencyId in packageDefinition.Dependencies)
@@ -884,6 +874,27 @@ namespace Deucarian.PackageInstaller.Editor
             string dependencyReason = isDependency && requestedPackage != null
                 ? "Required by " + requestedPackage.DisplayName + "."
                 : string.Empty;
+
+            if (planningTargets.TryGetValue(
+                    packageDefinition.PackageId,
+                    out PackagePlanningTarget existingTarget))
+            {
+                if (!string.Equals(existingTarget.TargetUrl, packageUrl, StringComparison.Ordinal))
+                {
+                    errorMessage = "Conflicting package targets for " + packageDefinition.DisplayName +
+                                   ": " + existingTarget.FormatRootPaths() + " request " +
+                                   existingTarget.Channel + " (" + existingTarget.TargetUrl + "), while " +
+                                   rootPath + " requests " + packageChannel + " (" + packageUrl + ").";
+                    return false;
+                }
+
+                existingTarget.AddRootPath(rootPath);
+            }
+            else
+            {
+                planningTargets[packageDefinition.PackageId] =
+                    new PackagePlanningTarget(packageChannel, packageUrl, rootPath);
+            }
 
             if (stepBuilders.TryGetValue(
                     packageDefinition.PackageId,
@@ -1201,18 +1212,39 @@ namespace Deucarian.PackageInstaller.Editor
 
         private sealed class PackagePlanningTarget
         {
+            private readonly List<string> _rootPaths = new List<string>();
+
             public PackagePlanningTarget(PackageChannel channel, string targetUrl, string rootPath)
             {
                 Channel = channel;
                 TargetUrl = targetUrl ?? string.Empty;
-                RootPath = rootPath ?? string.Empty;
+                AddRootPath(rootPath);
             }
 
             public PackageChannel Channel { get; }
 
             public string TargetUrl { get; }
 
-            public string RootPath { get; }
+            public void AddRootPath(string rootPath)
+            {
+                if (string.IsNullOrWhiteSpace(rootPath) ||
+                    _rootPaths.Any(existing => string.Equals(
+                        existing,
+                        rootPath,
+                        StringComparison.OrdinalIgnoreCase)))
+                {
+                    return;
+                }
+
+                _rootPaths.Add(rootPath.Trim());
+            }
+
+            public string FormatRootPaths()
+            {
+                return _rootPaths.Count > 0
+                    ? string.Join("; ", _rootPaths.ToArray())
+                    : "an unknown root path";
+            }
         }
 
         private sealed class PackageDependencyInstallStepBuilder

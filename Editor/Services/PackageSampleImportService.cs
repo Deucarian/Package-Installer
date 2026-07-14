@@ -383,9 +383,14 @@ namespace Deucarian.PackageInstaller.Editor
                 return false;
             }
 
-            string destinationAssetPath = GetDestinationPath(packageDefinition, extraDefinition, packageInfo);
+            string requestedDestinationAssetPath = GetDestinationPath(
+                packageDefinition,
+                extraDefinition,
+                packageInfo);
 
-            if (!IsSafeAssetPath(destinationAssetPath))
+            if (!TryCanonicalizeDestinationAssetPath(
+                    requestedDestinationAssetPath,
+                    out string destinationAssetPath))
             {
                 message = "Sample destination must be inside the project's Assets folder.";
                 return false;
@@ -657,7 +662,45 @@ namespace Deucarian.PackageInstaller.Editor
                 return false;
             }
 
-            string normalizedSamplePath = NormalizeAssetPath(extraDefinition.SamplePath);
+            return TryResolveSampleSourcePath(
+                packageInfo.resolvedPath,
+                extraDefinition.SamplePath,
+                out sourcePath,
+                out message);
+        }
+
+        internal static bool TryResolveSampleSourcePathForTests(
+            string resolvedPackagePath,
+            string samplePath,
+            out string sourcePath,
+            out string message)
+        {
+            return TryResolveSampleSourcePath(
+                resolvedPackagePath,
+                samplePath,
+                out sourcePath,
+                out message);
+        }
+
+        internal static bool TryCanonicalizeDestinationAssetPathForTests(
+            string destinationAssetPath,
+            out string canonicalAssetPath)
+        {
+            return TryCanonicalizeDestinationAssetPath(
+                destinationAssetPath,
+                out canonicalAssetPath);
+        }
+
+        private static bool TryResolveSampleSourcePath(
+            string resolvedPackagePath,
+            string samplePath,
+            out string sourcePath,
+            out string message)
+        {
+            sourcePath = string.Empty;
+            message = string.Empty;
+
+            string normalizedSamplePath = NormalizeAssetPath(samplePath);
 
             if (string.IsNullOrWhiteSpace(normalizedSamplePath))
             {
@@ -671,7 +714,7 @@ namespace Deucarian.PackageInstaller.Editor
                 return false;
             }
 
-            string packagePath = GetPackageRootPath(packageInfo.resolvedPath);
+            string packagePath = GetPackageRootPath(resolvedPackagePath);
 
             if (string.IsNullOrWhiteSpace(packagePath))
             {
@@ -679,13 +722,26 @@ namespace Deucarian.PackageInstaller.Editor
                 return false;
             }
 
-            sourcePath = Path.GetFullPath(Path.Combine(
-                packagePath,
-                normalizedSamplePath.Replace('/', Path.DirectorySeparatorChar)));
-
-            if (!IsPathInsideDirectory(sourcePath, packagePath))
+            const string samplesRootName = "Samples~";
+            string relativeSamplePath = normalizedSamplePath.Length > samplesRootName.Length
+                ? normalizedSamplePath.Substring(samplesRootName.Length).TrimStart('/')
+                : string.Empty;
+            if (!TryNormalizeRelativePathWithinRoot(
+                    relativeSamplePath,
+                    out string normalizedRelativeSamplePath))
             {
-                message = "Sample path resolves outside the installed package.";
+                message = "Sample path resolves outside the installed package's Samples~ folder.";
+                return false;
+            }
+
+            string samplesRootPath = Path.GetFullPath(Path.Combine(packagePath, samplesRootName));
+            sourcePath = Path.GetFullPath(Path.Combine(
+                samplesRootPath,
+                normalizedRelativeSamplePath.Replace('/', Path.DirectorySeparatorChar)));
+
+            if (!IsPathInsideDirectory(sourcePath, samplesRootPath))
+            {
+                message = "Sample path resolves outside the installed package's Samples~ folder.";
                 sourcePath = string.Empty;
                 return false;
             }
@@ -695,14 +751,9 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static bool DestinationExists(string destinationAssetPath)
         {
-            string normalizedPath = NormalizeAssetPath(destinationAssetPath);
-
-            if (string.IsNullOrWhiteSpace(normalizedPath))
-            {
-                return false;
-            }
-
-            if (!IsSafeAssetPath(normalizedPath))
+            if (!TryCanonicalizeDestinationAssetPath(
+                    destinationAssetPath,
+                    out string normalizedPath))
             {
                 return false;
             }
@@ -811,8 +862,11 @@ namespace Deucarian.PackageInstaller.Editor
             return projectRoot != null ? projectRoot.FullName : Application.dataPath;
         }
 
-        private static bool IsSafeAssetPath(string assetPath)
+        private static bool TryCanonicalizeDestinationAssetPath(
+            string assetPath,
+            out string canonicalAssetPath)
         {
+            canonicalAssetPath = string.Empty;
             string normalizedPath = NormalizeAssetPath(assetPath);
 
             if (string.IsNullOrWhiteSpace(normalizedPath))
@@ -820,8 +874,27 @@ namespace Deucarian.PackageInstaller.Editor
                 return false;
             }
 
-            return string.Equals(normalizedPath, "Assets", StringComparison.OrdinalIgnoreCase) ||
-                   normalizedPath.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase);
+            const string assetsRootName = "Assets";
+            if (!string.Equals(normalizedPath, assetsRootName, StringComparison.OrdinalIgnoreCase) &&
+                !normalizedPath.StartsWith(assetsRootName + "/", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            string relativeAssetPath = normalizedPath.Length > assetsRootName.Length
+                ? normalizedPath.Substring(assetsRootName.Length).TrimStart('/')
+                : string.Empty;
+            if (!TryNormalizeRelativePathWithinRoot(
+                    relativeAssetPath,
+                    out string normalizedRelativeAssetPath))
+            {
+                return false;
+            }
+
+            canonicalAssetPath = string.IsNullOrEmpty(normalizedRelativeAssetPath)
+                ? assetsRootName
+                : assetsRootName + "/" + normalizedRelativeAssetPath;
+            return true;
         }
 
         private static bool IsSamplesFolderPath(string samplePath)
@@ -830,6 +903,37 @@ namespace Deucarian.PackageInstaller.Editor
 
             return string.Equals(normalizedPath, "Samples~", StringComparison.OrdinalIgnoreCase) ||
                    normalizedPath.StartsWith("Samples~/", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool TryNormalizeRelativePathWithinRoot(
+            string relativePath,
+            out string normalizedRelativePath)
+        {
+            normalizedRelativePath = string.Empty;
+            List<string> segments = new List<string>();
+            foreach (string segment in NormalizeAssetPath(relativePath).Split('/'))
+            {
+                if (string.IsNullOrEmpty(segment) || string.Equals(segment, ".", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                if (string.Equals(segment, "..", StringComparison.Ordinal))
+                {
+                    if (segments.Count == 0)
+                    {
+                        return false;
+                    }
+
+                    segments.RemoveAt(segments.Count - 1);
+                    continue;
+                }
+
+                segments.Add(segment);
+            }
+
+            normalizedRelativePath = string.Join("/", segments.ToArray());
+            return true;
         }
 
         private static bool IsPathInsideDirectory(string path, string directory)
