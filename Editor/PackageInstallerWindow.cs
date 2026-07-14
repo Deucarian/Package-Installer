@@ -134,6 +134,7 @@ namespace Deucarian.PackageInstaller.Editor
         private const float SidebarRowMinHeight = 94f;
         private const float SidebarRowMaxHeight = 150f;
         private const float DetailLabelWidth = 118f;
+        private const float DetailsActionsStackWidth = 460f;
         private const int OperationInlinePadding = OperationLayoutMetrics.InlinePadding;
         private const int OperationBlockPadding = OperationLayoutMetrics.BlockPadding;
         private const int OperationControlGap = OperationLayoutMetrics.ControlGap;
@@ -459,6 +460,22 @@ namespace Deucarian.PackageInstaller.Editor
         internal static PackageInstallerResponsiveMode ResolveResponsiveModeForTests(float width)
         {
             return ResolveResponsiveMode(width);
+        }
+
+        internal static float ResolveDetailsContentWidthForTests(
+            float windowWidth,
+            bool isEcosystemGraph,
+            float graphDetailsContentWidth)
+        {
+            return ResolveDetailsContentWidth(
+                windowWidth,
+                isEcosystemGraph,
+                graphDetailsContentWidth);
+        }
+
+        internal static bool ShouldStackDetailsActionsForTests(float detailsContentWidth)
+        {
+            return ShouldStackDetailsActions(detailsContentWidth);
         }
 
         internal static bool IsGraphNavigationRowKeyboardActivationForTests(
@@ -4042,7 +4059,35 @@ namespace Deucarian.PackageInstaller.Editor
 
         private float GetDetailsContentWidth()
         {
-            return Mathf.Max(0f, position.width - SidebarWidth - 56f);
+            float graphDetailsContentWidth = _graphDetailsContainer == null
+                ? 0f
+                : _graphDetailsContainer.contentRect.width;
+
+            return ResolveDetailsContentWidth(
+                position.width,
+                _viewMode == InstallerViewMode.EcosystemGraph,
+                graphDetailsContentWidth);
+        }
+
+        private static float ResolveDetailsContentWidth(
+            float windowWidth,
+            bool isEcosystemGraph,
+            float graphDetailsContentWidth)
+        {
+            if (isEcosystemGraph &&
+                graphDetailsContentWidth > 0f &&
+                !float.IsNaN(graphDetailsContentWidth) &&
+                !float.IsInfinity(graphDetailsContentWidth))
+            {
+                return graphDetailsContentWidth;
+            }
+
+            return Mathf.Max(0f, windowWidth - SidebarWidth - 56f);
+        }
+
+        private static bool ShouldStackDetailsActions(float detailsContentWidth)
+        {
+            return detailsContentWidth < DetailsActionsStackWidth;
         }
 
         private void DrawDetailHeader(PackageDefinition packageDefinition)
@@ -4398,7 +4443,7 @@ namespace Deucarian.PackageInstaller.Editor
             bool installed = _packageDetectionService.IsInstalled(packageDefinition.PackageId);
             bool queuedOrInstalling = _packageInstallService.IsQueuedOrInstalling(packageDefinition.PackageId);
             bool actionsBusy = IsAnyOperationBusy();
-            bool stackActions = GetDetailsContentWidth() < 460f;
+            bool stackActions = ShouldStackDetailsActions(GetDetailsContentWidth());
             PackageUpdateStatus updateStatus = _packageUpdateCheckService.GetStatus(
                 packageDefinition,
                 GetSelectedChannel(packageDefinition));
