@@ -199,18 +199,27 @@ namespace Deucarian.PackageInstaller.Editor
         private const string RelativeStatePath = "Library/Deucarian/PackageInstaller/pending-operation.json";
 
         private readonly string _statePath;
+        private readonly PackageInstallerAtomicFileCommitter _atomicCommitter;
 
         public PackageOperationStateRepository()
-            : this(GetProjectRoot())
+            : this(GetProjectRoot(), null)
         {
         }
 
         internal PackageOperationStateRepository(string projectRoot)
+            : this(projectRoot, null)
+        {
+        }
+
+        internal PackageOperationStateRepository(
+            string projectRoot,
+            PackageInstallerAtomicFileCommitter atomicCommitter)
         {
             string root = string.IsNullOrWhiteSpace(projectRoot) ? GetProjectRoot() : projectRoot;
             _statePath = Path.GetFullPath(Path.Combine(
                 root,
                 RelativeStatePath.Replace('/', Path.DirectorySeparatorChar)));
+            _atomicCommitter = atomicCommitter ?? PackageInstallerAtomicFileCommitter.Shared;
         }
 
         internal string StatePathForTests => _statePath;
@@ -481,14 +490,7 @@ namespace Deucarian.PackageInstaller.Editor
 
                 File.WriteAllText(tempPath, JsonUtility.ToJson(storage, true));
 
-                if (File.Exists(_statePath))
-                {
-                    File.Replace(tempPath, _statePath, null);
-                }
-                else
-                {
-                    File.Move(tempPath, _statePath);
-                }
+                _atomicCommitter.Commit(tempPath, _statePath);
 
                 return true;
             }
@@ -515,14 +517,9 @@ namespace Deucarian.PackageInstaller.Editor
 
         public void Clear()
         {
-            if (!File.Exists(_statePath))
-            {
-                return;
-            }
-
             try
             {
-                File.Delete(_statePath);
+                _atomicCommitter.Delete(_statePath);
             }
             catch (Exception exception)
             {

@@ -6,6 +6,7 @@
 
 - Added immutable, dependency-aware operation plans with contextual preflight for bulk, multi-step, migration, downgrade, fallback, conflict, and destructive operations while keeping ordinary one-step installs immediate.
 - Added failure propagation, independent-root continuation, request-boundary cancellation, exact-target recovery records, and explicit Resume, Restart, and Discard handling after assembly reloads.
+- Retried transient atomic file-replacement collisions for recovery and registry-cache state without deleting a valid destination.
 - Hardened registry and update networking with validated last-known-good caching, bounded concurrency, request timeouts, cancellation, deduplication, and stale-generation suppression.
 - Tightened installed-source channel detection to match the normalized Git remote, package path, and ref together, and added registry self-dependency and cycle rejection.
 - Staged fallback sample imports beneath `Library`, fully validated them before an atomic move into `Assets`, and guaranteed cleanup without overwriting existing imports.
