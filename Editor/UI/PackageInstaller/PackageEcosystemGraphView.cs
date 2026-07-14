@@ -127,6 +127,10 @@ namespace Deucarian.PackageInstaller.Editor
 
             VisualElement filterRow = new VisualElement();
             filterRow.AddToClassList("dpi-ecosystem-graph__filter-row");
+            // Package focus can add contextual text at otherwise wide window sizes.
+            // Keep the navigation controls as one wrap-safe item so no action is clipped.
+            filterRow.style.flexWrap = Wrap.Wrap;
+            filterRow.style.alignContent = Align.FlexStart;
             header.Add(filterRow);
 
             _breadcrumbRow = new VisualElement();
@@ -197,6 +201,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             VisualElement toolbar = new VisualElement();
             toolbar.AddToClassList("dpi-ecosystem-graph__toolbar");
+            toolbar.style.flexGrow = 1f;
             toolbar.Add(CreateToolbarButton("Fit", FitCurrentContext));
             toolbar.Add(CreateToolbarButton("100%", ResetCurrentContextZoom));
             toolbar.Add(CreateToolbarButton("Center", CenterCurrentContext));

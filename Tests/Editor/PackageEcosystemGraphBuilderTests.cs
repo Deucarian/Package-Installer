@@ -3340,6 +3340,12 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         public void GraphView_ResponsiveModeClassesAreStable()
         {
             PackageGraphView view = new PackageGraphView(_ => { }, (_, __) => { });
+            VisualElement filterRow = FindByClass(view, "dpi-ecosystem-graph__filter-row").Single();
+            VisualElement toolbar = FindByClass(view, "dpi-ecosystem-graph__toolbar").Single();
+
+            Assert.AreEqual(Wrap.Wrap, filterRow.style.flexWrap.value);
+            Assert.AreEqual(Align.FlexStart, filterRow.style.alignContent.value);
+            Assert.AreEqual(1f, toolbar.style.flexGrow.value);
 
             view.SetResponsiveMode(PackageInstallerResponsiveMode.Compact);
 
