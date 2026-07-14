@@ -10,6 +10,7 @@
 - Tightened installed-source channel detection to match the normalized Git remote, package path, and ref together, and added registry self-dependency and cycle rejection.
 - Staged fallback sample imports beneath `Library`, fully validated them before an atomic move into `Assets`, and guaranteed cleanup without overwriting existing imports.
 - Improved package-specific graph behavior for responsive widths, keyboard navigation, focus/search restoration, route isolation, transient Checking state, missing relationships, and dense-relation overflow.
+- Kept graph rendering compatible with Unity 2021.3 through a package-specific mesh fallback while preserving native Painter2D rendering on newer editors.
 - Added actual installed/package-lock reverse-dependency removal warnings, a chronological activity/result surface with copyable details, and contextual recovery actions.
 - Added normal push and pull-request Unity EditMode CI using the minimum Unity 2021.3 fixture and exact Editor/Logging package revisions.
 

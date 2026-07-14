@@ -7,6 +7,11 @@ using Deucarian.Editor;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
+#if UNITY_2022_1_OR_NEWER
+using PackageGraphPainter = UnityEngine.UIElements.Painter2D;
+#else
+using PackageGraphPainter = Deucarian.PackageInstaller.Editor.PackageGraphMeshPainter;
+#endif
 
 namespace Deucarian.PackageInstaller.Editor
 {
@@ -5669,7 +5674,7 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            Painter2D painter = context.painter2D;
+            PackageGraphPainter painter = PackageGraphPainterCompatibility.Create(context);
             Dictionary<string, PackageGraphGroupLayoutNode> groupNodeById = _layout.GroupNodes
                 .Where(groupNode => groupNode != null && groupNode.Group != null)
                 .GroupBy(groupNode => groupNode.GroupId, StringComparer.OrdinalIgnoreCase)
@@ -5688,6 +5693,7 @@ namespace Deucarian.PackageInstaller.Editor
             if (_layout.Mode == PackageGraphLayoutMode.Focus)
             {
                 DrawFocusMembershipGuides(painter, groupNodeById);
+                PackageGraphPainterCompatibility.Complete(painter);
                 return;
             }
 
@@ -5717,6 +5723,8 @@ namespace Deucarian.PackageInstaller.Editor
                     DrawSpoke(painter, groupHubRect, childRect, emphasized, muted);
                 }
             }
+
+            PackageGraphPainterCompatibility.Complete(painter);
         }
 
         internal IReadOnlyList<PackageGraphOrbitVisualState> BuildOrbitVisualStatesForTests()
@@ -5856,7 +5864,7 @@ namespace Deucarian.PackageInstaller.Editor
         }
 
         private void DrawFocusMembershipGuides(
-            Painter2D painter,
+            PackageGraphPainter painter,
             IReadOnlyDictionary<string, PackageGraphGroupLayoutNode> groupNodeById)
         {
             foreach (PackageGraphStructuralMembershipRoute route in BuildFocusMembershipRoutes(groupNodeById))
@@ -6069,7 +6077,7 @@ namespace Deucarian.PackageInstaller.Editor
         }
 
         private static void DrawStructuralMembershipRoute(
-            Painter2D painter,
+            PackageGraphPainter painter,
             PackageGraphStructuralMembershipRoute route,
             bool emphasized,
             bool muted)
@@ -6176,7 +6184,7 @@ namespace Deucarian.PackageInstaller.Editor
                     : 0f;
         }
 
-        private static void DrawOrbitCircle(Painter2D painter, PackageGraphOrbitVisualState orbit)
+        private static void DrawOrbitCircle(PackageGraphPainter painter, PackageGraphOrbitVisualState orbit)
         {
             if (!orbit.Visible || orbit.Radius <= 0.01f)
             {
@@ -6189,7 +6197,7 @@ namespace Deucarian.PackageInstaller.Editor
             DrawCircle(painter, orbit.Center, orbit.Radius);
         }
 
-        private static void DrawStatusRing(Painter2D painter, CategoryStatusRingVisualState ring)
+        private static void DrawStatusRing(PackageGraphPainter painter, CategoryStatusRingVisualState ring)
         {
             if (ring.Radius <= 0.01f || ring.Thickness <= 0.01f)
             {
@@ -6222,7 +6230,7 @@ namespace Deucarian.PackageInstaller.Editor
         }
 
         private static void DrawFullStatusRing(
-            Painter2D painter,
+            PackageGraphPainter painter,
             Vector2 center,
             float radius,
             float thickness,
@@ -6236,7 +6244,7 @@ namespace Deucarian.PackageInstaller.Editor
         }
 
         private static void DrawRingSegment(
-            Painter2D painter,
+            PackageGraphPainter painter,
             Vector2 center,
             float radius,
             float thickness,
@@ -6275,7 +6283,7 @@ namespace Deucarian.PackageInstaller.Editor
             painter.Stroke();
         }
 
-        private static void DrawSpoke(Painter2D painter, Rect fromHubRect, Rect toRect, bool emphasized, bool muted)
+        private static void DrawSpoke(PackageGraphPainter painter, Rect fromHubRect, Rect toRect, bool emphasized, bool muted)
         {
             Vector2 fromCenter = fromHubRect.center;
             Vector2 toCenter = toRect.center;
@@ -6320,20 +6328,20 @@ namespace Deucarian.PackageInstaller.Editor
             return center - normalized * distance;
         }
 
-        private static void DrawCircle(Painter2D painter, Vector2 center, float radius)
+        private static void DrawCircle(PackageGraphPainter painter, Vector2 center, float radius)
         {
             DrawCirclePath(painter, center, radius);
             painter.Fill();
             painter.Stroke();
         }
 
-        private static void DrawCircleStroke(Painter2D painter, Vector2 center, float radius)
+        private static void DrawCircleStroke(PackageGraphPainter painter, Vector2 center, float radius)
         {
             DrawCirclePath(painter, center, radius);
             painter.Stroke();
         }
 
-        private static void DrawCirclePath(Painter2D painter, Vector2 center, float radius)
+        private static void DrawCirclePath(PackageGraphPainter painter, Vector2 center, float radius)
         {
             const float Kappa = 0.55228475f;
             float safeRadius = Mathf.Max(0f, radius);
@@ -7113,7 +7121,7 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             long painterStartTicks = Stopwatch.GetTimestamp();
-            Painter2D painter = context.painter2D;
+            PackageGraphPainter painter = PackageGraphPainterCompatibility.Create(context);
 
             foreach (PackageGraphEdgeRoute route in _routes)
             {
@@ -7124,6 +7132,8 @@ namespace Deucarian.PackageInstaller.Editor
                     _focus.HasFocus,
                     _animationPhase);
             }
+
+            PackageGraphPainterCompatibility.Complete(painter);
 
             PackageGraphOpenProfiler.Current?.AddEdgeRouteDiagnostics(
                 new PackageGraphEdgeRouteBuildDiagnostics
@@ -7480,7 +7490,7 @@ namespace Deucarian.PackageInstaller.Editor
         }
 
         private static void DrawEdge(
-            Painter2D painter,
+            PackageGraphPainter painter,
             PackageGraphEdgeRoute route,
             bool emphasized,
             bool focusMode,
@@ -7570,7 +7580,7 @@ namespace Deucarian.PackageInstaller.Editor
         }
 
         private static void DrawCompositeDependencyIntegrationRoute(
-            Painter2D painter,
+            PackageGraphPainter painter,
             PackageGraphEdgeRoute route,
             bool emphasized,
             bool focusMode,
@@ -8994,7 +9004,7 @@ namespace Deucarian.PackageInstaller.Editor
         }
 
         private static void DrawPolylineStroke(
-            Painter2D painter,
+            PackageGraphPainter painter,
             IReadOnlyList<Vector2> points)
         {
             if (points == null || points.Count < 2)
@@ -9014,7 +9024,7 @@ namespace Deucarian.PackageInstaller.Editor
         }
 
         private static void DrawRouteUnderlay(
-            Painter2D painter,
+            PackageGraphPainter painter,
             IReadOnlyList<Vector2> points,
             PackageGraphEdgeKind kind,
             float semanticWidth,
@@ -9038,7 +9048,7 @@ namespace Deucarian.PackageInstaller.Editor
         }
 
         private static void DrawIntegrationCableRoute(
-            Painter2D painter,
+            PackageGraphPainter painter,
             IReadOnlyList<Vector2> points,
             Color color,
             float width,
@@ -9063,7 +9073,7 @@ namespace Deucarian.PackageInstaller.Editor
         }
 
         private static void DrawOffsetPolyline(
-            Painter2D painter,
+            PackageGraphPainter painter,
             IReadOnlyList<Vector2> points,
             float offset)
         {
@@ -9087,7 +9097,7 @@ namespace Deucarian.PackageInstaller.Editor
         }
 
         private static void DrawFlowMarkers(
-            Painter2D painter,
+            PackageGraphPainter painter,
             PackageGraphEdgeRoute route,
             PackageGraphEdgeKind kind,
             Color color,
@@ -9118,7 +9128,7 @@ namespace Deucarian.PackageInstaller.Editor
         }
 
         private static void DrawFlowChevron(
-            Painter2D painter,
+            PackageGraphPainter painter,
             Vector2 center,
             Vector2 tangent,
             Color color,
@@ -9189,7 +9199,7 @@ namespace Deucarian.PackageInstaller.Editor
         }
 
         private static void DrawDashedPolyline(
-            Painter2D painter,
+            PackageGraphPainter painter,
             IReadOnlyList<Vector2> points,
             float dashLength,
             float gapLength,
@@ -9474,7 +9484,7 @@ namespace Deucarian.PackageInstaller.Editor
                    point.y <= Mathf.Max(segmentStart.y, segmentEnd.y) + Epsilon;
         }
 
-        private static void DrawWarningMarker(Painter2D painter, Vector2 center)
+        private static void DrawWarningMarker(PackageGraphPainter painter, Vector2 center)
         {
             painter.fillColor = new Color(0.94f, 0.64f, 0.27f, 0.90f);
             painter.strokeColor = new Color(0.16f, 0.12f, 0.06f, 0.86f);
