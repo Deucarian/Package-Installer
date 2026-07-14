@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 1.1.63 - 2026-07-15
+
+- Restored a contextual ecosystem-wide `Update all (N)` action in the root overview whenever update results are available.
+- Temporarily disabled List View and route all view requests to Ecosystem Graph while keeping the list implementation available for later refinement.
+- Required Git-backed Unity review and validation hosts so branch testing cannot silently use stale local package worktrees.
+
 ## 1.1.62 - 2026-07-13
 
 - Added immutable, dependency-aware operation plans with contextual preflight for bulk, multi-step, migration, downgrade, fallback, conflict, and destructive operations while keeping ordinary one-step installs immediate.
