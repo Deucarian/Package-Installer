@@ -360,4 +360,4 @@ After installing, updating, or removing a package, the installer refreshes insta
 
 ## License
 
-See [LICENSE.md](LICENSE.md).
+MIT. See [LICENSE.md](LICENSE.md).
