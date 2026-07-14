@@ -3,6 +3,7 @@
   "version": "1.1.61",
   "displayName": "Deucarian Package Installer",
   "description": "Editor-only installer window for installing and composing Deucarian Unity UPM packages.",
+  "license": "MIT",
   "unity": "2021.3",
   "author": {
     "name": "Deucarian"
