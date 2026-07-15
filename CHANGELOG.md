@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## 1.1.65 - 2026-07-15
+
+- Moved Package Installer toolbar, responsive, drawer, footer, and IMGUI workbench presentation onto the shared `com.deucarian.editor` 1.0.2 contract.
+- Preserved the released Package Installer hierarchy, geometry, interaction states, breakpoints, and graph-specific behavior through visual-equivalence contracts.
 
 ## 1.1.64 - 2026-07-15
 
