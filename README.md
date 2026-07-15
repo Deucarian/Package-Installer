@@ -95,6 +95,8 @@ The installer then loads a validated last-known-good remote cache from `Library/
 
 The registry is the source of truth for stable Git `#main` URLs and development Git `#develop` URLs. Git tags, GitHub releases, and npm/scoped-registry publication are deferred until a separate deliberate release wave.
 
+The remote registry and bundled fallback intentionally contain supported public open foundations only. Reserved proprietary product packages are distributed separately and are never fetched from this public catalog.
+
 Opening the Package Installer window and using the header `Refresh` or `Check Updates` buttons refetch the remote registry, so newly registered packages and package reference changes can appear without restarting Unity.
 
 Remote registry validation also checks each package entry against the target package's `package.json` name so installed-package detection uses Unity's exact package IDs. If a target manifest cannot be fetched, the validation message includes the exact `package.json` URL that failed.
@@ -104,9 +106,9 @@ The current bundled fallback registry includes these Ecosystem Graph groups:
 - Infrastructure: Editor, Logging
 - State & Data: Core State
 - Runtime Services: API, Session, Object Loading, Monetization
-- Experience & Interaction: UI Binding, UI, UI Flow, Theming, XR UI, Camera Navigation, Object Selection
+- Experience & Interaction: UI Binding, UI Flow, Object Selection
 - Tools & Quality: Package Installer, Diagnostics, Game Content Authoring
-- Integrations: UI Binding + Core State Integration, Object Loading API Integration, Object Selection + Core State Integration, Session + API Integration, XR UI Theming Integration
+- Integrations: UI Binding + Core State Integration, Object Loading API Integration, Object Selection + Core State Integration, Session + API Integration
 - Gameplay: Gameplay Foundation, Persistence, Progression, Combat, Encounters, World Spawning, World Navigation, Defense Games, Attacks, Projectiles, Weapon Systems, Auto Defense, Run Upgrades, Idle Progression
 - Suites: Selection Suite, Auto Defense Suite
 - Templates: Idle Auto Defense, Survivors, Movement FPS
@@ -120,11 +122,7 @@ Registered packages are first-class UPM packages with their own package IDs:
 - `com.deucarian.session`
 - `com.deucarian.monetization`
 - `com.deucarian.ui-binding`
-- `com.deucarian.ui`
 - `com.deucarian.ui-flow`
-- `com.deucarian.theming`
-- `com.deucarian.xr-ui`
-- `com.deucarian.camera-navigation`
 - `com.deucarian.object-selection`
 - `com.deucarian.editor`
 - `com.deucarian.game-content-authoring`
@@ -132,7 +130,6 @@ Registered packages are first-class UPM packages with their own package IDs:
 - `com.deucarian.object-loading.api-integration`
 - `com.deucarian.object-selection.core-state-integration`
 - `com.deucarian.session.api-integration`
-- `com.deucarian.xr-ui.theming-integration`
 - `com.deucarian.selection-suite`
 - `com.deucarian.diagnostics`
 - `com.deucarian.package-installer`

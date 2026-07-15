@@ -611,7 +611,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
-        public void BundledRegistryIncludesEditorBackedTools()
+        public void BundledRegistryIncludesPublicEditorBackedTools()
         {
             string registryJson = File.ReadAllText(GetBundledRegistryPath());
             PackageRegistryLoadResult result = new PackageRegistryLoader()
@@ -623,8 +623,6 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 .Single(package => package.id == "com.deucarian.editor");
             PackageRegistryEntry logging = result.Registry.packages
                 .Single(package => package.id == "com.deucarian.logging");
-            PackageRegistryEntry theming = result.Registry.packages
-                .Single(package => package.id == "com.deucarian.theming");
             PackageRegistryEntry packageInstaller = result.Registry.packages
                 .Single(package => package.id == "com.deucarian.package-installer");
 
@@ -632,8 +630,34 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             StringAssert.Contains("Editor.git#main", editor.stableUrl);
             StringAssert.Contains("Editor.git#develop", editor.developmentUrl);
             CollectionAssert.AreEqual(new[] { "com.deucarian.editor" }, logging.dependencies);
-            CollectionAssert.AreEqual(new[] { "com.deucarian.editor", "com.deucarian.logging" }, theming.dependencies);
             CollectionAssert.AreEqual(new[] { "com.deucarian.editor", "com.deucarian.logging" }, packageInstaller.dependencies);
+        }
+
+        [Test]
+        public void BundledRegistryExcludesReservedProductPackages()
+        {
+            string registryJson = File.ReadAllText(GetBundledRegistryPath());
+            PackageRegistryLoadResult result = new PackageRegistryLoader()
+                .LoadFromJson(registryJson, PackageRegistrySource.Bundled);
+
+            Assert.IsTrue(result.IsValid, result.ErrorMessage);
+
+            string[] reservedPackageIds =
+            {
+                "com.deucarian.theming",
+                "com.deucarian.ui",
+                "com.deucarian.camera-navigation",
+                "com.deucarian.xr-ui",
+                "com.deucarian.xr-ui.theming-integration"
+            };
+
+            foreach (string packageId in reservedPackageIds)
+            {
+                Assert.IsFalse(
+                    result.Registry.packages.Any(package => package.id == packageId),
+                    $"The bundled public registry must not contain reserved package '{packageId}'.");
+                StringAssert.DoesNotContain($"\"{packageId}\"", registryJson);
+            }
         }
 
         [Test]
