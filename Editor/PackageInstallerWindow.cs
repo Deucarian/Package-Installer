@@ -2199,8 +2199,7 @@ namespace Deucarian.PackageInstaller.Editor
                         _visibilityFilterState);
                     searchState = PackageGraphSearchIndex.Create(
                         graph,
-                        _visibilityFilterState,
-                        visiblePackageIds);
+                        _visibilityFilterState);
 
                     ClearGraphSelectionIfHidden(visiblePackageIds);
 

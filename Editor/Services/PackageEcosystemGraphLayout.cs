@@ -8,7 +8,6 @@ namespace Deucarian.PackageInstaller.Editor
     internal enum PackageGraphLayoutMode
     {
         Overview,
-        Filtered,
         GroupFocus,
         Focus
     }
@@ -84,7 +83,6 @@ namespace Deucarian.PackageInstaller.Editor
             switch (mode)
             {
                 case PackageGraphLayoutMode.Overview:
-                case PackageGraphLayoutMode.Filtered:
                     return PackageGraphNodePresentationLevel.Micro;
                 case PackageGraphLayoutMode.GroupFocus:
                     return PackageGraphNodePresentationLevel.Compact;
@@ -98,7 +96,7 @@ namespace Deucarian.PackageInstaller.Editor
             float zoom,
             PackageGraphNodePresentationLevel current)
         {
-            if (mode == PackageGraphLayoutMode.Overview || mode == PackageGraphLayoutMode.Filtered)
+            if (mode == PackageGraphLayoutMode.Overview)
             {
                 return ResolveOverview(zoom, current);
             }
@@ -615,7 +613,6 @@ namespace Deucarian.PackageInstaller.Editor
         private const float RootSummaryGroupPadding = 40f;
         private const float RootOverviewClusterPadding = 40f;
         private const float RootOverviewOrbitSearchStep = 16f;
-        private const float MinimumClusterGap = 56f;
         private const float FocusOrbitRadius = 335f;
         private const float FocusGridGapX = 48f;
         private const float CategoryCaptionClearance = 24f;
@@ -679,11 +676,6 @@ namespace Deucarian.PackageInstaller.Editor
                 Array.Empty<PackageGraphEdge>(),
                 Array.Empty<PackageGraphSuiteRegion>());
 
-            if (mode == PackageGraphLayoutMode.Filtered)
-            {
-                return CalculateFilteredOverview(safeGraph, presentationLevel);
-            }
-
             if (mode == PackageGraphLayoutMode.GroupFocus &&
                 TryGetGroup(safeGraph, focusGroupId, out PackageGraphGroup focusedGroup))
             {
@@ -697,83 +689,6 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             return CalculateRootOverview(safeGraph, presentationLevel);
-        }
-
-        private static PackageGraphLayoutResult CalculateFilteredOverview(
-            PackageGraphModel graph,
-            PackageGraphNodePresentationLevel presentationLevel)
-        {
-            Dictionary<string, Rect> nodeRects = CreateNodeRingDictionary(graph, out Dictionary<string, PackageGraphLayoutRing> nodeRings);
-            Dictionary<string, PackageGraphNodePresentationLevel> nodePresentations =
-                new Dictionary<string, PackageGraphNodePresentationLevel>(StringComparer.OrdinalIgnoreCase);
-            List<PackageGraphGroupLayoutNode> groupNodes = new List<PackageGraphGroupLayoutNode>();
-            List<PackageGraphRingGuide> ringGuides = new List<PackageGraphRingGuide>();
-            Rect hubRect = CreateOverviewHubRect();
-            PackageGraphNodeMetrics packageMetrics = PackageGraphPresentationPolicy.GetMetrics(presentationLevel);
-            PackageGraphGroup[] topGroups = GetTopLevelGroups(graph)
-                .Where(group => GetDescendantPackages(graph, group.Id).Any())
-                .ToArray();
-
-            if (topGroups.Length == 0)
-            {
-                return new PackageGraphLayoutResult(
-                    PackageGraphLayoutMode.Filtered,
-                    string.Empty,
-                    CanvasWidth,
-                    CanvasHeight,
-                    hubRect,
-                    hubRect.center,
-                    nodeRects,
-                    nodeRings,
-                    ringGuides,
-                    Array.Empty<PackageGraphSectorLabel>(),
-                    groupNodes: groupNodes,
-                    nodePresentationLevels: nodePresentations);
-            }
-
-            float maxClusterRadius = topGroups
-                .Select(group => CalculateFilteredClusterRadius(graph, group, packageMetrics, presentationLevel))
-                .DefaultIfEmpty(0f)
-                .Max();
-            float globalOrbitRadius = CalculateFilteredGlobalOrbitRadius(topGroups.Length, maxClusterRadius);
-
-            ringGuides.Add(new PackageGraphRingGuide(
-                string.Empty,
-                PackageGraphLayoutRing.Infrastructure,
-                GraphCenter,
-                globalOrbitRadius));
-
-            float[] groupAngles = CreateEvenCircleAngles(topGroups.Length, -90f);
-
-            for (int index = 0; index < topGroups.Length; index++)
-            {
-                PackageGraphGroup group = topGroups[index];
-                Vector2 groupCenter = PointOnOrbit(GraphCenter, groupAngles[index], globalOrbitRadius);
-                PlaceFilteredGroupRecursive(
-                    graph,
-                    group,
-                    groupCenter,
-                    topLevel: true,
-                    nodeRects,
-                    nodeRings,
-                    nodePresentations,
-                    groupNodes,
-                    presentationLevel);
-            }
-
-            return new PackageGraphLayoutResult(
-                PackageGraphLayoutMode.Filtered,
-                string.Empty,
-                CanvasWidth,
-                CanvasHeight,
-                hubRect,
-                hubRect.center,
-                nodeRects,
-                nodeRings,
-                ringGuides,
-                Array.Empty<PackageGraphSectorLabel>(),
-                groupNodes: groupNodes,
-                nodePresentationLevels: nodePresentations);
         }
 
         private static PackageGraphLayoutResult CalculateRootOverview(
@@ -1506,166 +1421,6 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             return new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
-        }
-
-        private static void PlaceFilteredGroupRecursive(
-            PackageGraphModel graph,
-            PackageGraphGroup group,
-            Vector2 center,
-            bool topLevel,
-            IDictionary<string, Rect> nodeRects,
-            IDictionary<string, PackageGraphLayoutRing> nodeRings,
-            IDictionary<string, PackageGraphNodePresentationLevel> nodePresentations,
-            ICollection<PackageGraphGroupLayoutNode> groupNodes,
-            PackageGraphNodePresentationLevel packagePresentationLevel)
-        {
-            IReadOnlyList<PackageGraphNode> directPackages = GetDirectPackages(graph, group.Id);
-            PackageGraphGroup[] directGroups = GetChildGroups(graph, group.Id)
-                .Where(childGroup => GetDescendantPackages(graph, childGroup.Id).Any())
-                .ToArray();
-            int childCount = directPackages.Count + directGroups.Length;
-            float hubSize = topLevel ? GroupHubSize : GroupChipHubSize;
-            float captionWidth = topLevel ? GroupCaptionWidth : GroupChipCaptionWidth;
-            float captionHeight = topLevel ? GroupCaptionHeight : GroupChipCaptionHeight;
-            float localRadius = CalculateFilteredLocalOrbitRadius(
-                graph,
-                group,
-                packagePresentationLevel);
-            Rect groupRect = CreateGroupElementRect(center, hubSize, captionWidth, captionHeight);
-            Rect groupHubRect = CreateHubRect(center, hubSize);
-
-            groupNodes.Add(CreateGroupLayoutNode(
-                graph,
-                group,
-                groupRect,
-                groupHubRect,
-                focused: false,
-                collapsed: !topLevel,
-                orbitRadius: childCount > 0 ? localRadius : 0f));
-
-            if (childCount <= 0)
-            {
-                return;
-            }
-
-            List<ChildPlacement> children = new List<ChildPlacement>();
-            PackageGraphNodeMetrics packageMetrics = PackageGraphPresentationPolicy.GetMetrics(packagePresentationLevel);
-
-            foreach (PackageGraphGroup childGroup in directGroups)
-            {
-                children.Add(ChildPlacement.ForGroup(childGroup));
-            }
-
-            foreach (PackageGraphNode package in directPackages)
-            {
-                children.Add(ChildPlacement.ForPackage(package));
-            }
-
-            ChildPlacement[] orderedChildren = children
-                .OrderBy(child => child.SortOrder)
-                .ThenBy(child => child.DisplayName, StringComparer.OrdinalIgnoreCase)
-                .ThenBy(child => child.Id, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-            float[] angles = CreateEvenCircleAngles(
-                orderedChildren.Length,
-                orderedChildren.Length > 1 ? -90f + 180f / orderedChildren.Length : -90f);
-
-            for (int index = 0; index < orderedChildren.Length; index++)
-            {
-                ChildPlacement child = orderedChildren[index];
-                Vector2 childCenter = PointOnOrbit(center, angles[index], localRadius);
-
-                if (child.Group != null)
-                {
-                    PlaceFilteredGroupRecursive(
-                        graph,
-                        child.Group,
-                        childCenter,
-                        topLevel: false,
-                        nodeRects,
-                        nodeRings,
-                        nodePresentations,
-                        groupNodes,
-                        packagePresentationLevel);
-                    continue;
-                }
-
-                Rect packageRect = CenteredRect(childCenter, packageMetrics);
-                nodeRects[child.Package.PackageId] = ClampToCanvas(packageRect);
-                nodeRings[child.Package.PackageId] = ResolveRing(group.Id);
-                nodePresentations[child.Package.PackageId] = packagePresentationLevel;
-            }
-        }
-
-        private static float CalculateFilteredLocalOrbitRadius(
-            PackageGraphModel graph,
-            PackageGraphGroup group,
-            PackageGraphNodePresentationLevel packagePresentationLevel)
-        {
-            PackageGraphNodeMetrics packageMetrics = PackageGraphPresentationPolicy.GetMetrics(packagePresentationLevel);
-            PackageGraphGroup[] directGroups = GetChildGroups(graph, group.Id)
-                .Where(childGroup => GetDescendantPackages(graph, childGroup.Id).Any())
-                .ToArray();
-            int childCount = GetDirectPackages(graph, group.Id).Count + directGroups.Length;
-            float childGroupDiameter = directGroups
-                .Select(childGroup => CalculateFilteredClusterRadius(graph, childGroup, packageMetrics, packagePresentationLevel) * 2f)
-                .DefaultIfEmpty(GroupChipCaptionWidth)
-                .Max();
-            float childGroupWidth = Mathf.Max(GroupChipCaptionWidth, childGroupDiameter);
-            float childGroupHeight = Mathf.Max(GroupChipHubSize + GroupChipCaptionHeight, childGroupDiameter);
-
-            return CalculateLocalOrbitRadius(
-                childCount,
-                packageMetrics,
-                childGroupWidth,
-                childGroupHeight);
-        }
-
-        private static float CalculateFilteredClusterRadius(
-            PackageGraphModel graph,
-            PackageGraphGroup group,
-            PackageGraphNodeMetrics packageMetrics,
-            PackageGraphNodePresentationLevel packagePresentationLevel)
-        {
-            IReadOnlyList<PackageGraphNode> directPackages = GetDirectPackages(graph, group.Id);
-            PackageGraphGroup[] directGroups = GetChildGroups(graph, group.Id)
-                .Where(childGroup => GetDescendantPackages(graph, childGroup.Id).Any())
-                .ToArray();
-            int childCount = directPackages.Count + directGroups.Length;
-            float groupHalfExtent = CalculateGroupElementRadiusFromHub(
-                GroupCaptionWidth,
-                GroupHubSize,
-                GroupCaptionHeight);
-
-            if (childCount <= 0)
-            {
-                return groupHalfExtent;
-            }
-
-            float localRadius = CalculateFilteredLocalOrbitRadius(graph, group, packagePresentationLevel);
-            float packageHalfExtent = CalculateHalfDiagonal(packageMetrics.Width, packageMetrics.Height);
-            float childGroupHalfExtent = directGroups
-                .Select(childGroup => CalculateFilteredClusterRadius(graph, childGroup, packageMetrics, packagePresentationLevel))
-                .DefaultIfEmpty(CalculateHalfDiagonal(GroupChipCaptionWidth, GroupChipHubSize + GroupChipCaptionHeight))
-                .Max();
-            float childHalfExtent = Mathf.Max(packageHalfExtent, childGroupHalfExtent);
-            return Mathf.Max(groupHalfExtent, localRadius + childHalfExtent + NodeGap);
-        }
-
-        private static float CalculateFilteredGlobalOrbitRadius(
-            int topGroupCount,
-            float maxClusterRadius)
-        {
-            float minimumRadius = Mathf.Max(320f, maxClusterRadius + 180f);
-
-            if (topGroupCount <= 1)
-            {
-                return Mathf.Min(980f, minimumRadius);
-            }
-
-            float chordRadius = (maxClusterRadius * 2f + MinimumClusterGap) /
-                                Mathf.Max(0.01f, 2f * Mathf.Sin(Mathf.PI / topGroupCount));
-            return Mathf.Clamp(Mathf.Max(MinimumGlobalGroupOrbitRadius, chordRadius + 120f), 420f, 1360f);
         }
 
         private static void PlaceDirectChildren(
