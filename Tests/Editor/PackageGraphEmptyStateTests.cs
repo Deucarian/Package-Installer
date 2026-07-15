@@ -423,12 +423,24 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             {
                 type = EventType.MouseDown,
                 button = 0,
-                mousePosition = Vector2.zero
+                mousePosition = Vector2.one
             };
 
-            using (MouseDownEvent evt = MouseDownEvent.GetPooled(mouseDown))
+            using (MouseDownEvent downEvent = MouseDownEvent.GetPooled(mouseDown))
             {
-                action.clickable.Invoke(evt);
+                action.SendEvent(downEvent);
+            }
+
+            Event mouseUp = new Event
+            {
+                type = EventType.MouseUp,
+                button = 0,
+                mousePosition = Vector2.one
+            };
+
+            using (MouseUpEvent upEvent = MouseUpEvent.GetPooled(mouseUp))
+            {
+                action.SendEvent(upEvent);
             }
         }
 
