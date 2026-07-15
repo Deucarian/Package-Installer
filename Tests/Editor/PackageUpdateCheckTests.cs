@@ -1,6 +1,8 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using NUnit.Framework;
 using UnityEngine;
 
@@ -69,6 +71,96 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.IsFalse(PackageUpdateCheckService.RevisionsMatch(
                 "0123456789abcdef0123456789abcdef01234567",
                 "fedcba9876543210fedcba9876543210fedcba98"));
+        }
+
+        [Test]
+        public void OwnedGitProcessSeamResolvesRemoteRevision()
+        {
+            const string revision = "0123456789abcdef0123456789abcdef01234567";
+            string receivedArguments = string.Empty;
+            int receivedTimeout = 0;
+            PackageUpdateCheckService.GitProcessRunnerForTests =
+                (arguments, cancellationToken, timeoutMilliseconds) =>
+                {
+                    receivedArguments = arguments;
+                    receivedTimeout = timeoutMilliseconds;
+                    Assert.IsFalse(cancellationToken.IsCancellationRequested);
+                    return PackageUpdateCheckService.GitProcessResult.Ok(
+                        revision + "\trefs/heads/main\n");
+                };
+
+            bool found = PackageUpdateCheckService.TryGetRemoteRevisionForTests(
+                "https://github.com/Deucarian/Object-Loading.git",
+                "main",
+                CancellationToken.None,
+                out string actualRevision,
+                out string message);
+
+            Assert.IsTrue(found, message);
+            Assert.AreEqual(revision, actualRevision);
+            StringAssert.StartsWith("ls-remote ", receivedArguments);
+            StringAssert.Contains("Object-Loading.git", receivedArguments);
+            StringAssert.Contains("main", receivedArguments);
+            Assert.Greater(receivedTimeout, 0);
+        }
+
+        [Test]
+        public void OwnedGitProcessSeamSurfacesFailure()
+        {
+            PackageUpdateCheckService.GitProcessRunnerForTests =
+                (_, __, ___) => PackageUpdateCheckService.GitProcessResult.Fail(
+                    "Synthetic git failure.");
+
+            bool found = PackageUpdateCheckService.TryGetRemoteRevisionForTests(
+                "https://github.com/Deucarian/Object-Loading.git",
+                "main",
+                CancellationToken.None,
+                out string revision,
+                out string message);
+
+            Assert.IsFalse(found);
+            Assert.IsEmpty(revision);
+            Assert.AreEqual("Synthetic git failure.", message);
+        }
+
+        [Test]
+        public void OwnedGitProcessSeamPropagatesCancellation()
+        {
+            using (ManualResetEventSlim runnerStarted = new ManualResetEventSlim(false))
+            using (CancellationTokenSource cancellation = new CancellationTokenSource())
+            {
+                Exception observedException = null;
+                PackageUpdateCheckService.GitProcessRunnerForTests =
+                    (_, cancellationToken, __) =>
+                    {
+                        runnerStarted.Set();
+                        cancellationToken.WaitHandle.WaitOne(TimeSpan.FromSeconds(5));
+                        cancellationToken.ThrowIfCancellationRequested();
+                        return PackageUpdateCheckService.GitProcessResult.Ok(string.Empty);
+                    };
+
+                Task invocation = Task.Run(() =>
+                {
+                    try
+                    {
+                        PackageUpdateCheckService.TryGetRemoteRevisionForTests(
+                            "https://github.com/Deucarian/Object-Loading.git",
+                            "main",
+                            cancellation.Token,
+                            out _,
+                            out _);
+                    }
+                    catch (Exception exception)
+                    {
+                        observedException = exception;
+                    }
+                });
+
+                Assert.IsTrue(runnerStarted.Wait(TimeSpan.FromSeconds(2)));
+                cancellation.Cancel();
+                Assert.IsTrue(invocation.Wait(TimeSpan.FromSeconds(2)));
+                Assert.IsInstanceOf<OperationCanceledException>(observedException);
+            }
         }
 
         [Test]
@@ -624,6 +716,853 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void FullUpdateCheckUsesAtMostFourWorkers()
+        {
+            int activeWorkers = 0;
+            int maximumWorkers = 0;
+            int resolverCalls = 0;
+            PackageDefinition[] packages = Enumerable.Range(0, 8)
+                .Select(index => new PackageDefinition(
+                    "Package " + index,
+                    "com.deucarian.test-" + index,
+                    "https://github.com/Deucarian/Test-" + index + ".git#" + StableRevision,
+                    "Test package."))
+                .ToArray();
+
+            PackageUpdateCheckService.GitPackageVersionResolverForTests = (_, __, ___) =>
+            {
+                int current = Interlocked.Increment(ref activeWorkers);
+                Interlocked.Increment(ref resolverCalls);
+                int observed;
+                do
+                {
+                    observed = maximumWorkers;
+                }
+                while (current > observed &&
+                       Interlocked.CompareExchange(ref maximumWorkers, current, observed) != observed);
+
+                Thread.Sleep(40);
+                Interlocked.Decrement(ref activeWorkers);
+                return PackageUpdateCheckService.PackageVersionResult.Ok("1.2.3");
+            };
+
+            using (PackageDetectionService detectionService = new PackageDetectionService())
+            using (PackageUpdateCheckService updateCheckService = new PackageUpdateCheckService(detectionService))
+            {
+                foreach (PackageDefinition package in packages)
+                {
+                    detectionService.ReplaceInstalledPackageForTests(
+                        package.PackageId,
+                        "1.2.0",
+                        PackageInstallSourceType.Registry,
+                        "1.2.0");
+                }
+
+                updateCheckService.CheckForUpdates(packages, _ => PackageChannel.Stable);
+                PumpFullCheckUntilIdle(updateCheckService);
+            }
+
+            Assert.AreEqual(packages.Length, resolverCalls);
+            Assert.LessOrEqual(maximumWorkers, 4);
+        }
+
+        [Test]
+        public void BulkAndTargetedChecksShareOneFourWorkerBudget()
+        {
+            int activeWorkers = 0;
+            int maximumWorkers = 0;
+            int resolverCalls = 0;
+            PackageDefinition[] bulkPackages = CreateConcurrentPackages("bulk", 6);
+            PackageDefinition[] targetedPackages = CreateConcurrentPackages("targeted", 6);
+
+            PackageUpdateCheckService.GitPackageVersionResolverForTests = (_, __, ___) =>
+            {
+                int current = Interlocked.Increment(ref activeWorkers);
+                Interlocked.Increment(ref resolverCalls);
+                int observed;
+                do
+                {
+                    observed = maximumWorkers;
+                }
+                while (current > observed &&
+                       Interlocked.CompareExchange(ref maximumWorkers, current, observed) != observed);
+
+                Thread.Sleep(40);
+                Interlocked.Decrement(ref activeWorkers);
+                return PackageUpdateCheckService.PackageVersionResult.Ok("1.2.3");
+            };
+
+            using (PackageDetectionService detectionService = new PackageDetectionService())
+            using (PackageUpdateCheckService updateCheckService = new PackageUpdateCheckService(detectionService))
+            {
+                foreach (PackageDefinition package in bulkPackages.Concat(targetedPackages))
+                {
+                    detectionService.ReplaceInstalledPackageForTests(
+                        package.PackageId,
+                        "1.2.0",
+                        PackageInstallSourceType.Registry,
+                        "1.2.0");
+                }
+
+                updateCheckService.CheckForUpdates(bulkPackages, _ => PackageChannel.Stable);
+                foreach (PackageDefinition package in targetedPackages)
+                {
+                    updateCheckService.CheckForUpdate(package, PackageChannel.Stable);
+                }
+                PackageUpdateCheckService.UpdateTargetedChecksForTests(forceStartPending: true);
+
+                Assert.IsTrue(updateCheckService.IsChecking);
+                Assert.IsTrue(PackageUpdateCheckService.HasTargetedChecksForTests);
+                PumpAllChecksUntilIdle(updateCheckService);
+            }
+
+            Assert.AreEqual(bulkPackages.Length + targetedPackages.Length, resolverCalls);
+            Assert.LessOrEqual(maximumWorkers, 4);
+        }
+
+        [Test]
+        public void CancelCurrentCheckCancelsBulkAndTargetedAndSuppressesLateResults()
+        {
+            PackageDefinition bulkPackage = CreateConcurrentPackages("cancel-bulk", 1).Single();
+            PackageDefinition targetedPackage = CreateConcurrentPackages("cancel-targeted", 1).Single();
+            using (ManualResetEventSlim bulkStarted = new ManualResetEventSlim(false))
+            using (ManualResetEventSlim targetedStarted = new ManualResetEventSlim(false))
+            using (ManualResetEventSlim releaseOldChecks = new ManualResetEventSlim(false))
+            {
+                PackageUpdateCheckService.GitPackageVersionResolverForTests =
+                    (package, channel, _) =>
+                    {
+                        if (channel == PackageChannel.Development)
+                        {
+                            return PackageUpdateCheckService.PackageVersionResult.Ok("2.0.0-dev.1");
+                        }
+
+                        if (package.PackageId == bulkPackage.PackageId)
+                        {
+                            bulkStarted.Set();
+                        }
+                        else if (package.PackageId == targetedPackage.PackageId)
+                        {
+                            targetedStarted.Set();
+                        }
+
+                        releaseOldChecks.Wait(TimeSpan.FromSeconds(3));
+                        return PackageUpdateCheckService.PackageVersionResult.Ok("9.9.9");
+                    };
+
+                try
+                {
+                    using (PackageDetectionService detectionService = new PackageDetectionService())
+                    using (PackageUpdateCheckService updateCheckService =
+                           new PackageUpdateCheckService(detectionService))
+                    {
+                        foreach (PackageDefinition package in new[] { bulkPackage, targetedPackage })
+                        {
+                            detectionService.ReplaceInstalledPackageForTests(
+                                package.PackageId,
+                                "1.2.0",
+                                PackageInstallSourceType.Registry,
+                                "1.2.0");
+                        }
+
+                        updateCheckService.CheckForUpdates(
+                            new[] { bulkPackage },
+                            _ => PackageChannel.Stable);
+                        updateCheckService.CheckForUpdate(targetedPackage, PackageChannel.Stable);
+                        PackageUpdateCheckService.UpdateTargetedChecksForTests(forceStartPending: true);
+                        Assert.IsTrue(bulkStarted.Wait(TimeSpan.FromSeconds(2)));
+                        Assert.IsTrue(targetedStarted.Wait(TimeSpan.FromSeconds(2)));
+
+                        Assert.IsTrue(updateCheckService.CancelCurrentCheck());
+                        Assert.IsFalse(updateCheckService.IsChecking);
+                        Assert.IsFalse(PackageUpdateCheckService.HasTargetedChecksForTests);
+                        Assert.AreEqual(
+                            PackageUpdateStatusKind.Unknown,
+                            updateCheckService.GetStatus(bulkPackage, PackageChannel.Stable).Kind);
+                        Assert.AreEqual(
+                            PackageUpdateStatusKind.Unknown,
+                            updateCheckService.GetStatus(targetedPackage, PackageChannel.Stable).Kind);
+
+                        updateCheckService.CheckForUpdate(
+                            targetedPackage,
+                            PackageChannel.Development);
+                        PumpTargetedChecksUntilIdle();
+                        PackageUpdateStatus newerStatus = updateCheckService.GetStatus(
+                            targetedPackage,
+                            PackageChannel.Development);
+                        Assert.AreEqual(
+                            PackageUpdateStatusKind.SourceMigrationAvailable,
+                            newerStatus.Kind);
+                        Assert.AreEqual("2.0.0-dev.1", newerStatus.LatestVersion);
+
+                        releaseOldChecks.Set();
+                        Thread.Sleep(75);
+                        PackageUpdateCheckService.UpdateSharedForTests();
+                        PackageUpdateCheckService.UpdateTargetedChecksForTests(forceStartPending: true);
+
+                        PackageUpdateStatus finalStatus = updateCheckService.GetStatus(
+                            targetedPackage,
+                            PackageChannel.Development);
+                        Assert.AreEqual(
+                            PackageUpdateStatusKind.SourceMigrationAvailable,
+                            finalStatus.Kind);
+                        Assert.AreEqual("2.0.0-dev.1", finalStatus.LatestVersion);
+                    }
+                }
+                finally
+                {
+                    releaseOldChecks.Set();
+                }
+            }
+        }
+
+        [Test]
+        public void InvalidateAllDetachesBulkCheckAndSuppressesItsLateCompletion()
+        {
+            PackageDefinition package = CreatePackageWithRevisionChannels();
+            DateTime? previousLastCheckedUtc = PackageUpdateCheckPreferences.LastCheckedUtc;
+            DateTime sentinelLastCheckedUtc = new DateTime(
+                2026,
+                1,
+                2,
+                3,
+                4,
+                5,
+                DateTimeKind.Utc);
+            using (ManualResetEventSlim oldCheckStarted = new ManualResetEventSlim(false))
+            using (ManualResetEventSlim releaseOldCheck = new ManualResetEventSlim(false))
+            using (ManualResetEventSlim oldCheckCompleted = new ManualResetEventSlim(false))
+            {
+                PackageUpdateCheckPreferences.LastCheckedUtc = sentinelLastCheckedUtc;
+                PackageInstallerActivityService.ClearForTests();
+                PackageUpdateCheckService.GitPackageVersionResolverForTests = (_, channel, __) =>
+                {
+                    if (channel == PackageChannel.Stable)
+                    {
+                        oldCheckStarted.Set();
+                        releaseOldCheck.Wait(TimeSpan.FromSeconds(3));
+                        oldCheckCompleted.Set();
+                        return PackageUpdateCheckService.PackageVersionResult.Ok("9.9.9");
+                    }
+
+                    return PackageUpdateCheckService.PackageVersionResult.Ok("1.2.4-dev.7");
+                };
+
+                try
+                {
+                    using (PackageDetectionService detectionService = new PackageDetectionService())
+                    using (PackageUpdateCheckService updateCheckService =
+                           new PackageUpdateCheckService(detectionService))
+                    {
+                        detectionService.ReplaceInstalledPackageForTests(
+                            package.PackageId,
+                            "1.2.3",
+                            PackageInstallSourceType.Registry,
+                            "1.2.3");
+
+                        updateCheckService.CheckForUpdates(
+                            new[] { package },
+                            _ => PackageChannel.Stable);
+                        Assert.IsTrue(oldCheckStarted.Wait(TimeSpan.FromSeconds(2)));
+
+                        updateCheckService.InvalidateAll();
+
+                        Assert.IsFalse(updateCheckService.IsChecking);
+                        Assert.AreEqual(0, PackageInstallerActivityService.Recent.Count);
+                        Assert.AreEqual(
+                            sentinelLastCheckedUtc,
+                            PackageUpdateCheckPreferences.LastCheckedUtc);
+
+                        updateCheckService.CheckForUpdates(
+                            new[] { package },
+                            _ => PackageChannel.Development);
+                        Assert.IsTrue(updateCheckService.IsChecking);
+                        PumpFullCheckUntilIdle(updateCheckService);
+
+                        Assert.AreEqual(1, PackageInstallerActivityService.Recent.Count);
+                        DateTime? acceptedLastCheckedUtc =
+                            PackageUpdateCheckPreferences.LastCheckedUtc;
+                        Assert.IsTrue(acceptedLastCheckedUtc.HasValue);
+                        Assert.AreNotEqual(sentinelLastCheckedUtc, acceptedLastCheckedUtc.Value);
+
+                        releaseOldCheck.Set();
+                        Assert.IsTrue(oldCheckCompleted.Wait(TimeSpan.FromSeconds(2)));
+                        Thread.Sleep(50);
+                        PackageUpdateCheckService.UpdateSharedForTests();
+
+                        Assert.AreEqual(1, PackageInstallerActivityService.Recent.Count);
+                        Assert.AreEqual(
+                            acceptedLastCheckedUtc,
+                            PackageUpdateCheckPreferences.LastCheckedUtc);
+                        PackageUpdateStatus finalStatus = updateCheckService.GetStatus(
+                            package,
+                            PackageChannel.Development);
+                        Assert.AreEqual(
+                            PackageUpdateStatusKind.SourceMigrationAvailable,
+                            finalStatus.Kind);
+                        Assert.AreEqual("1.2.4-dev.7", finalStatus.LatestVersion);
+                    }
+                }
+                finally
+                {
+                    releaseOldCheck.Set();
+                    PackageUpdateCheckPreferences.LastCheckedUtc = previousLastCheckedUtc;
+                    PackageInstallerActivityService.ClearForTests();
+                }
+            }
+        }
+
+        [Test]
+        public void NewTargetedIntentIsNotOverwrittenByOlderBulkFinalization()
+        {
+            PackageDefinition package = CreatePackageWithRevisionChannels();
+            using (ManualResetEventSlim stableStarted = new ManualResetEventSlim(false))
+            using (ManualResetEventSlim releaseStable = new ManualResetEventSlim(false))
+            {
+                PackageUpdateCheckService.GitPackageVersionResolverForTests = (_, channel, __) =>
+                {
+                    if (channel == PackageChannel.Stable)
+                    {
+                        stableStarted.Set();
+                        releaseStable.Wait(TimeSpan.FromSeconds(3));
+                        return PackageUpdateCheckService.PackageVersionResult.Ok("9.9.9");
+                    }
+
+                    return PackageUpdateCheckService.PackageVersionResult.Ok("1.2.4-dev.7");
+                };
+
+                try
+                {
+                    using (PackageDetectionService detectionService = new PackageDetectionService())
+                    using (PackageUpdateCheckService updateCheckService =
+                           new PackageUpdateCheckService(detectionService))
+                    {
+                        detectionService.ReplaceInstalledPackageForTests(
+                            package.PackageId,
+                            "1.2.0",
+                            PackageInstallSourceType.Registry,
+                            "1.2.0");
+
+                        updateCheckService.CheckForUpdates(
+                            new[] { package },
+                            _ => PackageChannel.Stable);
+                        Assert.IsTrue(stableStarted.Wait(TimeSpan.FromSeconds(2)));
+
+                        updateCheckService.CheckForUpdate(package, PackageChannel.Development);
+                        PumpTargetedChecksUntilIdle();
+                        Assert.AreEqual(
+                            "1.2.4-dev.7",
+                            updateCheckService.GetStatus(
+                                package,
+                                PackageChannel.Development).LatestVersion);
+
+                        releaseStable.Set();
+                        PumpFullCheckUntilIdle(updateCheckService);
+
+                        PackageUpdateStatus status = updateCheckService.GetStatus(
+                            package,
+                            PackageChannel.Development);
+                        Assert.AreEqual(PackageUpdateStatusKind.SourceMigrationAvailable, status.Kind);
+                        Assert.AreEqual("1.2.4-dev.7", status.LatestVersion);
+                    }
+                }
+                finally
+                {
+                    releaseStable.Set();
+                }
+            }
+        }
+
+        [Test]
+        public void NewBulkIntentIsNotOverwrittenByOlderTargetedResult()
+        {
+            PackageDefinition package = CreatePackageWithRevisionChannels();
+            using (ManualResetEventSlim stableStarted = new ManualResetEventSlim(false))
+            using (ManualResetEventSlim releaseStable = new ManualResetEventSlim(false))
+            {
+                PackageUpdateCheckService.GitPackageVersionResolverForTests = (_, channel, __) =>
+                {
+                    if (channel == PackageChannel.Stable)
+                    {
+                        stableStarted.Set();
+                        releaseStable.Wait(TimeSpan.FromSeconds(3));
+                        return PackageUpdateCheckService.PackageVersionResult.Ok("9.9.9");
+                    }
+
+                    return PackageUpdateCheckService.PackageVersionResult.Ok("1.2.4-dev.7");
+                };
+
+                try
+                {
+                    using (PackageDetectionService detectionService = new PackageDetectionService())
+                    using (PackageUpdateCheckService updateCheckService =
+                           new PackageUpdateCheckService(detectionService))
+                    {
+                        detectionService.ReplaceInstalledPackageForTests(
+                            package.PackageId,
+                            "1.2.0",
+                            PackageInstallSourceType.Registry,
+                            "1.2.0");
+
+                        updateCheckService.CheckForUpdate(package, PackageChannel.Stable);
+                        PackageUpdateCheckService.UpdateTargetedChecksForTests(forceStartPending: true);
+                        Assert.IsTrue(stableStarted.Wait(TimeSpan.FromSeconds(2)));
+
+                        updateCheckService.CheckForUpdates(
+                            new[] { package },
+                            _ => PackageChannel.Development);
+                        PumpFullCheckUntilIdle(updateCheckService);
+                        Assert.AreEqual(
+                            "1.2.4-dev.7",
+                            updateCheckService.GetStatus(
+                                package,
+                                PackageChannel.Development).LatestVersion);
+
+                        releaseStable.Set();
+                        PumpTargetedChecksUntilIdle();
+
+                        PackageUpdateStatus status = updateCheckService.GetStatus(
+                            package,
+                            PackageChannel.Development);
+                        Assert.AreEqual(PackageUpdateStatusKind.SourceMigrationAvailable, status.Kind);
+                        Assert.AreEqual("1.2.4-dev.7", status.LatestVersion);
+                    }
+                }
+                finally
+                {
+                    releaseStable.Set();
+                }
+            }
+        }
+
+        [Test]
+        public void SequentialBulkRefreshDoesNotReuseCompletedManifestResult()
+        {
+            PackageDefinition package = CreatePackageWithRevisionChannels();
+            int resolverCalls = 0;
+            PackageUpdateCheckService.GitPackageVersionResolverForTests = (_, __, ___) =>
+                PackageUpdateCheckService.PackageVersionResult.Ok(
+                    Interlocked.Increment(ref resolverCalls) == 1 ? "1.2.3" : "1.2.4");
+
+            using (PackageDetectionService detectionService = new PackageDetectionService())
+            using (PackageUpdateCheckService updateCheckService = new PackageUpdateCheckService(detectionService))
+            {
+                detectionService.ReplaceInstalledPackageForTests(
+                    package.PackageId,
+                    "1.2.0",
+                    PackageInstallSourceType.Registry,
+                    "1.2.0");
+
+                updateCheckService.CheckForUpdates(new[] { package }, _ => PackageChannel.Stable);
+                PumpFullCheckUntilIdle(updateCheckService);
+                Assert.AreEqual("1.2.3", updateCheckService.GetStatus(package, PackageChannel.Stable).LatestVersion);
+
+                updateCheckService.CheckForUpdates(new[] { package }, _ => PackageChannel.Stable);
+                PumpFullCheckUntilIdle(updateCheckService);
+
+                Assert.AreEqual(2, resolverCalls);
+                Assert.AreEqual("1.2.4", updateCheckService.GetStatus(package, PackageChannel.Stable).LatestVersion);
+            }
+        }
+
+        [Test]
+        public void FullUpdateCheckDeduplicatesEquivalentManifestProbe()
+        {
+            int resolverCalls = 0;
+            PackageDefinition first = new PackageDefinition(
+                "First",
+                "com.deucarian.first",
+                "https://github.com/Deucarian/Shared.git#" + StableRevision,
+                "First package.");
+            PackageDefinition second = new PackageDefinition(
+                "Second",
+                "com.deucarian.second",
+                first.StableUrl,
+                "Second package.");
+            PackageUpdateCheckService.GitPackageVersionResolverForTests = (_, __, ___) =>
+            {
+                Interlocked.Increment(ref resolverCalls);
+                Thread.Sleep(25);
+                return PackageUpdateCheckService.PackageVersionResult.Ok("1.2.3");
+            };
+
+            using (PackageDetectionService detectionService = new PackageDetectionService())
+            using (PackageUpdateCheckService updateCheckService = new PackageUpdateCheckService(detectionService))
+            {
+                detectionService.ReplaceInstalledPackageForTests(
+                    first.PackageId,
+                    "1.2.0",
+                    PackageInstallSourceType.Registry,
+                    "1.2.0");
+                detectionService.ReplaceInstalledPackageForTests(
+                    second.PackageId,
+                    "1.2.0",
+                    PackageInstallSourceType.Registry,
+                    "1.2.0");
+
+                updateCheckService.CheckForUpdates(new[] { first, second }, _ => PackageChannel.Stable);
+                PumpFullCheckUntilIdle(updateCheckService);
+            }
+
+            Assert.AreEqual(1, resolverCalls);
+        }
+
+        [Test]
+        public void FullUpdateCheckDeduplicatesNormalizedRemoteAndReferenceAliases()
+        {
+            int gitCalls = 0;
+            int manifestCalls = 0;
+            string probedGitArguments = string.Empty;
+            string requestedManifestUrl = string.Empty;
+            PackageDefinition first = new PackageDefinition(
+                "First Alias",
+                "com.deucarian.first-alias",
+                "git+https://GitHub.com/Deucarian/Shared.git?path=/Packages/Shared#refs/heads/main",
+                "First alias package.");
+            PackageDefinition second = new PackageDefinition(
+                "Second Alias",
+                "com.deucarian.second-alias",
+                "git@github.com:deucarian/shared.git?path=Packages/Shared#origin/main",
+                "Second alias package.");
+            PackageUpdateCheckService.GitProcessRunnerForTests = (arguments, __, ___) =>
+            {
+                Interlocked.Increment(ref gitCalls);
+                probedGitArguments = arguments;
+                Thread.Sleep(25);
+                return PackageUpdateCheckService.GitProcessResult.Ok(
+                    StableRevision + "\trefs/heads/main\n");
+            };
+            PackageRegistryRemoteFetchDelegate fetcher = (url, _, __) =>
+            {
+                Interlocked.Increment(ref manifestCalls);
+                requestedManifestUrl = url;
+                Thread.Sleep(25);
+                return Task.FromResult(new PackageRegistryRemoteFetchResponse(
+                    "{\"name\":\"com.deucarian.shared\",\"version\":\"1.2.3\"}"));
+            };
+
+            using (PackageDetectionService detectionService = new PackageDetectionService())
+            using (PackageUpdateCheckService updateCheckService = new PackageUpdateCheckService(
+                       detectionService,
+                       fetcher,
+                       TimeSpan.FromSeconds(1)))
+            {
+                InstallRegistryPackagesForTests(detectionService, first, second);
+
+                updateCheckService.CheckForUpdates(
+                    new[] { first, second },
+                    _ => PackageChannel.Stable);
+                PumpFullCheckUntilIdle(updateCheckService);
+            }
+
+            Assert.AreEqual(1, gitCalls);
+            Assert.AreEqual(1, manifestCalls);
+            StringAssert.Contains("\"main\"", probedGitArguments);
+            StringAssert.DoesNotContain("refs/heads/main", probedGitArguments);
+            StringAssert.DoesNotContain("origin/main", probedGitArguments);
+            Assert.AreEqual(
+                "https://raw.githubusercontent.com/deucarian/shared/" +
+                StableRevision + "/Packages/Shared/package.json",
+                requestedManifestUrl);
+        }
+
+        [Test]
+        public void SharedRemoteWithDifferentPackagePathsDeduplicatesOnlyRevisionProbe()
+        {
+            int gitCalls = 0;
+            int manifestCalls = 0;
+            PackageDefinition first = new PackageDefinition(
+                "First Path",
+                "com.deucarian.first-path",
+                "https://github.com/Deucarian/Shared.git?path=/Packages/First#main",
+                "First path package.");
+            PackageDefinition second = new PackageDefinition(
+                "Second Path",
+                "com.deucarian.second-path",
+                "git@github.com:deucarian/shared.git?path=/Packages/Second#refs/heads/main",
+                "Second path package.");
+            PackageUpdateCheckService.GitProcessRunnerForTests = (_, __, ___) =>
+            {
+                Interlocked.Increment(ref gitCalls);
+                Thread.Sleep(25);
+                return PackageUpdateCheckService.GitProcessResult.Ok(
+                    StableRevision + "\trefs/heads/main\n");
+            };
+            PackageUpdateCheckService.GitPackageVersionResolverForTests = (package, __, ___) =>
+            {
+                Interlocked.Increment(ref manifestCalls);
+                Thread.Sleep(25);
+                string packageVersion = string.Equals(
+                    package.PackageId,
+                    first.PackageId,
+                    StringComparison.Ordinal)
+                    ? "1.2.3"
+                    : "4.5.6";
+                return PackageUpdateCheckService.PackageVersionResult.Ok(packageVersion);
+            };
+
+            using (PackageDetectionService detectionService = new PackageDetectionService())
+            using (PackageUpdateCheckService updateCheckService = new PackageUpdateCheckService(detectionService))
+            {
+                InstallRegistryPackagesForTests(detectionService, first, second);
+
+                updateCheckService.CheckForUpdates(
+                    new[] { first, second },
+                    _ => PackageChannel.Stable);
+                PumpFullCheckUntilIdle(updateCheckService);
+
+                Assert.AreEqual(
+                    "1.2.3",
+                    updateCheckService.GetStatus(first, PackageChannel.Stable).LatestVersion);
+                Assert.AreEqual(
+                    "4.5.6",
+                    updateCheckService.GetStatus(second, PackageChannel.Stable).LatestVersion);
+            }
+
+            Assert.AreEqual(1, gitCalls);
+            Assert.AreEqual(2, manifestCalls);
+        }
+
+        [Test]
+        public void CaseDistinctGitReferencesDoNotDeduplicateRemoteProbe()
+        {
+            int gitCalls = 0;
+            int manifestCalls = 0;
+            PackageDefinition upper = new PackageDefinition(
+                "Upper Reference",
+                "com.deucarian.upper-reference",
+                "https://github.com/Deucarian/Shared.git?path=/Packages/Shared#refs/heads/Feature/X",
+                "Upper reference package.");
+            PackageDefinition lower = new PackageDefinition(
+                "Lower Reference",
+                "com.deucarian.lower-reference",
+                "https://github.com/deucarian/shared.git?path=/Packages/Shared#refs/heads/feature/x",
+                "Lower reference package.");
+            PackageUpdateCheckService.GitProcessRunnerForTests = (arguments, __, ___) =>
+            {
+                Interlocked.Increment(ref gitCalls);
+                string revision = arguments.IndexOf("Feature/X", StringComparison.Ordinal) >= 0
+                    ? StableRevision
+                    : DevelopmentRevision;
+                return PackageUpdateCheckService.GitProcessResult.Ok(
+                    revision + "\trefs/heads/feature\n");
+            };
+            PackageUpdateCheckService.GitPackageVersionResolverForTests = (_, __, ___) =>
+            {
+                Interlocked.Increment(ref manifestCalls);
+                return PackageUpdateCheckService.PackageVersionResult.Ok("1.2.3");
+            };
+
+            using (PackageDetectionService detectionService = new PackageDetectionService())
+            using (PackageUpdateCheckService updateCheckService = new PackageUpdateCheckService(detectionService))
+            {
+                InstallRegistryPackagesForTests(detectionService, upper, lower);
+
+                updateCheckService.CheckForUpdates(
+                    new[] { upper, lower },
+                    _ => PackageChannel.Stable);
+                PumpFullCheckUntilIdle(updateCheckService);
+            }
+
+            Assert.AreEqual(2, gitCalls);
+            Assert.AreEqual(2, manifestCalls);
+        }
+
+        [Test]
+        public void InjectedManifestFetcherSuppliesLatestVersionAndReceivesRequestContext()
+        {
+            PackageDefinition package = CreatePackageWithRevisionChannels();
+            string requestedUrl = string.Empty;
+            TimeSpan requestedTimeout = TimeSpan.Zero;
+            bool tokenWasCanceled = true;
+            TimeSpan configuredTimeout = TimeSpan.FromMilliseconds(750);
+            PackageRegistryRemoteFetchDelegate fetcher = (url, cancellationToken, timeout) =>
+            {
+                requestedUrl = url;
+                requestedTimeout = timeout;
+                tokenWasCanceled = cancellationToken.IsCancellationRequested;
+                return Task.FromResult(new PackageRegistryRemoteFetchResponse(
+                    "{\"name\":\"com.deucarian.object-loading\",\"version\":\"2.3.4\"}"));
+            };
+
+            using (PackageDetectionService detectionService = new PackageDetectionService())
+            using (PackageUpdateCheckService updateCheckService = new PackageUpdateCheckService(
+                       detectionService,
+                       fetcher,
+                       configuredTimeout))
+            {
+                InstallRegistryPackagesForTests(detectionService, package);
+
+                updateCheckService.CheckForUpdates(
+                    new[] { package },
+                    _ => PackageChannel.Stable);
+                PumpFullCheckUntilIdle(updateCheckService);
+
+                PackageUpdateStatus status = updateCheckService.GetStatus(
+                    package,
+                    PackageChannel.Stable);
+                Assert.AreEqual(PackageUpdateStatusKind.SourceMigrationAvailable, status.Kind);
+                Assert.AreEqual("2.3.4", status.LatestVersion);
+            }
+
+            Assert.AreEqual(
+                "https://raw.githubusercontent.com/deucarian/object-loading/" +
+                StableRevision + "/package.json",
+                requestedUrl);
+            Assert.AreEqual(configuredTimeout, requestedTimeout);
+            Assert.IsFalse(tokenWasCanceled);
+        }
+
+        [Test]
+        public void InjectedManifestFetcherFailureRemainsAnActionableMigrationDiagnostic()
+        {
+            PackageDefinition package = CreatePackageWithRevisionChannels();
+            PackageRegistryRemoteFetchDelegate fetcher = (_, __, ___) =>
+            {
+                TaskCompletionSource<PackageRegistryRemoteFetchResponse> completion =
+                    new TaskCompletionSource<PackageRegistryRemoteFetchResponse>();
+                completion.SetException(new InvalidOperationException("Synthetic manifest failure."));
+                return completion.Task;
+            };
+
+            using (PackageDetectionService detectionService = new PackageDetectionService())
+            using (PackageUpdateCheckService updateCheckService = new PackageUpdateCheckService(
+                       detectionService,
+                       fetcher,
+                       TimeSpan.FromSeconds(1)))
+            {
+                InstallRegistryPackagesForTests(detectionService, package);
+
+                updateCheckService.CheckForUpdates(
+                    new[] { package },
+                    _ => PackageChannel.Stable);
+                PumpFullCheckUntilIdle(updateCheckService);
+
+                PackageUpdateStatus status = updateCheckService.GetStatus(
+                    package,
+                    PackageChannel.Stable);
+                Assert.AreEqual(PackageUpdateStatusKind.SourceMigrationAvailable, status.Kind);
+                StringAssert.Contains("Target metadata was unavailable", status.Message);
+                StringAssert.Contains("Synthetic manifest failure", status.Message);
+            }
+        }
+
+        [Test]
+        public void InjectedManifestFetcherTimeoutCancelsOwnedTokenAndReportsDiagnostic()
+        {
+            PackageDefinition package = CreatePackageWithRevisionChannels();
+            using (ManualResetEventSlim timeoutCancellationObserved = new ManualResetEventSlim(false))
+            {
+                PackageRegistryRemoteFetchDelegate fetcher = (_, cancellationToken, __) =>
+                {
+                    TaskCompletionSource<PackageRegistryRemoteFetchResponse> completion =
+                        new TaskCompletionSource<PackageRegistryRemoteFetchResponse>();
+                    cancellationToken.Register(() =>
+                    {
+                        timeoutCancellationObserved.Set();
+                        completion.TrySetCanceled();
+                    });
+                    return completion.Task;
+                };
+
+                using (PackageDetectionService detectionService = new PackageDetectionService())
+                using (PackageUpdateCheckService updateCheckService = new PackageUpdateCheckService(
+                           detectionService,
+                           fetcher,
+                           TimeSpan.FromMilliseconds(50)))
+                {
+                    InstallRegistryPackagesForTests(detectionService, package);
+
+                    updateCheckService.CheckForUpdates(
+                        new[] { package },
+                        _ => PackageChannel.Stable);
+                    PumpFullCheckUntilIdle(updateCheckService);
+
+                    PackageUpdateStatus status = updateCheckService.GetStatus(
+                        package,
+                        PackageChannel.Stable);
+                    Assert.AreEqual(PackageUpdateStatusKind.SourceMigrationAvailable, status.Kind);
+                    StringAssert.Contains("timed out", status.Message.ToLowerInvariant());
+                }
+
+                Assert.IsTrue(timeoutCancellationObserved.Wait(TimeSpan.FromSeconds(2)));
+            }
+        }
+
+        [Test]
+        public void CancelingManifestFetchCancelsTokenAndLateResponseCannotOverwriteNewerStatus()
+        {
+            PackageDefinition package = CreatePackageWithRevisionChannels();
+            TaskCompletionSource<PackageRegistryRemoteFetchResponse> stableCompletion =
+                new TaskCompletionSource<PackageRegistryRemoteFetchResponse>();
+            using (ManualResetEventSlim stableStarted = new ManualResetEventSlim(false))
+            {
+                CancellationToken stableToken = CancellationToken.None;
+                PackageRegistryRemoteFetchDelegate fetcher = (url, cancellationToken, __) =>
+                {
+                    if (url.IndexOf(StableRevision, StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        stableToken = cancellationToken;
+                        stableStarted.Set();
+                        return stableCompletion.Task;
+                    }
+
+                    return Task.FromResult(new PackageRegistryRemoteFetchResponse(
+                        "{\"name\":\"com.deucarian.object-loading\",\"version\":\"2.0.0-dev.1\"}"));
+                };
+
+                try
+                {
+                    using (PackageDetectionService detectionService = new PackageDetectionService())
+                    using (PackageUpdateCheckService updateCheckService = new PackageUpdateCheckService(
+                               detectionService,
+                               fetcher,
+                               TimeSpan.FromSeconds(5)))
+                    {
+                        InstallRegistryPackagesForTests(detectionService, package);
+
+                        updateCheckService.CheckForUpdates(
+                            new[] { package },
+                            _ => PackageChannel.Stable);
+                        Assert.IsTrue(stableStarted.Wait(TimeSpan.FromSeconds(2)));
+
+                        Assert.IsTrue(updateCheckService.CancelCurrentCheck());
+                        Assert.IsTrue(SpinWait.SpinUntil(
+                            () => stableToken.IsCancellationRequested,
+                            TimeSpan.FromSeconds(2)));
+
+                        updateCheckService.CheckForUpdates(
+                            new[] { package },
+                            _ => PackageChannel.Development);
+                        PumpFullCheckUntilIdle(updateCheckService);
+
+                        PackageUpdateStatus newerStatus = updateCheckService.GetStatus(
+                            package,
+                            PackageChannel.Development);
+                        Assert.AreEqual(PackageUpdateStatusKind.SourceMigrationAvailable, newerStatus.Kind);
+                        Assert.AreEqual("2.0.0-dev.1", newerStatus.LatestVersion);
+
+                        stableCompletion.TrySetResult(new PackageRegistryRemoteFetchResponse(
+                            "{\"name\":\"com.deucarian.object-loading\",\"version\":\"9.9.9\"}"));
+                        Thread.Sleep(75);
+                        PackageUpdateCheckService.UpdateSharedForTests();
+
+                        PackageUpdateStatus finalStatus = updateCheckService.GetStatus(
+                            package,
+                            PackageChannel.Development);
+                        Assert.AreEqual(PackageUpdateStatusKind.SourceMigrationAvailable, finalStatus.Kind);
+                        Assert.AreEqual("2.0.0-dev.1", finalStatus.LatestVersion);
+                    }
+                }
+                finally
+                {
+                    stableCompletion.TrySetResult(new PackageRegistryRemoteFetchResponse(
+                        "{\"name\":\"com.deucarian.object-loading\",\"version\":\"9.9.9\"}"));
+                }
+            }
+        }
+
+        [Test]
         public void TargetedStableToDevelopmentCheckMarksCheckingThenMigrationAvailable()
         {
             PackageDefinition packageDefinition = CreatePackageWithRevisionChannels();
@@ -791,6 +1730,37 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 category: "Core");
         }
 
+        private static PackageDefinition[] CreateConcurrentPackages(string prefix, int count)
+        {
+            return Enumerable.Range(0, count)
+                .Select(index => new PackageDefinition(
+                    prefix + " " + index,
+                    "com.deucarian." + prefix + "-" + index,
+                    "https://github.com/Deucarian/" + prefix + "-" + index +
+                    ".git#" + StableRevision,
+                    "Concurrent update-check package.",
+                    Array.Empty<string>(),
+                    PackageType.Core,
+                    "https://github.com/Deucarian/" + prefix + "-" + index +
+                    ".git#" + DevelopmentRevision,
+                    category: "Core"))
+                .ToArray();
+        }
+
+        private static void InstallRegistryPackagesForTests(
+            PackageDetectionService detectionService,
+            params PackageDefinition[] packages)
+        {
+            foreach (PackageDefinition package in packages ?? Array.Empty<PackageDefinition>())
+            {
+                detectionService.ReplaceInstalledPackageForTests(
+                    package.PackageId,
+                    "1.2.0",
+                    PackageInstallSourceType.Registry,
+                    "1.2.0");
+            }
+        }
+
         private static void PumpTargetedChecksUntilIdle()
         {
             DateTime deadline = DateTime.UtcNow.AddSeconds(5);
@@ -801,6 +1771,36 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 Thread.Sleep(10);
             }
 
+            Assert.IsFalse(PackageUpdateCheckService.HasTargetedChecksForTests);
+        }
+
+        private static void PumpFullCheckUntilIdle(PackageUpdateCheckService service)
+        {
+            DateTime deadline = DateTime.UtcNow.AddSeconds(5);
+            while (service.IsChecking && DateTime.UtcNow < deadline)
+            {
+                PackageUpdateCheckService.UpdateSharedForTests();
+                Thread.Sleep(10);
+            }
+
+            PackageUpdateCheckService.UpdateSharedForTests();
+            Assert.IsFalse(service.IsChecking);
+        }
+
+        private static void PumpAllChecksUntilIdle(PackageUpdateCheckService service)
+        {
+            DateTime deadline = DateTime.UtcNow.AddSeconds(5);
+            while ((service.IsChecking || PackageUpdateCheckService.HasTargetedChecksForTests) &&
+                   DateTime.UtcNow < deadline)
+            {
+                PackageUpdateCheckService.UpdateSharedForTests();
+                PackageUpdateCheckService.UpdateTargetedChecksForTests(forceStartPending: true);
+                Thread.Sleep(10);
+            }
+
+            PackageUpdateCheckService.UpdateSharedForTests();
+            PackageUpdateCheckService.UpdateTargetedChecksForTests(forceStartPending: true);
+            Assert.IsFalse(service.IsChecking);
             Assert.IsFalse(PackageUpdateCheckService.HasTargetedChecksForTests);
         }
     }

@@ -1,26 +1,88 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace Deucarian.PackageInstaller.Editor
 {
+    [Flags]
+    internal enum PackageOperationRisk
+    {
+        None = 0,
+        MultiStep = 1 << 0,
+        SourceOrChannelMigration = 1 << 1,
+        Downgrade = 1 << 2,
+        ChannelFallback = 1 << 3,
+        Conflict = 1 << 4,
+        Destructive = 1 << 5,
+        Bulk = 1 << 6
+    }
+
     internal sealed class PackageDependencyInstallStep
     {
         public PackageDependencyInstallStep(
             PackageDefinition packageDefinition,
             PackageChannel channel,
-            bool isDependency)
+            bool isDependency,
+            string targetUrl = null,
+            IEnumerable<string> prerequisitePackageIds = null,
+            IEnumerable<string> rootPackageIds = null,
+            IEnumerable<string> rootPaths = null,
+            string dependencyReason = null,
+            string detectedCurrentSource = null,
+            string detectedCurrentVersion = null,
+            string detectedCurrentIdentity = null,
+            PackageChannel? requestedChannel = null)
         {
             PackageDefinition = packageDefinition ?? throw new ArgumentNullException(nameof(packageDefinition));
             Channel = channel;
+            RequestedChannel = requestedChannel ?? channel;
             IsDependency = isDependency;
+            TargetUrl = string.IsNullOrWhiteSpace(targetUrl)
+                ? packageDefinition.GetUrl(channel)
+                : targetUrl.Trim();
+            PrerequisitePackageIds = ToReadOnlyList(prerequisitePackageIds);
+            RootPackageIds = ToReadOnlyList(rootPackageIds);
+            RootPaths = ToReadOnlyList(rootPaths);
+            DependencyReason = dependencyReason ?? string.Empty;
+            DetectedCurrentSource = detectedCurrentSource ?? string.Empty;
+            DetectedCurrentVersion = detectedCurrentVersion ?? string.Empty;
+            DetectedCurrentIdentity = detectedCurrentIdentity ?? string.Empty;
         }
 
         public PackageDefinition PackageDefinition { get; }
 
         public PackageChannel Channel { get; }
 
+        public PackageChannel RequestedChannel { get; }
+
         public bool IsDependency { get; }
+
+        public string TargetUrl { get; }
+
+        public IReadOnlyList<string> PrerequisitePackageIds { get; }
+
+        public IReadOnlyList<string> RootPackageIds { get; }
+
+        public IReadOnlyList<string> RootPaths { get; }
+
+        public string DependencyReason { get; }
+
+        public string DetectedCurrentSource { get; }
+
+        public string DetectedCurrentVersion { get; }
+
+        public string DetectedCurrentIdentity { get; }
+
+        private static IReadOnlyList<string> ToReadOnlyList(IEnumerable<string> values)
+        {
+            return Array.AsReadOnly((values ?? Array.Empty<string>())
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Select(value => value.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray());
+        }
     }
 
     internal sealed class PackageDependencyInstallPlan
@@ -31,12 +93,31 @@ namespace Deucarian.PackageInstaller.Editor
             bool isValid,
             IEnumerable<PackageDependencyInstallStep> steps,
             IEnumerable<string> messages,
-            string errorMessage)
+            string errorMessage,
+            string operationId,
+            string registryFingerprint,
+            long createdAtUtcTicks,
+            PackageOperationRisk risks,
+            IEnumerable<PackageOperationRootRequest> rootRequests)
         {
             IsValid = isValid;
-            Steps = (steps ?? Array.Empty<PackageDependencyInstallStep>()).ToArray();
-            Messages = (messages ?? Array.Empty<string>()).ToArray();
+            Steps = Array.AsReadOnly(
+                (steps ?? Array.Empty<PackageDependencyInstallStep>()).ToArray());
+            Messages = Array.AsReadOnly((messages ?? Array.Empty<string>()).ToArray());
             ErrorMessage = errorMessage ?? string.Empty;
+            OperationId = string.IsNullOrWhiteSpace(operationId)
+                ? Guid.NewGuid().ToString("N")
+                : operationId;
+            RegistryFingerprint = registryFingerprint ?? string.Empty;
+            CreatedAtUtcTicks = createdAtUtcTicks > 0 ? createdAtUtcTicks : DateTime.UtcNow.Ticks;
+            RootRequests = NormalizeRootRequests(rootRequests, Steps);
+            Risks = Steps.Count > 1
+                ? risks | PackageOperationRisk.MultiStep
+                : risks;
+            if (RootRequests.Count > 1)
+            {
+                Risks |= PackageOperationRisk.Bulk;
+            }
 
             _channelsByPackageId = Steps
                 .GroupBy(step => step.PackageDefinition.PackageId, StringComparer.OrdinalIgnoreCase)
@@ -54,6 +135,33 @@ namespace Deucarian.PackageInstaller.Editor
 
         public string ErrorMessage { get; }
 
+        public string OperationId { get; }
+
+        public string RegistryFingerprint { get; }
+
+        public long CreatedAtUtcTicks { get; }
+
+        public PackageOperationRisk Risks { get; }
+
+        public IReadOnlyList<PackageOperationRootRequest> RootRequests { get; }
+
+        public bool IsMultiStep => (Risks & PackageOperationRisk.MultiStep) != 0;
+
+        public bool IsBulk => (Risks & PackageOperationRisk.Bulk) != 0;
+
+        public bool HasMigrationRisk =>
+            (Risks & PackageOperationRisk.SourceOrChannelMigration) != 0;
+
+        public bool HasDowngradeRisk => (Risks & PackageOperationRisk.Downgrade) != 0;
+
+        public bool HasChannelFallback => (Risks & PackageOperationRisk.ChannelFallback) != 0;
+
+        public bool HasConflict => (Risks & PackageOperationRisk.Conflict) != 0;
+
+        public bool HasDestructiveRisk => (Risks & PackageOperationRisk.Destructive) != 0;
+
+        public bool RequiresPreflight => Risks != PackageOperationRisk.None;
+
         public PackageDefinition[] Packages => Steps.Select(step => step.PackageDefinition).ToArray();
 
         public PackageChannel GetChannel(PackageDefinition packageDefinition)
@@ -68,22 +176,134 @@ namespace Deucarian.PackageInstaller.Editor
                 : PackageChannel.Stable;
         }
 
+        internal PackageDependencyInstallPlan WithAdditionalRisks(
+            PackageOperationRisk additionalRisks)
+        {
+            if (additionalRisks == PackageOperationRisk.None ||
+                (Risks & additionalRisks) == additionalRisks)
+            {
+                return this;
+            }
+
+            return new PackageDependencyInstallPlan(
+                IsValid,
+                Steps,
+                Messages,
+                ErrorMessage,
+                OperationId,
+                RegistryFingerprint,
+                CreatedAtUtcTicks,
+                Risks | additionalRisks,
+                RootRequests);
+        }
+
         public static PackageDependencyInstallPlan Success(
             IEnumerable<PackageDependencyInstallStep> steps,
-            IEnumerable<string> messages)
+            IEnumerable<string> messages,
+            string registryFingerprint = "",
+            PackageOperationRisk risks = PackageOperationRisk.None,
+            IEnumerable<PackageOperationRootRequest> rootRequests = null)
         {
-            return new PackageDependencyInstallPlan(true, steps, messages, string.Empty);
+            return new PackageDependencyInstallPlan(
+                true,
+                steps,
+                messages,
+                string.Empty,
+                string.Empty,
+                registryFingerprint,
+                DateTime.UtcNow.Ticks,
+                risks,
+                rootRequests);
         }
 
         public static PackageDependencyInstallPlan Failure(
             string errorMessage,
-            IEnumerable<string> messages)
+            IEnumerable<string> messages,
+            PackageOperationRisk risks = PackageOperationRisk.None,
+            IEnumerable<PackageOperationRootRequest> rootRequests = null)
         {
             return new PackageDependencyInstallPlan(
                 false,
                 Array.Empty<PackageDependencyInstallStep>(),
                 messages,
-                errorMessage);
+                errorMessage,
+                string.Empty,
+                string.Empty,
+                DateTime.UtcNow.Ticks,
+                risks,
+                rootRequests);
+        }
+
+        internal static PackageDependencyInstallPlan Restore(
+            string operationId,
+            string registryFingerprint,
+            long createdAtUtcTicks,
+            IEnumerable<PackageDependencyInstallStep> steps,
+            IEnumerable<string> messages,
+            IEnumerable<PackageOperationRootRequest> rootRequests = null)
+        {
+            return new PackageDependencyInstallPlan(
+                true,
+                steps,
+                messages,
+                string.Empty,
+                operationId,
+                registryFingerprint,
+                createdAtUtcTicks,
+                PackageOperationRisk.None,
+                rootRequests);
+        }
+
+        private static IReadOnlyList<PackageOperationRootRequest> NormalizeRootRequests(
+            IEnumerable<PackageOperationRootRequest> rootRequests,
+            IEnumerable<PackageDependencyInstallStep> steps)
+        {
+            List<PackageOperationRootRequest> normalized = new List<PackageOperationRootRequest>();
+            HashSet<string> seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (PackageOperationRootRequest root in rootRequests ??
+                         Array.Empty<PackageOperationRootRequest>())
+            {
+                if (root != null && !string.IsNullOrWhiteSpace(root.PackageId) &&
+                    seen.Add(root.PackageId.Trim()))
+                {
+                    normalized.Add(new PackageOperationRootRequest(root.PackageId.Trim(), root.Channel));
+                }
+            }
+
+            if (normalized.Count > 0)
+            {
+                return Array.AsReadOnly(normalized.ToArray());
+            }
+
+            PackageDependencyInstallStep[] installSteps =
+                (steps ?? Array.Empty<PackageDependencyInstallStep>())
+                .Where(step => step != null)
+                .ToArray();
+            foreach (PackageDependencyInstallStep step in installSteps.Where(step => !step.IsDependency))
+            {
+                if (seen.Add(step.PackageDefinition.PackageId))
+                {
+                    normalized.Add(new PackageOperationRootRequest(
+                        step.PackageDefinition.PackageId,
+                        step.RequestedChannel));
+                }
+            }
+
+            foreach (PackageDependencyInstallStep step in installSteps)
+            {
+                foreach (string rootPackageId in step.RootPackageIds)
+                {
+                    if (seen.Add(rootPackageId))
+                    {
+                        normalized.Add(new PackageOperationRootRequest(
+                            rootPackageId,
+                            step.RequestedChannel));
+                    }
+                }
+            }
+
+            return Array.AsReadOnly(normalized.ToArray());
         }
     }
 
@@ -92,6 +312,12 @@ namespace Deucarian.PackageInstaller.Editor
         private readonly PackageInstallService _packageInstallService;
         private readonly PackageDetectionService _packageDetectionService;
         private readonly Func<IEnumerable<PackageDefinition>> _registeredPackagesProvider;
+        private PackagePlannerRetryRequest _lastPlannerRetryRequest;
+
+        internal Func<PackageDependencyInstallPlan, string, bool> PreflightConfirmation { get; set; }
+
+        internal bool CanRetryLastPlannerFailure =>
+            _lastPlannerRetryRequest != null && _lastPlannerRetryRequest.RootRequests.Count > 0;
 
         public PackageDependencyInstaller(
             PackageInstallService packageInstallService,
@@ -152,17 +378,31 @@ namespace Deucarian.PackageInstaller.Editor
                 includeInstalledRequestedPackages: true,
                 alreadyInstalledMessage: packageDefinition != null
                     ? packageDefinition.DisplayName + " has no packages to reinstall."
-                    : "No packages to reinstall.");
+                    : "No packages to reinstall.",
+                additionalRisks: PackageOperationRisk.Destructive);
         }
 
         public void InstallAll(Func<PackageDefinition, PackageChannel> channelSelector)
         {
-            StartDependencyAwareOperation(
+            InstallManyWithDependencies(
                 GetInstallAllRootPackages(),
                 channelSelector,
                 "Install All Packages",
+                "All registered packages are already installed.");
+        }
+
+        public void InstallManyWithDependencies(
+            IEnumerable<PackageDefinition> packageDefinitions,
+            Func<PackageDefinition, PackageChannel> channelSelector,
+            string operationName,
+            string alreadyInstalledMessage = "All selected packages are already installed.")
+        {
+            StartDependencyAwareOperation(
+                packageDefinitions,
+                channelSelector,
+                string.IsNullOrWhiteSpace(operationName) ? "Install Packages" : operationName,
                 includeInstalledRequestedPackages: false,
-                alreadyInstalledMessage: "All registered packages are already installed.");
+                alreadyInstalledMessage: alreadyInstalledMessage);
         }
 
         internal PackageDefinition[] GetInstallAllRootPackagesForTests()
@@ -174,12 +414,25 @@ namespace Deucarian.PackageInstaller.Editor
             IEnumerable<PackageDefinition> packageDefinitions,
             Func<PackageDefinition, PackageChannel> channelSelector)
         {
-            StartDependencyAwareOperation(
+            UpdateManyWithDependencies(
                 packageDefinitions,
                 channelSelector,
                 "Update All Installed Packages",
+                "No installed packages need updates.");
+        }
+
+        public void UpdateManyWithDependencies(
+            IEnumerable<PackageDefinition> packageDefinitions,
+            Func<PackageDefinition, PackageChannel> channelSelector,
+            string operationName,
+            string alreadyInstalledMessage = "No selected packages need updates.")
+        {
+            StartDependencyAwareOperation(
+                packageDefinitions,
+                channelSelector,
+                string.IsNullOrWhiteSpace(operationName) ? "Update Packages" : operationName,
                 includeInstalledRequestedPackages: true,
-                alreadyInstalledMessage: "No installed packages need updates.");
+                alreadyInstalledMessage: alreadyInstalledMessage);
         }
 
         public PackageDefinition[] CreateInstallPlan(PackageDefinition packageDefinition)
@@ -202,22 +455,42 @@ namespace Deucarian.PackageInstaller.Editor
             Func<PackageDefinition, PackageChannel> channelSelector,
             bool includeInstalledRequestedPackages)
         {
-            List<PackageDependencyInstallStep> installPlan = new List<PackageDependencyInstallStep>();
             List<string> messages = new List<string>();
-            HashSet<string> plannedPackageIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            HashSet<string> visitedPackageIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            HashSet<string> visitingPackageIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            List<PackageDefinition> visitStack = new List<PackageDefinition>();
+            Dictionary<string, PackageDefinition> registeredPackages = GetRegisteredPackages()
+                .Where(package => package != null && !string.IsNullOrWhiteSpace(package.PackageId))
+                .GroupBy(package => package.PackageId, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+            Dictionary<string, PackageDependencyInstallStepBuilder> stepBuilders =
+                new Dictionary<string, PackageDependencyInstallStepBuilder>(StringComparer.OrdinalIgnoreCase);
+            Dictionary<string, PackagePlanningTarget> planningTargets =
+                new Dictionary<string, PackagePlanningTarget>(StringComparer.OrdinalIgnoreCase);
+            List<PackageDependencyInstallStepBuilder> orderedBuilders =
+                new List<PackageDependencyInstallStepBuilder>();
+            PackageOperationRisk risks = PackageOperationRisk.None;
 
             PackageDefinition[] requestedPackages = (packageDefinitions ?? Array.Empty<PackageDefinition>())
                 .Where(packageDefinition => packageDefinition != null)
                 .GroupBy(packageDefinition => packageDefinition.PackageId, StringComparer.OrdinalIgnoreCase)
                 .Select(group => group.First())
                 .ToArray();
+            Dictionary<string, PackageChannel> requestedChannelsByPackageId = requestedPackages
+                .ToDictionary(
+                    packageDefinition => packageDefinition.PackageId,
+                    packageDefinition => SelectRequestedChannel(packageDefinition, channelSelector),
+                    StringComparer.OrdinalIgnoreCase);
+            PackageOperationRootRequest[] rootRequests = requestedPackages
+                .Select(packageDefinition => new PackageOperationRootRequest(
+                    packageDefinition.PackageId,
+                    requestedChannelsByPackageId[packageDefinition.PackageId]))
+                .ToArray();
 
             foreach (PackageDefinition packageDefinition in requestedPackages)
             {
-                PackageChannel requestedChannel = SelectRequestedChannel(packageDefinition, channelSelector);
+                PackageChannel requestedChannel =
+                    requestedChannelsByPackageId[packageDefinition.PackageId];
+                List<PackageDefinition> path = new List<PackageDefinition> { packageDefinition };
+                HashSet<string> visitingPackageIds =
+                    new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
                 if (!AddPackageToPlan(
                         packageDefinition,
@@ -226,19 +499,49 @@ namespace Deucarian.PackageInstaller.Editor
                         requestedChannel,
                         isDependency: false,
                         includeInstalledRequestedPackages: includeInstalledRequestedPackages,
-                        installPlan: installPlan,
-                        plannedPackageIds: plannedPackageIds,
-                        visitedPackageIds: visitedPackageIds,
+                        registeredPackages: registeredPackages,
+                        stepBuilders: stepBuilders,
+                        orderedBuilders: orderedBuilders,
+                        planningTargets: planningTargets,
                         visitingPackageIds: visitingPackageIds,
-                        visitStack: visitStack,
+                        visitStack: path,
                         messages: messages,
+                        risks: ref risks,
+                        out _,
                         out string errorMessage))
                 {
-                    return PackageDependencyInstallPlan.Failure(errorMessage, messages);
+                    PackageOperationRisk failureRisks = errorMessage.StartsWith(
+                        "Conflicting package targets",
+                        StringComparison.Ordinal)
+                        ? risks | PackageOperationRisk.Conflict
+                        : risks;
+                    return PackageDependencyInstallPlan.Failure(
+                        errorMessage,
+                        messages,
+                        failureRisks,
+                        rootRequests);
                 }
             }
 
-            return PackageDependencyInstallPlan.Success(installPlan, messages);
+            foreach (PackageDependencyInstallStepBuilder builder in orderedBuilders)
+            {
+                risks |= GetInstalledTargetRisks(builder.PackageDefinition, builder.Channel);
+
+                foreach (string dependencyId in builder.PackageDefinition.Dependencies)
+                {
+                    if (stepBuilders.ContainsKey(dependencyId))
+                    {
+                        builder.AddPrerequisite(dependencyId);
+                    }
+                }
+            }
+
+            return PackageDependencyInstallPlan.Success(
+                orderedBuilders.Select(builder => builder.Build()).ToArray(),
+                messages,
+                ComputeRegistryFingerprint(registeredPackages.Values),
+                risks,
+                rootRequests);
         }
 
         public bool AreDependenciesInstalled(PackageDefinition packageDefinition)
@@ -286,25 +589,99 @@ namespace Deucarian.PackageInstaller.Editor
                 .ToArray();
         }
 
+        internal bool RetryLastPlannerFailure()
+        {
+            PackagePlannerRetryRequest retryRequest = _lastPlannerRetryRequest;
+            if (retryRequest == null || retryRequest.RootRequests.Count == 0)
+            {
+                return false;
+            }
+
+            Dictionary<string, PackageDefinition> registeredPackages = GetRegisteredPackages()
+                .Where(package => package != null && !string.IsNullOrWhiteSpace(package.PackageId))
+                .GroupBy(package => package.PackageId, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+            List<PackageDefinition> requestedPackages = new List<PackageDefinition>();
+
+            foreach (PackageOperationRootRequest rootRequest in retryRequest.RootRequests)
+            {
+                if (!registeredPackages.TryGetValue(
+                        rootRequest.PackageId,
+                        out PackageDefinition packageDefinition))
+                {
+                    string errorMessage = "Cannot retry " + retryRequest.OperationName +
+                                          " because root package " + rootRequest.PackageId +
+                                          " is no longer registered.";
+                    PackageInstallerLog.Install.Error(errorMessage);
+                    PackageInstallerActivityService.Record(
+                        "Planner",
+                        PackageInstallerActivitySeverity.Error,
+                        errorMessage,
+                        retryKind: PackageInstallerRetryKind.ReplanOperation);
+                    return false;
+                }
+
+                requestedPackages.Add(packageDefinition);
+            }
+
+            StartDependencyAwareOperation(
+                requestedPackages,
+                packageDefinition => retryRequest.GetChannel(packageDefinition.PackageId),
+                retryRequest.OperationName,
+                retryRequest.IncludeInstalledRequestedPackages,
+                retryRequest.AlreadyInstalledMessage,
+                retryRequest.AdditionalRisks);
+            return true;
+        }
+
         private void StartDependencyAwareOperation(
             IEnumerable<PackageDefinition> packageDefinitions,
             Func<PackageDefinition, PackageChannel> channelSelector,
             string operationName,
             bool includeInstalledRequestedPackages,
-            string alreadyInstalledMessage)
+            string alreadyInstalledMessage,
+            PackageOperationRisk additionalRisks = PackageOperationRisk.None)
         {
             PackageDependencyInstallPlan installPlan = CreateInstallPlan(
                 packageDefinitions,
                 channelSelector,
-                includeInstalledRequestedPackages);
+                includeInstalledRequestedPackages)
+                .WithAdditionalRisks(additionalRisks);
 
             LogMessages(installPlan.Messages);
 
             if (!installPlan.IsValid)
             {
+                if (installPlan.HasConflict && PreflightConfirmation != null)
+                {
+                    // Conflicts cannot be executed, but they still use the contextual
+                    // review surface so every affected root path is visible in place.
+                    PreflightConfirmation(installPlan, operationName);
+                }
+
+                _lastPlannerRetryRequest = installPlan.RootRequests.Count > 0
+                    ? new PackagePlannerRetryRequest(
+                        installPlan.RootRequests,
+                        operationName,
+                        includeInstalledRequestedPackages,
+                        alreadyInstalledMessage,
+                        additionalRisks)
+                    : null;
                 PackageInstallerLog.Install.Error(installPlan.ErrorMessage);
+                PackageInstallerActivityService.Record(
+                    "Planner",
+                    PackageInstallerActivitySeverity.Error,
+                    installPlan.ErrorMessage,
+                    installPlan.Messages.Count > 0
+                        ? string.Join("\n", installPlan.Messages.ToArray())
+                        : string.Empty,
+                    retryKind: CanRetryLastPlannerFailure
+                        ? PackageInstallerRetryKind.ReplanOperation
+                        : PackageInstallerRetryKind.None);
                 return;
             }
+
+            _lastPlannerRetryRequest = null;
 
             if (installPlan.Steps.Count == 0)
             {
@@ -316,11 +693,68 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            _packageInstallService.InstallMany(
-                installPlan.Packages,
-                installPlan.GetChannel,
-                operationName,
-                installPlan.Messages);
+            if (installPlan.RequiresPreflight &&
+                PreflightConfirmation != null &&
+                !PreflightConfirmation(installPlan, operationName))
+            {
+                PackageInstallerLog.Install.Info(operationName + " canceled during preflight.");
+                PackageInstallerActivityService.Record(
+                    "Planner",
+                    PackageInstallerActivitySeverity.Warning,
+                    operationName + " canceled during preflight.");
+                return;
+            }
+
+            _packageInstallService.InstallPlan(installPlan, operationName);
+        }
+
+        private sealed class PackagePlannerRetryRequest
+        {
+            private readonly Dictionary<string, PackageChannel> _channelsByPackageId;
+
+            public PackagePlannerRetryRequest(
+                IEnumerable<PackageOperationRootRequest> rootRequests,
+                string operationName,
+                bool includeInstalledRequestedPackages,
+                string alreadyInstalledMessage,
+                PackageOperationRisk additionalRisks)
+            {
+                RootRequests = Array.AsReadOnly((rootRequests ??
+                        Array.Empty<PackageOperationRootRequest>())
+                    .Where(root => root != null && !string.IsNullOrWhiteSpace(root.PackageId))
+                    .Select(root => new PackageOperationRootRequest(root.PackageId, root.Channel))
+                    .ToArray());
+                OperationName = string.IsNullOrWhiteSpace(operationName)
+                    ? "Package Operation"
+                    : operationName;
+                IncludeInstalledRequestedPackages = includeInstalledRequestedPackages;
+                AlreadyInstalledMessage = alreadyInstalledMessage ?? string.Empty;
+                AdditionalRisks = additionalRisks;
+                _channelsByPackageId = RootRequests
+                    .GroupBy(root => root.PackageId, StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(
+                        group => group.Key,
+                        group => group.First().Channel,
+                        StringComparer.OrdinalIgnoreCase);
+            }
+
+            public IReadOnlyList<PackageOperationRootRequest> RootRequests { get; }
+
+            public string OperationName { get; }
+
+            public bool IncludeInstalledRequestedPackages { get; }
+
+            public string AlreadyInstalledMessage { get; }
+
+            public PackageOperationRisk AdditionalRisks { get; }
+
+            public PackageChannel GetChannel(string packageId)
+            {
+                return !string.IsNullOrWhiteSpace(packageId) &&
+                       _channelsByPackageId.TryGetValue(packageId, out PackageChannel channel)
+                    ? channel
+                    : PackageChannel.Stable;
+            }
         }
 
         private bool AddPackageToPlan(
@@ -330,14 +764,18 @@ namespace Deucarian.PackageInstaller.Editor
             PackageChannel packageChannel,
             bool isDependency,
             bool includeInstalledRequestedPackages,
-            ICollection<PackageDependencyInstallStep> installPlan,
-            ISet<string> plannedPackageIds,
-            ISet<string> visitedPackageIds,
+            IReadOnlyDictionary<string, PackageDefinition> registeredPackages,
+            IDictionary<string, PackageDependencyInstallStepBuilder> stepBuilders,
+            ICollection<PackageDependencyInstallStepBuilder> orderedBuilders,
+            IDictionary<string, PackagePlanningTarget> planningTargets,
             ISet<string> visitingPackageIds,
             IList<PackageDefinition> visitStack,
             ICollection<string> messages,
+            ref PackageOperationRisk risks,
+            out bool isPlanned,
             out string errorMessage)
         {
+            isPlanned = false;
             errorMessage = string.Empty;
 
             if (packageDefinition == null || string.IsNullOrWhiteSpace(packageDefinition.PackageId))
@@ -345,82 +783,10 @@ namespace Deucarian.PackageInstaller.Editor
                 return true;
             }
 
-            if (plannedPackageIds.Contains(packageDefinition.PackageId))
-            {
-                if (isDependency)
-                {
-                    messages.Add("Skipped dependency " + packageDefinition.DisplayName + "; already queued.");
-                }
-
-                return true;
-            }
-
             if (visitingPackageIds.Contains(packageDefinition.PackageId))
             {
                 errorMessage = "Circular dependency detected: " + FormatCycle(visitStack, packageDefinition) + ".";
                 return false;
-            }
-
-            if (visitedPackageIds.Contains(packageDefinition.PackageId))
-            {
-                return true;
-            }
-
-            visitingPackageIds.Add(packageDefinition.PackageId);
-            visitStack.Add(packageDefinition);
-
-            foreach (string dependencyId in packageDefinition.Dependencies)
-            {
-                if (!TryGetRegisteredPackage(dependencyId, out PackageDefinition dependency) ||
-                    !dependency.HasPackageReference)
-                {
-                    errorMessage = "Cannot install " + requestedPackage.DisplayName +
-                                   " because dependency " + GetDependencyName(dependency, dependencyId) +
-                                   " is unavailable.";
-                    return false;
-                }
-
-                PackageChannel dependencyChannel = ResolveDependencyChannel(
-                    dependency,
-                    requestedChannel,
-                    requestedPackage,
-                    messages);
-
-                if (!AddPackageToPlan(
-                        dependency,
-                        requestedPackage,
-                        requestedChannel,
-                        dependencyChannel,
-                        isDependency: true,
-                        includeInstalledRequestedPackages: includeInstalledRequestedPackages,
-                        installPlan: installPlan,
-                        plannedPackageIds: plannedPackageIds,
-                        visitedPackageIds: visitedPackageIds,
-                        visitingPackageIds: visitingPackageIds,
-                        visitStack: visitStack,
-                        messages: messages,
-                        out errorMessage))
-                {
-                    return false;
-                }
-            }
-
-            visitingPackageIds.Remove(packageDefinition.PackageId);
-            visitStack.RemoveAt(visitStack.Count - 1);
-            visitedPackageIds.Add(packageDefinition.PackageId);
-
-            if (!ShouldInstallPackage(
-                    packageDefinition,
-                    packageChannel,
-                    isDependency,
-                    includeInstalledRequestedPackages))
-            {
-                if (isDependency)
-                {
-                    messages.Add("Skipped dependency " + packageDefinition.DisplayName + "; already installed.");
-                }
-
-                return true;
             }
 
             string packageUrl = packageDefinition.GetUrl(packageChannel);
@@ -433,14 +799,148 @@ namespace Deucarian.PackageInstaller.Editor
                 return false;
             }
 
-            if (isDependency)
+            string rootPath = FormatPath(visitStack);
+
+            visitingPackageIds.Add(packageDefinition.PackageId);
+
+            foreach (string dependencyId in packageDefinition.Dependencies)
             {
-                messages.Add("Installing dependency " + packageDefinition.DisplayName +
-                             " before " + requestedPackage.DisplayName + ".");
+                if (!registeredPackages.TryGetValue(dependencyId, out PackageDefinition dependency) ||
+                    !dependency.HasPackageReference)
+                {
+                    errorMessage = "Cannot install " + requestedPackage.DisplayName +
+                                   " because dependency " + GetDependencyName(dependency, dependencyId) +
+                                   " is unavailable.";
+                    return false;
+                }
+
+                PackageChannel dependencyChannel = ResolveDependencyChannel(
+                    dependency,
+                    requestedChannel,
+                    requestedPackage,
+                    messages,
+                    out bool usedChannelFallback);
+
+                if (usedChannelFallback)
+                {
+                    risks |= PackageOperationRisk.ChannelFallback;
+                }
+
+                visitStack.Add(dependency);
+
+                if (!AddPackageToPlan(
+                        dependency,
+                        requestedPackage,
+                        requestedChannel,
+                        dependencyChannel,
+                        isDependency: true,
+                        includeInstalledRequestedPackages: includeInstalledRequestedPackages,
+                        registeredPackages: registeredPackages,
+                        stepBuilders: stepBuilders,
+                        orderedBuilders: orderedBuilders,
+                        planningTargets: planningTargets,
+                        visitingPackageIds: visitingPackageIds,
+                        visitStack: visitStack,
+                        messages: messages,
+                        risks: ref risks,
+                        out _,
+                        out errorMessage))
+                {
+                    return false;
+                }
+
+                visitStack.RemoveAt(visitStack.Count - 1);
             }
 
-            installPlan.Add(new PackageDependencyInstallStep(packageDefinition, packageChannel, isDependency));
-            plannedPackageIds.Add(packageDefinition.PackageId);
+            visitingPackageIds.Remove(packageDefinition.PackageId);
+
+            if (!ShouldInstallPackage(
+                    packageDefinition,
+                    packageChannel,
+                    isDependency,
+                    includeInstalledRequestedPackages))
+            {
+                if (isDependency)
+                {
+                    AddUniqueMessage(
+                        messages,
+                        "Skipped dependency " + packageDefinition.DisplayName + "; already installed.");
+                }
+
+                return true;
+            }
+
+            string rootPackageId = requestedPackage != null ? requestedPackage.PackageId : packageDefinition.PackageId;
+            string dependencyReason = isDependency && requestedPackage != null
+                ? "Required by " + requestedPackage.DisplayName + "."
+                : string.Empty;
+
+            if (planningTargets.TryGetValue(
+                    packageDefinition.PackageId,
+                    out PackagePlanningTarget existingTarget))
+            {
+                if (!string.Equals(existingTarget.TargetUrl, packageUrl, StringComparison.Ordinal))
+                {
+                    errorMessage = "Conflicting package targets for " + packageDefinition.DisplayName +
+                                   ": " + existingTarget.FormatRootPaths() + " request " +
+                                   existingTarget.Channel + " (" + existingTarget.TargetUrl + "), while " +
+                                   rootPath + " requests " + packageChannel + " (" + packageUrl + ").";
+                    return false;
+                }
+
+                existingTarget.AddRootPath(rootPath);
+            }
+            else
+            {
+                planningTargets[packageDefinition.PackageId] =
+                    new PackagePlanningTarget(packageChannel, packageUrl, rootPath);
+            }
+
+            if (stepBuilders.TryGetValue(
+                    packageDefinition.PackageId,
+                    out PackageDependencyInstallStepBuilder existingBuilder))
+            {
+                existingBuilder.MergeContext(
+                    isDependency,
+                    rootPackageId,
+                    rootPath,
+                    dependencyReason,
+                    requestedChannel);
+                isPlanned = true;
+
+                if (isDependency)
+                {
+                    AddUniqueMessage(
+                        messages,
+                        "Skipped dependency " + packageDefinition.DisplayName + "; already queued.");
+                }
+
+                return true;
+            }
+
+            if (isDependency)
+            {
+                AddUniqueMessage(
+                    messages,
+                    "Installing dependency " + packageDefinition.DisplayName +
+                    " before " + requestedPackage.DisplayName + ".");
+            }
+
+            PackageDependencyInstallStepBuilder builder = new PackageDependencyInstallStepBuilder(
+                packageDefinition,
+                requestedChannel,
+                packageChannel,
+                packageUrl,
+                isDependency,
+                rootPackageId,
+                rootPath,
+                dependencyReason,
+                GetDetectedCurrentSource(packageDefinition.PackageId),
+                GetDetectedCurrentVersion(packageDefinition.PackageId),
+                _packageDetectionService.GetInstalledIdentity(packageDefinition.PackageId));
+            stepBuilders.Add(packageDefinition.PackageId, builder);
+            orderedBuilders.Add(builder);
+            isPlanned = true;
             return true;
         }
 
@@ -493,8 +993,11 @@ namespace Deucarian.PackageInstaller.Editor
             PackageDefinition dependency,
             PackageChannel requestedChannel,
             PackageDefinition requestedPackage,
-            ICollection<string> messages)
+            ICollection<string> messages,
+            out bool usedFallback)
         {
+            usedFallback = false;
+
             if (requestedChannel == PackageChannel.Development)
             {
                 if (dependency.HasDevelopmentUrl)
@@ -502,17 +1005,23 @@ namespace Deucarian.PackageInstaller.Editor
                     return PackageChannel.Development;
                 }
 
-                messages.Add("Dependency " + dependency.DisplayName +
-                             " has no Development channel; falling back to Stable before installing " +
-                             requestedPackage.DisplayName + ".");
+                AddUniqueMessage(
+                    messages,
+                    "Dependency " + dependency.DisplayName +
+                    " has no Development channel; falling back to Stable before installing " +
+                    requestedPackage.DisplayName + ".");
+                usedFallback = true;
                 return PackageChannel.Stable;
             }
 
             if (requestedChannel == PackageChannel.Custom)
             {
-                messages.Add("Dependency " + dependency.DisplayName +
-                             " has no Custom channel; falling back to Stable before installing " +
-                             requestedPackage.DisplayName + ".");
+                AddUniqueMessage(
+                    messages,
+                    "Dependency " + dependency.DisplayName +
+                    " has no Custom channel; falling back to Stable before installing " +
+                    requestedPackage.DisplayName + ".");
+                usedFallback = true;
             }
 
             return PackageChannel.Stable;
@@ -576,13 +1085,272 @@ namespace Deucarian.PackageInstaller.Editor
                 ? stack.Skip(cycleStart)
                 : stack;
 
+            IEnumerable<PackageDefinition> cycleWithEnd = cycle;
+            PackageDefinition lastPackage = cycle.LastOrDefault();
+
+            if (lastPackage == null || repeatedPackage == null ||
+                !string.Equals(
+                    lastPackage.PackageId,
+                    repeatedPackage.PackageId,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                cycleWithEnd = cycle.Concat(new[] { repeatedPackage });
+            }
+
             return string.Join(
                 " -> ",
-                cycle
-                    .Concat(new[] { repeatedPackage })
+                cycleWithEnd
                     .Where(packageDefinition => packageDefinition != null)
                     .Select(packageDefinition => packageDefinition.DisplayName)
                     .ToArray());
+        }
+
+        private static string FormatPath(IEnumerable<PackageDefinition> path)
+        {
+            return string.Join(
+                " -> ",
+                (path ?? Array.Empty<PackageDefinition>())
+                    .Where(package => package != null)
+                    .Select(package => package.DisplayName)
+                    .ToArray());
+        }
+
+        private static void AddUniqueMessage(ICollection<string> messages, string message)
+        {
+            if (messages == null || string.IsNullOrWhiteSpace(message) || messages.Contains(message))
+            {
+                return;
+            }
+
+            messages.Add(message);
+        }
+
+        private PackageOperationRisk GetInstalledTargetRisks(
+            PackageDefinition packageDefinition,
+            PackageChannel targetChannel)
+        {
+            if (packageDefinition == null ||
+                !_packageDetectionService.IsInstalled(packageDefinition.PackageId))
+            {
+                return PackageOperationRisk.None;
+            }
+
+            PackageOperationRisk risks = PackageOperationRisk.None;
+
+            if (_packageDetectionService.TryGetInstalledPackageSourceType(
+                    packageDefinition.PackageId,
+                    out PackageInstallSourceType sourceType) &&
+                (sourceType == PackageInstallSourceType.Registry ||
+                 sourceType == PackageInstallSourceType.Local ||
+                 sourceType == PackageInstallSourceType.Embedded))
+            {
+                risks |= PackageOperationRisk.SourceOrChannelMigration;
+            }
+
+            if (_packageDetectionService.TryGetInstalledPackageChannel(
+                    packageDefinition,
+                    out PackageChannel installedChannel,
+                    out _) &&
+                installedChannel != targetChannel)
+            {
+                risks |= installedChannel == PackageChannel.Development &&
+                         targetChannel == PackageChannel.Stable
+                    ? PackageOperationRisk.Downgrade
+                    : PackageOperationRisk.SourceOrChannelMigration;
+            }
+
+            return risks;
+        }
+
+        private string GetDetectedCurrentSource(string packageId)
+        {
+            return _packageDetectionService.TryGetInstalledPackageSourceType(
+                packageId,
+                out PackageInstallSourceType sourceType)
+                ? sourceType.ToString()
+                : string.Empty;
+        }
+
+        private string GetDetectedCurrentVersion(string packageId)
+        {
+            return _packageDetectionService.TryGetInstalledPackageVersion(
+                packageId,
+                out string version)
+                ? version
+                : string.Empty;
+        }
+
+        private static string ComputeRegistryFingerprint(IEnumerable<PackageDefinition> packages)
+        {
+            string payload = string.Join(
+                "\n",
+                (packages ?? Array.Empty<PackageDefinition>())
+                    .Where(package => package != null)
+                    .OrderBy(package => package.PackageId, StringComparer.OrdinalIgnoreCase)
+                    .Select(package =>
+                        package.PackageId.Trim() + "|" +
+                        (package.StableUrl ?? string.Empty).Trim() + "|" +
+                        (package.DevelopmentUrl ?? string.Empty).Trim() + "|" +
+                        string.Join(",", package.Dependencies
+                            .OrderBy(id => id, StringComparer.OrdinalIgnoreCase)
+                            .Select(id => id.Trim())
+                            .ToArray()))
+                    .ToArray());
+
+            using (SHA256 sha256 = SHA256.Create())
+            {
+                byte[] hash = sha256.ComputeHash(Encoding.UTF8.GetBytes(payload));
+                return BitConverter.ToString(hash).Replace("-", string.Empty).ToLowerInvariant();
+            }
+        }
+
+        internal static string ComputeRegistryFingerprintForTests(
+            IEnumerable<PackageDefinition> packages)
+        {
+            return ComputeRegistryFingerprint(packages);
+        }
+
+        private sealed class PackagePlanningTarget
+        {
+            private readonly List<string> _rootPaths = new List<string>();
+
+            public PackagePlanningTarget(PackageChannel channel, string targetUrl, string rootPath)
+            {
+                Channel = channel;
+                TargetUrl = targetUrl ?? string.Empty;
+                AddRootPath(rootPath);
+            }
+
+            public PackageChannel Channel { get; }
+
+            public string TargetUrl { get; }
+
+            public void AddRootPath(string rootPath)
+            {
+                if (string.IsNullOrWhiteSpace(rootPath) ||
+                    _rootPaths.Any(existing => string.Equals(
+                        existing,
+                        rootPath,
+                        StringComparison.OrdinalIgnoreCase)))
+                {
+                    return;
+                }
+
+                _rootPaths.Add(rootPath.Trim());
+            }
+
+            public string FormatRootPaths()
+            {
+                return _rootPaths.Count > 0
+                    ? string.Join("; ", _rootPaths.ToArray())
+                    : "an unknown root path";
+            }
+        }
+
+        private sealed class PackageDependencyInstallStepBuilder
+        {
+            private readonly List<string> _prerequisitePackageIds = new List<string>();
+            private readonly List<string> _rootPackageIds = new List<string>();
+            private readonly List<string> _rootPaths = new List<string>();
+            private readonly List<string> _dependencyReasons = new List<string>();
+
+            public PackageDependencyInstallStepBuilder(
+                PackageDefinition packageDefinition,
+                PackageChannel requestedChannel,
+                PackageChannel channel,
+                string targetUrl,
+                bool isDependency,
+                string rootPackageId,
+                string rootPath,
+                string dependencyReason,
+                string detectedCurrentSource,
+                string detectedCurrentVersion,
+                string detectedCurrentIdentity)
+            {
+                PackageDefinition = packageDefinition;
+                RequestedChannel = requestedChannel;
+                Channel = channel;
+                TargetUrl = targetUrl ?? string.Empty;
+                IsDependency = isDependency;
+                DetectedCurrentSource = detectedCurrentSource ?? string.Empty;
+                DetectedCurrentVersion = detectedCurrentVersion ?? string.Empty;
+                DetectedCurrentIdentity = detectedCurrentIdentity ?? string.Empty;
+                MergeContext(
+                    isDependency,
+                    rootPackageId,
+                    rootPath,
+                    dependencyReason,
+                    requestedChannel);
+            }
+
+            public PackageDefinition PackageDefinition { get; }
+
+            public PackageChannel Channel { get; }
+
+            public PackageChannel RequestedChannel { get; private set; }
+
+            public string TargetUrl { get; }
+
+            public bool IsDependency { get; private set; }
+
+            public string DetectedCurrentSource { get; }
+
+            public string DetectedCurrentVersion { get; }
+
+            public string DetectedCurrentIdentity { get; }
+
+            public void AddPrerequisite(string packageId)
+            {
+                AddUnique(_prerequisitePackageIds, packageId);
+            }
+
+            public void MergeContext(
+                bool isDependency,
+                string rootPackageId,
+                string rootPath,
+                string dependencyReason,
+                PackageChannel requestedChannel)
+            {
+                IsDependency = IsDependency && isDependency;
+                if ((int)requestedChannel > (int)RequestedChannel)
+                {
+                    RequestedChannel = requestedChannel;
+                }
+                AddUnique(_rootPackageIds, rootPackageId);
+                AddUnique(_rootPaths, rootPath);
+                AddUnique(_dependencyReasons, dependencyReason);
+            }
+
+            public PackageDependencyInstallStep Build()
+            {
+                return new PackageDependencyInstallStep(
+                    PackageDefinition,
+                    Channel,
+                    IsDependency,
+                    TargetUrl,
+                    _prerequisitePackageIds,
+                    _rootPackageIds,
+                    _rootPaths,
+                    string.Join(" ", _dependencyReasons.ToArray()),
+                    DetectedCurrentSource,
+                    DetectedCurrentVersion,
+                    DetectedCurrentIdentity,
+                    RequestedChannel);
+            }
+
+            private static void AddUnique(ICollection<string> values, string value)
+            {
+                if (string.IsNullOrWhiteSpace(value) ||
+                    values.Any(existing => string.Equals(
+                        existing,
+                        value,
+                        StringComparison.OrdinalIgnoreCase)))
+                {
+                    return;
+                }
+
+                values.Add(value.Trim());
+            }
         }
 
         private static void LogMessages(IEnumerable<string> messages)

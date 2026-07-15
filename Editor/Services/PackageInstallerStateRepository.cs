@@ -64,6 +64,11 @@ namespace Deucarian.PackageInstaller.Editor
             SetProjectChannel(GetProjectRoot(), channel);
         }
 
+        public void ClearProjectChannel()
+        {
+            ClearProjectChannel(GetProjectRoot());
+        }
+
         public PackageChannelSelection GetPackageChannelSelection(string packageId)
         {
             return GetPackageChannelSelection(GetProjectRoot(), packageId);
@@ -72,6 +77,11 @@ namespace Deucarian.PackageInstaller.Editor
         public void SetPackageChannel(string packageId, PackageChannel channel)
         {
             SetPackageChannel(GetProjectRoot(), packageId, channel);
+        }
+
+        public void ClearPackageChannel(string packageId)
+        {
+            ClearPackageChannel(GetProjectRoot(), packageId);
         }
 
         public string GetManifestStateSignature()
@@ -102,6 +112,11 @@ namespace Deucarian.PackageInstaller.Editor
             SetProjectChannel(projectRoot, channel, changedAtUtcTicks);
         }
 
+        internal static void ClearProjectChannelForTests(string projectRoot)
+        {
+            ClearProjectChannel(projectRoot);
+        }
+
         internal static PackageChannelSelection GetPackageChannelSelectionForTests(
             string projectRoot,
             string packageId)
@@ -116,6 +131,11 @@ namespace Deucarian.PackageInstaller.Editor
             long changedAtUtcTicks)
         {
             SetPackageChannel(projectRoot, packageId, channel, changedAtUtcTicks);
+        }
+
+        internal static void ClearPackageChannelForTests(string projectRoot, string packageId)
+        {
+            ClearPackageChannel(projectRoot, packageId);
         }
 
         internal static string GetProjectChannelPreferenceKeyForTests(string projectRoot)
@@ -210,6 +230,13 @@ namespace Deucarian.PackageInstaller.Editor
                 NormalizeChangedAtUtcTicks(changedAtUtcTicks).ToString());
         }
 
+        private static void ClearProjectChannel(string projectRoot)
+        {
+            EditorPrefs.DeleteKey(GetProjectChannelPreferenceKey(projectRoot));
+            EditorPrefs.DeleteKey(GetProjectChannelChangedAtPreferenceKey(projectRoot));
+            EditorPrefs.DeleteKey(GetLegacyBootstrapChannelPreferenceKey(projectRoot));
+        }
+
         private static PackageChannelSelection GetPackageChannelSelection(
             string projectRoot,
             string packageId)
@@ -257,6 +284,17 @@ namespace Deucarian.PackageInstaller.Editor
             EditorPrefs.SetString(
                 GetPackageChannelChangedAtPreferenceKey(projectRoot, packageId),
                 NormalizeChangedAtUtcTicks(changedAtUtcTicks).ToString());
+        }
+
+        private static void ClearPackageChannel(string projectRoot, string packageId)
+        {
+            if (string.IsNullOrWhiteSpace(packageId))
+            {
+                return;
+            }
+
+            EditorPrefs.DeleteKey(GetPackageChannelPreferenceKey(projectRoot, packageId));
+            EditorPrefs.DeleteKey(GetPackageChannelChangedAtPreferenceKey(projectRoot, packageId));
         }
 
         private static PackageChannel ParseStoredProjectChannel(int value)

@@ -6,7 +6,7 @@
 
 It is the Deucarian ecosystem front door for installing standalone packages, integration packages, suite packages, templates, and explicitly declared package samples from Package Registry metadata.
 
-Current package version: `1.1.61`.
+Current package version: `1.1.64`.
 
 ## When to use it
 
@@ -31,7 +31,7 @@ Open it from:
 Tools > Deucarian > Package Installer
 ```
 
-Select Stable or Development, choose a package, review its dependency plan, and click `Install`. Import samples only when the package detail view shows a sample you explicitly want.
+Select Stable or Development, choose a package, and click `Install`. Ordinary safe one-package actions start immediately; a contextual preflight appears only for bulk, multi-step, source-migration, downgrade, fallback, conflict, or destructive operations. Import samples only when the package detail view shows a sample you explicitly want.
 
 ## Deucarian Menu
 
@@ -91,7 +91,7 @@ The installer loads the bundled `PackageRegistry.json` first so it works offline
 
 `https://raw.githubusercontent.com/Deucarian/Package-Registry/main/packages.json`
 
-If the remote registry succeeds and validates, the window uses it. If it fails, the bundled registry stays active and the header shows that the remote registry failed.
+The installer then loads a validated last-known-good remote cache from `Library/Deucarian/PackageInstaller` when one exists and starts a fresh remote request. Invalid, canceled, timed-out, or offline responses never replace a valid cache. If neither cached nor fresh remote data is valid, the bundled registry stays active and the header explains the fallback.
 
 The registry is the source of truth for stable Git `#main` URLs and development Git `#develop` URLs. Git tags, GitHub releases, and npm/scoped-registry publication are deferred until a separate deliberate release wave.
 
@@ -191,7 +191,7 @@ Set `stableUrl` and, when available, `developmentUrl` to the UPM identifier or G
 
 Promoted packages in the bundled registry use stable Git `#main` URLs and development Git `#develop` URLs. For future pre-stable bootstrap packages whose GitHub repository does not yet have `main`, the bundled registry may intentionally set `stableUrl` equal to the verified `developmentUrl`.
 
-When an installed Git package can be matched to `#main` or `#develop`, including common forms such as `#refs/heads/main`, the installer infers the visible channel from the installed package reference. If the installed reference does not match a known channel, the row shows a Custom channel until the user selects Stable or Development.
+When an installed Git package matches a registered channel's normalized repository remote, optional package path, and ref together, including common ref forms such as `#refs/heads/main`, the installer infers the visible channel. Forks, local sources, and mismatched package paths remain Custom even if their branch is named `main` or `develop`.
 
 ## Samples and Extras
 
@@ -199,7 +199,7 @@ UPM packages can include `Samples~` folders, but Unity does not import those sam
 
 For installed packages, the installer resolves the package through Unity Package Manager metadata, reads its `package.json`, and displays entries from the `samples` array under the package detail view. Each row shows the sample `displayName`, `description`, import status, and an explicit import action.
 
-Sample imports are explicit. The installer first tries Unity's Package Manager sample import API, then falls back to a bounded copy from the installed package's `Samples~` folder into `Assets/Samples/<Package Display Name>/<Version>/<Sample Name>`.
+Sample imports are explicit. The installer first tries Unity's Package Manager sample import API. Its fallback copies into staging beneath `Library`, validates the complete file set and content, then atomically moves the staged sample into `Assets/Samples/<Package Display Name>/<Version>/<Sample Name>`. Failed or canceled imports clean their staging data and never expose a partial sample at the final destination.
 
 If a sample destination already exists, the installer shows it as already imported and does not overwrite it silently.
 
@@ -231,7 +231,7 @@ Unknown Git revisions are shown as "Cannot determine update" while the package r
 
 The installer can also check for updates automatically when Unity starts and when the Package Installer window opens. Startup checks wait until Unity is not compiling or updating, run at most once per editor session, cache their statuses, and log actionable results plus a completion summary without opening a modal or installing anything. Window-open checks are throttled so reopening the window does not repeatedly hit remotes. These settings are stored in `EditorPrefs` and can be toggled from the window header.
 
-`Update` and `Update All Installed Packages` reuse Unity Package Manager installation through `Client.Add` with the selected channel URL after dependency-first planning has installed any missing registered Deucarian dependencies.
+`Update` and the contextual `Update all (N)` action reuse Unity Package Manager installation through `Client.Add` with the selected channel URL after dependency-first planning has installed any missing registered Deucarian dependencies. After `Check Updates` finds actionable updates, return to the root `Deucarian` / `Ecosystem Overview` context to use `Update all (N)`.
 
 The installer package itself is included in update discovery when it is installed in the current project. Multi-package operations place Package Installer last. After a successful self-update, the installer persists the source assembly version and module identity across domain reloads; if Unity Package Manager resolved the new package while the previous assembly is still running, the row shows `Reload pending` with a `Retry Script Reload` action.
 
@@ -243,7 +243,21 @@ The installer shows step-based progress for package install, integration install
 
 Progress is counted by package steps because Unity Package Manager does not provide reliable download-byte progress for these Git package operations.
 
-Progress summaries list succeeded, failed, and skipped package steps so multi-package operations do not rely only on console logs.
+Progress summaries use one chronological activity/result stream with copyable details. They list succeeded, failed, skipped, blocked, and canceled steps so multi-package operations do not rely only on console logs.
+
+Failed prerequisites block their transitive dependents while unrelated requested roots continue. Cancellation lets the active Unity Package Manager request settle but submits no additional requests.
+
+Interrupted plans are stored project-locally beneath `Library/Deucarian/PackageInstaller`. After reload, the installer waits for installed-package and registry refreshes, then offers Resume, Restart, or Discard. Exact saved URLs are reusable only while the registry fingerprint still matches; registry drift requires review of a freshly resolved plan.
+
+## Ecosystem Graph UX
+
+The graph keeps its default toolbar compact and progressively discloses package, group, channel, and attention actions only where they apply. Existing controls wrap at wide, compact, and narrow widths without adding permanent toolbar controls.
+
+Ecosystem Graph is currently the only enabled view. List View remains implemented internally but its toggle is hidden and any stale List View request resolves back to Ecosystem Graph.
+
+Packages, groups, summaries, breadcrumbs, and back targets support keyboard focus. Enter or Space activates the focused target, while Escape clears search before backing out of package or group focus. Hover and keyboard focus share route preview behavior, and related-node previews isolate the route to the selected package. Missing registry relationships are diagnostic nodes, and dense relation sets use adaptive wrapping plus a `+N` overflow summary instead of overlapping cards.
+
+Search preserves the graph's spatial map: root and category positions stay fixed, direct matches and their category path are emphasized, and unrelated results are muted. Installed and Not installed remain visibility filters, but filtered package slots stay reserved so the remaining graph does not reflow. Empty search/filter states provide a contextual recovery action without turning the graph into a new permanent control surface.
 
 ## Integration Packages
 
@@ -271,7 +285,7 @@ The Package Installer now shows only the Integration package IDs. Remove or repl
 
 Current Integration repository URLs use Integration repository names. The old Bridge package IDs above remain listed only for manifest migration.
 
-When removing a package, the installer warns and disables removal if another installed registered package depends on it. Remove the dependent integration package first to avoid silently breaking the project.
+When removing a package, the installer warns if another installed package depends on it. It resolves reverse dependencies from current Unity Package Manager/package-lock data first and uses registry relationships only as a fallback. Removal remains available after explicit confirmation so you can resolve unusual project states, but remove the dependents first unless the breakage is intentional.
 
 ## Public API
 
@@ -285,7 +299,7 @@ Tools/Deucarian/Package Installer
 
 The implementation is split into internal editor classes:
 
-- `PackageInstallerWindow`: IMGUI window and coordination.
+- `PackageInstallerWindow`: UI Toolkit editor shell and coordination, with IMGUI containers for the package list and graph details.
 - `PackageInstallerStateRepository`: project-scoped selected-channel state shared with Bootstrap and manifest/package-lock invalidation signatures.
 - `PackageRegistryProvider`, `PackageRegistryLoader`, and `PackageRegistryValidator`: bundled and remote registry loading.
 - `PackageDefinition`, `PackageChannel`, and `PackageExtraDefinition`: installer data models.
@@ -307,7 +321,7 @@ Keeping the installer editor-only ensures:
 
 ## Versioning
 
-Current package version: `1.1.61`.
+Current package version: `1.1.64`.
 
 Branch strategy:
 
@@ -337,7 +351,7 @@ After installing, updating, or removing a package, the installer refreshes insta
 
 - Package list looks stale: close and reopen the Package Installer window, then refresh the remote registry if network access is available.
 - Install or update is blocked: check the selected channel, package dependency list, and Unity Package Manager console output for the first failed package in the dependency-first plan.
-- A remove button is disabled: another installed registered package depends on that package; remove the dependent integration or suite package first.
+- A removal warning lists installed dependents: remove those dependents first, or deliberately confirm removal if you are repairing an unusual project state.
 - Update status is unknown: the installed package may be embedded, local/file-based, missing Git metadata, or unavailable from the current network.
 - Package Installer shows `Reload pending`: fix any Console compilation errors, then use `Retry Script Reload` so Unity can load the resolved installer assembly.
 - A registry-installed Package Installer shows `Source migration available`: install/open Bootstrap and use `Tools > Deucarian > Bootstrap > Open Bootstrapper`; Package Installer does not self-migrate silently.

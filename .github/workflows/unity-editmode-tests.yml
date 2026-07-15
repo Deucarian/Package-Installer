@@ -1,0 +1,306 @@
+name: Unity EditMode Tests
+
+on:
+  workflow_dispatch:
+  # The workflow definition for a self-hosted job must come from the trusted
+  # base branch. Fork pull requests are deliberately skipped by the job guard.
+  pull_request_target:
+    branches:
+      - develop
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+  push:
+    branches:
+      - develop
+      - main
+
+concurrency:
+  group: unity-editmode-${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  editmode:
+    name: Unity 2021.3 EditMode
+    if: >-
+      github.event_name != 'pull_request_target' ||
+      (github.event.pull_request.head.repo.full_name == github.repository &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association))
+    runs-on:
+      - self-hosted
+      - Linux
+      - X64
+      - package-installer-ci
+    timeout-minutes: 45
+    env:
+      UNITY_EDITOR: /opt/unity/2021.3.45f1/Editor/Unity
+      TEMP_NAME: package-installer-${{ github.run_id }}-${{ github.run_attempt }}
+      PACKAGE_REVISION: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || github.sha }}
+
+    steps:
+      - name: Prepare disposable paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          temp_root="$RUNNER_TEMP/$TEMP_NAME"
+          {
+            echo "TEMP_ROOT=$temp_root"
+            echo "PROJECT_PATH=$temp_root/UnityTestProject"
+            echo "ARTIFACTS_PATH=$temp_root/artifacts"
+          } >> "$GITHUB_ENV"
+
+      - name: Check out package
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        with:
+          clean: true
+          fetch-depth: 2
+          persist-credentials: false
+          ref: ${{ github.event_name == 'pull_request_target' && format('refs/pull/{0}/merge', github.event.number) || github.sha }}
+
+      - name: Verify checked-out revision
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EXPECTED_SHA: ${{ github.sha }}
+          EXPECTED_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$EVENT_NAME" == "pull_request_target" ]]; then
+            test "$(git rev-parse HEAD^1)" = "$EXPECTED_BASE_SHA"
+            test "$(git rev-parse HEAD^2)" = "$EXPECTED_HEAD_SHA"
+          else
+            test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          fi
+
+      - name: Verify isolated Unity fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(id -un)" = "deucarian-runner"
+          test -x "$UNITY_EDITOR"
+
+      - name: Create disposable Unity project
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_root="$RUNNER_TEMP/package-installer-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          test "$TEMP_ROOT" = "$expected_root"
+          rm -rf -- "$TEMP_ROOT"
+          mkdir -p \
+            "$PROJECT_PATH/Assets" \
+            "$PROJECT_PATH/Packages" \
+            "$PROJECT_PATH/ProjectSettings" \
+            "$ARTIFACTS_PATH"
+          cat > "$PROJECT_PATH/Packages/manifest.json" <<JSON
+          {
+            "dependencies": {
+              "com.deucarian.editor": "https://github.com/Deucarian/Editor.git#409118eb502d201ebbe0e07fa2d9b8270abe54f3",
+              "com.deucarian.logging": "https://github.com/Deucarian/Logging.git#683d88858942d2d3c551135cbf1384b4f71cdd75",
+              "com.deucarian.package-installer": "https://github.com/Deucarian/Package-Installer.git#${PACKAGE_REVISION}",
+              "com.unity.test-framework": "1.1.33"
+            },
+            "testables": [
+              "com.deucarian.package-installer"
+            ]
+          }
+          JSON
+          cat > "$PROJECT_PATH/ProjectSettings/ProjectVersion.txt" <<'TEXT'
+          m_EditorVersion: 2021.3.45f1
+          TEXT
+
+      - name: Prepare Unity OpenSSL 1.1 compatibility
+        shell: bash
+        env:
+          OPENSSL11_URL: https://security.debian.org/debian-security/pool/updates/main/o/openssl/libssl1.1_1.1.1w-0%2Bdeb11u8_amd64.deb
+          OPENSSL11_SHA256: dcc68a543de6cb955a57077b66dcdb15f61d1e31e072f2c6cc4082c37da1b00d
+        run: |
+          set -euo pipefail
+
+          deb="$TEMP_ROOT/libssl1.1.deb"
+          root="$TEMP_ROOT/openssl11"
+
+          curl \
+            --fail \
+            --show-error \
+            --silent \
+            --location \
+            --proto '=https' \
+            --tlsv1.2 \
+            --retry 4 \
+            --retry-all-errors \
+            --output "$deb" \
+            "$OPENSSL11_URL"
+
+          printf '%s  %s\n' "$OPENSSL11_SHA256" "$deb" |
+            sha256sum --check --strict
+
+          test "$(dpkg-deb --field "$deb" Package)" = "libssl1.1"
+          test "$(dpkg-deb --field "$deb" Version)" = "1.1.1w-0+deb11u8"
+          test "$(dpkg-deb --field "$deb" Architecture)" = "amd64"
+
+          dpkg-deb --extract "$deb" "$root"
+
+          libdir="$root/usr/lib/x86_64-linux-gnu"
+          test -r "$libdir/libcrypto.so.1.1"
+          test -r "$libdir/libssl.so.1.1"
+
+          printf 'UNITY_OPENSSL11_LIBDIR=%s\n' "$libdir" >> "$GITHUB_ENV"
+
+      - name: Run Package Installer EditMode tests
+        id: unity-tests
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          unity_ld_path="$UNITY_OPENSSL11_LIBDIR"
+          if [[ -n "${LD_LIBRARY_PATH:-}" ]]; then
+            unity_ld_path="$unity_ld_path:$LD_LIBRARY_PATH"
+          fi
+
+          set +e
+          env \
+            LD_LIBRARY_PATH="$unity_ld_path" \
+            CLR_OPENSSL_VERSION_OVERRIDE=1.1 \
+            "$UNITY_EDITOR" \
+            -batchmode \
+            -nographics \
+            -accept-apiupdate \
+            -forgetProjectPath \
+            -disableManagedDebugger \
+            -projectPath "$PROJECT_PATH" \
+            -runTests \
+            -testPlatform EditMode \
+            -assemblyNames Deucarian.PackageInstaller.Editor.Tests \
+            -testResults "$ARTIFACTS_PATH/editmode-results.xml" \
+            -logFile "$ARTIFACTS_PATH/unity-editmode.log"
+          unity_status=$?
+          set -e
+
+          echo "status=$unity_status" >> "$GITHUB_OUTPUT"
+
+      - name: Validate Git package sources
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          project_path = Path(os.environ["PROJECT_PATH"])
+          manifest = json.loads((project_path / "Packages" / "manifest.json").read_text())
+          lock = json.loads((project_path / "Packages" / "packages-lock.json").read_text())
+          expected = {
+              "com.deucarian.editor": "https://github.com/Deucarian/Editor.git#409118eb502d201ebbe0e07fa2d9b8270abe54f3",
+              "com.deucarian.logging": "https://github.com/Deucarian/Logging.git#683d88858942d2d3c551135cbf1384b4f71cdd75",
+              "com.deucarian.package-installer": (
+                  "https://github.com/Deucarian/Package-Installer.git#"
+                  + os.environ["PACKAGE_REVISION"]
+              ),
+          }
+
+          for package_id, expected_url in expected.items():
+              actual_url = manifest["dependencies"].get(package_id)
+              if actual_url != expected_url:
+                  raise SystemExit(
+                      f"{package_id} manifest source mismatch: {actual_url!r} != {expected_url!r}."
+                  )
+
+              entry = lock["dependencies"].get(package_id, {})
+              if entry.get("source") != "git" or entry.get("version") != expected_url:
+                  raise SystemExit(
+                      f"{package_id} did not resolve from the expected Git source: {entry!r}."
+                  )
+
+              expected_hash = expected_url.rsplit("#", 1)[1]
+              if entry.get("hash") != expected_hash:
+                  raise SystemExit(
+                      f"{package_id} resolved {entry.get('hash')!r}, expected {expected_hash!r}."
+                  )
+
+          print("Package Installer, Editor, and Logging resolved from their exact Git revisions.")
+          PY
+
+      - name: Validate Unity test results
+        if: always()
+        shell: bash
+        env:
+          UNITY_STATUS: ${{ steps.unity-tests.outputs.status }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          result_path = Path(os.environ["ARTIFACTS_PATH"]) / "editmode-results.xml"
+          if not result_path.is_file():
+              raise SystemExit("Unity did not produce EditMode test results.")
+
+          test_run = ET.parse(result_path).getroot()
+          if test_run.tag != "test-run":
+              raise SystemExit(f"Unexpected Unity test result root: {test_run.tag!r}.")
+
+          total = int(test_run.attrib.get("total", "0"))
+          passed = int(test_run.attrib.get("passed", "0"))
+          failed = int(test_run.attrib.get("failed", "0"))
+          inconclusive = int(test_run.attrib.get("inconclusive", "0"))
+          skipped = int(test_run.attrib.get("skipped", "0"))
+          result = test_run.attrib.get("result", "")
+
+          if total <= 0:
+              raise SystemExit("Unity reported zero EditMode tests.")
+          if (
+              failed != 0
+              or inconclusive != 0
+              or skipped != 0
+              or result != "Passed"
+              or passed != total
+          ):
+              raise SystemExit(
+                  f"Unity EditMode results were not clean: "
+                  f"result={result}, total={total}, passed={passed}, failed={failed}, "
+                  f"inconclusive={inconclusive}, skipped={skipped}."
+              )
+
+          unity_status = os.environ.get("UNITY_STATUS", "")
+          if unity_status != "0":
+              raise SystemExit(f"Unity exited abnormally with status {unity_status or 'missing'}.")
+
+          print(f"Unity EditMode tests passed: {passed}/{total}.")
+          PY
+
+      - name: Print Unity diagnostics on failure
+        if: failure()
+        shell: bash
+        run: |
+          if [[ -f "$ARTIFACTS_PATH/unity-editmode.log" ]]; then
+            tail -n 300 "$ARTIFACTS_PATH/unity-editmode.log"
+          fi
+
+      - name: Upload Unity test results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: unity-editmode-results-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/package-installer-${{ github.run_id }}-${{ github.run_attempt }}/artifacts
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Remove disposable Unity project
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_root="$RUNNER_TEMP/package-installer-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          test "$TEMP_ROOT" = "$expected_root"
+          rm -rf -- "$TEMP_ROOT"
