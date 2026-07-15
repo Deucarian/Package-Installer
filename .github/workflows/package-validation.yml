@@ -7,6 +7,9 @@ on:
       - develop
       - main
 
+permissions:
+  contents: read
+
 jobs:
   validate:
     name: Shared package validation
@@ -16,6 +19,9 @@ jobs:
 
   validate-catalog-projection:
     name: Validate installer catalog projection
-    uses: Deucarian/Package-Registry/.github/workflows/deucarian-catalog-projection-check.yml@develop
+    # Coordinated with Package-Registry PR #8. Replace both immutable refs with
+    # that PR's durable merged commit before this consumer change lands.
+    uses: Deucarian/Package-Registry/.github/workflows/deucarian-catalog-projection-check.yml@9215f1d0c4443ba66768189d0afeb0b6e19ce2e7
     with:
       catalog: installer
+      registry-ref: 9215f1d0c4443ba66768189d0afeb0b6e19ce2e7
