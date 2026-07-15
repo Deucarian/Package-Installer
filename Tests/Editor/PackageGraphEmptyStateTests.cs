@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
+using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -9,6 +10,26 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 {
     internal sealed class PackageGraphEmptyStateTests
     {
+        private PackageGraphInteractionTestWindow _hostWindow;
+
+        [SetUp]
+        public void SetUp()
+        {
+            _hostWindow = ScriptableObject.CreateInstance<PackageGraphInteractionTestWindow>();
+            _hostWindow.position = new Rect(40f, 40f, 800f, 600f);
+            _hostWindow.Show();
+        }
+
+        [TearDown]
+        public void TearDown()
+        {
+            if (_hostWindow != null)
+            {
+                _hostWindow.Close();
+                _hostWindow = null;
+            }
+        }
+
         [Test]
         public void EmptyState_SubtreeIsExcludedFromViewportLeftPanCapture()
         {
@@ -335,7 +356,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual(1, rootFocusedCount);
         }
 
-        private static PackageGraphView CreateView(
+        private PackageGraphView CreateView(
             PackageGraphModel graph,
             PackageVisibilityFilterState filterState,
             Action filterChanged,
@@ -350,6 +371,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 groupFocused: null,
                 filterState: filterState,
                 filterChanged: filterChanged);
+            view.style.flexGrow = 1f;
+            _hostWindow.rootVisualElement.Add(view);
             HashSet<string> visiblePackageIds =
                 PackageVisibilityFilter.CreateStatusVisiblePackageIdSet(graph, filterState);
             PackageGraphSearchState searchState =
@@ -365,6 +388,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 searchState,
                 PackageVisibilityFilter.CalculateCounts(graph, filterState),
                 hiddenRelatedCount: 0);
+            _hostWindow.Repaint();
+            Assert.IsNotNull(view.panel, "The interaction test view must be attached to an Editor panel.");
             return view;
         }
 
@@ -419,6 +444,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
         private static void InvokePointerClick(Button action)
         {
+            action.style.width = 180f;
+            action.style.height = 30f;
             Event mouseDown = new Event
             {
                 type = EventType.MouseDown,
@@ -442,6 +469,10 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             {
                 action.SendEvent(upEvent);
             }
+        }
+
+        private sealed class PackageGraphInteractionTestWindow : EditorWindow
+        {
         }
 
         private static void InvokeKeyboard(Button action, KeyCode keyCode)

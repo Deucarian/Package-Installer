@@ -254,8 +254,6 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             string displayName = group.DisplayName ?? string.Empty;
-            string path = GetCategoryPath(graph, group.Id);
-
             if (MatchesExact(displayName, tokens))
             {
                 return 0;
@@ -266,7 +264,7 @@ namespace Deucarian.PackageInstaller.Editor
                 return 1;
             }
 
-            if (MatchesSubstring(displayName, tokens) || MatchesSubstring(path, tokens))
+            if (MatchesSubstring(displayName, tokens))
             {
                 return 2;
             }
@@ -342,25 +340,6 @@ namespace Deucarian.PackageInstaller.Editor
                 : CreateIdentityTokens(searchText);
 
             return tokens.Length > 0;
-        }
-
-        private static string GetCategoryPath(PackageGraphModel graph, string groupId)
-        {
-            List<string> path = new List<string>();
-            HashSet<string> visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            string currentGroupId = groupId;
-
-            while (graph != null &&
-                   !string.IsNullOrWhiteSpace(currentGroupId) &&
-                   visited.Add(currentGroupId) &&
-                   graph.TryGetGroup(currentGroupId, out PackageGraphGroup group))
-            {
-                path.Add(group.DisplayName);
-                currentGroupId = group.ParentGroupId;
-            }
-
-            path.Reverse();
-            return string.Join(" ", path.ToArray());
         }
 
         private static void AddAncestorGroups(
