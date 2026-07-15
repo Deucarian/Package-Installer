@@ -128,12 +128,9 @@ namespace Deucarian.PackageInstaller.Editor
         private const string BootstrapDevelopmentGitUrl = "https://github.com/Deucarian/Bootstrap.git#develop";
         private const float MinWindowWidth = 820f;
         private const float MinWindowHeight = 650f;
-        private const float CompactLayoutWidth = 1180f;
-        private const float NarrowLayoutWidth = 900f;
         private const float SidebarWidth = 340f;
         private const float SidebarRowMinHeight = 94f;
         private const float SidebarRowMaxHeight = 150f;
-        private const float DetailLabelWidth = 118f;
         private const float DetailsActionsStackWidth = 460f;
         private const int OperationInlinePadding = OperationLayoutMetrics.InlinePadding;
         private const int OperationBlockPadding = OperationLayoutMetrics.BlockPadding;
@@ -358,7 +355,6 @@ namespace Deucarian.PackageInstaller.Editor
         private Color _mainBackgroundColor;
         private Color _sidebarBackgroundColor;
         private Color _detailsBackgroundColor;
-        private Color _panelBackgroundColor;
         private Color _headerPanelBackgroundColor;
         private Color _sampleRowBackgroundColor;
         private Color _panelBorderColor;
@@ -478,6 +474,13 @@ namespace Deucarian.PackageInstaller.Editor
         internal static PackageInstallerResponsiveMode ResolveResponsiveModeForTests(float width)
         {
             return ResolveResponsiveMode(width);
+        }
+
+        internal static PackageInstallerResponsiveMode ApplyResponsiveClassesForTests(
+            VisualElement element,
+            float width)
+        {
+            return ApplyResponsiveClasses(element, width);
         }
 
         internal static float ResolveDetailsContentWidthForTests(
@@ -804,12 +807,10 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            PackageInstallerResponsiveMode nextMode = ResolveResponsiveMode(contentWidth);
+            PackageInstallerResponsiveMode nextMode = ApplyResponsiveClasses(
+                _windowContentRoot,
+                contentWidth);
             _responsiveMode = nextMode;
-
-            _windowContentRoot.EnableInClassList("dpi-responsive--wide", nextMode == PackageInstallerResponsiveMode.Wide);
-            _windowContentRoot.EnableInClassList("dpi-responsive--compact", nextMode == PackageInstallerResponsiveMode.Compact);
-            _windowContentRoot.EnableInClassList("dpi-responsive--narrow", nextMode == PackageInstallerResponsiveMode.Narrow);
 
             _graphView?.SetResponsiveMode(nextMode);
             PositionGlobalChannelOverridePopup();
@@ -817,14 +818,47 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static PackageInstallerResponsiveMode ResolveResponsiveMode(float width)
         {
-            if (width < NarrowLayoutWidth)
+            return ToPackageInstallerResponsiveMode(
+                DeucarianEditorResponsiveLayout.ResolveMode(width));
+        }
+
+        private static PackageInstallerResponsiveMode ApplyResponsiveClasses(
+            VisualElement element,
+            float width)
+        {
+            DeucarianEditorLayoutMode sharedMode =
+                DeucarianEditorResponsiveLayout.ApplyResponsiveClasses(element, width);
+            PackageInstallerResponsiveMode mode = ToPackageInstallerResponsiveMode(sharedMode);
+
+            if (element != null)
             {
-                return PackageInstallerResponsiveMode.Narrow;
+                element.EnableInClassList(
+                    "dpi-responsive--wide",
+                    mode == PackageInstallerResponsiveMode.Wide);
+                element.EnableInClassList(
+                    "dpi-responsive--compact",
+                    mode == PackageInstallerResponsiveMode.Compact);
+                element.EnableInClassList(
+                    "dpi-responsive--narrow",
+                    mode == PackageInstallerResponsiveMode.Narrow);
             }
 
-            return width < CompactLayoutWidth
-                ? PackageInstallerResponsiveMode.Compact
-                : PackageInstallerResponsiveMode.Wide;
+            return mode;
+        }
+
+        private static PackageInstallerResponsiveMode ToPackageInstallerResponsiveMode(
+            DeucarianEditorLayoutMode mode)
+        {
+            switch (mode)
+            {
+                case DeucarianEditorLayoutMode.Narrow:
+                    return PackageInstallerResponsiveMode.Narrow;
+                case DeucarianEditorLayoutMode.Compact:
+                    return PackageInstallerResponsiveMode.Compact;
+                case DeucarianEditorLayoutMode.Wide:
+                default:
+                    return PackageInstallerResponsiveMode.Wide;
+            }
         }
 
         private static void ConfigureFixedWallpaper(VisualElement root)
@@ -849,7 +883,10 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void BuildViewToolbar(VisualElement content)
         {
-            VisualElement toolbar = DeucarianEditorVisualShell.CreateToolbarRow();
+            VisualElement toolbar = DeucarianEditorWorkbenchToolbar.CreateToolbar();
+            // The released Package Installer toolbar was unnamed. Keep that domain
+            // contract while sourcing its visual construction from the workbench.
+            toolbar.name = null;
             toolbar.AddToClassList("dpi-view-toolbar");
 
             foreach (InstallerViewMode viewMode in GetEnabledInstallerViewModes())
@@ -868,12 +905,11 @@ namespace Deucarian.PackageInstaller.Editor
                 toolbar.Add(viewButton);
             }
 
-            _viewSummaryLabel = new Label();
+            _viewSummaryLabel = DeucarianEditorWorkbenchToolbar.CreateSummary(string.Empty);
             _viewSummaryLabel.AddToClassList("dpi-view-toolbar__summary");
             toolbar.Add(_viewSummaryLabel);
 
-            VisualElement spacer = new VisualElement();
-            spacer.AddToClassList("deucarian-toolbar-spacer");
+            VisualElement spacer = DeucarianEditorWorkbenchToolbar.CreateSpacer();
             toolbar.Add(spacer);
 
             _graphGlobalChannelButton = CreateGlobalChannelOverrideButton();
@@ -888,9 +924,22 @@ namespace Deucarian.PackageInstaller.Editor
 
         private Button CreateViewToggleButton(string text, InstallerViewMode viewMode)
         {
-            Button button = new Button(() => SetViewMode(viewMode)) { text = text };
-            button.AddToClassList("deucarian-toggle-button");
+            Button button = DeucarianEditorWorkbenchToolbar.CreateToggleButton(
+                text,
+                () => SetViewMode(viewMode));
+
+            // The generic workbench toggle is intentionally wider than the released
+            // Package Installer view switch. Retain the shared legacy toggle class so
+            // factory adoption does not change the established 116 px geometry.
+            button.RemoveFromClassList(DeucarianEditorWorkbenchToolbar.ActionClass);
+            button.RemoveFromClassList(DeucarianEditorWorkbenchToolbar.ToggleClass);
             return button;
+        }
+
+        private static void SetViewToggleActive(VisualElement toggle, bool active)
+        {
+            DeucarianEditorWorkbenchToolbar.SetToggleActive(toggle, active);
+            toggle?.RemoveFromClassList(DeucarianEditorWorkbenchToolbar.ToggleActiveClass);
         }
 
         private static InstallerViewMode[] GetEnabledInstallerViewModes()
@@ -908,12 +957,12 @@ namespace Deucarian.PackageInstaller.Editor
         private Button CreateGlobalChannelOverrideButton()
         {
             PackageChannelSelection selection = GetGlobalProjectChannelSelection();
-            Button button = new Button(ToggleGlobalChannelOverridePopup)
-            {
-                name = GlobalChannelOverrideButtonName,
-                text = FormatGlobalChannelButtonLabel(selection),
-                tooltip = GetGlobalChannelButtonTooltip(selection)
-            };
+            Button button = DeucarianEditorWorkbenchToolbar.CreateActionButton(
+                FormatGlobalChannelButtonLabel(selection),
+                ToggleGlobalChannelOverridePopup,
+                emphasized: true);
+            button.name = GlobalChannelOverrideButtonName;
+            button.tooltip = GetGlobalChannelButtonTooltip(selection);
             button.AddToClassList("dpi-view-toolbar__action");
             button.AddToClassList("dpi-view-toolbar__channel-button");
             return button;
@@ -921,13 +970,9 @@ namespace Deucarian.PackageInstaller.Editor
 
         private Button CreateGraphActionButton(string text, Action action)
         {
-            Button button = new Button(() =>
-            {
-                action?.Invoke();
-            })
-            {
-                text = text
-            };
+            Button button = DeucarianEditorWorkbenchToolbar.CreateActionButton(
+                text,
+                () => action?.Invoke());
             button.AddToClassList("dpi-view-toolbar__action");
             button.AddToClassList("dpi-view-toolbar__graph-action");
             return button;
@@ -2043,12 +2088,12 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (_listViewButton != null)
             {
-                _listViewButton.EnableInClassList("deucarian-toggle-button--active", !graphMode);
+                SetViewToggleActive(_listViewButton, !graphMode);
             }
 
             if (_graphViewButton != null)
             {
-                _graphViewButton.EnableInClassList("deucarian-toggle-button--active", graphMode);
+                SetViewToggleActive(_graphViewButton, graphMode);
             }
 
             bool busy = IsAnyOperationBusy();
@@ -2518,89 +2563,42 @@ namespace Deucarian.PackageInstaller.Editor
             _stylesInitialized = true;
             _lastProSkin = proSkin;
 
-            _mainBackgroundColor = DeucarianEditorVisualShell.DeepBackground;
-            _sidebarBackgroundColor = DeucarianEditorVisualShell.MainPanel;
-            _detailsBackgroundColor = DeucarianEditorVisualShell.MainPanel;
-            _panelBackgroundColor = DeucarianEditorVisualShell.NestedSurface;
-            _headerPanelBackgroundColor = DeucarianEditorVisualShell.HeaderPanel;
-            _sampleRowBackgroundColor = DeucarianEditorVisualShell.NestedSurface;
-            _panelBorderColor = DeucarianEditorVisualShell.Border;
-            _interactiveBorderColor = DeucarianEditorVisualShell.InteractiveBorder;
-            _separatorColor = DeucarianEditorVisualShell.SubtleBorder;
-            _rowBackgroundColor = new Color(32f / 255f, 47f / 255f, 56f / 255f, 0.46f);
-            _rowHoverColor = new Color(32f / 255f, 47f / 255f, 56f / 255f, 0.62f);
-            _rowSelectedColor = new Color(35f / 255f, 62f / 255f, 66f / 255f, 0.58f);
-            _operationDrawerBackgroundColor = DeucarianEditorVisualShell.NestedSurface;
+            _mainBackgroundColor = DeucarianEditorWorkbenchGUI.MainBackgroundColor;
+            _sidebarBackgroundColor = DeucarianEditorWorkbenchGUI.SidebarBackgroundColor;
+            _detailsBackgroundColor = DeucarianEditorWorkbenchGUI.DetailsBackgroundColor;
+            _headerPanelBackgroundColor = DeucarianEditorWorkbenchGUI.HeaderPanelBackgroundColor;
+            _sampleRowBackgroundColor = DeucarianEditorWorkbenchGUI.SampleRowBackgroundColor;
+            _panelBorderColor = DeucarianEditorWorkbenchGUI.PanelBorderColor;
+            _interactiveBorderColor = DeucarianEditorWorkbenchGUI.InteractiveBorderColor;
+            _separatorColor = DeucarianEditorWorkbenchGUI.SeparatorColor;
+            _rowBackgroundColor = DeucarianEditorWorkbenchGUI.RowBackgroundColor;
+            _rowHoverColor = DeucarianEditorWorkbenchGUI.RowHoverColor;
+            _rowSelectedColor = DeucarianEditorWorkbenchGUI.RowSelectedColor;
+            _operationDrawerBackgroundColor = DeucarianEditorWorkbenchGUI.PanelBackgroundColor;
             _operationDrawerBackgroundColor.a = 0.52f;
-            _operationDrawerBorderColor = DeucarianEditorVisualShell.InteractiveBorder;
+            _operationDrawerBorderColor = DeucarianEditorWorkbenchGUI.InteractiveBorderColor;
             _operationDrawerBorderColor.a = 0.38f;
-            _textColor = DeucarianEditorVisualShell.Text;
-            _mutedTextColor = DeucarianEditorVisualShell.MutedText;
+            _textColor = DeucarianEditorWorkbenchGUI.TextColor;
+            _mutedTextColor = DeucarianEditorWorkbenchGUI.MutedTextColor;
 
-            _windowStyle = new GUIStyle();
-            _windowStyle.padding = new RectOffset(12, 12, 10, 10);
-
-            _sidebarStyle = new GUIStyle();
-            _sidebarStyle.padding = new RectOffset(10, 10, 10, 10);
-
-            _detailsStyle = new GUIStyle();
-            _detailsStyle.padding = new RectOffset(10, 10, 10, 10);
-
-            _sampleRowStyle = new GUIStyle();
-            _sampleRowStyle.padding = new RectOffset(10, 10, 8, 8);
-            _sampleRowStyle.margin = new RectOffset(0, 0, 2, 6);
-
-            _titleStyle = new GUIStyle(DeucarianEditorStyles.PackageHeaderTitle);
-            _titleStyle.fontSize = 15;
-            _titleStyle.wordWrap = true;
-
-            _subtitleStyle = new GUIStyle(DeucarianEditorStyles.PackageHeaderSubtitle);
-
-            _sectionTitleStyle = new GUIStyle(DeucarianEditorStyles.SectionTitle);
-
-            _miniLabelStyle = new GUIStyle(EditorStyles.wordWrappedMiniLabel);
-            _miniLabelStyle.normal.textColor = _textColor;
-            _miniLabelStyle.wordWrap = true;
-            _miniLabelStyle.clipping = TextClipping.Overflow;
-
-            _mutedMiniLabelStyle = new GUIStyle(DeucarianEditorStyles.MutedLabel);
-            _mutedMiniLabelStyle.fontSize = EditorStyles.wordWrappedMiniLabel.fontSize;
-            _mutedMiniLabelStyle.wordWrap = true;
-            _mutedMiniLabelStyle.clipping = TextClipping.Overflow;
-
-            _rowTitleStyle = new GUIStyle(EditorStyles.miniBoldLabel);
-            _rowTitleStyle.normal.textColor = _textColor;
-            _rowTitleStyle.wordWrap = true;
-            _rowTitleStyle.clipping = TextClipping.Clip;
-
-            _rowSubLabelStyle = new GUIStyle(EditorStyles.wordWrappedMiniLabel);
-            _rowSubLabelStyle.normal.textColor = _mutedTextColor;
-            _rowSubLabelStyle.wordWrap = true;
-            _rowSubLabelStyle.clipping = TextClipping.Clip;
-
-            _rowStatusStyle = new GUIStyle(EditorStyles.miniLabel);
-            _rowStatusStyle.normal.textColor = _textColor;
-            _rowStatusStyle.alignment = TextAnchor.MiddleLeft;
-            _rowStatusStyle.clipping = TextClipping.Clip;
-
-            _markerStyle = new GUIStyle(EditorStyles.miniBoldLabel);
-            _markerStyle.alignment = TextAnchor.MiddleCenter;
-            _markerStyle.fontSize = 10;
-            _markerStyle.normal.textColor = _textColor;
-
-            _foldoutStyle = new GUIStyle(EditorStyles.foldout);
-            _foldoutStyle.normal.textColor = _textColor;
-            _foldoutStyle.onNormal.textColor = _textColor;
-            _foldoutStyle.hover.textColor = _textColor;
-            _foldoutStyle.onHover.textColor = _textColor;
-            _foldoutStyle.fontStyle = FontStyle.Bold;
-
-            _primaryButtonStyle = new GUIStyle(EditorStyles.miniButton);
-            _primaryButtonStyle.fontStyle = FontStyle.Bold;
-            _primaryButtonStyle.fixedHeight = 24f;
-
-            _secondaryButtonStyle = new GUIStyle(DeucarianEditorStyles.ToolbarButton);
-            _secondaryButtonStyle.fixedHeight = 24f;
+            // Keep the released per-window ownership semantics while sourcing every
+            // initial value from the shared Editor workbench contract.
+            _windowStyle = new GUIStyle(DeucarianEditorWorkbenchGUI.WindowStyle);
+            _sidebarStyle = new GUIStyle(DeucarianEditorWorkbenchGUI.SidebarStyle);
+            _detailsStyle = new GUIStyle(DeucarianEditorWorkbenchGUI.DetailsStyle);
+            _sampleRowStyle = new GUIStyle(DeucarianEditorWorkbenchGUI.SampleRowStyle);
+            _titleStyle = new GUIStyle(DeucarianEditorWorkbenchGUI.TitleStyle);
+            _subtitleStyle = new GUIStyle(DeucarianEditorWorkbenchGUI.SubtitleStyle);
+            _sectionTitleStyle = new GUIStyle(DeucarianEditorWorkbenchGUI.SectionTitleStyle);
+            _miniLabelStyle = new GUIStyle(DeucarianEditorWorkbenchGUI.MiniLabelStyle);
+            _mutedMiniLabelStyle = new GUIStyle(DeucarianEditorWorkbenchGUI.MutedMiniLabelStyle);
+            _rowTitleStyle = new GUIStyle(DeucarianEditorWorkbenchGUI.RowTitleStyle);
+            _rowSubLabelStyle = new GUIStyle(DeucarianEditorWorkbenchGUI.RowSubLabelStyle);
+            _rowStatusStyle = new GUIStyle(DeucarianEditorWorkbenchGUI.RowStatusStyle);
+            _markerStyle = new GUIStyle(DeucarianEditorWorkbenchGUI.MarkerStyle);
+            _foldoutStyle = new GUIStyle(DeucarianEditorWorkbenchGUI.FoldoutStyle);
+            _primaryButtonStyle = new GUIStyle(DeucarianEditorWorkbenchGUI.PrimaryButtonStyle);
+            _secondaryButtonStyle = new GUIStyle(DeucarianEditorWorkbenchGUI.SecondaryButtonStyle);
 
         }
 
@@ -4327,7 +4325,10 @@ namespace Deucarian.PackageInstaller.Editor
 
                 using (new EditorGUILayout.HorizontalScope())
                 {
-                    EditorGUILayout.LabelField("Selected", _mutedMiniLabelStyle, GUILayout.Width(DetailLabelWidth));
+                    EditorGUILayout.LabelField(
+                        "Selected",
+                        _mutedMiniLabelStyle,
+                        GUILayout.Width(DeucarianEditorWorkbenchGUI.DetailLabelWidth));
                     DrawChannelPopup(packageDefinition);
                     GUILayout.Space(6f);
                     DrawStatusBadge(GetChannelLabel(selectedChannel), VisualStatusKind.Info, GUILayout.Width(104f));
@@ -5788,16 +5789,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void DrawPanel(string title, Action content, params GUILayoutOption[] options)
         {
-            if (!string.IsNullOrWhiteSpace(title))
-            {
-                DeucarianEditorChrome.DrawSectionHeader(title);
-            }
-
-            Rect rect = EditorGUILayout.BeginVertical(DeucarianEditorStyles.SectionBox, options);
-            DrawSurface(rect, _panelBackgroundColor, _panelBorderColor);
-            content?.Invoke();
-            EditorGUILayout.EndVertical();
-            GUILayout.Space(8f);
+            DeucarianEditorWorkbenchGUI.DrawPanel(title, content, options);
         }
 
         private Rect BeginSurface(
@@ -5813,17 +5805,12 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static void DrawSurface(Rect rect, Color backgroundColor, Color borderColor)
         {
-            DeucarianEditorVisualShell.DrawFrostedSurface(rect, backgroundColor, borderColor);
+            DeucarianEditorWorkbenchGUI.DrawSurface(rect, backgroundColor, borderColor);
         }
 
         private void DrawHorizontalSeparator()
         {
-            Rect rect = GUILayoutUtility.GetRect(1f, 1f, GUILayout.ExpandWidth(true));
-
-            if (Event.current.type == EventType.Repaint)
-            {
-                EditorGUI.DrawRect(rect, _separatorColor);
-            }
+            DeucarianEditorWorkbenchGUI.DrawSeparator();
         }
 
         private void DrawInlineMarker(Rect rect, string text, VisualStatusKind statusKind)
@@ -5866,12 +5853,10 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void DrawFlatStatusRow(string marker, string text, VisualStatusKind statusKind)
         {
-            Rect rowRect = GUILayoutUtility.GetRect(1f, 20f, GUILayout.ExpandWidth(true));
-            Rect markerRect = new Rect(rowRect.x, rowRect.y + 1f, 18f, 18f);
-            Rect labelRect = new Rect(markerRect.xMax + 4f, rowRect.y, rowRect.width - 22f, 20f);
-
-            DrawColoredRectLabel(markerRect, marker, _markerStyle, GetStatusColor(statusKind));
-            DrawColoredRectLabel(labelRect, new GUIContent(text, text), _miniLabelStyle, _textColor);
+            DeucarianEditorWorkbenchGUI.DrawStatusRow(
+                marker,
+                text,
+                ToEditorStatus(statusKind));
         }
 
         private void DrawInlineHelp(string message, VisualStatusKind statusKind)
@@ -5886,13 +5871,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void DrawKeyValueRow(string label, string value)
         {
-            string displayValue = string.IsNullOrWhiteSpace(value) ? "-" : value;
-
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                EditorGUILayout.LabelField(new GUIContent(label, label), _mutedMiniLabelStyle, GUILayout.Width(DetailLabelWidth));
-                EditorGUILayout.LabelField(new GUIContent(displayValue, displayValue), _miniLabelStyle, GUILayout.ExpandWidth(true));
-            }
+            DeucarianEditorWorkbenchGUI.DrawKeyValueRow(label, value);
         }
 
         private void DrawSelectableValue(string label, string value)
