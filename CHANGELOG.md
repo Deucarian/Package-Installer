@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 1.1.64 - 2026-07-15
+
+- Fixed graph empty-state recovery actions so their pointer and keyboard activation is not intercepted by viewport panning.
+- Kept root and category geometry stable while search emphasizes matches and status filters hide packages without reflowing their remaining siblings.
+- Added truthful recovery actions for lexical misses, status-hidden matches, disabled visibility filters, and group-scoped misses.
+
 ## 1.1.63 - 2026-07-15
 
 - Restored a contextual ecosystem-wide `Update all (N)` action in the root overview whenever update results are available.
