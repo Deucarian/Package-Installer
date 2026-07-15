@@ -45,6 +45,25 @@ Architecture exceptions:
 - Diagnostics: Do not become Diagnostics; installer may display package status only.
 - Testing: Keep graph/installer tests package-specific and preserve install/update/remove behavior.
 
+## Package Sample Rules
+
+- Treat package samples as product-quality playable demos, not disconnected prototypes.
+- Do not create prototypes outside the package sample area.
+- Prefer improving the existing sample scene over creating a new scene.
+- The sample scene is the source of truth: pressing Play must demonstrate the feature, or the task is not done.
+- Wire every new gameplay script, prefab, data asset, UI element, and effect into the sample before completion.
+- Keep samples generic and reusable unless the task explicitly asks for a themed game.
+- Use behavior-based sample content names such as `Enemy_Basic`, `Enemy_Fast`, `Attack_Rapid`, and `Upgrade_Damage`.
+- Do not overbuild architecture before the sample is playable; a clean framework without a playable sample is a failed task.
+- If a package sample is read-only, create or update the imported editable sample under `Assets/Samples` and document that path.
+
+## Unity Package Layout
+
+- Do not edit files under `Library/PackageCache`, generated `Library` content, or imported third-party package source.
+- Put package-owned reusable code in the package runtime/editor folders.
+- Put playable demo scenes, prefabs, UI, data assets, and content in the package sample area.
+- If a sample must be imported into `Assets/Samples` for editing or testing, make that explicit in the handoff.
+
 ## Validation
 
 Run the shared validator before committing:
@@ -55,11 +74,14 @@ python C:/Repositories/Package-Registry/Tools/deucarian_package_validator.py --r
 
 Also run existing repository tests when changing code or asmdefs. Documentation-only updates should still run `git diff --check`.
 
+All Package Installer development, test, review, and validation Unity projects must reference Deucarian packages through canonical Git URLs. Never use `file:` or embedded package sources. For unmerged work, push the feature branch first and point the disposable Unity host at that Git branch or commit.
+
 ## Codex Guidance
 
 - Inspect current files before changing anything.
 - Work on `develop`; do not edit or merge `main` unless the task is promotion-only.
 - Do not edit `Library/PackageCache`.
+- Every package-content change destined for `develop` or `main` must include an increment to `package.json` and the embedded runtime identity version; never reuse a version for changed package content.
 - Do not guess package versions or dependency versions.
 - Do not add package dependencies casually; update asmdefs, `package.json`, `deucarian-package.json`, Package Registry, and fallback catalogs together when a dependency is truly required.
 - Do not create local copies of shared helpers.

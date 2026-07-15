@@ -7,6 +7,11 @@ using Deucarian.Editor;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
+#if UNITY_2022_1_OR_NEWER
+using PackageGraphPainter = UnityEngine.UIElements.Painter2D;
+#else
+using PackageGraphPainter = Deucarian.PackageInstaller.Editor.PackageGraphMeshPainter;
+#endif
 
 namespace Deucarian.PackageInstaller.Editor
 {
@@ -35,6 +40,7 @@ namespace Deucarian.PackageInstaller.Editor
         private readonly VisualElement _emptyState;
         private readonly Label _emptyStateTitle;
         private readonly Button _emptyStateActionButton;
+        private EmptyStateAction _emptyStateAction;
         private PackageVisibilityFilterCounts _filterCounts =
             new PackageVisibilityFilterCounts(0, 0, 0, 0);
         private PackageGraphModel _currentGraph;
@@ -45,9 +51,6 @@ namespace Deucarian.PackageInstaller.Editor
         private PackageGraphSpotlightKind _currentSpotlightKind = PackageGraphSpotlightKind.None;
         private int _hiddenRelatedCount;
         private bool _hasAppliedGraphFrame;
-        private bool _wasSearchActive;
-        private bool _hasPreSearchCameraState;
-        private PackageGraphCameraState _preSearchCameraState;
         private PackageInstallerResponsiveMode _responsiveMode = PackageInstallerResponsiveMode.Wide;
 
         public PackageGraphView(
@@ -98,6 +101,7 @@ namespace Deucarian.PackageInstaller.Editor
         {
             AddToClassList("dpi-ecosystem-graph");
             focusable = true;
+            RegisterCallback<KeyDownEvent>(HandleGraphKeyDown, TrickleDown.TrickleDown);
             _filterState = filterState ?? new PackageVisibilityFilterState();
             _packageSelected = packageSelected;
             _filterChanged = filterChanged;
@@ -126,6 +130,10 @@ namespace Deucarian.PackageInstaller.Editor
 
             VisualElement filterRow = new VisualElement();
             filterRow.AddToClassList("dpi-ecosystem-graph__filter-row");
+            // Package focus can add contextual text at otherwise wide window sizes.
+            // Keep the navigation controls as one wrap-safe item so no action is clipped.
+            filterRow.style.flexWrap = Wrap.Wrap;
+            filterRow.style.alignContent = Align.FlexStart;
             header.Add(filterRow);
 
             _breadcrumbRow = new VisualElement();
@@ -139,14 +147,7 @@ namespace Deucarian.PackageInstaller.Editor
             _searchField.AddToClassList("dpi-ecosystem-graph__search");
             _searchField.tooltip = "Find category or package by name or package ID.";
             _searchField.SetValueWithoutNotify(_filterState.SearchText);
-            _searchField.RegisterValueChangedCallback(evt =>
-            {
-                if (_filterState.SetSearchText(evt.newValue))
-                {
-                    _filterChanged?.Invoke();
-                    UpdateFilterControls();
-                }
-            });
+            _searchField.RegisterValueChangedCallback(evt => ApplySearchText(evt.newValue));
             _searchField.RegisterCallback<KeyDownEvent>(HandleSearchKeyDown);
             filterRow.Add(_searchField);
 
@@ -182,7 +183,7 @@ namespace Deucarian.PackageInstaller.Editor
             _clearFiltersButton.AddToClassList("dpi-ecosystem-graph__filter-clear");
             filterRow.Add(_clearFiltersButton);
 
-            _visibleCountLabel = new Label("0 visible");
+            _visibleCountLabel = new Label("0 shown");
             _visibleCountLabel.AddToClassList("dpi-ecosystem-graph__visible-count");
             filterRow.Add(_visibleCountLabel);
 
@@ -196,6 +197,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             VisualElement toolbar = new VisualElement();
             toolbar.AddToClassList("dpi-ecosystem-graph__toolbar");
+            toolbar.style.flexGrow = 1f;
             toolbar.Add(CreateToolbarButton("Fit", FitCurrentContext));
             toolbar.Add(CreateToolbarButton("100%", ResetCurrentContextZoom));
             toolbar.Add(CreateToolbarButton("Center", CenterCurrentContext));
@@ -217,8 +219,9 @@ namespace Deucarian.PackageInstaller.Editor
             _emptyStateTitle = new Label();
             _emptyStateTitle.AddToClassList("dpi-ecosystem-graph__empty-title");
             _emptyState.Add(_emptyStateTitle);
-            _emptyStateActionButton = new Button(ClearFilters);
+            _emptyStateActionButton = new Button(HandleEmptyStateAction);
             _emptyStateActionButton.AddToClassList("dpi-ecosystem-graph__empty-action");
+            _emptyStateActionButton.RegisterCallback<KeyDownEvent>(HandleEmptyStateActionKeyDown);
             _emptyState.Add(_emptyStateActionButton);
             _viewport.Add(_emptyState);
 
@@ -353,19 +356,6 @@ namespace Deucarian.PackageInstaller.Editor
             PackageGraphLayoutMode previousLayoutMode = _canvas.LayoutMode;
             bool shouldForceInitialFrame = !_hasAppliedGraphFrame && graph != null && graph.Nodes.Count > 0;
             PackageGraphSearchState nextSearchState = searchState ?? PackageGraphSearchState.Empty;
-            bool nextSearchActive = nextSearchState.HasQuery;
-            bool nextPackageEgoActive = IsPackageEgoRequest(graph, focusedPackageId);
-            bool searchStarted = !_wasSearchActive && nextSearchActive;
-            bool structuralSearchStarted = searchStarted && !nextPackageEgoActive;
-            bool searchCleared = _wasSearchActive && !nextSearchActive;
-            PackageGraphCameraState restoreCamera = _preSearchCameraState;
-
-            if (structuralSearchStarted)
-            {
-                _preSearchCameraState = _viewport.GetCameraState();
-                _hasPreSearchCameraState = true;
-            }
-
             PackageGraphTransitionAnchor[] anchorCandidates = CreateTransitionAnchorCandidates(
                 graph,
                 selectedPackageId,
@@ -422,28 +412,10 @@ namespace Deucarian.PackageInstaller.Editor
             UpdateFilterControls();
             UpdateBreadcrumbs(graph, focusedGroupId, focusedPackageId);
 
-            if (searchCleared && _hasPreSearchCameraState)
-            {
-                if (_canvas.LayoutMode != PackageGraphLayoutMode.Focus)
-                {
-                    _viewport.AnimateToCamera(restoreCamera);
-                }
-
-                _hasPreSearchCameraState = false;
-            }
-            else if (layoutTargetChanged && !shouldForceInitialFrame && !structuralSearchStarted)
+            if (layoutTargetChanged && !shouldForceInitialFrame)
             {
                 AnimateToCurrentContext(anchorCandidates, sourceAnchorCenters, sourceAnchorScreens);
             }
-
-            _wasSearchActive = nextSearchActive;
-        }
-
-        private static bool IsPackageEgoRequest(PackageGraphModel graph, string focusedPackageId)
-        {
-            return graph != null &&
-                   !string.IsNullOrWhiteSpace(focusedPackageId) &&
-                   graph.TryGetNode(focusedPackageId, out _);
         }
 
         private PackageGraphTransitionAnchor[] CreateTransitionAnchorCandidates(
@@ -806,6 +778,60 @@ namespace Deucarian.PackageInstaller.Editor
             evt.StopPropagation();
         }
 
+        private void ApplySearchText(string searchText)
+        {
+            if (_filterState.SetSearchText(searchText))
+            {
+                _filterChanged?.Invoke();
+                UpdateFilterControls();
+            }
+        }
+
+        internal void ApplySearchTextForTests(string searchText)
+        {
+            _searchField.SetValueWithoutNotify(searchText ?? string.Empty);
+            ApplySearchText(searchText);
+        }
+
+        internal bool ActivateBestSearchResultForTests(KeyCode keyCode)
+        {
+            return (keyCode == KeyCode.Return || keyCode == KeyCode.KeypadEnter) &&
+                   CommitBestSearchResult();
+        }
+
+        private void HandleGraphKeyDown(KeyDownEvent evt)
+        {
+            if (evt.keyCode != KeyCode.Escape)
+            {
+                return;
+            }
+
+            HandleEscapeNavigation();
+
+            evt.StopPropagation();
+        }
+
+        private void HandleEscapeNavigation()
+        {
+            if (!string.IsNullOrWhiteSpace(_filterState.SearchText))
+            {
+                ClearSearch();
+                return;
+            }
+
+            _selectionCleared?.Invoke();
+        }
+
+        internal void HandleEscapeForTests()
+        {
+            HandleEscapeNavigation();
+        }
+
+        internal void HandleEscapeFromWindow()
+        {
+            HandleEscapeNavigation();
+        }
+
         private bool CommitBestSearchResult()
         {
             PackageGraphSearchResult result = _searchState != null ? _searchState.BestResult : null;
@@ -1033,6 +1059,10 @@ namespace Deucarian.PackageInstaller.Editor
 
         internal PackageGraphCameraState CameraStateForTests => _viewport.GetCameraState();
 
+        internal bool CameraTransitionActiveForTests => _viewport.IsCameraTransitionActive;
+
+        internal bool LayoutTransitionActiveForTests => _canvas.LayoutTransitionActiveForTests;
+
         internal void ApplyCameraForTests(PackageGraphCameraState camera)
         {
             _viewport.ApplyPreviewCamera(camera);
@@ -1040,15 +1070,37 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static bool IsOverviewLikeLayout(PackageGraphLayoutMode mode)
         {
-            return mode == PackageGraphLayoutMode.Overview ||
-                   mode == PackageGraphLayoutMode.Filtered;
+            return mode == PackageGraphLayoutMode.Overview;
         }
 
         private void ShowAllPackages()
         {
-            if (_filterState.Set(string.Empty, showInstalled: true, showNotInstalled: true))
+            if (_filterState.Set(
+                    _filterState.SearchText,
+                    showInstalled: true,
+                    showNotInstalled: true))
             {
-                _searchField.SetValueWithoutNotify(string.Empty);
+                _filterChanged?.Invoke();
+            }
+
+            UpdateFilterControls();
+        }
+
+        private void ShowMatchingPackages()
+        {
+            PackageGraphNode[] candidates = GetSearchMatchCandidates();
+            bool showInstalled = _filterState.ShowInstalled || candidates.Any(node => node.IsInstalled);
+            bool showNotInstalled = _filterState.ShowNotInstalled || candidates.Any(node => !node.IsInstalled);
+
+            if (showInstalled == _filterState.ShowInstalled &&
+                showNotInstalled == _filterState.ShowNotInstalled)
+            {
+                showInstalled = true;
+                showNotInstalled = true;
+            }
+
+            if (_filterState.Set(_filterState.SearchText, showInstalled, showNotInstalled))
+            {
                 _filterChanged?.Invoke();
             }
 
@@ -1076,10 +1128,35 @@ namespace Deucarian.PackageInstaller.Editor
 
             _clearFiltersButton.SetEnabled(!_filterState.IsDefault);
             _visibleCountLabel.text = _filterState.HasSearch
-                ? (_searchState != null ? _searchState.DirectMatchCount : 0) + " direct matches"
-                : counts.VisibleCount + " visible";
-            _hiddenRelatedLabel.text = !_filterState.HasSearch && _hiddenRelatedCount > 0
-                ? _hiddenRelatedCount + " related hidden by filters"
+                ? (_searchState != null ? _searchState.DirectMatchCount : 0) + " matching"
+                : counts.VisibleCount + " shown";
+            bool packageFocusShowsFullEgo = _canvas != null &&
+                                            _canvas.LayoutMode == PackageGraphLayoutMode.Focus;
+            int summarizedDirectRelationshipCount = _canvas != null
+                ? _canvas.SummarizedDirectRelationshipCount
+                : 0;
+            bool showFocusContext = packageFocusShowsFullEgo &&
+                                    (!_filterState.IsDefault ||
+                                     _hiddenRelatedCount > 0 ||
+                                     summarizedDirectRelationshipCount > 0);
+            _hiddenRelatedLabel.text = showFocusContext
+                ? (summarizedDirectRelationshipCount > 0
+                    ? "Focus includes direct relations (" +
+                      summarizedDirectRelationshipCount +
+                      " summarized)"
+                    : "Focus includes direct relations")
+                : (!_filterState.HasSearch && _hiddenRelatedCount > 0
+                    ? _hiddenRelatedCount + " related hidden by filters"
+                    : string.Empty);
+            _hiddenRelatedLabel.tooltip = showFocusContext
+                ? (summarizedDirectRelationshipCount > 0
+                    ? "Search and visibility filters are preserved. All direct relationships remain represented; " +
+                      summarizedDirectRelationshipCount +
+                      " dense direct " +
+                      (summarizedDirectRelationshipCount == 1 ? "relationship is" : "relationships are") +
+                      " summarized behind the +N overflow summary."
+                    : "Search and visibility filters are preserved. Direct relationships remain represented; " +
+                      "dense extras may be summarized behind a +N overflow summary when needed.")
                 : string.Empty;
             _hiddenRelatedLabel.style.display = !string.IsNullOrWhiteSpace(_hiddenRelatedLabel.text)
                 ? DisplayStyle.Flex
@@ -1091,72 +1168,285 @@ namespace Deucarian.PackageInstaller.Editor
         {
             if (_canvas != null && _canvas.LayoutMode == PackageGraphLayoutMode.Focus)
             {
-                _emptyState.style.display = DisplayStyle.None;
+                HideEmptyState();
                 return;
             }
 
-            bool noSearchResults =
-                _filterState.HasSearch &&
-                _searchState != null &&
-                _searchState.DirectMatchCount == 0;
-            bool noRenderedStructuralSearchResults =
-                _filterState.HasSearch &&
-                _canvas != null &&
-                _canvas.LayoutMode != PackageGraphLayoutMode.Focus &&
-                _canvas.RenderedPackageCount == 0;
-            bool searchMatchesOnlyFilteredPackages =
-                _filterState.HasSearch &&
-                _searchState != null &&
-                _searchState.DirectMatchCount > 0 &&
-                _searchState.ContextPackageCount == 0;
-            bool showEmptyState =
-                counts != null &&
-                counts.TotalCount > 0 &&
-                (!_filterState.HasAnyVisibilityEnabled ||
-                 noSearchResults ||
-                 noRenderedStructuralSearchResults ||
-                 searchMatchesOnlyFilteredPackages ||
-                 (!_filterState.HasSearch && counts.VisibleCount == 0));
-            _emptyState.style.display = showEmptyState ? DisplayStyle.Flex : DisplayStyle.None;
-
-            if (!showEmptyState)
+            if (_currentGraph != null && counts != null && counts.TotalCount == 0)
             {
+                ShowEmptyState(
+                    "No package entries are available in the active registry.",
+                    string.Empty,
+                    string.Empty,
+                    EmptyStateAction.None);
                 return;
             }
 
             if (!_filterState.HasAnyVisibilityEnabled)
             {
-                _emptyStateTitle.text = "No package visibility filters selected.";
-                _emptyStateActionButton.text = "Show all packages";
-                _emptyStateActionButton.tooltip = "Enable Installed and Not installed packages.";
-                _emptyStateActionButton.clicked -= ClearFilters;
-                _emptyStateActionButton.clicked -= ShowAllPackages;
-                _emptyStateActionButton.clicked -= ClearSearch;
-                _emptyStateActionButton.clicked += ShowAllPackages;
+                ShowEmptyState(
+                    "No package visibility filters selected.",
+                    "Show all packages",
+                    "Enable Installed and Not installed packages while keeping the current search.",
+                    EmptyStateAction.ShowAllPackages);
                 return;
             }
 
-            if (noSearchResults)
+            bool lexicalMiss =
+                _filterState.HasSearch &&
+                (_searchState == null || _searchState.DirectMatchCount == 0);
+
+            if (lexicalMiss)
             {
-                _emptyStateTitle.text = "No categories or packages match the current search and status filters.";
-                _emptyStateActionButton.text = "Clear search";
-                _emptyStateActionButton.tooltip = "Clear the structural category/package search.";
-                _emptyStateActionButton.clicked -= ClearFilters;
-                _emptyStateActionButton.clicked -= ShowAllPackages;
-                _emptyStateActionButton.clicked -= ClearSearch;
-                _emptyStateActionButton.clicked += ClearSearch;
+                ShowEmptyState(
+                    "No categories or packages match the current search.",
+                    "Clear search",
+                    "Clear search while keeping the current package visibility filters and focus.",
+                    EmptyStateAction.ClearSearch);
                 return;
             }
 
-            _emptyStateTitle.text = _filterState.HasSearch || searchMatchesOnlyFilteredPackages
-                ? "No categories or packages match the current search and status filters."
-                : "No packages match the current filters.";
-            _emptyStateActionButton.text = "Clear filters";
-            _emptyStateActionButton.tooltip = "Clear search and show all package visibility states.";
-            _emptyStateActionButton.clicked -= ClearFilters;
-            _emptyStateActionButton.clicked -= ShowAllPackages;
-            _emptyStateActionButton.clicked -= ClearSearch;
-            _emptyStateActionButton.clicked += ClearFilters;
+            PackageGraphNode[] matchedCandidates = GetSearchMatchCandidates();
+            PackageGraphNode[] focusedCandidates = matchedCandidates
+                .Where(IsInCurrentGroupScope)
+                .ToArray();
+            bool hasCategoryMatchInCurrentScope = HasDirectCategoryMatchInCurrentScope();
+            bool hasVisibleCategoryMatchInCurrentScope = string.IsNullOrWhiteSpace(_currentFocusedGroupId)
+                ? _searchState != null && _searchState.DirectCategoryMatchCount > 0
+                : hasCategoryMatchInCurrentScope;
+            bool hasMatchInCurrentScope = focusedCandidates.Length > 0 || hasCategoryMatchInCurrentScope;
+            bool hasEligibleInCurrentScope = focusedCandidates.Any(IsVisibleByStatus);
+            bool hasHiddenInCurrentScope = focusedCandidates.Any(node => !IsVisibleByStatus(node));
+            bool hasMatchOutsideCurrentScope =
+                !string.IsNullOrWhiteSpace(_currentFocusedGroupId) &&
+                (matchedCandidates.Any(node => !IsInCurrentGroupScope(node)) ||
+                 HasDirectCategoryMatchOutsideCurrentScope());
+            bool hasHiddenMatch = matchedCandidates.Any(node => !IsVisibleByStatus(node));
+            bool noVisibleUnscopedPackages =
+                !_filterState.HasSearch &&
+                counts != null &&
+                counts.TotalCount > 0 &&
+                counts.VisibleCount == 0;
+
+            if (_filterState.HasSearch &&
+                !string.IsNullOrWhiteSpace(_currentFocusedGroupId) &&
+                !hasMatchInCurrentScope &&
+                hasMatchOutsideCurrentScope)
+            {
+                ShowEmptyState(
+                    "No matches in this group.",
+                    "Search all groups",
+                    "Return to the ecosystem overview while keeping the current search.",
+                    EmptyStateAction.SearchAllGroups);
+                return;
+            }
+
+            if (!hasVisibleCategoryMatchInCurrentScope &&
+                !hasEligibleInCurrentScope &&
+                (hasHiddenInCurrentScope ||
+                 (string.IsNullOrWhiteSpace(_currentFocusedGroupId) && hasHiddenMatch) ||
+                 noVisibleUnscopedPackages))
+            {
+                ShowEmptyState(
+                    _filterState.HasSearch
+                        ? "Matching packages are hidden by the current status filters."
+                        : "Packages are hidden by the current status filters.",
+                    "Show matching packages",
+                    "Enable the relevant package visibility states while keeping the current search and focus.",
+                    EmptyStateAction.ShowMatchingPackages);
+                return;
+            }
+
+            HideEmptyState();
+        }
+
+        private void HandleEmptyStateAction()
+        {
+            switch (_emptyStateAction)
+            {
+                case EmptyStateAction.ShowAllPackages:
+                    ShowAllPackages();
+                    break;
+                case EmptyStateAction.ShowMatchingPackages:
+                    ShowMatchingPackages();
+                    break;
+                case EmptyStateAction.ClearSearch:
+                    ClearSearch();
+                    break;
+                case EmptyStateAction.SearchAllGroups:
+                    NavigateToRoot();
+                    break;
+            }
+        }
+
+        private void HandleEmptyStateActionKeyDown(KeyDownEvent evt)
+        {
+            if (!PackageGraphKeyboard.IsActivationKey(evt.keyCode))
+            {
+                return;
+            }
+
+            HandleEmptyStateAction();
+            evt.PreventDefault();
+            evt.StopPropagation();
+        }
+
+        internal bool ActivateEmptyStateActionFromKeyboardForTests(KeyCode keyCode)
+        {
+            if (!PackageGraphKeyboard.IsActivationKey(keyCode))
+            {
+                return false;
+            }
+
+            HandleEmptyStateAction();
+            return true;
+        }
+
+        private void ShowEmptyState(
+            string title,
+            string actionText,
+            string actionTooltip,
+            EmptyStateAction action)
+        {
+            _emptyState.style.display = DisplayStyle.Flex;
+            _emptyStateTitle.text = title ?? string.Empty;
+            _emptyStateAction = action;
+            bool showAction = action != EmptyStateAction.None;
+            _emptyStateActionButton.style.display = showAction ? DisplayStyle.Flex : DisplayStyle.None;
+            _emptyStateActionButton.text = showAction ? actionText ?? string.Empty : string.Empty;
+            _emptyStateActionButton.tooltip = showAction ? actionTooltip ?? string.Empty : string.Empty;
+        }
+
+        private void HideEmptyState()
+        {
+            _emptyState.style.display = DisplayStyle.None;
+            _emptyStateAction = EmptyStateAction.None;
+        }
+
+        private PackageGraphNode[] GetSearchMatchCandidates()
+        {
+            if (_currentGraph == null)
+            {
+                return Array.Empty<PackageGraphNode>();
+            }
+
+            if (!_filterState.HasSearch || _searchState == null)
+            {
+                return _currentGraph.Nodes.Where(node => node != null).ToArray();
+            }
+
+            HashSet<string> candidateIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (string packageId in _searchState.DirectPackageMatchIds)
+            {
+                candidateIds.Add(packageId);
+            }
+
+            foreach (string groupId in _searchState.DirectCategoryMatchIds)
+            {
+                foreach (PackageGraphNode node in _currentGraph.GetDescendantPackages(groupId))
+                {
+                    if (node != null)
+                    {
+                        candidateIds.Add(node.PackageId);
+                    }
+                }
+            }
+
+            return _currentGraph.Nodes
+                .Where(node => node != null && candidateIds.Contains(node.PackageId))
+                .ToArray();
+        }
+
+        private bool IsVisibleByStatus(PackageGraphNode node)
+        {
+            return node != null &&
+                   (node.IsInstalled ? _filterState.ShowInstalled : _filterState.ShowNotInstalled);
+        }
+
+        private bool IsInCurrentGroupScope(PackageGraphNode node)
+        {
+            if (node == null ||
+                _currentGraph == null ||
+                string.IsNullOrWhiteSpace(_currentFocusedGroupId))
+            {
+                return node != null;
+            }
+
+            return _currentGraph.GetDescendantPackages(_currentFocusedGroupId)
+                .Any(candidate => candidate != null &&
+                                  string.Equals(
+                                      candidate.PackageId,
+                                      node.PackageId,
+                                      StringComparison.OrdinalIgnoreCase));
+        }
+
+        private bool HasDirectCategoryMatchOutsideCurrentScope()
+        {
+            if (_currentGraph == null ||
+                _searchState == null ||
+                string.IsNullOrWhiteSpace(_currentFocusedGroupId))
+            {
+                return false;
+            }
+
+            return _searchState.DirectCategoryMatchIds.Any(groupId =>
+                !AreGroupsInSameScope(_currentFocusedGroupId, groupId));
+        }
+
+        private bool HasDirectCategoryMatchInCurrentScope()
+        {
+            if (_currentGraph == null ||
+                _searchState == null ||
+                string.IsNullOrWhiteSpace(_currentFocusedGroupId))
+            {
+                return false;
+            }
+
+            return _searchState.DirectCategoryMatchIds.Any(groupId =>
+                AreGroupsInSameScope(_currentFocusedGroupId, groupId));
+        }
+
+        private bool AreGroupsInSameScope(string firstGroupId, string secondGroupId)
+        {
+            return IsGroupOrDescendant(firstGroupId, secondGroupId) ||
+                   IsGroupOrDescendant(secondGroupId, firstGroupId);
+        }
+
+        private bool IsGroupOrDescendant(string ancestorGroupId, string candidateGroupId)
+        {
+            if (_currentGraph == null ||
+                string.IsNullOrWhiteSpace(ancestorGroupId) ||
+                string.IsNullOrWhiteSpace(candidateGroupId))
+            {
+                return false;
+            }
+
+            string currentGroupId = candidateGroupId;
+            HashSet<string> visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            while (!string.IsNullOrWhiteSpace(currentGroupId) &&
+                   visited.Add(currentGroupId) &&
+                   _currentGraph.TryGetGroup(currentGroupId, out PackageGraphGroup group))
+            {
+                if (string.Equals(currentGroupId, ancestorGroupId, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+
+                currentGroupId = group.ParentGroupId;
+            }
+
+            return false;
+        }
+
+        private enum EmptyStateAction
+        {
+            None,
+            ShowAllPackages,
+            ShowMatchingPackages,
+            ClearSearch,
+            SearchAllGroups
         }
 
         private static Button CreateFilterToggleButton(Action action, string iconClass)
@@ -1227,6 +1517,8 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             _legend.Clear();
+            bool hasAttention = _canvas != null && _canvas.HasRenderedAttentionNode();
+            bool hasChecking = HasNodeStatus(status => status == PackageGraphNodeStatus.Checking);
 
             if (layoutMode == PackageGraphLayoutMode.Focus)
             {
@@ -1250,7 +1542,7 @@ namespace Deucarian.PackageInstaller.Editor
                     "Suite membership",
                     "dpi-graph-legend__line--suite",
                     "Package belongs to a curated bundle"));
-                _legend.Add(CreateLegendItem("!", "Attention", "dpi-graph-legend__line--warning"));
+                AddTransientStatusLegendItems(hasAttention, hasChecking);
                 return;
             }
 
@@ -1259,7 +1551,7 @@ namespace Deucarian.PackageInstaller.Editor
                 _legend.Add(CreateLegendItem("Group", "Group", "dpi-graph-legend__line--group"));
                 _legend.Add(CreateLegendItem("Pkg", "Package", "dpi-graph-legend__line--package"));
                 _legend.Add(CreateLegendItem("Line", "Structural membership", "dpi-graph-legend__line--membership", "Structural group membership, not a dependency"));
-                _legend.Add(CreateLegendItem("!", "Attention", "dpi-graph-legend__line--warning"));
+                AddTransientStatusLegendItems(hasAttention, hasChecking);
                 return;
             }
 
@@ -1268,7 +1560,27 @@ namespace Deucarian.PackageInstaller.Editor
             _legend.Add(CreateLegendItem("Pkg", "Package", "dpi-graph-legend__line--package"));
             _legend.Add(CreateLegendItem(InstalledStatusMarker, "Installed", "dpi-graph-legend__line--installed"));
             _legend.Add(CreateLegendItem(NotInstalledStatusMarker, "Not installed", "dpi-graph-legend__line--available"));
-            _legend.Add(CreateLegendItem("!", "Attention", "dpi-graph-legend__line--warning"));
+            AddTransientStatusLegendItems(hasAttention, hasChecking);
+        }
+
+        private bool HasNodeStatus(Func<PackageGraphNodeStatus, bool> predicate)
+        {
+            return predicate != null &&
+                   _canvas != null &&
+                   _canvas.HasRenderedNodeStatus(predicate);
+        }
+
+        private void AddTransientStatusLegendItems(bool hasAttention, bool hasChecking)
+        {
+            if (hasChecking)
+            {
+                _legend.Add(CreateLegendItem("...", "Checking", "dpi-graph-legend__line--checking"));
+            }
+
+            if (hasAttention)
+            {
+                _legend.Add(CreateLegendItem("!", "Attention", "dpi-graph-legend__line--warning"));
+            }
         }
 
         private static VisualElement CreateLegendItem(
@@ -1353,9 +1665,24 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void PopulatePackageContextMenu(GenericMenu menu, PackageGraphNode packageNode)
         {
-            if (packageNode == null || packageNode.PackageDefinition == null)
+            if (packageNode == null)
             {
                 PopulateCanvasContextMenu(menu);
+                return;
+            }
+
+            if (packageNode.PackageDefinition == null)
+            {
+                string diagnostic = GetMissingPackageDiagnostic(packageNode);
+                menu.AddDisabledItem(new GUIContent("Missing Registry Target"));
+                menu.AddItem(
+                    new GUIContent("Copy Package ID"),
+                    false,
+                    () => EditorGUIUtility.systemCopyBuffer = packageNode.PackageId);
+                menu.AddItem(
+                    new GUIContent("Copy Diagnostic"),
+                    false,
+                    () => EditorGUIUtility.systemCopyBuffer = diagnostic);
                 return;
             }
 
@@ -1373,6 +1700,21 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 menu.AddDisabledItem(new GUIContent("Open Repository"));
             }
+        }
+
+        internal static string GetMissingPackageDiagnostic(PackageGraphNode packageNode)
+        {
+            if (packageNode == null)
+            {
+                return string.Empty;
+            }
+
+            string reason = !string.IsNullOrWhiteSpace(packageNode.Description)
+                ? packageNode.Description.Trim()
+                : (!string.IsNullOrWhiteSpace(packageNode.UpdateStatusLabel)
+                    ? packageNode.UpdateStatusLabel.Trim()
+                    : "Registry relationship target is not registered.");
+            return "Package ID: " + packageNode.PackageId + "\nReason: " + reason;
         }
 
         private void PopulateGroupContextMenu(GenericMenu menu, PackageGraphGroup group)
@@ -2292,8 +2634,7 @@ namespace Deucarian.PackageInstaller.Editor
         private float GetMinZoom(PackageGraphLayoutMode layoutMode)
         {
             float configuredMinimum =
-                layoutMode == PackageGraphLayoutMode.Overview ||
-                layoutMode == PackageGraphLayoutMode.Filtered
+                layoutMode == PackageGraphLayoutMode.Overview
                     ? OverviewMinZoom
                     : FocusMinZoom;
             return CalculateEffectiveMinZoom(configuredMinimum, _requiredFitZoom);
@@ -2375,14 +2716,30 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static bool ShouldConsiderPan(MouseDownEvent evt)
         {
-            return evt.button == 2 ||
-                   evt.button == 1 ||
-                   (evt.button == 0 && (evt.altKey || IsLeftPanTarget(evt.target as VisualElement)));
+            return evt != null &&
+                   ShouldConsiderPan(evt.target as VisualElement, evt.button, evt.altKey);
+        }
+
+        private static bool ShouldConsiderPan(VisualElement target, int button, bool altKey)
+        {
+            if (HasAncestorClass(target, "dpi-ecosystem-graph__empty-state"))
+            {
+                return false;
+            }
+
+            return button == 2 ||
+                   button == 1 ||
+                   (button == 0 && (altKey || IsLeftPanTarget(target)));
         }
 
         internal static bool IsLeftPanTargetForTests(VisualElement target)
         {
             return IsLeftPanTarget(target);
+        }
+
+        internal static bool ShouldConsiderPanForTests(VisualElement target, int button, bool altKey = false)
+        {
+            return ShouldConsiderPan(target, button, altKey);
         }
 
         internal static float CalculateEffectiveMinZoomForTests(float configuredMinimum, float requiredFitZoom)
@@ -2409,6 +2766,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             return !HasAncestorClass(target, "dpi-graph-node") &&
                    !HasAncestorClass(target, "dpi-graph-group") &&
+                   !HasAncestorClass(target, "dpi-ecosystem-graph__empty-state") &&
                    !HasAncestorClass(target, "dpi-ecosystem-graph__toolbar") &&
                    !HasAncestorClass(target, "dpi-ecosystem-graph__breadcrumbs") &&
                    !HasAncestorClass(target, "dpi-ecosystem-graph__legend");
@@ -2490,6 +2848,14 @@ namespace Deucarian.PackageInstaller.Editor
                 }
             }
 
+            foreach (PackageGraphOverflowSummary summary in layout.OverflowSummaries)
+            {
+                if (summary != null)
+                {
+                    AddRect(ref bounds, ref hasBounds, summary.Rect);
+                }
+            }
+
             if (!hasBounds)
             {
                 bounds = new Rect(
@@ -2520,8 +2886,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static bool IsOverviewLikeLayout(PackageGraphLayoutMode mode)
         {
-            return mode == PackageGraphLayoutMode.Overview ||
-                   mode == PackageGraphLayoutMode.Filtered;
+            return mode == PackageGraphLayoutMode.Overview;
         }
 
         private static Rect Union(Rect first, Rect second)
@@ -2886,6 +3251,7 @@ namespace Deucarian.PackageInstaller.Editor
                 Array.Empty<PackageGraphSuiteRegion>());
         private HashSet<string> _visiblePackageIds =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private PackageGraphLayoutResult _baselineLayoutResult;
         private PackageGraphLayoutResult _layoutResult;
         private string _selectedPackageId = string.Empty;
         private string _focusedPackageId = string.Empty;
@@ -2968,7 +3334,11 @@ namespace Deucarian.PackageInstaller.Editor
 
         public Rect GetContentBounds()
         {
-            Rect bounds = PackageGraphActiveLayoutBounds.Calculate(_layoutResult);
+            PackageGraphLayoutResult boundsLayout = _layoutResult != null &&
+                                                    _layoutResult.Mode == PackageGraphLayoutMode.Focus
+                ? _layoutResult
+                : _baselineLayoutResult ?? _layoutResult;
+            Rect bounds = PackageGraphActiveLayoutBounds.Calculate(boundsLayout);
             bool hasBounds = true;
 
             foreach (PackageGraphEdgeRoute route in _edgeLayer.BuildRoutesSnapshotForTests())
@@ -2999,11 +3369,47 @@ namespace Deucarian.PackageInstaller.Editor
 
         public int RenderedPackageCount => _visibleGraph != null ? _visibleGraph.Nodes.Count : 0;
 
+        public int SummarizedDirectRelationshipCount => _layoutResult != null
+            ? _layoutResult.OverflowSummaries.Sum(summary => summary.HiddenCount)
+            : 0;
+
         public bool InteractionsLocked => _interactionsLocked;
+
+        internal bool LayoutTransitionActiveForTests => _layoutAnimationActive;
 
         public string ActiveHoverGroupId => GetActiveHoverGroupId();
 
         public string DirectHoverGroupId => _hoveredGroupId;
+
+        public bool HasRenderedNodeStatus(Func<PackageGraphNodeStatus, bool> predicate)
+        {
+            if (predicate == null || _visibleGraph == null)
+            {
+                return false;
+            }
+
+            if (_layoutResult == null || _layoutResult.Mode != PackageGraphLayoutMode.Focus)
+            {
+                return _visibleGraph.Nodes.Any(node => node != null && predicate(node.Status));
+            }
+
+            return _layoutResult.NodeRects.Keys.Any(packageId =>
+                _visibleGraph.TryGetNode(packageId, out PackageGraphNode node) &&
+                node != null &&
+                predicate(node.Status));
+        }
+
+        public bool HasRenderedAttentionNode()
+        {
+            return _layoutResult != null &&
+                   _visibleGraph != null &&
+                   _layoutResult.NodeRects.Keys.Any(packageId =>
+                       _visibleGraph.TryGetNode(packageId, out PackageGraphNode node) &&
+                       node != null &&
+                       (node.Status == PackageGraphNodeStatus.Missing ||
+                        node.Status == PackageGraphNodeStatus.UpdateAvailable ||
+                        node.Status == PackageGraphNodeStatus.Warning));
+        }
 
         public event Action<bool> InteractionsLockedChanged;
 
@@ -3200,14 +3606,14 @@ namespace Deucarian.PackageInstaller.Editor
 
             _hoveredGroupId = nextGroupId;
             NotifyActiveHoverGroupChanged();
-            Rebuild();
+            RefreshHoverVisualState();
         }
 
         internal void SetPreviewPackageForTests(string packageId)
         {
             _hoveredPackageId = packageId ?? string.Empty;
             NotifyActiveHoverGroupChanged();
-            Rebuild();
+            RefreshHoverVisualState();
         }
 
         internal void ClearPreviewPackageForTests(string packageId)
@@ -3219,7 +3625,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             _hoveredPackageId = string.Empty;
             NotifyActiveHoverGroupChanged();
-            Rebuild();
+            RefreshHoverVisualState();
         }
 
         public void ClearExternalHoverGroup(string groupId)
@@ -3232,7 +3638,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             _hoveredGroupId = string.Empty;
             NotifyActiveHoverGroupChanged();
-            Rebuild();
+            RefreshHoverVisualState();
         }
 
         public void ClearHoverState()
@@ -3246,7 +3652,7 @@ namespace Deucarian.PackageInstaller.Editor
             _hoveredGroupId = string.Empty;
             _hoveredPackageId = string.Empty;
             NotifyActiveHoverGroupChanged();
-            Rebuild();
+            RefreshHoverVisualState();
         }
 
         public bool SetViewportSize(Vector2 viewportSize)
@@ -3472,9 +3878,7 @@ namespace Deucarian.PackageInstaller.Editor
                 ? PackageGraphLayoutMode.Focus
                 : (!string.IsNullOrWhiteSpace(_layoutFocusGroupId)
                     ? PackageGraphLayoutMode.GroupFocus
-                    : (_searchState.HasQuery
-                        ? PackageGraphLayoutMode.Filtered
-                        : PackageGraphLayoutMode.Overview));
+                    : PackageGraphLayoutMode.Overview);
             _layoutPresentationLevel = PackageGraphPresentationPolicy.ResolveForZoom(
                 layoutMode,
                 _viewportZoom,
@@ -3485,7 +3889,7 @@ namespace Deucarian.PackageInstaller.Editor
             using (PackageGraphOpenProfiler.Measure(PackageGraphOpenTiming.Layout))
             {
                 fullLayoutResult = _layout.Calculate(
-                    _visibleGraph,
+                    _graph,
                     layoutMode,
                     _layoutFocusPackageId,
                     _layoutFocusGroupId,
@@ -3500,7 +3904,8 @@ namespace Deucarian.PackageInstaller.Editor
                 edgeFocus = PackageGraphFocus.Create(
                     _visibleGraph,
                     _layoutFocusPackageId);
-                _layoutResult = CreateVisibleLayoutResult(fullLayoutResult, _currentFocus);
+                _baselineLayoutResult = fullLayoutResult;
+                _layoutResult = CreateProjectedLayoutResult(fullLayoutResult, _currentFocus);
             }
 
             using (PackageGraphOpenProfiler.Measure(PackageGraphOpenTiming.LayoutRepaintScheduling))
@@ -3541,6 +3946,7 @@ namespace Deucarian.PackageInstaller.Editor
             using (PackageGraphOpenProfiler.Measure(PackageGraphOpenTiming.LayoutRepaintScheduling))
             {
                 DrawUnrelatedSummary();
+                DrawOverflowSummaries();
                 ApplyAnimatedLayout(updateEdgeLayer: false);
                 _edgeLayer.SetGraph(
                     _visibleGraph,
@@ -3548,6 +3954,7 @@ namespace Deucarian.PackageInstaller.Editor
                     CreateTargetGroupRectSnapshot(),
                     _layoutResult.CanvasHeight,
                     edgeFocus);
+                _edgeLayer.SetPreviewPackage(_hoveredPackageId);
                 ApplyInteractionState();
             }
         }
@@ -3559,61 +3966,13 @@ namespace Deucarian.PackageInstaller.Editor
                 return _graph;
             }
 
-            if (_searchState == null || !_searchState.HasQuery)
-            {
-                return PackageVisibilityFilter.CreateVisibleGraph(_graph, _visiblePackageIds);
-            }
-
-            string[] requiredCategoryIds = !string.IsNullOrWhiteSpace(_focusedGroupId) &&
-                                           _graph.TryGetGroup(_focusedGroupId, out _)
-                ? new[] { _focusedGroupId }
-                : Array.Empty<string>();
-            ISet<string> structuralVisiblePackageIds = _visiblePackageIds;
-
-            if (requiredCategoryIds.Length > 0)
-            {
-                structuralVisiblePackageIds = CreateDescendantVisiblePackageIdSet(requiredCategoryIds[0]);
-            }
-
-            return PackageGraphSearchIndex.CreateFilteredGraph(
-                _graph,
-                _searchState,
-                structuralVisiblePackageIds,
-                requiredCategoryIds);
+            return PackageVisibilityFilter.CreateVisibleGraph(_graph, _visiblePackageIds);
         }
 
         private bool HasPackageEgoFocus()
         {
             return !string.IsNullOrWhiteSpace(_focusedPackageId) &&
                    _graph.TryGetNode(_focusedPackageId, out _);
-        }
-
-        private ISet<string> CreateDescendantVisiblePackageIdSet(string groupId)
-        {
-            HashSet<string> descendantGroupIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            CollectDescendantGroupIds(groupId, descendantGroupIds);
-            return new HashSet<string>(
-                _graph.Nodes
-                    .Where(node => node != null &&
-                                   _visiblePackageIds.Contains(node.PackageId) &&
-                                   descendantGroupIds.Contains(node.GroupId))
-                    .Select(node => node.PackageId),
-                StringComparer.OrdinalIgnoreCase);
-        }
-
-        private void CollectDescendantGroupIds(string groupId, ISet<string> groupIds)
-        {
-            if (string.IsNullOrWhiteSpace(groupId) || !groupIds.Add(groupId))
-            {
-                return;
-            }
-
-            foreach (PackageGraphGroup childGroup in _graph.Groups.Where(group =>
-                         group != null &&
-                         string.Equals(group.ParentGroupId, groupId, StringComparison.OrdinalIgnoreCase)))
-            {
-                CollectDescendantGroupIds(childGroup.Id, groupIds);
-            }
         }
 
         private string GetLayoutFocusPackageId()
@@ -3632,7 +3991,7 @@ namespace Deucarian.PackageInstaller.Editor
                 : string.Empty;
         }
 
-        private PackageGraphLayoutResult CreateVisibleLayoutResult(
+        private PackageGraphLayoutResult CreateProjectedLayoutResult(
             PackageGraphLayoutResult fullLayoutResult,
             PackageGraphFocus fullFocus)
         {
@@ -3641,28 +4000,26 @@ namespace Deucarian.PackageInstaller.Editor
                 return null;
             }
 
-            bool applyStructuralVisibility = fullLayoutResult.Mode != PackageGraphLayoutMode.Focus;
-            Dictionary<string, Rect> visibleNodeRects = fullLayoutResult.NodeRects
-                .Where(pair => !applyStructuralVisibility || _visiblePackageIds.Contains(pair.Key))
+            bool packageFocus = fullLayoutResult.Mode == PackageGraphLayoutMode.Focus;
+            Dictionary<string, Rect> projectedNodeRects = fullLayoutResult.NodeRects
+                .Where(pair => packageFocus || _visiblePackageIds.Contains(pair.Key))
                 .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
-            Dictionary<string, PackageGraphLayoutRing> visibleNodeRings = fullLayoutResult.NodeRings
-                .Where(pair => !applyStructuralVisibility || _visiblePackageIds.Contains(pair.Key))
+            Dictionary<string, PackageGraphLayoutRing> projectedNodeRings = fullLayoutResult.NodeRings
+                .Where(pair => packageFocus || _visiblePackageIds.Contains(pair.Key))
                 .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
-            Dictionary<string, PackageGraphNodePresentationLevel> visibleNodePresentations =
+            Dictionary<string, PackageGraphNodePresentationLevel> projectedNodePresentations =
                 fullLayoutResult.NodePresentationLevels
-                    .Where(pair => !applyStructuralVisibility || _visiblePackageIds.Contains(pair.Key))
+                    .Where(pair => packageFocus || _visiblePackageIds.Contains(pair.Key))
                     .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase);
-            int visibleUnrelatedCount = fullLayoutResult.Mode == PackageGraphLayoutMode.Focus && fullFocus != null
+            int visibleUnrelatedCount = packageFocus && fullFocus != null
                 ? _visibleGraph.Nodes.Count(node => !fullFocus.IsPackageRelated(node.PackageId))
                 : 0;
             Rect unrelatedSummaryRect = visibleUnrelatedCount > 0
                 ? fullLayoutResult.UnrelatedSummaryRect
                 : default(Rect);
-            PackageGraphGroupLayoutNode[] visibleGroupNodes = fullLayoutResult.GroupNodes
-                .Where(groupNode => groupNode != null &&
-                                    (groupNode.PackageCount > 0 ||
-                                     fullLayoutResult.Mode == PackageGraphLayoutMode.GroupFocus ||
-                                     fullLayoutResult.Mode == PackageGraphLayoutMode.Overview))
+            PackageGraphGroupLayoutNode[] projectedGroupNodes = fullLayoutResult.GroupNodes
+                .Where(groupNode => groupNode != null)
+                .Select(ProjectGroupLayoutNode)
                 .ToArray();
 
             return new PackageGraphLayoutResult(
@@ -3672,15 +4029,51 @@ namespace Deucarian.PackageInstaller.Editor
                 fullLayoutResult.CanvasHeight,
                 fullLayoutResult.HubRect,
                 fullLayoutResult.ActiveCenter,
-                visibleNodeRects,
-                visibleNodeRings,
+                projectedNodeRects,
+                projectedNodeRings,
                 fullLayoutResult.RingGuides,
                 fullLayoutResult.SectorLabels,
                 visibleUnrelatedCount,
                 unrelatedSummaryRect,
-                visibleGroupNodes,
+                projectedGroupNodes,
                 fullLayoutResult.FocusGroupId,
-                visibleNodePresentations);
+                projectedNodePresentations,
+                fullLayoutResult.OverflowSummaries);
+        }
+
+        private PackageGraphGroupLayoutNode ProjectGroupLayoutNode(PackageGraphGroupLayoutNode groupNode)
+        {
+            List<PackageGraphNode> shownPackageList = new List<PackageGraphNode>();
+
+            foreach (string packageId in groupNode.RepresentedPackageIds)
+            {
+                if (!string.IsNullOrWhiteSpace(packageId) &&
+                    _visibleGraph.TryGetNode(packageId, out PackageGraphNode node))
+                {
+                    shownPackageList.Add(node);
+                }
+            }
+
+            PackageGraphNode[] shownPackages = shownPackageList.ToArray();
+            PackageGraphCategoryStatusSummary statusSummary =
+                PackageGraphCategoryStatusSummary.Create(shownPackages);
+
+            return new PackageGraphGroupLayoutNode(
+                groupNode.Group,
+                groupNode.Rect,
+                groupNode.HubRect,
+                groupNode.Ring,
+                shownPackages.Length,
+                statusSummary.InstalledCount,
+                statusSummary.NotInstalledCount,
+                statusSummary.AttentionCount,
+                statusSummary.UnknownCount,
+                shownPackages.Count(node => node.Status == PackageGraphNodeStatus.UpdateAvailable),
+                groupNode.Focused,
+                groupNode.Collapsed,
+                groupNode.OrbitRadius,
+                groupNode.SummaryLabel,
+                groupNode.RepresentedPackageIds);
         }
 
         private Dictionary<string, Rect> CaptureCurrentNodeRects()
@@ -4488,6 +4881,8 @@ namespace Deucarian.PackageInstaller.Editor
 
             VisualElement hub = new VisualElement();
             hub.AddToClassList("dpi-graph-hub");
+            hub.focusable = true;
+            hub.tabIndex = 0;
             hub.EnableInClassList("dpi-graph-hub--focus", _layoutResult.Mode == PackageGraphLayoutMode.Focus);
             hub.EnableInClassList("dpi-graph-hub--group-focus", _layoutResult.Mode == PackageGraphLayoutMode.GroupFocus);
             hub.style.left = _layoutResult.HubRect.x;
@@ -4506,6 +4901,16 @@ namespace Deucarian.PackageInstaller.Editor
                 _rootFocused?.Invoke();
                 evt.StopPropagation();
             });
+            hub.RegisterCallback<KeyDownEvent>(evt => PackageGraphKeyboard.Activate(
+                evt,
+                hub,
+                () =>
+                {
+                    if (!_interactionsLocked)
+                    {
+                        _rootFocused?.Invoke();
+                    }
+                }));
 
             Image hubIcon = new Image
             {
@@ -4549,7 +4954,8 @@ namespace Deucarian.PackageInstaller.Editor
                     !_interactionsLocked,
                     groupFocused,
                     SetPreviewGroup,
-                    ClearPreviewGroup);
+                    ClearPreviewGroup,
+                    GetRootGroupSearchMatchCount(groupNode));
                 ApplySearchClasses(
                     groupElement,
                     _searchState.IsDirectCategoryMatch(groupNode.GroupId),
@@ -4559,6 +4965,45 @@ namespace Deucarian.PackageInstaller.Editor
                 _nodeLayer.Add(groupElement);
                 _groupElements[groupNode.GroupId] = groupElement;
             }
+        }
+
+        private int GetRootGroupSearchMatchCount(PackageGraphGroupLayoutNode groupNode)
+        {
+            if (groupNode == null ||
+                _layoutResult == null ||
+                _layoutResult.Mode != PackageGraphLayoutMode.Overview ||
+                _searchState == null ||
+                !_searchState.HasQuery)
+            {
+                return 0;
+            }
+
+            int packageMatches = groupNode.RepresentedPackageIds.Count(packageId =>
+                _visiblePackageIds.Contains(packageId) &&
+                _searchState.IsDirectPackageMatch(packageId));
+            int categoryMatches = _searchState.DirectCategoryMatchIds.Count(groupId =>
+                IsGroupWithin(groupId, groupNode.GroupId));
+            return packageMatches + categoryMatches;
+        }
+
+        private bool IsGroupWithin(string candidateGroupId, string ancestorGroupId)
+        {
+            HashSet<string> visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            string currentGroupId = candidateGroupId;
+
+            while (!string.IsNullOrWhiteSpace(currentGroupId) &&
+                   visited.Add(currentGroupId) &&
+                   _graph.TryGetGroup(currentGroupId, out PackageGraphGroup currentGroup))
+            {
+                if (string.Equals(currentGroup.Id, ancestorGroupId, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+
+                currentGroupId = currentGroup.ParentGroupId;
+            }
+
+            return false;
         }
 
         private string GetGroupBackTooltip(PackageGraphGroup group)
@@ -4592,7 +5037,7 @@ namespace Deucarian.PackageInstaller.Editor
         {
             using (PackageGraphOpenProfiler.Measure(PackageGraphOpenTiming.VisualNodeCreation))
             {
-                foreach (PackageGraphNode node in _graph.Nodes)
+                foreach (PackageGraphNode node in _visibleGraph.Nodes)
                 {
                     if (!_animatedNodeRects.TryGetValue(node.PackageId, out Rect rect))
                     {
@@ -4662,6 +5107,7 @@ namespace Deucarian.PackageInstaller.Editor
                                  layout.Mode == PackageGraphLayoutMode.Focus
                 ? GetPackageBackTooltip(node.GroupId)
                 : string.Empty;
+            string relationshipTooltip = GetRelationshipTooltip(node, layout);
             PackageGraphNodeElement nodeElement = new PackageGraphNodeElement(
                 node,
                 ring,
@@ -4678,6 +5124,7 @@ namespace Deucarian.PackageInstaller.Editor
                 !_interactionsLocked,
                 categoryPathLabel,
                 backTooltip,
+                relationshipTooltip,
                 _packageSelected,
                 _packageAction,
                 _selectionCleared,
@@ -4691,6 +5138,59 @@ namespace Deucarian.PackageInstaller.Editor
             return nodeElement;
         }
 
+        private string GetRelationshipTooltip(PackageGraphNode node, PackageGraphLayoutResult layout)
+        {
+            if (node == null || layout == null || layout.Mode != PackageGraphLayoutMode.Focus ||
+                string.IsNullOrWhiteSpace(layout.FocusPackageId) ||
+                string.Equals(node.PackageId, layout.FocusPackageId, StringComparison.OrdinalIgnoreCase))
+            {
+                return string.Empty;
+            }
+
+            string[] labels = _visibleGraph.Edges
+                .Where(edge => edge != null &&
+                               edge.ConnectsPackage(node.PackageId) &&
+                               edge.ConnectsPackage(layout.FocusPackageId))
+                .Select(edge => FormatRelationshipTooltipLabel(edge.Kind, edge.Label))
+                .Where(label => !string.IsNullOrWhiteSpace(label))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            return labels.Length == 0
+                ? string.Empty
+                : "Relationship: " + string.Join("; ", labels);
+        }
+
+        private static string FormatRelationshipTooltipLabel(
+            PackageGraphEdgeKind kind,
+            string relationshipLabel)
+        {
+            string kindLabel = GetRelationshipKindLabel(kind);
+            string detail = string.IsNullOrWhiteSpace(relationshipLabel)
+                ? string.Empty
+                : relationshipLabel.Trim();
+            return string.IsNullOrWhiteSpace(detail) ||
+                   string.Equals(detail, kindLabel, StringComparison.OrdinalIgnoreCase)
+                ? kindLabel
+                : kindLabel + " - " + detail;
+        }
+
+        private static string GetRelationshipKindLabel(PackageGraphEdgeKind kind)
+        {
+            switch (kind)
+            {
+                case PackageGraphEdgeKind.HardDependency:
+                    return "Required dependency";
+                case PackageGraphEdgeKind.IntegrationConnection:
+                    return "Integration connection";
+                case PackageGraphEdgeKind.OptionalCompanion:
+                    return "Optional companion";
+                case PackageGraphEdgeKind.SuiteMembership:
+                    return "Suite membership";
+                default:
+                    return "Recommended relationship";
+            }
+        }
+
         private void DrawUnrelatedSummary()
         {
             if (_layoutResult == null || !_layoutResult.HasUnrelatedSummary)
@@ -4702,6 +5202,8 @@ namespace Deucarian.PackageInstaller.Editor
             summary.name = "ecosystem-graph-unrelated-summary";
             summary.AddToClassList("dpi-graph-unrelated-summary");
             summary.tooltip = "Return to overview";
+            summary.focusable = true;
+            summary.tabIndex = 0;
             summary.SetEnabled(!_interactionsLocked);
             summary.RegisterCallback<ClickEvent>(evt =>
             {
@@ -4714,8 +5216,165 @@ namespace Deucarian.PackageInstaller.Editor
                 _selectionCleared?.Invoke();
                 evt.StopPropagation();
             });
+            summary.RegisterCallback<KeyDownEvent>(evt => PackageGraphKeyboard.Activate(
+                evt,
+                summary,
+                () =>
+                {
+                    if (!_interactionsLocked)
+                    {
+                        _selectionCleared?.Invoke();
+                    }
+                }));
             SetElementRect(summary, _layoutResult.UnrelatedSummaryRect);
             _nodeLayer.Add(summary);
+        }
+
+        private void DrawOverflowSummaries()
+        {
+            if (_layoutResult == null || _layoutResult.OverflowSummaries.Count == 0)
+            {
+                return;
+            }
+
+            foreach (PackageGraphOverflowSummary overflow in _layoutResult.OverflowSummaries)
+            {
+                PackageGraphOverflowSummaryElement summary = new PackageGraphOverflowSummaryElement(
+                    "+" + overflow.HiddenCount + " related packages",
+                    GetOverflowDiagnostic(overflow));
+                summary.name = "ecosystem-graph-overflow-" + GetOverflowZoneClass(overflow.Zone);
+                summary.AddToClassList("dpi-graph-unrelated-summary");
+                summary.AddToClassList("dpi-graph-overflow-summary");
+                summary.AddToClassList("dpi-graph-overflow-summary--" + GetOverflowZoneClass(overflow.Zone));
+                summary.tooltip = "Additional " + GetOverflowZoneLabel(overflow.Zone) +
+                                  " are summarized to keep this dense relationship view readable. " +
+                                  "Click or press Enter/Space to copy their IDs.";
+                SetElementRect(summary, overflow.Rect);
+                _nodeLayer.Add(summary);
+            }
+        }
+
+        private string GetOverflowDiagnostic(PackageGraphOverflowSummary overflow)
+        {
+            if (overflow == null)
+            {
+                return string.Empty;
+            }
+
+            PackageGraphNode[] hiddenNodes = GetOverflowNodes(overflow.Zone)
+                .Take(overflow.HiddenCount)
+                .ToArray();
+            List<string> lines = new List<string>
+            {
+                "Additional " + GetOverflowZoneLabel(overflow.Zone) + ": " + overflow.HiddenCount
+            };
+            lines.AddRange(hiddenNodes.Select(node => node.DisplayName + " (" + node.PackageId + ")"));
+            return string.Join("\n", lines.ToArray());
+        }
+
+        private IEnumerable<PackageGraphNode> GetOverflowNodes(PackageGraphEgoLayoutZone zone)
+        {
+            if (_layoutResult == null ||
+                _visibleGraph == null ||
+                string.IsNullOrWhiteSpace(_layoutResult.FocusPackageId))
+            {
+                return Enumerable.Empty<PackageGraphNode>();
+            }
+
+            string focusPackageId = _layoutResult.FocusPackageId;
+            return _visibleGraph.Nodes
+                .Where(node => node != null &&
+                               !_layoutResult.NodeRects.ContainsKey(node.PackageId) &&
+                               ResolveEgoZone(node, focusPackageId) == zone)
+                .OrderBy(node => node.DisplayName, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(node => node.PackageId, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+
+        private PackageGraphEgoLayoutZone ResolveEgoZone(
+            PackageGraphNode node,
+            string focusPackageId)
+        {
+            if (node == null || string.IsNullOrWhiteSpace(focusPackageId))
+            {
+                return PackageGraphEgoLayoutZone.OwningCategory;
+            }
+
+            if (_visibleGraph.GetHardDependencyProviderEdges(focusPackageId).Any(edge =>
+                    string.Equals(edge.FromPackageId, node.PackageId, StringComparison.OrdinalIgnoreCase)))
+            {
+                return PackageGraphEgoLayoutZone.Providers;
+            }
+
+            if (node.NodeType != PackageGraphNodeType.Integration &&
+                _visibleGraph.GetHardDependencyDependentEdges(focusPackageId).Any(edge =>
+                    string.Equals(edge.ToPackageId, node.PackageId, StringComparison.OrdinalIgnoreCase)))
+            {
+                return PackageGraphEgoLayoutZone.Dependents;
+            }
+
+            if (node.NodeType == PackageGraphNodeType.Integration &&
+                (_visibleGraph.GetIntegrationEdges(focusPackageId).Any(edge =>
+                     edge.ConnectsPackage(node.PackageId)) ||
+                 _visibleGraph.GetEdgesForPackage(focusPackageId).Any(edge =>
+                     edge.Kind == PackageGraphEdgeKind.HardDependency &&
+                     edge.ConnectsPackage(node.PackageId))))
+            {
+                return PackageGraphEgoLayoutZone.Integrations;
+            }
+
+            bool optionalCompanion = _visibleGraph.GetOptionalCompanionEdges(focusPackageId).Any(edge =>
+                edge.ConnectsPackage(node.PackageId));
+            bool suiteRelationship = _visibleGraph.GetSuiteRegionsForPackage(focusPackageId).Any(region =>
+                (string.Equals(
+                     region.SuitePackageId,
+                     focusPackageId,
+                     StringComparison.OrdinalIgnoreCase) &&
+                 region.MemberPackageIds.Any(memberPackageId => string.Equals(
+                     memberPackageId,
+                     node.PackageId,
+                     StringComparison.OrdinalIgnoreCase))) ||
+                (region.MemberPackageIds.Any(memberPackageId => string.Equals(
+                     memberPackageId,
+                     focusPackageId,
+                     StringComparison.OrdinalIgnoreCase)) &&
+                 string.Equals(
+                     region.SuitePackageId,
+                     node.PackageId,
+                     StringComparison.OrdinalIgnoreCase)));
+            return optionalCompanion || suiteRelationship
+                ? PackageGraphEgoLayoutZone.CompanionsAndSuites
+                : PackageGraphEgoLayoutZone.OwningCategory;
+        }
+
+        private static string GetOverflowZoneClass(PackageGraphEgoLayoutZone zone)
+        {
+            switch (zone)
+            {
+                case PackageGraphEgoLayoutZone.Providers:
+                    return "providers";
+                case PackageGraphEgoLayoutZone.Dependents:
+                    return "dependents";
+                case PackageGraphEgoLayoutZone.Integrations:
+                    return "integrations";
+                default:
+                    return "companions";
+            }
+        }
+
+        private static string GetOverflowZoneLabel(PackageGraphEgoLayoutZone zone)
+        {
+            switch (zone)
+            {
+                case PackageGraphEgoLayoutZone.Providers:
+                    return "prerequisites";
+                case PackageGraphEgoLayoutZone.Dependents:
+                    return "dependent packages";
+                case PackageGraphEgoLayoutZone.Integrations:
+                    return "integration packages";
+                default:
+                    return "companions and suite packages";
+            }
         }
 
         private PackageGraphNodeVisualMode GetNodeVisualMode(bool dimmed)
@@ -4774,12 +5433,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             _hoveredPackageId = packageId ?? string.Empty;
             NotifyActiveHoverGroupChanged();
-            if (IsStructuralSearchProjectionActive())
-            {
-                return;
-            }
-
-            Rebuild();
+            RefreshHoverVisualState();
         }
 
         private void ClearPreviewPackage(string packageId)
@@ -4796,20 +5450,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             _hoveredPackageId = string.Empty;
             NotifyActiveHoverGroupChanged();
-            if (IsStructuralSearchProjectionActive())
-            {
-                return;
-            }
-
-            Rebuild();
-        }
-
-        private bool IsStructuralSearchProjectionActive()
-        {
-            return _searchState != null &&
-                   _searchState.HasQuery &&
-                   _layoutResult != null &&
-                   _layoutResult.Mode != PackageGraphLayoutMode.Focus;
+            RefreshHoverVisualState();
         }
 
         private void SetPreviewGroup(string groupId)
@@ -4826,7 +5467,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             _hoveredGroupId = groupId ?? string.Empty;
             NotifyActiveHoverGroupChanged();
-            Rebuild();
+            RefreshHoverVisualState();
         }
 
         private void ClearPreviewGroup(string groupId)
@@ -4843,7 +5484,38 @@ namespace Deucarian.PackageInstaller.Editor
 
             _hoveredGroupId = string.Empty;
             NotifyActiveHoverGroupChanged();
-            Rebuild();
+            RefreshHoverVisualState();
+        }
+
+        private void RefreshHoverVisualState()
+        {
+            string activeHoverGroupId = GetActiveHoverGroupId();
+            bool hoverActive = !string.IsNullOrWhiteSpace(activeHoverGroupId);
+
+            foreach (KeyValuePair<string, PackageGraphGroupElement> pair in _groupElements)
+            {
+                bool hoverContext = hoverActive &&
+                                    IsGroupInHoverContext(pair.Key, activeHoverGroupId);
+                pair.Value.SetHoverState(hoverContext, hoverActive && !hoverContext);
+            }
+
+            foreach (KeyValuePair<string, PackageGraphNodeElement> pair in _nodeElements)
+            {
+                if (!_visibleGraph.TryGetNode(pair.Key, out PackageGraphNode node))
+                {
+                    continue;
+                }
+
+                bool hoverContext = hoverActive &&
+                                    IsPackageInHoverContext(node, activeHoverGroupId);
+                pair.Value.SetPreviewState(
+                    string.Equals(pair.Key, _hoveredPackageId, StringComparison.OrdinalIgnoreCase),
+                    hoverContext,
+                    hoverActive && !hoverContext);
+            }
+
+            _membershipLayer.SetHoverState(activeHoverGroupId, _interactionsLocked);
+            _edgeLayer.SetPreviewPackage(_hoveredPackageId);
         }
 
         private void NotifyActiveHoverGroupChanged()
@@ -5204,6 +5876,23 @@ namespace Deucarian.PackageInstaller.Editor
             MarkDirtyRepaint();
         }
 
+        public void SetHoverState(string hoveredGroupId, bool interactionsLocked)
+        {
+            string nextHoveredGroupId = hoveredGroupId ?? string.Empty;
+            if (string.Equals(
+                    _hoveredGroupId,
+                    nextHoveredGroupId,
+                    StringComparison.OrdinalIgnoreCase) &&
+                _interactionsLocked == interactionsLocked)
+            {
+                return;
+            }
+
+            _hoveredGroupId = nextHoveredGroupId;
+            _interactionsLocked = interactionsLocked;
+            MarkDirtyRepaint();
+        }
+
         private void CopyNodeRects(IReadOnlyDictionary<string, Rect> nodeRects)
         {
             _nodeRects.Clear();
@@ -5272,7 +5961,7 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            Painter2D painter = context.painter2D;
+            PackageGraphPainter painter = PackageGraphPainterCompatibility.Create(context);
             Dictionary<string, PackageGraphGroupLayoutNode> groupNodeById = _layout.GroupNodes
                 .Where(groupNode => groupNode != null && groupNode.Group != null)
                 .GroupBy(groupNode => groupNode.GroupId, StringComparer.OrdinalIgnoreCase)
@@ -5291,6 +5980,7 @@ namespace Deucarian.PackageInstaller.Editor
             if (_layout.Mode == PackageGraphLayoutMode.Focus)
             {
                 DrawFocusMembershipGuides(painter, groupNodeById);
+                PackageGraphPainterCompatibility.Complete(painter);
                 return;
             }
 
@@ -5320,6 +6010,8 @@ namespace Deucarian.PackageInstaller.Editor
                     DrawSpoke(painter, groupHubRect, childRect, emphasized, muted);
                 }
             }
+
+            PackageGraphPainterCompatibility.Complete(painter);
         }
 
         internal IReadOnlyList<PackageGraphOrbitVisualState> BuildOrbitVisualStatesForTests()
@@ -5459,7 +6151,7 @@ namespace Deucarian.PackageInstaller.Editor
         }
 
         private void DrawFocusMembershipGuides(
-            Painter2D painter,
+            PackageGraphPainter painter,
             IReadOnlyDictionary<string, PackageGraphGroupLayoutNode> groupNodeById)
         {
             foreach (PackageGraphStructuralMembershipRoute route in BuildFocusMembershipRoutes(groupNodeById))
@@ -5672,7 +6364,7 @@ namespace Deucarian.PackageInstaller.Editor
         }
 
         private static void DrawStructuralMembershipRoute(
-            Painter2D painter,
+            PackageGraphPainter painter,
             PackageGraphStructuralMembershipRoute route,
             bool emphasized,
             bool muted)
@@ -5779,7 +6471,7 @@ namespace Deucarian.PackageInstaller.Editor
                     : 0f;
         }
 
-        private static void DrawOrbitCircle(Painter2D painter, PackageGraphOrbitVisualState orbit)
+        private static void DrawOrbitCircle(PackageGraphPainter painter, PackageGraphOrbitVisualState orbit)
         {
             if (!orbit.Visible || orbit.Radius <= 0.01f)
             {
@@ -5792,7 +6484,7 @@ namespace Deucarian.PackageInstaller.Editor
             DrawCircle(painter, orbit.Center, orbit.Radius);
         }
 
-        private static void DrawStatusRing(Painter2D painter, CategoryStatusRingVisualState ring)
+        private static void DrawStatusRing(PackageGraphPainter painter, CategoryStatusRingVisualState ring)
         {
             if (ring.Radius <= 0.01f || ring.Thickness <= 0.01f)
             {
@@ -5825,7 +6517,7 @@ namespace Deucarian.PackageInstaller.Editor
         }
 
         private static void DrawFullStatusRing(
-            Painter2D painter,
+            PackageGraphPainter painter,
             Vector2 center,
             float radius,
             float thickness,
@@ -5839,7 +6531,7 @@ namespace Deucarian.PackageInstaller.Editor
         }
 
         private static void DrawRingSegment(
-            Painter2D painter,
+            PackageGraphPainter painter,
             Vector2 center,
             float radius,
             float thickness,
@@ -5878,7 +6570,7 @@ namespace Deucarian.PackageInstaller.Editor
             painter.Stroke();
         }
 
-        private static void DrawSpoke(Painter2D painter, Rect fromHubRect, Rect toRect, bool emphasized, bool muted)
+        private static void DrawSpoke(PackageGraphPainter painter, Rect fromHubRect, Rect toRect, bool emphasized, bool muted)
         {
             Vector2 fromCenter = fromHubRect.center;
             Vector2 toCenter = toRect.center;
@@ -5923,20 +6615,20 @@ namespace Deucarian.PackageInstaller.Editor
             return center - normalized * distance;
         }
 
-        private static void DrawCircle(Painter2D painter, Vector2 center, float radius)
+        private static void DrawCircle(PackageGraphPainter painter, Vector2 center, float radius)
         {
             DrawCirclePath(painter, center, radius);
             painter.Fill();
             painter.Stroke();
         }
 
-        private static void DrawCircleStroke(Painter2D painter, Vector2 center, float radius)
+        private static void DrawCircleStroke(PackageGraphPainter painter, Vector2 center, float radius)
         {
             DrawCirclePath(painter, center, radius);
             painter.Stroke();
         }
 
-        private static void DrawCirclePath(Painter2D painter, Vector2 center, float radius)
+        private static void DrawCirclePath(PackageGraphPainter painter, Vector2 center, float radius)
         {
             const float Kappa = 0.55228475f;
             float safeRadius = Mathf.Max(0f, radius);
@@ -6559,6 +7251,7 @@ namespace Deucarian.PackageInstaller.Editor
                 Array.Empty<PackageGraphEdge>(),
                 Array.Empty<PackageGraphSuiteRegion>());
         private PackageGraphFocus _focus = PackageGraphFocus.Create(null, string.Empty);
+        private string _previewPackageId = string.Empty;
         private readonly PackageGraphEdgeRouteCache _routeCache = new PackageGraphEdgeRouteCache();
         private IReadOnlyList<PackageGraphEdgeRoute> _routes = Array.Empty<PackageGraphEdgeRoute>();
         private IVisualElementScheduledItem _animationItem;
@@ -6608,6 +7301,19 @@ namespace Deucarian.PackageInstaller.Editor
             PackageGraphEdgeRouteBuildDiagnostics diagnostics = RebuildRoutes();
             MarkDirtyRepaint();
             PackageGraphOpenProfiler.Current?.AddEdgeRouteDiagnostics(diagnostics);
+        }
+
+        public void SetPreviewPackage(string packageId)
+        {
+            string nextPackageId = packageId ?? string.Empty;
+
+            if (string.Equals(_previewPackageId, nextPackageId, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            _previewPackageId = nextPackageId;
+            MarkDirtyRepaint();
         }
 
         private void CopyNodeRects(IReadOnlyDictionary<string, Rect> nodeRects)
@@ -6702,23 +7408,40 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             long painterStartTicks = Stopwatch.GetTimestamp();
-            Painter2D painter = context.painter2D;
+            PackageGraphPainter painter = PackageGraphPainterCompatibility.Create(context);
 
             foreach (PackageGraphEdgeRoute route in _routes)
             {
                 DrawEdge(
                     painter,
                     route,
-                    route.Bundle.Edges.Any(edge => _focus.IsEdgeEmphasized(edge)),
+                    IsRouteEmphasized(route, _focus, _previewPackageId),
                     _focus.HasFocus,
                     _animationPhase);
             }
+
+            PackageGraphPainterCompatibility.Complete(painter);
 
             PackageGraphOpenProfiler.Current?.AddEdgeRouteDiagnostics(
                 new PackageGraphEdgeRouteBuildDiagnostics
                 {
                     PainterPassTicks = Stopwatch.GetTimestamp() - painterStartTicks
                 });
+        }
+
+        internal static bool IsRouteEmphasized(
+            PackageGraphEdgeRoute route,
+            PackageGraphFocus focus,
+            string previewPackageId)
+        {
+            if (focus == null ||
+                !route.Bundle.Edges.Any(edge => focus.IsEdgeEmphasized(edge)))
+            {
+                return false;
+            }
+
+            return string.IsNullOrWhiteSpace(previewPackageId) ||
+                   route.Bundle.ConnectsPackage(previewPackageId);
         }
 
         private void CopyGroupRects(IReadOnlyDictionary<string, Rect> groupRects)
@@ -7054,7 +7777,7 @@ namespace Deucarian.PackageInstaller.Editor
         }
 
         private static void DrawEdge(
-            Painter2D painter,
+            PackageGraphPainter painter,
             PackageGraphEdgeRoute route,
             bool emphasized,
             bool focusMode,
@@ -7144,7 +7867,7 @@ namespace Deucarian.PackageInstaller.Editor
         }
 
         private static void DrawCompositeDependencyIntegrationRoute(
-            Painter2D painter,
+            PackageGraphPainter painter,
             PackageGraphEdgeRoute route,
             bool emphasized,
             bool focusMode,
@@ -8568,7 +9291,7 @@ namespace Deucarian.PackageInstaller.Editor
         }
 
         private static void DrawPolylineStroke(
-            Painter2D painter,
+            PackageGraphPainter painter,
             IReadOnlyList<Vector2> points)
         {
             if (points == null || points.Count < 2)
@@ -8588,7 +9311,7 @@ namespace Deucarian.PackageInstaller.Editor
         }
 
         private static void DrawRouteUnderlay(
-            Painter2D painter,
+            PackageGraphPainter painter,
             IReadOnlyList<Vector2> points,
             PackageGraphEdgeKind kind,
             float semanticWidth,
@@ -8612,7 +9335,7 @@ namespace Deucarian.PackageInstaller.Editor
         }
 
         private static void DrawIntegrationCableRoute(
-            Painter2D painter,
+            PackageGraphPainter painter,
             IReadOnlyList<Vector2> points,
             Color color,
             float width,
@@ -8637,7 +9360,7 @@ namespace Deucarian.PackageInstaller.Editor
         }
 
         private static void DrawOffsetPolyline(
-            Painter2D painter,
+            PackageGraphPainter painter,
             IReadOnlyList<Vector2> points,
             float offset)
         {
@@ -8661,7 +9384,7 @@ namespace Deucarian.PackageInstaller.Editor
         }
 
         private static void DrawFlowMarkers(
-            Painter2D painter,
+            PackageGraphPainter painter,
             PackageGraphEdgeRoute route,
             PackageGraphEdgeKind kind,
             Color color,
@@ -8692,7 +9415,7 @@ namespace Deucarian.PackageInstaller.Editor
         }
 
         private static void DrawFlowChevron(
-            Painter2D painter,
+            PackageGraphPainter painter,
             Vector2 center,
             Vector2 tangent,
             Color color,
@@ -8763,7 +9486,7 @@ namespace Deucarian.PackageInstaller.Editor
         }
 
         private static void DrawDashedPolyline(
-            Painter2D painter,
+            PackageGraphPainter painter,
             IReadOnlyList<Vector2> points,
             float dashLength,
             float gapLength,
@@ -9048,7 +9771,7 @@ namespace Deucarian.PackageInstaller.Editor
                    point.y <= Mathf.Max(segmentStart.y, segmentEnd.y) + Epsilon;
         }
 
-        private static void DrawWarningMarker(Painter2D painter, Vector2 center)
+        private static void DrawWarningMarker(PackageGraphPainter painter, Vector2 center)
         {
             painter.fillColor = new Color(0.94f, 0.64f, 0.27f, 0.90f);
             painter.strokeColor = new Color(0.16f, 0.12f, 0.06f, 0.86f);
@@ -9061,6 +9784,61 @@ namespace Deucarian.PackageInstaller.Editor
             painter.ClosePath();
             painter.Fill();
             painter.Stroke();
+        }
+    }
+
+    internal static class PackageGraphKeyboard
+    {
+        public static bool Activate(KeyDownEvent evt, VisualElement owner, Action action)
+        {
+            if (evt == null || owner == null || evt.target != owner || !IsActivationKey(evt.keyCode))
+            {
+                return false;
+            }
+
+            action?.Invoke();
+            evt.StopPropagation();
+            return true;
+        }
+
+        internal static bool IsActivationKey(KeyCode keyCode)
+        {
+            return keyCode == KeyCode.Return ||
+                   keyCode == KeyCode.KeypadEnter ||
+                   keyCode == KeyCode.Space;
+        }
+    }
+
+    internal sealed class PackageGraphOverflowSummaryElement : Label
+    {
+        private readonly string _diagnostic;
+
+        public PackageGraphOverflowSummaryElement(string text, string diagnostic)
+            : base(text)
+        {
+            _diagnostic = diagnostic ?? string.Empty;
+            focusable = true;
+            tabIndex = 0;
+            pickingMode = PickingMode.Position;
+            RegisterCallback<ClickEvent>(evt =>
+            {
+                Activate();
+                evt.StopPropagation();
+            });
+            RegisterCallback<KeyDownEvent>(evt =>
+                PackageGraphKeyboard.Activate(evt, this, Activate));
+        }
+
+        internal bool HasKeyboardActivationForTests => !string.IsNullOrEmpty(_diagnostic);
+
+        internal void ActivateForTests()
+        {
+            Activate();
+        }
+
+        private void Activate()
+        {
+            EditorGUIUtility.systemCopyBuffer = _diagnostic;
         }
     }
 
@@ -9082,7 +9860,8 @@ namespace Deucarian.PackageInstaller.Editor
             bool interactionsEnabled,
             Action<PackageGraphGroup> groupFocused,
             Action<string> previewGroup,
-            Action<string> clearPreviewGroup)
+            Action<string> clearPreviewGroup,
+            int searchMatchCount = 0)
         {
             if (groupNode == null || groupNode.Group == null)
             {
@@ -9096,8 +9875,7 @@ namespace Deucarian.PackageInstaller.Editor
             EnableInClassList("dpi-graph-group--collapsed", groupNode.Collapsed);
             EnableInClassList(
                 "dpi-graph-group--overview",
-                layoutMode == PackageGraphLayoutMode.Overview ||
-                layoutMode == PackageGraphLayoutMode.Filtered);
+                layoutMode == PackageGraphLayoutMode.Overview);
             EnableInClassList("dpi-graph-group--locked", !interactionsEnabled);
             EnableInClassList("dpi-graph-group--attention", groupNode.AttentionCount > 0);
             EnableInClassList("dpi-graph-group--empty", groupNode.PackageCount == 0);
@@ -9106,16 +9884,24 @@ namespace Deucarian.PackageInstaller.Editor
             bool hasBackAffordance = !string.IsNullOrWhiteSpace(backTooltip);
             EnableInClassList("dpi-graph-group--has-back", hasBackAffordance);
             tooltip = hasBackAffordance ? backTooltip : groupNode.Group.DisplayName;
+            focusable = interactionsEnabled;
+            tabIndex = interactionsEnabled ? 0 : -1;
 
             if (interactionsEnabled)
             {
                 RegisterCallback<MouseEnterEvent>(_ => previewGroup?.Invoke(groupNode.GroupId));
                 RegisterCallback<MouseLeaveEvent>(_ => clearPreviewGroup?.Invoke(groupNode.GroupId));
+                RegisterCallback<FocusInEvent>(_ => previewGroup?.Invoke(groupNode.GroupId));
+                RegisterCallback<FocusOutEvent>(_ => clearPreviewGroup?.Invoke(groupNode.GroupId));
                 RegisterCallback<ClickEvent>(evt =>
                 {
                     groupFocused?.Invoke(groupNode.Group);
                     evt.StopPropagation();
                 });
+                RegisterCallback<KeyDownEvent>(evt => PackageGraphKeyboard.Activate(
+                    evt,
+                    this,
+                    () => groupFocused?.Invoke(groupNode.Group)));
             }
 
             float symbolSize = Mathf.Min(groupNode.HubRect.width, groupNode.HubRect.height);
@@ -9179,9 +9965,11 @@ namespace Deucarian.PackageInstaller.Editor
             title.AddToClassList("dpi-graph-group__title");
             titleRow.Add(title);
 
-            string subtitleText = groupNode.Collapsed && !string.IsNullOrWhiteSpace(groupNode.SummaryLabel)
-                ? groupNode.SummaryLabel
-                : PackageGraphCategoryStatusVisuals.FormatTotal(groupNode.PackageCount);
+            string subtitleText = layoutMode == PackageGraphLayoutMode.Overview && searchMatchCount > 0
+                ? searchMatchCount + (searchMatchCount == 1 ? " match" : " matches")
+                : (groupNode.Collapsed && !string.IsNullOrWhiteSpace(groupNode.SummaryLabel)
+                    ? groupNode.SummaryLabel
+                    : PackageGraphCategoryStatusVisuals.FormatTotal(groupNode.PackageCount));
             Label subtitle = new Label(subtitleText);
             subtitle.AddToClassList("dpi-graph-group__subtitle");
             caption.Add(subtitle);
@@ -9190,7 +9978,10 @@ namespace Deucarian.PackageInstaller.Editor
             stats.AddToClassList("dpi-graph-group__stats");
             stats.Add(CreateStat("Installed", groupNode.InstalledCount, "installed"));
             stats.Add(CreateStat("Not installed", groupNode.NotInstalledCount, "available"));
-            stats.Add(CreateStat("Attention", groupNode.AttentionCount, "attention"));
+            if (groupNode.AttentionCount > 0)
+            {
+                stats.Add(CreateStat("Attention", groupNode.AttentionCount, "attention"));
+            }
 
             if (groupNode.UnknownCount > 0)
             {
@@ -9199,6 +9990,12 @@ namespace Deucarian.PackageInstaller.Editor
 
             caption.Add(stats);
 
+        }
+
+        public void SetHoverState(bool hoverContext, bool hoverDimmed)
+        {
+            EnableInClassList("dpi-graph-group--hover-context", hoverContext);
+            EnableInClassList("dpi-graph-group--hover-dimmed", hoverDimmed);
         }
 
         private static string GetTitle(PackageGraphGroupLayoutNode groupNode)
@@ -9247,6 +10044,7 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed class PackageGraphNodeElement : VisualElement
     {
         private readonly PackageGraphNode _node;
+        private readonly Action _activationAction;
 
         public PackageGraphNodeElement(
             PackageGraphNode node,
@@ -9264,6 +10062,7 @@ namespace Deucarian.PackageInstaller.Editor
             bool interactionsEnabled,
             string categoryPathLabel,
             string backTooltip,
+            string relationshipTooltip,
             Action<PackageDefinition> packageSelected,
             Action<PackageDefinition, PackageGraphNodeAction> packageAction,
             Action selectionCleared,
@@ -9303,7 +10102,13 @@ namespace Deucarian.PackageInstaller.Editor
             EnableInClassList("dpi-graph-node--missing", !node.IsRegistered);
             bool hasBackAffordance = selected && !string.IsNullOrWhiteSpace(backTooltip);
             EnableInClassList("dpi-graph-node--has-back", hasBackAffordance);
-            tooltip = GetCompactTooltip(node);
+            tooltip = GetCompactTooltip(node, relationshipTooltip);
+            if (!node.IsRegistered)
+            {
+                tooltip += "\nPress Enter or Space to copy this diagnostic.";
+            }
+            focusable = interactionsEnabled;
+            tabIndex = interactionsEnabled ? 0 : -1;
 
             VisualElement statusRail = new VisualElement();
             statusRail.AddToClassList("dpi-graph-node__status-rail");
@@ -9326,15 +10131,16 @@ namespace Deucarian.PackageInstaller.Editor
                     DeucarianEditorGlassSheen.Play(glassSheen);
                 });
                 RegisterCallback<MouseLeaveEvent>(_ => clearPreviewPackage?.Invoke(node.PackageId));
+                RegisterCallback<FocusInEvent>(_ => previewPackage?.Invoke(node.PackageId));
+                RegisterCallback<FocusOutEvent>(_ => clearPreviewPackage?.Invoke(node.PackageId));
             }
 
             if (node.PackageDefinition != null && packageSelected != null)
             {
-                RegisterCallback<ClickEvent>(evt =>
+                Action activate = () =>
                 {
                     if (!interactionsEnabled)
                     {
-                        evt.StopPropagation();
                         return;
                     }
 
@@ -9346,9 +10152,22 @@ namespace Deucarian.PackageInstaller.Editor
                     {
                         packageSelected(node.PackageDefinition);
                     }
-
+                };
+                _activationAction = activate;
+                RegisterCallback<ClickEvent>(evt =>
+                {
+                    activate();
                     evt.StopPropagation();
                 });
+                RegisterCallback<KeyDownEvent>(evt => PackageGraphKeyboard.Activate(evt, this, activate));
+            }
+            else if (!node.IsRegistered && interactionsEnabled)
+            {
+                Action copyDiagnostic = () =>
+                    EditorGUIUtility.systemCopyBuffer = PackageGraphView.GetMissingPackageDiagnostic(node);
+                _activationAction = copyDiagnostic;
+                RegisterCallback<KeyDownEvent>(evt =>
+                    PackageGraphKeyboard.Activate(evt, this, copyDiagnostic));
             }
 
             VisualElement header = new VisualElement();
@@ -9538,6 +10357,20 @@ namespace Deucarian.PackageInstaller.Editor
             }
         }
 
+        public void SetPreviewState(bool previewed, bool hoverContext, bool hoverDimmed)
+        {
+            EnableInClassList("dpi-graph-node--previewed", previewed);
+            EnableInClassList("dpi-graph-node--hover-context", hoverContext);
+            EnableInClassList("dpi-graph-node--hover-dimmed", hoverDimmed);
+        }
+
+        internal bool HasKeyboardActivationForTests => _activationAction != null;
+
+        internal void ActivateForTests()
+        {
+            _activationAction?.Invoke();
+        }
+
         private static string GetNodeTypeLabel(PackageGraphNodeType nodeType)
         {
             switch (nodeType)
@@ -9619,14 +10452,27 @@ namespace Deucarian.PackageInstaller.Editor
             return "dpi-graph-node__badge--" + GetStatusClass(status);
         }
 
-        private static string GetCompactTooltip(PackageGraphNode node)
+        private static string GetCompactTooltip(PackageGraphNode node, string relationshipTooltip)
         {
             string status = string.IsNullOrWhiteSpace(node.UpdateStatusLabel)
                 ? GetStatusLabel(node)
                 : node.UpdateStatusLabel;
+            StringBuilder tooltip = new StringBuilder()
+                .Append(node.DisplayName)
+                .Append("\nStatus: ")
+                .Append(status);
 
-            return node.DisplayName + "\n" +
-                   "Status: " + status;
+            if (!string.IsNullOrWhiteSpace(relationshipTooltip))
+            {
+                tooltip.Append('\n').Append(relationshipTooltip);
+            }
+
+            if (!node.IsRegistered && !string.IsNullOrWhiteSpace(node.Description))
+            {
+                tooltip.Append("\nDiagnostic: ").Append(node.Description.Trim());
+            }
+
+            return tooltip.ToString();
         }
     }
 }

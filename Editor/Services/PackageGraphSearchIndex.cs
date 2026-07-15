@@ -126,8 +126,7 @@ namespace Deucarian.PackageInstaller.Editor
     {
         public static PackageGraphSearchState Create(
             PackageGraphModel graph,
-            PackageVisibilityFilterState filterState,
-            ISet<string> statusVisiblePackageIds)
+            PackageVisibilityFilterState filterState)
         {
             string query = filterState != null ? filterState.SearchText : string.Empty;
 
@@ -136,11 +135,6 @@ namespace Deucarian.PackageInstaller.Editor
                 return PackageGraphSearchState.Empty;
             }
 
-            HashSet<string> statusVisibleIds = statusVisiblePackageIds == null
-                ? new HashSet<string>(
-                    graph.Nodes.Select(node => node.PackageId),
-                    StringComparer.OrdinalIgnoreCase)
-                : new HashSet<string>(statusVisiblePackageIds, StringComparer.OrdinalIgnoreCase);
             List<PackageGraphSearchResult> results = new List<PackageGraphSearchResult>();
             HashSet<string> directCategoryIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             HashSet<string> directPackageIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -158,17 +152,6 @@ namespace Deucarian.PackageInstaller.Editor
 
                 directCategoryIds.Add(group.Id);
                 AddAncestorGroups(graph, group.Id, contextCategoryIds);
-                AddDescendantGroups(graph, group.Id, contextCategoryIds);
-
-                foreach (PackageGraphNode descendantPackage in GetDescendantPackages(graph, group.Id))
-                {
-                    if (!statusVisibleIds.Contains(descendantPackage.PackageId))
-                    {
-                        continue;
-                    }
-
-                    contextPackageIds.Add(descendantPackage.PackageId);
-                }
 
                 results.Add(new PackageGraphSearchResult(
                     PackageGraphSearchResultType.Category,
@@ -179,11 +162,6 @@ namespace Deucarian.PackageInstaller.Editor
 
             foreach (PackageGraphNode node in graph.Nodes)
             {
-                if (!statusVisibleIds.Contains(node.PackageId))
-                {
-                    continue;
-                }
-
                 int rank = GetPackageMatchRank(node, tokens);
 
                 if (rank < 0)
@@ -194,6 +172,7 @@ namespace Deucarian.PackageInstaller.Editor
                 directPackageIds.Add(node.PackageId);
                 contextPackageIds.Add(node.PackageId);
                 AddAncestorGroups(graph, node.GroupId, contextCategoryIds);
+
                 results.Add(new PackageGraphSearchResult(
                     PackageGraphSearchResultType.Package,
                     node.PackageId,
@@ -275,8 +254,6 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             string displayName = group.DisplayName ?? string.Empty;
-            string path = GetCategoryPath(graph, group.Id);
-
             if (MatchesExact(displayName, tokens))
             {
                 return 0;
@@ -287,7 +264,7 @@ namespace Deucarian.PackageInstaller.Editor
                 return 1;
             }
 
-            if (MatchesSubstring(displayName, tokens) || MatchesSubstring(path, tokens))
+            if (MatchesSubstring(displayName, tokens))
             {
                 return 2;
             }
@@ -365,25 +342,6 @@ namespace Deucarian.PackageInstaller.Editor
             return tokens.Length > 0;
         }
 
-        private static string GetCategoryPath(PackageGraphModel graph, string groupId)
-        {
-            List<string> path = new List<string>();
-            HashSet<string> visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            string currentGroupId = groupId;
-
-            while (graph != null &&
-                   !string.IsNullOrWhiteSpace(currentGroupId) &&
-                   visited.Add(currentGroupId) &&
-                   graph.TryGetGroup(currentGroupId, out PackageGraphGroup group))
-            {
-                path.Add(group.DisplayName);
-                currentGroupId = group.ParentGroupId;
-            }
-
-            path.Reverse();
-            return string.Join(" ", path.ToArray());
-        }
-
         private static void AddAncestorGroups(
             PackageGraphModel graph,
             string groupId,
@@ -402,94 +360,5 @@ namespace Deucarian.PackageInstaller.Editor
             }
         }
 
-        private static void AddDescendantGroups(
-            PackageGraphModel graph,
-            string groupId,
-            ISet<string> groupIds)
-        {
-            if (graph == null || string.IsNullOrWhiteSpace(groupId) || !groupIds.Add(groupId))
-            {
-                return;
-            }
-
-            foreach (PackageGraphGroup childGroup in graph.GetChildGroups(groupId))
-            {
-                AddDescendantGroups(graph, childGroup.Id, groupIds);
-            }
-        }
-
-        private static IEnumerable<PackageGraphNode> GetDescendantPackages(
-            PackageGraphModel graph,
-            string groupId)
-        {
-            return graph.GetDescendantPackages(groupId);
-        }
-
-        public static PackageGraphModel CreateFilteredGraph(
-            PackageGraphModel graph,
-            PackageGraphSearchState searchState,
-            ISet<string> statusVisiblePackageIds,
-            IEnumerable<string> requiredCategoryIds = null)
-        {
-            if (graph == null || searchState == null || !searchState.HasQuery)
-            {
-                return graph ?? new PackageGraphModel(
-                    Array.Empty<PackageGraphNode>(),
-                    Array.Empty<PackageGraphEdge>(),
-                    Array.Empty<PackageGraphSuiteRegion>(),
-                    Array.Empty<PackageGraphGroup>());
-            }
-
-            HashSet<string> statusVisibleIds = statusVisiblePackageIds == null
-                ? new HashSet<string>(
-                    graph.Nodes.Select(node => node.PackageId),
-                    StringComparer.OrdinalIgnoreCase)
-                : new HashSet<string>(statusVisiblePackageIds, StringComparer.OrdinalIgnoreCase);
-            HashSet<string> visiblePackageIds = new HashSet<string>(
-                searchState.ContextPackageIds.Where(statusVisibleIds.Contains),
-                StringComparer.OrdinalIgnoreCase);
-            HashSet<string> visibleGroupIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-            foreach (PackageGraphNode node in graph.Nodes)
-            {
-                if (node != null && visiblePackageIds.Contains(node.PackageId))
-                {
-                    AddAncestorGroups(graph, node.GroupId, visibleGroupIds);
-                }
-            }
-
-            if (requiredCategoryIds != null)
-            {
-                foreach (string groupId in requiredCategoryIds)
-                {
-                    AddAncestorGroups(graph, groupId, visibleGroupIds);
-                }
-            }
-
-            PackageGraphNode[] visibleNodes = graph.Nodes
-                .Where(node => node != null && visiblePackageIds.Contains(node.PackageId))
-                .ToArray();
-            PackageGraphEdge[] visibleEdges = graph.Edges
-                .Where(edge => edge != null &&
-                               visiblePackageIds.Contains(edge.FromPackageId) &&
-                               visiblePackageIds.Contains(edge.ToPackageId))
-                .ToArray();
-            PackageGraphSuiteRegion[] visibleSuiteRegions = graph.SuiteRegions
-                .Where(region => region != null && visiblePackageIds.Contains(region.SuitePackageId))
-                .Select(region => new PackageGraphSuiteRegion(
-                    region.SuitePackageId,
-                    region.MemberPackageIds.Where(visiblePackageIds.Contains)))
-                .Where(region => region.MemberPackageIds.Count > 0)
-                .ToArray();
-            PackageGraphGroup[] visibleGroups = graph.Groups
-                .Where(group => group != null && visibleGroupIds.Contains(group.Id))
-                .ToArray();
-
-            return new PackageGraphModel(
-                visibleNodes,
-                visibleEdges,
-                visibleSuiteRegions,
-                visibleGroups);
-        }
     }
 }

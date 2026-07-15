@@ -111,7 +111,18 @@ namespace Deucarian.PackageInstaller.Editor
                         return false;
                     }
 
-                    if (!packageIds.Contains(dependencyId.Trim()))
+                    string normalizedDependencyId = dependencyId.Trim();
+
+                    if (string.Equals(
+                            package.id.Trim(),
+                            normalizedDependencyId,
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        message = "Package " + package.id + " cannot depend on itself.";
+                        return false;
+                    }
+
+                    if (!packageIds.Contains(normalizedDependencyId))
                     {
                         message = "Package " + package.id + " depends on unknown package id " + dependencyId + ".";
                         return false;
@@ -128,8 +139,106 @@ namespace Deucarian.PackageInstaller.Editor
                 }
             }
 
+            if (!ValidateDependencyGraph(registry.packages, out message))
+            {
+                return false;
+            }
+
             message = string.Empty;
             return true;
+        }
+
+        private static bool ValidateDependencyGraph(
+            IEnumerable<PackageRegistryEntry> packages,
+            out string message)
+        {
+            Dictionary<string, PackageRegistryEntry> packageById =
+                new Dictionary<string, PackageRegistryEntry>(StringComparer.OrdinalIgnoreCase);
+            Dictionary<string, int> visitState =
+                new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            List<string> path = new List<string>();
+
+            foreach (PackageRegistryEntry package in packages)
+            {
+                packageById[package.id.Trim()] = package;
+            }
+
+            foreach (PackageRegistryEntry package in packages)
+            {
+                if (!VisitPackage(package, packageById, visitState, path, out message))
+                {
+                    return false;
+                }
+            }
+
+            message = string.Empty;
+            return true;
+        }
+
+        private static bool VisitPackage(
+            PackageRegistryEntry package,
+            IReadOnlyDictionary<string, PackageRegistryEntry> packageById,
+            IDictionary<string, int> visitState,
+            IList<string> path,
+            out string message)
+        {
+            string packageId = package.id.Trim();
+
+            if (visitState.TryGetValue(packageId, out int state))
+            {
+                if (state == 2)
+                {
+                    message = string.Empty;
+                    return true;
+                }
+
+                if (state == 1)
+                {
+                    int cycleStart = IndexOfPackage(path, packageId);
+                    List<string> cycle = new List<string>();
+
+                    for (int index = Math.Max(0, cycleStart); index < path.Count; index++)
+                    {
+                        cycle.Add(path[index]);
+                    }
+
+                    cycle.Add(packageId);
+                    message = "Dependency cycle detected: " + string.Join(" -> ", cycle) + ".";
+                    return false;
+                }
+            }
+
+            visitState[packageId] = 1;
+            path.Add(packageId);
+
+            foreach (string dependencyIdValue in package.dependencies ?? Array.Empty<string>())
+            {
+                string dependencyId = dependencyIdValue.Trim();
+
+                if (packageById.TryGetValue(dependencyId, out PackageRegistryEntry dependency) &&
+                    !VisitPackage(dependency, packageById, visitState, path, out message))
+                {
+                    return false;
+                }
+            }
+
+            path.RemoveAt(path.Count - 1);
+            visitState[packageId] = 2;
+            message = string.Empty;
+            return true;
+        }
+
+        private static int IndexOfPackage(IList<string> path, string packageId)
+        {
+            for (int index = 0; index < path.Count; index++)
+            {
+                if (string.Equals(path[index], packageId, StringComparison.OrdinalIgnoreCase))
+                {
+                    return index;
+                }
+            }
+
+            return -1;
         }
 
         private static bool ValidateKnownRelationshipIds(

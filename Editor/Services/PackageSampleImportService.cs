@@ -4,6 +4,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
 using UnityEditor;
 using UnityEngine;
 using PackageManagerPackageInfo = UnityEditor.PackageManager.PackageInfo;
@@ -16,6 +18,7 @@ namespace Deucarian.PackageInstaller.Editor
         Importing,
         Imported,
         AlreadyImported,
+        Canceled,
         Failed
     }
 
@@ -32,10 +35,26 @@ namespace Deucarian.PackageInstaller.Editor
         public string Message { get; }
     }
 
-    internal sealed class PackageSampleImportService
+    internal sealed class PackageSampleImportService : IDisposable
     {
         private readonly Dictionary<string, PackageSampleImportStatus> _statuses =
             new Dictionary<string, PackageSampleImportStatus>(StringComparer.OrdinalIgnoreCase);
+        private readonly PackageSampleStagingImporter _stagingImporter;
+        private readonly Func<string, PackageManagerPackageInfo> _packageInfoResolver;
+        private CancellationTokenSource _copyCancellation;
+        private Task<PackageSampleStageResult> _copyTask;
+        private string _activeStatusKey = string.Empty;
+        private string _activeSampleDisplayName = string.Empty;
+        private PackageDefinition _lastPackageDefinition;
+        private PackageExtraDefinition _lastExtraDefinition;
+
+        public PackageSampleImportService(
+            PackageSampleStagingImporter stagingImporter = null,
+            Func<string, PackageManagerPackageInfo> packageInfoResolver = null)
+        {
+            _stagingImporter = stagingImporter ?? new PackageSampleStagingImporter();
+            _packageInfoResolver = packageInfoResolver ?? ResolveCurrentPackageInfo;
+        }
 
         public event Action StateChanged;
 
@@ -96,10 +115,13 @@ namespace Deucarian.PackageInstaller.Editor
             PackageExtraDefinition extraDefinition,
             PackageManagerPackageInfo packageInfo)
         {
-            if (packageDefinition == null || extraDefinition == null)
+            if (packageDefinition == null || extraDefinition == null || IsBusy)
             {
                 return;
             }
+
+            _lastPackageDefinition = packageDefinition;
+            _lastExtraDefinition = extraDefinition;
 
             string key = GetStatusKey(packageDefinition, extraDefinition);
             IsBusy = true;
@@ -114,42 +136,105 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 if (extraDefinition.RequiresPackageInstalled && packageInfo == null)
                 {
-                    SetStatus(key, PackageSampleImportState.Failed, "Install the package before importing this sample.");
+                    CompleteImport(
+                        key,
+                        PackageSampleImportState.Failed,
+                        "Install the package before importing this sample.");
                     return;
                 }
 
                 if (IsSampleImported(packageDefinition, extraDefinition, packageInfo))
                 {
-                    SetStatus(key, PackageSampleImportState.AlreadyImported, "Sample already imported.");
+                    CompleteImport(
+                        key,
+                        PackageSampleImportState.AlreadyImported,
+                        "Sample already imported.");
                     return;
                 }
 
                 if (TryImportWithUnitySampleApi(packageDefinition, extraDefinition, packageInfo, out string unityMessage))
                 {
-                    SetStatus(key, PackageSampleImportState.Imported, unityMessage);
+                    CompleteImport(key, PackageSampleImportState.Imported, unityMessage);
                     return;
                 }
 
-                if (TryImportByCopy(packageDefinition, extraDefinition, packageInfo, out string copyMessage))
+                if (!TryPrepareCopyImport(
+                        packageDefinition,
+                        extraDefinition,
+                        packageInfo,
+                        out string sourcePath,
+                        out string destinationPath,
+                        out string stagingRootPath,
+                        out string copyMessage))
                 {
-                    SetStatus(key, PackageSampleImportState.Imported, copyMessage);
+                    string message = string.IsNullOrWhiteSpace(unityMessage)
+                        ? copyMessage
+                        : unityMessage + " " + copyMessage;
+                    CompleteImport(
+                        key,
+                        PackageSampleImportState.Failed,
+                        string.IsNullOrWhiteSpace(message) ? "Import failed." : message.Trim());
                     return;
                 }
 
-                string message = string.IsNullOrWhiteSpace(unityMessage)
-                    ? copyMessage
-                    : unityMessage + " " + copyMessage;
-                SetStatus(key, PackageSampleImportState.Failed, string.IsNullOrWhiteSpace(message)
-                    ? "Import failed."
-                    : message.Trim());
+                _activeStatusKey = key;
+                _activeSampleDisplayName = extraDefinition.DisplayName;
+                _copyCancellation = new CancellationTokenSource();
+                CancellationToken cancellationToken = _copyCancellation.Token;
+                _copyTask = Task.Run(() => _stagingImporter.Import(
+                    sourcePath,
+                    destinationPath,
+                    stagingRootPath,
+                    cancellationToken));
+                EditorApplication.update -= UpdateCopyImport;
+                EditorApplication.update += UpdateCopyImport;
             }
-            finally
+            catch (Exception exception)
             {
-                IsBusy = false;
-                CurrentOperationName = string.Empty;
-                CurrentExtraName = string.Empty;
+                CompleteImport(
+                    key,
+                    PackageSampleImportState.Failed,
+                    "Sample import failed: " + exception.GetBaseException().Message);
+            }
+        }
+
+        public bool RetryLastImport()
+        {
+            if (IsBusy || _lastPackageDefinition == null || _lastExtraDefinition == null)
+            {
+                return false;
+            }
+
+            PackageManagerPackageInfo currentPackageInfo =
+                _packageInfoResolver(_lastPackageDefinition.PackageId);
+            ImportSample(_lastPackageDefinition, _lastExtraDefinition, currentPackageInfo);
+            return IsBusy || !string.IsNullOrWhiteSpace(LastStatusMessage);
+        }
+
+        public bool CancelCurrentImport()
+        {
+            if (!IsBusy || _copyTask == null || _copyCancellation == null)
+            {
+                return false;
+            }
+
+            if (!_copyCancellation.IsCancellationRequested)
+            {
+                _copyCancellation.Cancel();
+                LastStatusMessage = "Cancel requested. Staged files will be discarded before commit.";
                 NotifyStateChanged();
             }
+
+            return true;
+        }
+
+        public void Dispose()
+        {
+            EditorApplication.update -= UpdateCopyImport;
+            _copyCancellation?.Cancel();
+            _copyCancellation?.Dispose();
+            _copyCancellation = null;
+            _copyTask = null;
         }
 
         public string GetDestinationPath(PackageDefinition packageDefinition, PackageExtraDefinition extraDefinition)
@@ -203,30 +288,9 @@ namespace Deucarian.PackageInstaller.Editor
                     return true;
                 }
 
-                MethodInfo importMethod = sample
-                    .GetType()
-                    .GetMethods(BindingFlags.Instance | BindingFlags.Public)
-                    .FirstOrDefault(method => method.Name == "Import");
-
-                if (importMethod == null)
+                if (!TryInvokeUnitySampleImport(sample, out message))
                 {
-                    message = "Unity sample import API is unavailable for this sample.";
-                    return false;
-                }
-
-                ParameterInfo[] parameters = importMethod.GetParameters();
-
-                if (parameters.Length == 0)
-                {
-                    importMethod.Invoke(sample, null);
-                }
-                else if (parameters.Length == 1 && parameters[0].ParameterType.IsEnum)
-                {
-                    importMethod.Invoke(sample, new[] { Enum.ToObject(parameters[0].ParameterType, 0) });
-                }
-                else
-                {
-                    message = "Unity sample import API has an unsupported import signature.";
+                    PackageInstallerLog.Samples.Warning(message);
                     return false;
                 }
 
@@ -243,12 +307,69 @@ namespace Deucarian.PackageInstaller.Editor
             }
         }
 
-        private bool TryImportByCopy(
+        internal static bool TryInvokeUnitySampleImportForTests(object sample, out string message)
+        {
+            return TryInvokeUnitySampleImport(sample, out message);
+        }
+
+        private static bool TryInvokeUnitySampleImport(object sample, out string message)
+        {
+            message = string.Empty;
+            if (sample == null)
+            {
+                message = "Unity sample import API is unavailable for this sample.";
+                return false;
+            }
+
+            MethodInfo importMethod = sample
+                .GetType()
+                .GetMethods(BindingFlags.Instance | BindingFlags.Public)
+                .FirstOrDefault(method =>
+                {
+                    if (method.Name != "Import")
+                    {
+                        return false;
+                    }
+
+                    ParameterInfo[] candidateParameters = method.GetParameters();
+                    return candidateParameters.Length == 0 ||
+                           (candidateParameters.Length == 1 &&
+                            candidateParameters[0].ParameterType.IsEnum);
+                });
+            if (importMethod == null)
+            {
+                message = "Unity sample import API has no supported import signature.";
+                return false;
+            }
+
+            ParameterInfo[] parameters = importMethod.GetParameters();
+            object invocationResult = parameters.Length == 0
+                ? importMethod.Invoke(sample, null)
+                : importMethod.Invoke(
+                    sample,
+                    new[] { Enum.ToObject(parameters[0].ParameterType, 0) });
+            if (importMethod.ReturnType == typeof(bool) &&
+                (!(invocationResult is bool imported) || !imported))
+            {
+                message = "Unity sample import API returned false; trying the staged fallback import.";
+                return false;
+            }
+
+            return true;
+        }
+
+        private bool TryPrepareCopyImport(
             PackageDefinition packageDefinition,
             PackageExtraDefinition extraDefinition,
             PackageManagerPackageInfo packageInfo,
+            out string sourcePath,
+            out string destinationPath,
+            out string stagingRootPath,
             out string message)
         {
+            sourcePath = string.Empty;
+            destinationPath = string.Empty;
+            stagingRootPath = string.Empty;
             message = string.Empty;
 
             if (packageInfo == null)
@@ -257,20 +378,25 @@ namespace Deucarian.PackageInstaller.Editor
                 return false;
             }
 
-            if (!TryGetSourcePath(packageInfo, extraDefinition, out string sourcePath, out message))
+            if (!TryGetSourcePath(packageInfo, extraDefinition, out sourcePath, out message))
             {
                 return false;
             }
 
-            string destinationAssetPath = GetDestinationPath(packageDefinition, extraDefinition, packageInfo);
+            string requestedDestinationAssetPath = GetDestinationPath(
+                packageDefinition,
+                extraDefinition,
+                packageInfo);
 
-            if (!IsSafeAssetPath(destinationAssetPath))
+            if (!TryCanonicalizeDestinationAssetPath(
+                    requestedDestinationAssetPath,
+                    out string destinationAssetPath))
             {
                 message = "Sample destination must be inside the project's Assets folder.";
                 return false;
             }
 
-            string destinationPath = GetAbsoluteProjectPath(destinationAssetPath);
+            destinationPath = GetAbsoluteProjectPath(destinationAssetPath);
             string assetsRootPath = Path.Combine(GetProjectRootPath(), "Assets");
 
             if (!IsPathInsideDirectory(destinationPath, assetsRootPath))
@@ -291,21 +417,90 @@ namespace Deucarian.PackageInstaller.Editor
                 return false;
             }
 
+            stagingRootPath = Path.Combine(
+                GetProjectRootPath(),
+                "Library",
+                "Deucarian",
+                "PackageInstaller",
+                "SampleImports");
+            return true;
+        }
+
+        private void UpdateCopyImport()
+        {
+            if (_copyTask == null || !_copyTask.IsCompleted)
+            {
+                return;
+            }
+
+            EditorApplication.update -= UpdateCopyImport;
+            PackageSampleStageResult result;
+
             try
             {
-                Directory.CreateDirectory(Path.GetDirectoryName(destinationPath));
-                CopyDirectory(sourcePath, destinationPath);
-                AssetDatabase.Refresh();
-                message = "Imported sample " + extraDefinition.DisplayName + ".";
-                PackageInstallerLog.Samples.Info(message);
-                return true;
+                result = _copyTask.GetAwaiter().GetResult();
             }
             catch (Exception exception)
             {
-                message = "Sample import failed: " + exception.Message;
-                PackageInstallerLog.Samples.Warning(message);
-                return false;
+                result = new PackageSampleStageResult(
+                    PackageSampleStageResultState.Failed,
+                    "Sample import failed: " + exception.GetBaseException().Message);
             }
+
+            PackageSampleImportState state;
+            switch (result.State)
+            {
+                case PackageSampleStageResultState.Imported:
+                    state = PackageSampleImportState.Imported;
+                    AssetDatabase.Refresh();
+                    result = new PackageSampleStageResult(
+                        result.State,
+                        "Imported sample " + _activeSampleDisplayName + ".");
+                    PackageInstallerLog.Samples.Info(result.Message);
+                    break;
+                case PackageSampleStageResultState.AlreadyExists:
+                    state = PackageSampleImportState.AlreadyImported;
+                    break;
+                case PackageSampleStageResultState.Canceled:
+                    state = PackageSampleImportState.Canceled;
+                    PackageInstallerLog.Samples.Info(result.Message);
+                    break;
+                default:
+                    state = PackageSampleImportState.Failed;
+                    PackageInstallerLog.Samples.Warning(result.Message);
+                    break;
+            }
+
+            CompleteImport(_activeStatusKey, state, result.Message);
+        }
+
+        private void CompleteImport(string key, PackageSampleImportState state, string message)
+        {
+            SetStatus(key, state, message);
+            PackageInstallerActivitySeverity severity = state == PackageSampleImportState.Failed
+                ? PackageInstallerActivitySeverity.Error
+                : state == PackageSampleImportState.Canceled
+                    ? PackageInstallerActivitySeverity.Warning
+                    : PackageInstallerActivitySeverity.Success;
+            PackageInstallerActivityService.Record(
+                "Samples",
+                severity,
+                message,
+                packageId: _lastPackageDefinition != null
+                    ? _lastPackageDefinition.PackageId
+                    : string.Empty,
+                retryKind: state == PackageSampleImportState.Failed || state == PackageSampleImportState.Canceled
+                    ? PackageInstallerRetryKind.ImportSample
+                    : PackageInstallerRetryKind.None);
+            IsBusy = false;
+            CurrentOperationName = string.Empty;
+            CurrentExtraName = string.Empty;
+            _activeStatusKey = string.Empty;
+            _activeSampleDisplayName = string.Empty;
+            _copyTask = null;
+            _copyCancellation?.Dispose();
+            _copyCancellation = null;
+            NotifyStateChanged();
         }
 
         private bool TryFindUnitySample(
@@ -467,7 +662,45 @@ namespace Deucarian.PackageInstaller.Editor
                 return false;
             }
 
-            string normalizedSamplePath = NormalizeAssetPath(extraDefinition.SamplePath);
+            return TryResolveSampleSourcePath(
+                packageInfo.resolvedPath,
+                extraDefinition.SamplePath,
+                out sourcePath,
+                out message);
+        }
+
+        internal static bool TryResolveSampleSourcePathForTests(
+            string resolvedPackagePath,
+            string samplePath,
+            out string sourcePath,
+            out string message)
+        {
+            return TryResolveSampleSourcePath(
+                resolvedPackagePath,
+                samplePath,
+                out sourcePath,
+                out message);
+        }
+
+        internal static bool TryCanonicalizeDestinationAssetPathForTests(
+            string destinationAssetPath,
+            out string canonicalAssetPath)
+        {
+            return TryCanonicalizeDestinationAssetPath(
+                destinationAssetPath,
+                out canonicalAssetPath);
+        }
+
+        private static bool TryResolveSampleSourcePath(
+            string resolvedPackagePath,
+            string samplePath,
+            out string sourcePath,
+            out string message)
+        {
+            sourcePath = string.Empty;
+            message = string.Empty;
+
+            string normalizedSamplePath = NormalizeAssetPath(samplePath);
 
             if (string.IsNullOrWhiteSpace(normalizedSamplePath))
             {
@@ -481,7 +714,7 @@ namespace Deucarian.PackageInstaller.Editor
                 return false;
             }
 
-            string packagePath = GetPackageRootPath(packageInfo.resolvedPath);
+            string packagePath = GetPackageRootPath(resolvedPackagePath);
 
             if (string.IsNullOrWhiteSpace(packagePath))
             {
@@ -489,13 +722,26 @@ namespace Deucarian.PackageInstaller.Editor
                 return false;
             }
 
-            sourcePath = Path.GetFullPath(Path.Combine(
-                packagePath,
-                normalizedSamplePath.Replace('/', Path.DirectorySeparatorChar)));
-
-            if (!IsPathInsideDirectory(sourcePath, packagePath))
+            const string samplesRootName = "Samples~";
+            string relativeSamplePath = normalizedSamplePath.Length > samplesRootName.Length
+                ? normalizedSamplePath.Substring(samplesRootName.Length).TrimStart('/')
+                : string.Empty;
+            if (!TryNormalizeRelativePathWithinRoot(
+                    relativeSamplePath,
+                    out string normalizedRelativeSamplePath))
             {
-                message = "Sample path resolves outside the installed package.";
+                message = "Sample path resolves outside the installed package's Samples~ folder.";
+                return false;
+            }
+
+            string samplesRootPath = Path.GetFullPath(Path.Combine(packagePath, samplesRootName));
+            sourcePath = Path.GetFullPath(Path.Combine(
+                samplesRootPath,
+                normalizedRelativeSamplePath.Replace('/', Path.DirectorySeparatorChar)));
+
+            if (!IsPathInsideDirectory(sourcePath, samplesRootPath))
+            {
+                message = "Sample path resolves outside the installed package's Samples~ folder.";
                 sourcePath = string.Empty;
                 return false;
             }
@@ -505,14 +751,9 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static bool DestinationExists(string destinationAssetPath)
         {
-            string normalizedPath = NormalizeAssetPath(destinationAssetPath);
-
-            if (string.IsNullOrWhiteSpace(normalizedPath))
-            {
-                return false;
-            }
-
-            if (!IsSafeAssetPath(normalizedPath))
+            if (!TryCanonicalizeDestinationAssetPath(
+                    destinationAssetPath,
+                    out string normalizedPath))
             {
                 return false;
             }
@@ -533,23 +774,6 @@ namespace Deucarian.PackageInstaller.Editor
         private static string GetAbsoluteProjectPath(string assetPath)
         {
             return Path.GetFullPath(Path.Combine(GetProjectRootPath(), NormalizeAssetPath(assetPath)));
-        }
-
-        private static void CopyDirectory(string sourceDirectory, string destinationDirectory)
-        {
-            Directory.CreateDirectory(destinationDirectory);
-
-            foreach (string file in Directory.GetFiles(sourceDirectory))
-            {
-                string destinationFile = Path.Combine(destinationDirectory, Path.GetFileName(file));
-                File.Copy(file, destinationFile, false);
-            }
-
-            foreach (string directory in Directory.GetDirectories(sourceDirectory))
-            {
-                string destinationSubdirectory = Path.Combine(destinationDirectory, Path.GetFileName(directory));
-                CopyDirectory(directory, destinationSubdirectory);
-            }
         }
 
         private static string SanitizeAssetPathSegment(string segment)
@@ -598,6 +822,23 @@ namespace Deucarian.PackageInstaller.Editor
             return packageDefinition != null ? packageDefinition.DisplayVersion : string.Empty;
         }
 
+        private static PackageManagerPackageInfo ResolveCurrentPackageInfo(string packageId)
+        {
+            if (string.IsNullOrWhiteSpace(packageId))
+            {
+                return null;
+            }
+
+            return (PackageManagerPackageInfo.GetAllRegisteredPackages() ??
+                    Array.Empty<PackageManagerPackageInfo>())
+                .FirstOrDefault(packageInfo =>
+                    packageInfo != null &&
+                    string.Equals(
+                        packageInfo.name,
+                        packageId,
+                        StringComparison.OrdinalIgnoreCase));
+        }
+
         private static string GetPackageRootPath(string resolvedPath)
         {
             string packagePath = resolvedPath ?? string.Empty;
@@ -621,8 +862,11 @@ namespace Deucarian.PackageInstaller.Editor
             return projectRoot != null ? projectRoot.FullName : Application.dataPath;
         }
 
-        private static bool IsSafeAssetPath(string assetPath)
+        private static bool TryCanonicalizeDestinationAssetPath(
+            string assetPath,
+            out string canonicalAssetPath)
         {
+            canonicalAssetPath = string.Empty;
             string normalizedPath = NormalizeAssetPath(assetPath);
 
             if (string.IsNullOrWhiteSpace(normalizedPath))
@@ -630,8 +874,27 @@ namespace Deucarian.PackageInstaller.Editor
                 return false;
             }
 
-            return string.Equals(normalizedPath, "Assets", StringComparison.OrdinalIgnoreCase) ||
-                   normalizedPath.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase);
+            const string assetsRootName = "Assets";
+            if (!string.Equals(normalizedPath, assetsRootName, StringComparison.OrdinalIgnoreCase) &&
+                !normalizedPath.StartsWith(assetsRootName + "/", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            string relativeAssetPath = normalizedPath.Length > assetsRootName.Length
+                ? normalizedPath.Substring(assetsRootName.Length).TrimStart('/')
+                : string.Empty;
+            if (!TryNormalizeRelativePathWithinRoot(
+                    relativeAssetPath,
+                    out string normalizedRelativeAssetPath))
+            {
+                return false;
+            }
+
+            canonicalAssetPath = string.IsNullOrEmpty(normalizedRelativeAssetPath)
+                ? assetsRootName
+                : assetsRootName + "/" + normalizedRelativeAssetPath;
+            return true;
         }
 
         private static bool IsSamplesFolderPath(string samplePath)
@@ -640,6 +903,37 @@ namespace Deucarian.PackageInstaller.Editor
 
             return string.Equals(normalizedPath, "Samples~", StringComparison.OrdinalIgnoreCase) ||
                    normalizedPath.StartsWith("Samples~/", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool TryNormalizeRelativePathWithinRoot(
+            string relativePath,
+            out string normalizedRelativePath)
+        {
+            normalizedRelativePath = string.Empty;
+            List<string> segments = new List<string>();
+            foreach (string segment in NormalizeAssetPath(relativePath).Split('/'))
+            {
+                if (string.IsNullOrEmpty(segment) || string.Equals(segment, ".", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                if (string.Equals(segment, "..", StringComparison.Ordinal))
+                {
+                    if (segments.Count == 0)
+                    {
+                        return false;
+                    }
+
+                    segments.RemoveAt(segments.Count - 1);
+                    continue;
+                }
+
+                segments.Add(segment);
+            }
+
+            normalizedRelativePath = string.Join("/", segments.ToArray());
+            return true;
         }
 
         private static bool IsPathInsideDirectory(string path, string directory)

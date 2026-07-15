@@ -1,6 +1,6 @@
 using System;
 using System.IO;
-using System.Net;
+using System.Threading;
 using System.Threading.Tasks;
 using UnityEditor.PackageManager;
 using UnityEngine;
@@ -13,20 +13,41 @@ namespace Deucarian.PackageInstaller.Editor
             "https://raw.githubusercontent.com/Deucarian/Package-Registry/main/packages.json";
         public const string BundledRegistryFileName = "PackageRegistry.json";
 
-        private readonly Func<string, Task<string>> _remoteFetcher;
-        private readonly Func<string, Task<string>> _packageManifestFetcher;
+        private readonly PackageRegistryRemoteFetchDelegate _remoteFetcher;
+        private readonly PackageRegistryRemoteFetchDelegate _packageManifestFetcher;
         private readonly string _remoteRegistryUrl;
+        private readonly PackageRegistryCache _cache;
+        private readonly TimeSpan _requestTimeout;
 
         public PackageRegistryLoader(
             Func<string, Task<string>> remoteFetcher = null,
             string remoteRegistryUrl = RemoteRegistryUrl,
             Func<string, Task<string>> packageManifestFetcher = null)
+            : this(
+                PackageRegistryRemoteFetch.WrapLegacy(remoteFetcher),
+                remoteRegistryUrl,
+                PackageRegistryRemoteFetch.WrapLegacy(packageManifestFetcher),
+                PackageRegistryCache.GetDefaultCachePath(),
+                PackageRegistryRemoteFetch.DefaultTimeout)
         {
-            _remoteFetcher = remoteFetcher ?? FetchRemoteJsonAsync;
-            _packageManifestFetcher = packageManifestFetcher ?? FetchRemoteJsonAsync;
+        }
+
+        internal PackageRegistryLoader(
+            PackageRegistryRemoteFetchDelegate remoteFetcher,
+            string remoteRegistryUrl,
+            PackageRegistryRemoteFetchDelegate packageManifestFetcher,
+            string cachePath,
+            TimeSpan requestTimeout)
+        {
+            _remoteFetcher = remoteFetcher ?? PackageRegistryRemoteFetch.FetchAsync;
+            _packageManifestFetcher = packageManifestFetcher ?? PackageRegistryRemoteFetch.FetchAsync;
             _remoteRegistryUrl = string.IsNullOrWhiteSpace(remoteRegistryUrl)
                 ? RemoteRegistryUrl
                 : remoteRegistryUrl;
+            _cache = new PackageRegistryCache(cachePath);
+            _requestTimeout = requestTimeout > TimeSpan.Zero
+                ? requestTimeout
+                : PackageRegistryRemoteFetch.DefaultTimeout;
         }
 
         public PackageRegistryLoadResult LoadBundled()
@@ -41,38 +62,130 @@ namespace Deucarian.PackageInstaller.Editor
 
         public async Task<PackageRegistryLoadResult> LoadRemoteAsync(PackageRegistry bundledRegistry)
         {
+            PackageRegistryLoadResult fallback = bundledRegistry != null
+                ? PackageRegistryLoadResult.Success(bundledRegistry, PackageRegistrySource.Bundled)
+                : PackageRegistryLoadResult.Failure(
+                    PackageRegistrySource.Bundled,
+                    "Bundled registry is unavailable.");
+            return await LoadRemoteAsync(fallback, CancellationToken.None).ConfigureAwait(false);
+        }
+
+        internal async Task<PackageRegistryLoadResult> LoadRemoteAsync(
+            PackageRegistryLoadResult fallback,
+            CancellationToken cancellationToken,
+            PackageRegistryCacheCommitGuard cacheCommitGuard = null)
+        {
             try
             {
-                string json = await _remoteFetcher(_remoteRegistryUrl);
-                PackageRegistryLoadResult result = LoadFromJson(json, PackageRegistrySource.Remote);
+                PackageRegistryRemoteFetchResponse response =
+                    await PackageRegistryRemoteFetch.ExecuteAsync(
+                        _remoteFetcher,
+                        _remoteRegistryUrl,
+                        cancellationToken,
+                        _requestTimeout).ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
+                PackageRegistryLoadResult result = LoadFromJson(
+                    response.Content,
+                    PackageRegistrySource.Remote);
 
                 if (!result.IsValid)
                 {
-                    return PackageRegistryLoadResult.RemoteFailureUsingBundled(
-                        bundledRegistry,
+                    return PackageRegistryLoadResult.RemoteFailureUsingFallback(
+                        fallback,
                         result.ErrorMessage);
                 }
 
                 string packageNameValidationMessage =
                     await PackageRegistryPackageNameValidator.ValidateRemotePackageNamesAsync(
                         result.Registry,
-                        _packageManifestFetcher);
+                        _packageManifestFetcher,
+                        cancellationToken,
+                        _requestTimeout,
+                        4).ConfigureAwait(false);
 
                 if (!string.IsNullOrWhiteSpace(packageNameValidationMessage))
                 {
-                    return PackageRegistryLoadResult.RemoteFailureUsingBundled(
-                        bundledRegistry,
+                    return PackageRegistryLoadResult.RemoteFailureUsingFallback(
+                        fallback,
                         packageNameValidationMessage);
                 }
 
-                return result;
+                cancellationToken.ThrowIfCancellationRequested();
+                DateTimeOffset fetchedAtUtc = DateTimeOffset.UtcNow;
+                string contentHash = PackageRegistryCache.ComputeContentHash(response.Content);
+
+                if (!_cache.TryWrite(
+                        response.Content,
+                        _remoteRegistryUrl,
+                        response.EntityTag,
+                        fetchedAtUtc,
+                        result.Registry.updatedAt,
+                        out string cacheErrorMessage,
+                        cancellationToken,
+                        cacheCommitGuard))
+                {
+                    PackageInstallerLog.Registry.Warning(cacheErrorMessage);
+                }
+
+                return PackageRegistryLoadResult.Success(
+                    result.Registry,
+                    PackageRegistrySource.Remote,
+                    _remoteRegistryUrl,
+                    response.EntityTag,
+                    contentHash,
+                    fetchedAtUtc);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
             }
             catch (Exception exception)
             {
-                return PackageRegistryLoadResult.RemoteFailureUsingBundled(
-                    bundledRegistry,
+                return PackageRegistryLoadResult.RemoteFailureUsingFallback(
+                    fallback,
                     exception.GetBaseException().Message);
             }
+        }
+
+        internal bool TryLoadCached(
+            out PackageRegistryLoadResult result,
+            out string errorMessage)
+        {
+            result = null;
+
+            if (!_cache.TryRead(_remoteRegistryUrl, out PackageRegistryCacheEntry entry, out errorMessage))
+            {
+                return false;
+            }
+
+            PackageRegistryLoadResult parsed = LoadFromJson(
+                entry.RegistryJson,
+                PackageRegistrySource.Cached);
+
+            if (!parsed.IsValid)
+            {
+                errorMessage = "Cached registry failed validation: " + parsed.ErrorMessage;
+                return false;
+            }
+
+            if (!string.Equals(
+                    parsed.Registry.updatedAt ?? string.Empty,
+                    entry.RegistryUpdatedAt ?? string.Empty,
+                    StringComparison.Ordinal))
+            {
+                errorMessage = "Cached registry updatedAt does not match its metadata.";
+                return false;
+            }
+
+            result = PackageRegistryLoadResult.Success(
+                parsed.Registry,
+                PackageRegistrySource.Cached,
+                entry.SourceUrl,
+                entry.EntityTag,
+                entry.ContentHash,
+                entry.FetchedAtUtc);
+            errorMessage = string.Empty;
+            return true;
         }
 
         internal PackageRegistryLoadResult LoadFromJson(string json, PackageRegistrySource source)
@@ -99,18 +212,6 @@ namespace Deucarian.PackageInstaller.Editor
                     source,
                     "Registry JSON could not be parsed: " + exception.Message);
             }
-        }
-
-        private static Task<string> FetchRemoteJsonAsync(string url)
-        {
-            return Task.Run(() =>
-            {
-                using (WebClient webClient = new WebClient())
-                {
-                    webClient.Headers[HttpRequestHeader.UserAgent] = "Deucarian-Package-Installer";
-                    return webClient.DownloadString(url);
-                }
-            });
         }
 
         private static bool TryReadBundledRegistryJson(out string json, out string errorMessage)
