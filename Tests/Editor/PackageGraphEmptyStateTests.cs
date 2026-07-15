@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using NUnit.Framework;
-using UnityEditor;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -10,26 +10,6 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 {
     internal sealed class PackageGraphEmptyStateTests
     {
-        private PackageGraphInteractionTestWindow _hostWindow;
-
-        [SetUp]
-        public void SetUp()
-        {
-            _hostWindow = ScriptableObject.CreateInstance<PackageGraphInteractionTestWindow>();
-            _hostWindow.position = new Rect(40f, 40f, 800f, 600f);
-            _hostWindow.Show();
-        }
-
-        [TearDown]
-        public void TearDown()
-        {
-            if (_hostWindow != null)
-            {
-                _hostWindow.Close();
-                _hostWindow = null;
-            }
-        }
-
         [Test]
         public void EmptyState_SubtreeIsExcludedFromViewportLeftPanCapture()
         {
@@ -305,11 +285,12 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 showInstalled: false,
                 showNotInstalled: false);
             int showAllChanged = 0;
-            Button showAll = FindEmptyStateAction(CreateView(
+            PackageGraphView showAllView = CreateView(
                 graph,
                 showAllState,
-                () => showAllChanged++));
-            InvokeKeyboard(showAll, keyCode);
+                () => showAllChanged++);
+            Button showAll = FindEmptyStateAction(showAllView);
+            InvokeKeyboard(showAllView, showAll, keyCode);
             Assert.IsTrue(showAllState.ShowInstalled);
             Assert.IsTrue(showAllState.ShowNotInstalled);
             Assert.AreEqual(1, showAllChanged);
@@ -319,11 +300,12 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 showInstalled: true,
                 showNotInstalled: false);
             int clearSearchChanged = 0;
-            Button clearSearch = FindEmptyStateAction(CreateView(
+            PackageGraphView clearSearchView = CreateView(
                 graph,
                 clearSearchState,
-                () => clearSearchChanged++));
-            InvokeKeyboard(clearSearch, keyCode);
+                () => clearSearchChanged++);
+            Button clearSearch = FindEmptyStateAction(clearSearchView);
+            InvokeKeyboard(clearSearchView, clearSearch, keyCode);
             Assert.AreEqual(string.Empty, clearSearchState.SearchText);
             Assert.AreEqual(1, clearSearchChanged);
 
@@ -332,11 +314,12 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 showInstalled: true,
                 showNotInstalled: false);
             int showMatchingChanged = 0;
-            Button showMatching = FindEmptyStateAction(CreateView(
+            PackageGraphView showMatchingView = CreateView(
                 graph,
                 showMatchingState,
-                () => showMatchingChanged++));
-            InvokeKeyboard(showMatching, keyCode);
+                () => showMatchingChanged++);
+            Button showMatching = FindEmptyStateAction(showMatchingView);
+            InvokeKeyboard(showMatchingView, showMatching, keyCode);
             Assert.IsTrue(showMatchingState.ShowNotInstalled);
             Assert.AreEqual(1, showMatchingChanged);
 
@@ -345,18 +328,19 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 showInstalled: true,
                 showNotInstalled: true);
             int rootFocusedCount = 0;
-            Button searchAll = FindEmptyStateAction(CreateView(
+            PackageGraphView searchAllView = CreateView(
                 graph,
                 searchAllState,
                 null,
                 () => rootFocusedCount++,
-                "infrastructure"));
-            InvokeKeyboard(searchAll, keyCode);
+                "infrastructure");
+            Button searchAll = FindEmptyStateAction(searchAllView);
+            InvokeKeyboard(searchAllView, searchAll, keyCode);
             Assert.AreEqual("theming", searchAllState.SearchText);
             Assert.AreEqual(1, rootFocusedCount);
         }
 
-        private PackageGraphView CreateView(
+        private static PackageGraphView CreateView(
             PackageGraphModel graph,
             PackageVisibilityFilterState filterState,
             Action filterChanged,
@@ -371,8 +355,6 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 groupFocused: null,
                 filterState: filterState,
                 filterChanged: filterChanged);
-            view.style.flexGrow = 1f;
-            _hostWindow.rootVisualElement.Add(view);
             HashSet<string> visiblePackageIds =
                 PackageVisibilityFilter.CreateStatusVisiblePackageIdSet(graph, filterState);
             PackageGraphSearchState searchState =
@@ -388,8 +370,6 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 searchState,
                 PackageVisibilityFilter.CalculateCounts(graph, filterState),
                 hiddenRelatedCount: 0);
-            _hostWindow.Repaint();
-            Assert.IsNotNull(view.panel, "The interaction test view must be attached to an Editor panel.");
             return view;
         }
 
@@ -444,8 +424,6 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
         private static void InvokePointerClick(Button action)
         {
-            action.style.width = 180f;
-            action.style.height = 30f;
             Event mouseDown = new Event
             {
                 type = EventType.MouseDown,
@@ -455,34 +433,18 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
             using (MouseDownEvent downEvent = MouseDownEvent.GetPooled(mouseDown))
             {
-                action.SendEvent(downEvent);
-            }
-
-            Event mouseUp = new Event
-            {
-                type = EventType.MouseUp,
-                button = 0,
-                mousePosition = Vector2.one
-            };
-
-            using (MouseUpEvent upEvent = MouseUpEvent.GetPooled(mouseUp))
-            {
-                action.SendEvent(upEvent);
+                MethodInfo invoke = typeof(Clickable).GetMethod(
+                    "Invoke",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.IsNotNull(invoke, "UI Toolkit Clickable must expose its protected pointer invocation path.");
+                invoke.Invoke(action.clickable, new object[] { downEvent });
             }
         }
 
-        private sealed class PackageGraphInteractionTestWindow : EditorWindow
-        {
-        }
-
-        private static void InvokeKeyboard(Button action, KeyCode keyCode)
+        private static void InvokeKeyboard(PackageGraphView view, Button action, KeyCode keyCode)
         {
             Assert.IsTrue(action.focusable);
-
-            using (KeyDownEvent evt = KeyDownEvent.GetPooled('\0', keyCode, EventModifiers.None))
-            {
-                action.SendEvent(evt);
-            }
+            Assert.IsTrue(view.ActivateEmptyStateActionFromKeyboardForTests(keyCode));
         }
 
         private static Button FindEmptyStateAction(VisualElement root)

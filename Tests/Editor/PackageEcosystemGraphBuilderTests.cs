@@ -13,18 +13,6 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 {
     internal sealed class PackageGraphBuilderTests
     {
-        private PackageGraphInteractionTestWindow _interactionWindow;
-
-        [TearDown]
-        public void CloseInteractionWindow()
-        {
-            if (_interactionWindow != null)
-            {
-                _interactionWindow.Close();
-                _interactionWindow = null;
-            }
-        }
-
         [Test]
         public void Window_ExposesOnlyEcosystemGraphAndCoercesListRequests()
         {
@@ -1289,6 +1277,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 PackageGraphSearchState.Empty,
                 PackageVisibilityFilter.CalculateCounts(graph, filterState),
                 hiddenRelatedCount: 0);
+            GetCanvas(view).SetViewportZoom(0.5f);
 
             PackageGraphView missingView = new PackageGraphView(_ => { }, (_, __) => { });
             missingView.SetGraph(
@@ -2004,12 +1993,6 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 groupFocused: group => focusedGroup = group,
                 filterState: filterState,
                 filterChanged: () => filterChangedCount++);
-            _interactionWindow = ScriptableObject.CreateInstance<PackageGraphInteractionTestWindow>();
-            _interactionWindow.position = new Rect(40f, 40f, 800f, 600f);
-            _interactionWindow.Show();
-            view.style.flexGrow = 1f;
-            _interactionWindow.rootVisualElement.Add(view);
-            Assert.IsNotNull(view.panel, "The search interaction test must use an attached Editor panel.");
             HashSet<string> visiblePackageIds = PackageVisibilityFilter.CreateStatusVisiblePackageIdSet(graph, filterState);
 
             view.SetGraph(
@@ -2026,9 +2009,10 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 .OfType<TextField>()
                 .Single();
 
-            searchField.value = query;
+            view.ApplySearchTextForTests(query);
 
             Assert.AreEqual(query, filterState.SearchText);
+            Assert.AreEqual(query, searchField.value);
             Assert.AreEqual(1, filterChangedCount);
             Assert.IsNull(selectedPackage, "Typing must not select a package.");
             Assert.IsNull(focusedGroup, "Typing must not focus a category.");
@@ -2056,10 +2040,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 string.IsNullOrWhiteSpace(expectedGroupId) ? expectedPackageId : expectedGroupId,
                 searchState.BestResult.Id);
 
-            using (KeyDownEvent evt = KeyDownEvent.GetPooled('\0', keyCode, EventModifiers.None))
-            {
-                searchField.SendEvent(evt);
-            }
+            Assert.IsTrue(view.ActivateBestSearchResultForTests(keyCode));
 
             Assert.AreEqual(
                 expectedPackageId,
@@ -5628,10 +5609,6 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         private static string CreateRouteId(PackageGraphEdgeRoute route)
         {
             return route.Bundle.Key + ":" + route.RouteKind;
-        }
-
-        private sealed class PackageGraphInteractionTestWindow : EditorWindow
-        {
         }
 
         private static void AssertFooterElementVisible(VisualElement element)

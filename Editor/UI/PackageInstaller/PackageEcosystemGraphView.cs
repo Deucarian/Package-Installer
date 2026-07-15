@@ -147,14 +147,7 @@ namespace Deucarian.PackageInstaller.Editor
             _searchField.AddToClassList("dpi-ecosystem-graph__search");
             _searchField.tooltip = "Find category or package by name or package ID.";
             _searchField.SetValueWithoutNotify(_filterState.SearchText);
-            _searchField.RegisterValueChangedCallback(evt =>
-            {
-                if (_filterState.SetSearchText(evt.newValue))
-                {
-                    _filterChanged?.Invoke();
-                    UpdateFilterControls();
-                }
-            });
+            _searchField.RegisterValueChangedCallback(evt => ApplySearchText(evt.newValue));
             _searchField.RegisterCallback<KeyDownEvent>(HandleSearchKeyDown);
             filterRow.Add(_searchField);
 
@@ -785,6 +778,27 @@ namespace Deucarian.PackageInstaller.Editor
             evt.StopPropagation();
         }
 
+        private void ApplySearchText(string searchText)
+        {
+            if (_filterState.SetSearchText(searchText))
+            {
+                _filterChanged?.Invoke();
+                UpdateFilterControls();
+            }
+        }
+
+        internal void ApplySearchTextForTests(string searchText)
+        {
+            _searchField.SetValueWithoutNotify(searchText ?? string.Empty);
+            ApplySearchText(searchText);
+        }
+
+        internal bool ActivateBestSearchResultForTests(KeyCode keyCode)
+        {
+            return (keyCode == KeyCode.Return || keyCode == KeyCode.KeypadEnter) &&
+                   CommitBestSearchResult();
+        }
+
         private void HandleGraphKeyDown(KeyDownEvent evt)
         {
             if (evt.keyCode != KeyCode.Escape)
@@ -1275,6 +1289,17 @@ namespace Deucarian.PackageInstaller.Editor
             HandleEmptyStateAction();
             evt.PreventDefault();
             evt.StopPropagation();
+        }
+
+        internal bool ActivateEmptyStateActionFromKeyboardForTests(KeyCode keyCode)
+        {
+            if (!PackageGraphKeyboard.IsActivationKey(keyCode))
+            {
+                return false;
+            }
+
+            HandleEmptyStateAction();
+            return true;
         }
 
         private void ShowEmptyState(
