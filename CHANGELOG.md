@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.66 - 2026-07-16
+
+- Added Deucarian Build Pipeline to the bundled Package Registry fallback catalog.
+
 ## 1.1.65 - 2026-07-15
 
 - Moved Package Installer toolbar, responsive, drawer, footer, and IMGUI workbench presentation onto the shared `com.deucarian.editor` 1.0.2 contract.
