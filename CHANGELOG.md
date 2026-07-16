@@ -1,6 +1,35 @@
 # Changelog
 
-## Unreleased
+## 1.1.65 - 2026-07-15
+
+- Moved Package Installer toolbar, responsive, drawer, footer, and IMGUI workbench presentation onto the shared `com.deucarian.editor` 1.0.2 contract.
+- Preserved the released Package Installer hierarchy, geometry, interaction states, breakpoints, and graph-specific behavior through visual-equivalence contracts.
+
+## 1.1.64 - 2026-07-15
+
+- Fixed graph empty-state recovery actions so their pointer and keyboard activation is not intercepted by viewport panning.
+- Kept root and category geometry stable while search emphasizes matches and status filters hide packages without reflowing their remaining siblings.
+- Added truthful recovery actions for lexical misses, status-hidden matches, disabled visibility filters, and group-scoped misses.
+
+## 1.1.63 - 2026-07-15
+
+- Restored a contextual ecosystem-wide `Update all (N)` action in the root overview whenever update results are available.
+- Temporarily disabled List View and route all view requests to Ecosystem Graph while keeping the list implementation available for later refinement.
+- Required Git-backed Unity review and validation hosts so branch testing cannot silently use stale local package worktrees.
+
+## 1.1.62 - 2026-07-13
+
+- Added immutable, dependency-aware operation plans with contextual preflight for bulk, multi-step, migration, downgrade, fallback, conflict, and destructive operations while keeping ordinary one-step installs immediate.
+- Added failure propagation, independent-root continuation, request-boundary cancellation, exact-target recovery records, and explicit Resume, Restart, and Discard handling after assembly reloads.
+- Retried transient atomic file-replacement collisions for recovery and registry-cache state without deleting a valid destination.
+- Hardened registry and update networking with validated last-known-good caching, bounded concurrency, request timeouts, cancellation, deduplication, and stale-generation suppression.
+- Cancel installer-owned remote registry refreshes when the Unity editor quits so network continuations cannot outlive Mono shutdown.
+- Tightened installed-source channel detection to match the normalized Git remote, package path, and ref together, and added registry self-dependency and cycle rejection.
+- Staged fallback sample imports beneath `Library`, fully validated them before an atomic move into `Assets`, and guaranteed cleanup without overwriting existing imports.
+- Improved package-specific graph behavior for responsive widths, keyboard navigation, focus/search restoration, route isolation, transient Checking state, missing relationships, and dense-relation overflow.
+- Kept graph rendering compatible with Unity 2021.3 through a package-specific mesh fallback while preserving native Painter2D rendering on newer editors.
+- Added actual installed/package-lock reverse-dependency removal warnings, a chronological activity/result surface with copyable details, and contextual recovery actions.
+- Added normal push and pull-request Unity EditMode CI using the minimum Unity 2021.3 fixture and exact Editor/Logging package revisions.
 
 ## 1.1.64 - 2026-07-15
 
