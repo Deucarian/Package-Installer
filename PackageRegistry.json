@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-07-01",
+  "updatedAt": "2026-07-16",
   "groups": [
     {
       "id": "infrastructure",
@@ -181,12 +181,12 @@
       "category": "Core",
       "type": "Core",
       "ecosystemGroup": "Infrastructure",
-      "groupId": "infrastructure",
       "overviewOrder": 5,
       "description": "Tiny dependency-free runtime primitives shared across Deucarian packages.",
       "stableUrl": "https://github.com/Deucarian/Common.git#main",
       "developmentUrl": "https://github.com/Deucarian/Common.git#develop",
-      "dependencies": []
+      "dependencies": [],
+      "groupId": "infrastructure"
     },
     {
       "id": "com.deucarian.editor",
@@ -194,12 +194,12 @@
       "category": "Editor",
       "type": "Core",
       "ecosystemGroup": "Infrastructure",
-      "groupId": "infrastructure",
       "overviewOrder": 10,
       "description": "Shared editor tooling and branded editor UI helpers for Deucarian Unity packages.",
       "stableUrl": "https://github.com/Deucarian/Editor.git#main",
       "developmentUrl": "https://github.com/Deucarian/Editor.git#develop",
-      "dependencies": []
+      "dependencies": [],
+      "groupId": "infrastructure"
     },
     {
       "id": "com.deucarian.game-content-authoring",
@@ -207,7 +207,6 @@
       "category": "Editor",
       "type": "Tool",
       "ecosystemGroup": "Tools & Quality",
-      "groupId": "tools-quality",
       "overviewOrder": 30,
       "description": "Shared Deucarian editor shell and provider API for game content authoring packages.",
       "stableUrl": "https://github.com/Deucarian/Game-Content-Authoring.git#main",
@@ -216,7 +215,8 @@
         "com.deucarian.common",
         "com.deucarian.editor",
         "com.deucarian.gameplay-foundation"
-      ]
+      ],
+      "groupId": "tools-quality"
     },
     {
       "id": "com.deucarian.core-state",
@@ -224,7 +224,6 @@
       "category": "Core",
       "type": "Core",
       "ecosystemGroup": "State & Data",
-      "groupId": "state-data",
       "overviewOrder": 10,
       "description": "Generic repository and selection state services for Unity.",
       "stableUrl": "https://github.com/Deucarian/Core-State.git#main",
@@ -236,7 +235,8 @@
       ],
       "recommendedWith": [
         "com.deucarian.selection-suite"
-      ]
+      ],
+      "groupId": "state-data"
     },
     {
       "id": "com.deucarian.api",
@@ -244,7 +244,6 @@
       "category": "Core",
       "type": "Core",
       "ecosystemGroup": "Runtime Services",
-      "groupId": "runtime-services",
       "overviewOrder": 10,
       "description": "Reusable API client for Unity.",
       "stableUrl": "https://github.com/Deucarian/API.git#main",
@@ -255,7 +254,8 @@
       "optionalIntegrations": [
         "com.deucarian.session.api-integration",
         "com.deucarian.object-loading.api-integration"
-      ]
+      ],
+      "groupId": "runtime-services"
     },
     {
       "id": "com.deucarian.logging",
@@ -263,14 +263,14 @@
       "category": "Core",
       "type": "Core",
       "ecosystemGroup": "Infrastructure",
-      "groupId": "infrastructure",
       "overviewOrder": 20,
       "description": "Small dependency-light logging wrapper for Deucarian Unity packages.",
       "stableUrl": "https://github.com/Deucarian/Logging.git#main",
       "developmentUrl": "https://github.com/Deucarian/Logging.git#develop",
       "dependencies": [
         "com.deucarian.editor"
-      ]
+      ],
+      "groupId": "infrastructure"
     },
     {
       "id": "com.deucarian.object-loading",
@@ -278,7 +278,6 @@
       "category": "Core",
       "type": "Core",
       "ecosystemGroup": "Runtime Services",
-      "groupId": "runtime-services",
       "overviewOrder": 30,
       "description": "Reusable runtime loading pipeline for resolved object and scene content sources.",
       "stableUrl": "https://github.com/Deucarian/Object-Loading.git#main",
@@ -293,7 +292,8 @@
       ],
       "optionalIntegrations": [
         "com.deucarian.object-loading.api-integration"
-      ]
+      ],
+      "groupId": "runtime-services"
     },
     {
       "id": "com.deucarian.session",
@@ -301,7 +301,6 @@
       "category": "Core",
       "type": "Core",
       "ecosystemGroup": "Runtime Services",
-      "groupId": "runtime-services",
       "overviewOrder": 20,
       "description": "Reusable session management for Unity.",
       "stableUrl": "https://github.com/Deucarian/Session.git#main",
@@ -311,7 +310,8 @@
       ],
       "optionalIntegrations": [
         "com.deucarian.session.api-integration"
-      ]
+      ],
+      "groupId": "runtime-services"
     },
     {
       "id": "com.deucarian.monetization",
@@ -319,12 +319,12 @@
       "category": "Core",
       "type": "Core",
       "ecosystemGroup": "Runtime Services",
-      "groupId": "runtime-services",
       "overviewOrder": 25,
       "description": "SDK-free monetization placement abstractions, mock/no-op ad providers, pacing policies, entitlements, consent, and rewarded claim identity for Deucarian games.",
       "stableUrl": "https://github.com/Deucarian/Monetization.git#main",
       "developmentUrl": "https://github.com/Deucarian/Monetization.git#develop",
-      "dependencies": []
+      "dependencies": [],
+      "groupId": "runtime-services"
     },
     {
       "id": "com.deucarian.ui-binding",
@@ -332,7 +332,6 @@
       "category": "UI",
       "type": "OptionalIntegration",
       "ecosystemGroup": "Experience & Interaction",
-      "groupId": "ui-presentation",
       "overviewOrder": 10,
       "description": "Data-driven UI Binding containers for Unity.",
       "stableUrl": "https://github.com/Deucarian/UI-Binding.git#main",
@@ -345,7 +344,8 @@
       ],
       "recommendedWith": [
         "com.deucarian.selection-suite"
-      ]
+      ],
+      "groupId": "ui-presentation"
     },
     {
       "id": "com.deucarian.ui",
@@ -353,7 +353,6 @@
       "category": "UI",
       "type": "Core",
       "ecosystemGroup": "Experience & Interaction",
-      "groupId": "ui-presentation",
       "overviewOrder": 12,
       "description": "Reusable Deucarian UI motion, glass, icon, control island, and UI Toolkit/uGUI presentation primitives.",
       "stableUrl": "https://github.com/Deucarian/UI.git#main",
@@ -361,7 +360,8 @@
       "dependencies": [
         "com.deucarian.common",
         "com.deucarian.theming"
-      ]
+      ],
+      "groupId": "ui-presentation"
     },
     {
       "id": "com.deucarian.ui-flow",
@@ -369,7 +369,6 @@
       "category": "UI",
       "type": "OptionalIntegration",
       "ecosystemGroup": "Experience & Interaction",
-      "groupId": "ui-presentation",
       "overviewOrder": 15,
       "description": "Deterministic asynchronous UI navigation with route assets, channels, guards, transitions, Back handling, action assets, and typed modal presentations.",
       "stableUrl": "https://github.com/Deucarian/UI-FLow.git#main",
@@ -377,7 +376,8 @@
       "dependencies": [
         "com.deucarian.common",
         "com.deucarian.logging"
-      ]
+      ],
+      "groupId": "ui-presentation"
     },
     {
       "id": "com.deucarian.theming",
@@ -385,7 +385,6 @@
       "category": "UI",
       "type": "OptionalIntegration",
       "ecosystemGroup": "Experience & Interaction",
-      "groupId": "ui-presentation",
       "overviewOrder": 30,
       "description": "Designer-friendly ScriptableObject theming with color role assets, palettes, themes, and Unity component adapters.",
       "stableUrl": "https://github.com/Deucarian/Theming.git#main",
@@ -396,7 +395,8 @@
       ],
       "optionalIntegrations": [
         "com.deucarian.xr-ui.theming-integration"
-      ]
+      ],
+      "groupId": "ui-presentation"
     },
     {
       "id": "com.deucarian.xr-ui",
@@ -404,7 +404,6 @@
       "category": "World",
       "type": "Core",
       "ecosystemGroup": "Experience & Interaction",
-      "groupId": "world-interaction",
       "overviewOrder": 28,
       "description": "Standalone XR-ready uGUI pressable controls, world canvas helpers, poke affordances, and neutral visual settings.",
       "stableUrl": "https://github.com/Deucarian/XR-UI.git#main",
@@ -414,7 +413,8 @@
       ],
       "optionalIntegrations": [
         "com.deucarian.xr-ui.theming-integration"
-      ]
+      ],
+      "groupId": "world-interaction"
     },
     {
       "id": "com.deucarian.camera-navigation",
@@ -422,14 +422,14 @@
       "category": "World",
       "type": "Core",
       "ecosystemGroup": "Experience & Interaction",
-      "groupId": "world-interaction",
       "overviewOrder": 25,
       "description": "Reusable camera pose, framing, transition, orbit, fly, top-down, and waypoint navigation primitives.",
       "stableUrl": "https://github.com/Deucarian/Camera-Navigation.git#main",
       "developmentUrl": "https://github.com/Deucarian/Camera-Navigation.git#develop",
       "dependencies": [
         "com.deucarian.common"
-      ]
+      ],
+      "groupId": "world-interaction"
     },
     {
       "id": "com.deucarian.object-selection",
@@ -437,7 +437,6 @@
       "category": "World",
       "type": "OptionalIntegration",
       "ecosystemGroup": "Experience & Interaction",
-      "groupId": "world-interaction",
       "overviewOrder": 20,
       "description": "Keyed world-object selection, raycast input adapters, hover tracking, and highlight hooks for Unity.",
       "stableUrl": "https://github.com/Deucarian/Object-Selection.git#main",
@@ -450,7 +449,8 @@
       ],
       "recommendedWith": [
         "com.deucarian.selection-suite"
-      ]
+      ],
+      "groupId": "world-interaction"
     },
     {
       "id": "com.deucarian.package-installer",
@@ -458,7 +458,6 @@
       "category": "Tools",
       "type": "Tool",
       "ecosystemGroup": "Tools & Quality",
-      "groupId": "tools-quality",
       "overviewOrder": 20,
       "description": "Editor installer window for installing and composing Deucarian Unity UPM packages.",
       "stableUrl": "https://github.com/Deucarian/Package-Installer.git#main",
@@ -466,14 +465,30 @@
       "dependencies": [
         "com.deucarian.editor",
         "com.deucarian.logging"
-      ]
+      ],
+      "groupId": "tools-quality"
+    },
+    {
+      "id": "com.deucarian.build-pipeline",
+      "displayName": "Deucarian Build Pipeline",
+      "category": "Tools",
+      "type": "Tool",
+      "ecosystemGroup": "Tools & Quality",
+      "overviewOrder": 50,
+      "description": "Editor-only Build Pipeline Manager, provider workflows, profile policies, drift validation, artifact manifests, and CI build entry points.",
+      "stableUrl": "https://github.com/Deucarian/Build-Pipeline.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Build-Pipeline.git#develop",
+      "dependencies": [
+        "com.deucarian.editor",
+        "com.deucarian.logging"
+      ],
+      "groupId": "tools-quality"
     },
     {
       "id": "com.deucarian.diagnostics",
       "displayName": "Deucarian Diagnostics",
       "category": "Tools",
       "ecosystemGroup": "Tools & Quality",
-      "groupId": "tools-quality",
       "overviewOrder": 10,
       "description": "Local diagnostics snapshots, providers, JSON export, and developer-facing runtime/editor views for Deucarian Unity projects.",
       "stableUrl": "https://github.com/Deucarian/Diagnostics.git#main",
@@ -481,14 +496,14 @@
       "dependencies": [
         "com.deucarian.editor",
         "com.deucarian.logging"
-      ]
+      ],
+      "groupId": "tools-quality"
     },
     {
       "id": "com.deucarian.session.api-integration",
       "displayName": "Deucarian Session API Integration",
       "category": "Integration",
       "type": "Integration",
-      "groupId": "integrations",
       "overviewOrder": 10,
       "description": "Integration package connecting Session authentication to API.",
       "stableUrl": "https://github.com/Deucarian/Session-API-Integration.git#main",
@@ -501,6 +516,7 @@
         "com.deucarian.session",
         "com.deucarian.api"
       ],
+      "groupId": "integrations",
       "ecosystemGroup": "Integrations"
     },
     {
@@ -508,7 +524,6 @@
       "displayName": "Deucarian Object Loading API Integration",
       "category": "Integration",
       "type": "Integration",
-      "groupId": "integrations",
       "overviewOrder": 20,
       "description": "Optional integration package that provides optimized API-backed UnityWebRequestAssetBundle transport for Object Loading.",
       "stableUrl": "https://github.com/Deucarian/ObjectLoading-API-Integration.git#main",
@@ -521,6 +536,7 @@
         "com.deucarian.object-loading",
         "com.deucarian.api"
       ],
+      "groupId": "integrations",
       "ecosystemGroup": "Integrations"
     },
     {
@@ -528,7 +544,6 @@
       "displayName": "Deucarian UI Binding Core State Integration",
       "category": "Integration",
       "type": "Integration",
-      "groupId": "integrations",
       "overviewOrder": 30,
       "description": "Integration package connecting UI Binding containers to Core State repositories and selection services.",
       "stableUrl": "https://github.com/Deucarian/UIBinding-CoreState-Integration.git#main",
@@ -541,6 +556,7 @@
         "com.deucarian.ui-binding",
         "com.deucarian.core-state"
       ],
+      "groupId": "integrations",
       "ecosystemGroup": "Integrations"
     },
     {
@@ -548,7 +564,6 @@
       "displayName": "Deucarian XR UI Theming Integration",
       "category": "Integration",
       "type": "Integration",
-      "groupId": "integrations",
       "overviewOrder": 35,
       "description": "Optional integration that maps Deucarian Theming color roles into Deucarian XR UI palettes.",
       "stableUrl": "https://github.com/Deucarian/XR-UI-Theming-Integration.git#main",
@@ -561,6 +576,7 @@
         "com.deucarian.xr-ui",
         "com.deucarian.theming"
       ],
+      "groupId": "integrations",
       "ecosystemGroup": "Integrations"
     },
     {
@@ -568,7 +584,6 @@
       "displayName": "Deucarian Object Selection Core State Integration",
       "category": "Integration",
       "type": "Integration",
-      "groupId": "integrations",
       "overviewOrder": 40,
       "description": "Integration package synchronizing Object Selection and Core State selections through shared keys.",
       "stableUrl": "https://github.com/Deucarian/ObjectSelection-CoreState-Integration.git#main",
@@ -582,6 +597,7 @@
         "com.deucarian.object-selection",
         "com.deucarian.core-state"
       ],
+      "groupId": "integrations",
       "ecosystemGroup": "Integrations"
     },
     {
@@ -589,7 +605,6 @@
       "displayName": "Deucarian Selection Suite",
       "category": "Suites",
       "type": "Suite",
-      "groupId": "suites",
       "overviewOrder": 10,
       "description": "Curated bundle that installs Core State, UI Binding, Object Selection, and both Core State selection integrations.",
       "stableUrl": "https://github.com/Deucarian/Selection-Suite.git#main",
@@ -608,6 +623,7 @@
         "com.deucarian.ui-binding.core-state-integration",
         "com.deucarian.object-selection.core-state-integration"
       ],
+      "groupId": "suites",
       "ecosystemGroup": "Suites"
     },
     {
