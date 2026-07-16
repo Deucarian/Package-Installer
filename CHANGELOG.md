@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.67 - 2026-07-16
+
+- Refreshed the bundled Package Registry catalog with Build Pipeline capability ownership and its direct Deucarian Editor and Logging dependencies.
+
 ## 1.1.66 - 2026-07-16
 
 - Added Deucarian Build Pipeline to the bundled Package Registry fallback catalog.

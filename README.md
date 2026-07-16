@@ -6,7 +6,7 @@
 
 It is the Deucarian ecosystem front door for installing standalone packages, integration packages, suite packages, templates, and explicitly declared package samples from Package Registry metadata.
 
-Current package version: `1.1.66`.
+Current package version: `1.1.67`.
 
 ## When to use it
 
@@ -321,7 +321,7 @@ Keeping the installer editor-only ensures:
 
 ## Versioning
 
-Current package version: `1.1.66`.
+Current package version: `1.1.67`.
 
 Branch strategy:
 
@@ -374,4 +374,4 @@ After installing, updating, or removing a package, the installer refreshes insta
 
 ## License
 
-See [LICENSE.md](LICENSE.md).
+MIT. See [LICENSE.md](LICENSE.md).
