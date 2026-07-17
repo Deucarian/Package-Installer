@@ -1,6 +1,6 @@
 {
-  "schemaVersion": 1,
-  "updatedAt": "2026-07-16",
+  "schemaVersion": 2,
+  "updatedAt": "2026-07-17",
   "groups": [
     {
       "id": "infrastructure",
@@ -48,11 +48,11 @@
       "styleKey": "ui-presentation"
     },
     {
-      "id": "world-interaction",
-      "displayName": "World Interaction",
+      "id": "world-xr-interaction",
+      "displayName": "World & XR Interaction",
       "parentGroupId": "experience-interaction",
       "sortOrder": 42,
-      "description": "World-object interaction, selection, and input-facing systems.",
+      "description": "World-object interaction, selection, XR controls, and input-facing systems.",
       "iconKey": "selection",
       "styleKey": "world-interaction"
     },
@@ -66,28 +66,10 @@
       "styleKey": "tools"
     },
     {
-      "id": "integrations",
-      "displayName": "Integrations",
-      "parentGroupId": "",
-      "sortOrder": 60,
-      "description": "Installable packages that connect two or more systems.",
-      "iconKey": "api-helper",
-      "styleKey": "integration"
-    },
-    {
-      "id": "suites",
-      "displayName": "Suites",
-      "parentGroupId": "",
-      "sortOrder": 70,
-      "description": "Curated installable bundle packages.",
-      "iconKey": "selection",
-      "styleKey": "suite"
-    },
-    {
       "id": "gameplay",
       "displayName": "Gameplay",
       "parentGroupId": "",
-      "sortOrder": 65,
+      "sortOrder": 60,
       "description": "Reusable gameplay foundations, systems, simulation modules, and genre frameworks.",
       "iconKey": "gameplay-foundation",
       "styleKey": "gameplay"
@@ -96,34 +78,43 @@
       "id": "gameplay-foundations",
       "displayName": "Foundations",
       "parentGroupId": "gameplay",
-      "sortOrder": 66,
+      "sortOrder": 61,
       "description": "Low-level gameplay primitives and deterministic foundation types.",
       "iconKey": "gameplay-foundation",
       "styleKey": "gameplay"
     },
     {
-      "id": "gameplay-systems",
-      "displayName": "Systems",
+      "id": "gameplay-progression-meta",
+      "displayName": "Progression & Meta",
       "parentGroupId": "gameplay",
-      "sortOrder": 67,
-      "description": "Reusable gameplay systems for persistence, progression, upgrades, and idle calculation.",
+      "sortOrder": 62,
+      "description": "Reusable progression, upgrade, and idle-calculation systems.",
       "iconKey": "progression",
       "styleKey": "gameplay"
     },
     {
-      "id": "gameplay-simulation",
-      "displayName": "Simulation",
+      "id": "gameplay-combat-weapons",
+      "displayName": "Combat & Weapons",
       "parentGroupId": "gameplay",
-      "sortOrder": 68,
-      "description": "Combat, encounter, world, attack, projectile, and weapon simulation modules.",
+      "sortOrder": 63,
+      "description": "Combat, attack, projectile, and weapon simulation modules.",
       "iconKey": "combat",
       "styleKey": "simulation"
     },
     {
-      "id": "gameplay-frameworks",
+      "id": "gameplay-encounters-world",
+      "displayName": "Encounters & World",
+      "parentGroupId": "gameplay",
+      "sortOrder": 64,
+      "description": "Encounter orchestration, world spawning, and gameplay navigation modules.",
+      "iconKey": "world-spawning",
+      "styleKey": "simulation"
+    },
+    {
+      "id": "gameplay-genre-frameworks",
       "displayName": "Genre Frameworks",
       "parentGroupId": "gameplay",
-      "sortOrder": 69,
+      "sortOrder": 65,
       "description": "Higher-level genre composition packages built on gameplay foundations and systems.",
       "iconKey": "auto-defense",
       "styleKey": "gameplay"
@@ -132,7 +123,7 @@
       "id": "templates",
       "displayName": "Templates",
       "parentGroupId": "",
-      "sortOrder": 80,
+      "sortOrder": 70,
       "description": "Starter project templates and sample game foundations.",
       "iconKey": "selection",
       "styleKey": "template"
@@ -141,36 +132,9 @@
       "id": "templates-games",
       "displayName": "Games",
       "parentGroupId": "templates",
-      "sortOrder": 81,
+      "sortOrder": 71,
       "description": "Playable starter game templates.",
       "iconKey": "auto-defense",
-      "styleKey": "template"
-    },
-    {
-      "id": "templates-games-idle-auto-defense",
-      "displayName": "Idle Auto Defense",
-      "parentGroupId": "templates-games",
-      "sortOrder": 82,
-      "description": "Idle auto-defense starter game templates.",
-      "iconKey": "auto-defense",
-      "styleKey": "template"
-    },
-    {
-      "id": "templates-games-survivors",
-      "displayName": "Survivors",
-      "parentGroupId": "templates-games",
-      "sortOrder": 83,
-      "description": "Survivors-style horde roguelite starter game templates.",
-      "iconKey": "combat",
-      "styleKey": "template"
-    },
-    {
-      "id": "templates-games-movement-fps",
-      "displayName": "Movement FPS",
-      "parentGroupId": "templates-games",
-      "sortOrder": 84,
-      "description": "Movement-FPS horde arena starter game templates.",
-      "iconKey": "combat",
       "styleKey": "template"
     }
   ],
@@ -180,6 +144,7 @@
       "displayName": "Deucarian Common",
       "category": "Core",
       "type": "Core",
+      "kind": "Library",
       "ecosystemGroup": "Infrastructure",
       "overviewOrder": 5,
       "description": "Tiny dependency-free runtime primitives shared across Deucarian packages.",
@@ -193,6 +158,7 @@
       "displayName": "Deucarian Editor",
       "category": "Editor",
       "type": "Core",
+      "kind": "Library",
       "ecosystemGroup": "Infrastructure",
       "overviewOrder": 10,
       "description": "Shared editor tooling and branded editor UI helpers for Deucarian Unity packages.",
@@ -206,6 +172,7 @@
       "displayName": "Deucarian Game Content Authoring",
       "category": "Editor",
       "type": "Tool",
+      "kind": "Tool",
       "ecosystemGroup": "Tools & Quality",
       "overviewOrder": 30,
       "description": "Shared Deucarian editor shell and provider API for game content authoring packages.",
@@ -223,19 +190,13 @@
       "displayName": "Deucarian Core State",
       "category": "Core",
       "type": "Core",
+      "kind": "Library",
       "ecosystemGroup": "State & Data",
       "overviewOrder": 10,
       "description": "Generic repository and selection state services for Unity.",
       "stableUrl": "https://github.com/Deucarian/Core-State.git#main",
       "developmentUrl": "https://github.com/Deucarian/Core-State.git#develop",
       "dependencies": [],
-      "optionalIntegrations": [
-        "com.deucarian.ui-binding.core-state-integration",
-        "com.deucarian.object-selection.core-state-integration"
-      ],
-      "recommendedWith": [
-        "com.deucarian.selection-suite"
-      ],
       "groupId": "state-data"
     },
     {
@@ -243,6 +204,7 @@
       "displayName": "Deucarian API",
       "category": "Core",
       "type": "Core",
+      "kind": "Library",
       "ecosystemGroup": "Runtime Services",
       "overviewOrder": 10,
       "description": "Reusable API client for Unity.",
@@ -251,10 +213,6 @@
       "dependencies": [
         "com.deucarian.logging"
       ],
-      "optionalIntegrations": [
-        "com.deucarian.session.api-integration",
-        "com.deucarian.object-loading.api-integration"
-      ],
       "groupId": "runtime-services"
     },
     {
@@ -262,6 +220,7 @@
       "displayName": "Deucarian Logging",
       "category": "Core",
       "type": "Core",
+      "kind": "Library",
       "ecosystemGroup": "Infrastructure",
       "overviewOrder": 20,
       "description": "Small dependency-light logging wrapper for Deucarian Unity packages.",
@@ -277,6 +236,7 @@
       "displayName": "Deucarian Object Loading",
       "category": "Core",
       "type": "Core",
+      "kind": "Library",
       "ecosystemGroup": "Runtime Services",
       "overviewOrder": 30,
       "description": "Reusable runtime loading pipeline for resolved object and scene content sources.",
@@ -286,12 +246,8 @@
         "com.deucarian.common",
         "com.deucarian.logging"
       ],
-      "optionalCompanions": [
-        "com.deucarian.diagnostics",
-        "com.deucarian.object-loading.api-integration"
-      ],
-      "optionalIntegrations": [
-        "com.deucarian.object-loading.api-integration"
+      "recommendedWith": [
+        "com.deucarian.diagnostics"
       ],
       "groupId": "runtime-services"
     },
@@ -300,6 +256,7 @@
       "displayName": "Deucarian Session",
       "category": "Core",
       "type": "Core",
+      "kind": "Library",
       "ecosystemGroup": "Runtime Services",
       "overviewOrder": 20,
       "description": "Reusable session management for Unity.",
@@ -308,9 +265,6 @@
       "dependencies": [
         "com.deucarian.logging"
       ],
-      "optionalIntegrations": [
-        "com.deucarian.session.api-integration"
-      ],
       "groupId": "runtime-services"
     },
     {
@@ -318,6 +272,7 @@
       "displayName": "Deucarian Monetization",
       "category": "Core",
       "type": "Core",
+      "kind": "Library",
       "ecosystemGroup": "Runtime Services",
       "overviewOrder": 25,
       "description": "SDK-free monetization placement abstractions, mock/no-op ad providers, pacing policies, entitlements, consent, and rewarded claim identity for Deucarian games.",
@@ -331,6 +286,7 @@
       "displayName": "Deucarian UI Binding",
       "category": "UI",
       "type": "OptionalIntegration",
+      "kind": "Library",
       "ecosystemGroup": "Experience & Interaction",
       "overviewOrder": 10,
       "description": "Data-driven UI Binding containers for Unity.",
@@ -339,12 +295,6 @@
       "dependencies": [
         "com.deucarian.common"
       ],
-      "optionalIntegrations": [
-        "com.deucarian.ui-binding.core-state-integration"
-      ],
-      "recommendedWith": [
-        "com.deucarian.selection-suite"
-      ],
       "groupId": "ui-presentation"
     },
     {
@@ -352,6 +302,7 @@
       "displayName": "Deucarian UI",
       "category": "UI",
       "type": "Core",
+      "kind": "Library",
       "ecosystemGroup": "Experience & Interaction",
       "overviewOrder": 12,
       "description": "Reusable Deucarian UI motion, glass, icon, control island, and UI Toolkit/uGUI presentation primitives.",
@@ -368,6 +319,7 @@
       "displayName": "Deucarian UI Flow",
       "category": "UI",
       "type": "OptionalIntegration",
+      "kind": "Library",
       "ecosystemGroup": "Experience & Interaction",
       "overviewOrder": 15,
       "description": "Deterministic asynchronous UI navigation with route assets, channels, guards, transitions, Back handling, action assets, and typed modal presentations.",
@@ -384,6 +336,7 @@
       "displayName": "Deucarian Theming",
       "category": "UI",
       "type": "OptionalIntegration",
+      "kind": "Library",
       "ecosystemGroup": "Experience & Interaction",
       "overviewOrder": 30,
       "description": "Designer-friendly ScriptableObject theming with color role assets, palettes, themes, and Unity component adapters.",
@@ -393,9 +346,6 @@
         "com.deucarian.editor",
         "com.deucarian.logging"
       ],
-      "optionalIntegrations": [
-        "com.deucarian.xr-ui.theming-integration"
-      ],
       "groupId": "ui-presentation"
     },
     {
@@ -403,6 +353,7 @@
       "displayName": "Deucarian XR UI",
       "category": "World",
       "type": "Core",
+      "kind": "Library",
       "ecosystemGroup": "Experience & Interaction",
       "overviewOrder": 28,
       "description": "Standalone XR-ready uGUI pressable controls, world canvas helpers, poke affordances, and neutral visual settings.",
@@ -411,16 +362,14 @@
       "dependencies": [
         "com.deucarian.common"
       ],
-      "optionalIntegrations": [
-        "com.deucarian.xr-ui.theming-integration"
-      ],
-      "groupId": "world-interaction"
+      "groupId": "world-xr-interaction"
     },
     {
       "id": "com.deucarian.camera-navigation",
       "displayName": "Deucarian Camera Navigation",
       "category": "World",
       "type": "Core",
+      "kind": "Library",
       "ecosystemGroup": "Experience & Interaction",
       "overviewOrder": 25,
       "description": "Reusable camera pose, framing, transition, orbit, fly, top-down, and waypoint navigation primitives.",
@@ -429,13 +378,14 @@
       "dependencies": [
         "com.deucarian.common"
       ],
-      "groupId": "world-interaction"
+      "groupId": "world-xr-interaction"
     },
     {
       "id": "com.deucarian.object-selection",
       "displayName": "Deucarian Object Selection",
       "category": "World",
       "type": "OptionalIntegration",
+      "kind": "Library",
       "ecosystemGroup": "Experience & Interaction",
       "overviewOrder": 20,
       "description": "Keyed world-object selection, raycast input adapters, hover tracking, and highlight hooks for Unity.",
@@ -444,19 +394,14 @@
       "dependencies": [
         "com.deucarian.logging"
       ],
-      "optionalIntegrations": [
-        "com.deucarian.object-selection.core-state-integration"
-      ],
-      "recommendedWith": [
-        "com.deucarian.selection-suite"
-      ],
-      "groupId": "world-interaction"
+      "groupId": "world-xr-interaction"
     },
     {
       "id": "com.deucarian.package-installer",
       "displayName": "Deucarian Package Installer",
       "category": "Tools",
       "type": "Tool",
+      "kind": "Tool",
       "ecosystemGroup": "Tools & Quality",
       "overviewOrder": 20,
       "description": "Editor installer window for installing and composing Deucarian Unity UPM packages.",
@@ -473,6 +418,7 @@
       "displayName": "Deucarian Build Pipeline",
       "category": "Tools",
       "type": "Tool",
+      "kind": "Tool",
       "ecosystemGroup": "Tools & Quality",
       "overviewOrder": 50,
       "description": "Editor-only Build Pipeline Manager, provider workflows, profile policies, drift validation, artifact manifests, and CI build entry points.",
@@ -488,6 +434,8 @@
       "id": "com.deucarian.diagnostics",
       "displayName": "Deucarian Diagnostics",
       "category": "Tools",
+      "type": "Tool",
+      "kind": "Tool",
       "ecosystemGroup": "Tools & Quality",
       "overviewOrder": 10,
       "description": "Local diagnostics snapshots, providers, JSON export, and developer-facing runtime/editor views for Deucarian Unity projects.",
@@ -504,6 +452,7 @@
       "displayName": "Deucarian Session API Integration",
       "category": "Integration",
       "type": "Integration",
+      "kind": "Integration",
       "overviewOrder": 10,
       "description": "Integration package connecting Session authentication to API.",
       "stableUrl": "https://github.com/Deucarian/Session-API-Integration.git#main",
@@ -516,7 +465,7 @@
         "com.deucarian.session",
         "com.deucarian.api"
       ],
-      "groupId": "integrations",
+      "groupId": "runtime-services",
       "ecosystemGroup": "Integrations"
     },
     {
@@ -524,6 +473,7 @@
       "displayName": "Deucarian Object Loading API Integration",
       "category": "Integration",
       "type": "Integration",
+      "kind": "Integration",
       "overviewOrder": 20,
       "description": "Optional integration package that provides optimized API-backed UnityWebRequestAssetBundle transport for Object Loading.",
       "stableUrl": "https://github.com/Deucarian/ObjectLoading-API-Integration.git#main",
@@ -536,7 +486,7 @@
         "com.deucarian.object-loading",
         "com.deucarian.api"
       ],
-      "groupId": "integrations",
+      "groupId": "runtime-services",
       "ecosystemGroup": "Integrations"
     },
     {
@@ -544,6 +494,7 @@
       "displayName": "Deucarian UI Binding Core State Integration",
       "category": "Integration",
       "type": "Integration",
+      "kind": "Integration",
       "overviewOrder": 30,
       "description": "Integration package connecting UI Binding containers to Core State repositories and selection services.",
       "stableUrl": "https://github.com/Deucarian/UIBinding-CoreState-Integration.git#main",
@@ -556,7 +507,7 @@
         "com.deucarian.ui-binding",
         "com.deucarian.core-state"
       ],
-      "groupId": "integrations",
+      "groupId": "ui-presentation",
       "ecosystemGroup": "Integrations"
     },
     {
@@ -564,6 +515,7 @@
       "displayName": "Deucarian XR UI Theming Integration",
       "category": "Integration",
       "type": "Integration",
+      "kind": "Integration",
       "overviewOrder": 35,
       "description": "Optional integration that maps Deucarian Theming color roles into Deucarian XR UI palettes.",
       "stableUrl": "https://github.com/Deucarian/XR-UI-Theming-Integration.git#main",
@@ -576,7 +528,7 @@
         "com.deucarian.xr-ui",
         "com.deucarian.theming"
       ],
-      "groupId": "integrations",
+      "groupId": "world-xr-interaction",
       "ecosystemGroup": "Integrations"
     },
     {
@@ -584,6 +536,7 @@
       "displayName": "Deucarian Object Selection Core State Integration",
       "category": "Integration",
       "type": "Integration",
+      "kind": "Integration",
       "overviewOrder": 40,
       "description": "Integration package synchronizing Object Selection and Core State selections through shared keys.",
       "stableUrl": "https://github.com/Deucarian/ObjectSelection-CoreState-Integration.git#main",
@@ -597,7 +550,7 @@
         "com.deucarian.object-selection",
         "com.deucarian.core-state"
       ],
-      "groupId": "integrations",
+      "groupId": "world-xr-interaction",
       "ecosystemGroup": "Integrations"
     },
     {
@@ -605,6 +558,7 @@
       "displayName": "Deucarian Selection Suite",
       "category": "Suites",
       "type": "Suite",
+      "kind": "Suite",
       "overviewOrder": 10,
       "description": "Curated bundle that installs Core State, UI Binding, Object Selection, and both Core State selection integrations.",
       "stableUrl": "https://github.com/Deucarian/Selection-Suite.git#main",
@@ -623,7 +577,7 @@
         "com.deucarian.ui-binding.core-state-integration",
         "com.deucarian.object-selection.core-state-integration"
       ],
-      "groupId": "suites",
+      "groupId": "world-xr-interaction",
       "ecosystemGroup": "Suites"
     },
     {
@@ -631,6 +585,7 @@
       "displayName": "Deucarian Gameplay Foundation",
       "category": "Gameplay",
       "type": "Core",
+      "kind": "Library",
       "ecosystemGroup": "Gameplay",
       "groupId": "gameplay-foundations",
       "overviewOrder": 10,
@@ -644,8 +599,9 @@
       "displayName": "Deucarian Persistence",
       "category": "Gameplay",
       "type": "Core",
+      "kind": "Library",
       "ecosystemGroup": "Gameplay",
-      "groupId": "gameplay-systems",
+      "groupId": "state-data",
       "overviewOrder": 10,
       "description": "Versioned local document persistence with migrations, validation, atomic file writes, backups, and recovery.",
       "stableUrl": "https://github.com/Deucarian/Persistence.git#main",
@@ -657,8 +613,9 @@
       "displayName": "Deucarian Progression",
       "category": "Gameplay",
       "type": "Core",
+      "kind": "Library",
       "ecosystemGroup": "Gameplay",
-      "groupId": "gameplay-systems",
+      "groupId": "gameplay-progression-meta",
       "overviewOrder": 20,
       "description": "Pure C# progression foundations for currencies, tracks, rewards, unlocks, research graphs, milestones, snapshots, and deterministic result deltas.",
       "stableUrl": "https://github.com/Deucarian/Progression.git#main",
@@ -672,8 +629,9 @@
       "displayName": "Deucarian Run Upgrades",
       "category": "Gameplay",
       "type": "Core",
+      "kind": "Library",
       "ecosystemGroup": "Gameplay",
-      "groupId": "gameplay-systems",
+      "groupId": "gameplay-progression-meta",
       "overviewOrder": 30,
       "description": "Pure C# roguelite run upgrade core plus Unity authoring assets/providers for definitions, drafts, choices, prerequisites, exclusions, and snapshots.",
       "stableUrl": "https://github.com/Deucarian/Run-Upgrades.git#main",
@@ -691,8 +649,9 @@
       "displayName": "Deucarian Idle Progression",
       "category": "Gameplay",
       "type": "Core",
+      "kind": "Library",
       "ecosystemGroup": "Gameplay",
-      "groupId": "gameplay-systems",
+      "groupId": "gameplay-progression-meta",
       "overviewOrder": 40,
       "description": "Pure C# idle/offline progression elapsed-time, capped catch-up, cycle rewards, and Progression reward-bundle calculation.",
       "stableUrl": "https://github.com/Deucarian/Idle-Progression.git#main",
@@ -707,8 +666,9 @@
       "displayName": "Deucarian Combat",
       "category": "Gameplay",
       "type": "Core",
+      "kind": "Library",
       "ecosystemGroup": "Gameplay",
-      "groupId": "gameplay-simulation",
+      "groupId": "gameplay-combat-weapons",
       "overviewOrder": 10,
       "description": "Pure C# combat rules for health, shields, damage, mitigation, critical hits, statuses, targeting, snapshots, and deterministic results.",
       "stableUrl": "https://github.com/Deucarian/Combat.git#main",
@@ -722,8 +682,9 @@
       "displayName": "Deucarian Encounters",
       "category": "Gameplay",
       "type": "Core",
+      "kind": "Library",
       "ecosystemGroup": "Gameplay",
-      "groupId": "gameplay-simulation",
+      "groupId": "gameplay-encounters-world",
       "overviewOrder": 20,
       "description": "Pure C# encounter foundations for stages, waves, spawn request scheduling, weighted selection, objective state, reward references, scaling descriptors, and snapshots.",
       "stableUrl": "https://github.com/Deucarian/Encounters.git#main",
@@ -737,8 +698,9 @@
       "displayName": "Deucarian World Spawning",
       "category": "Gameplay",
       "type": "Core",
+      "kind": "Library",
       "ecosystemGroup": "Gameplay",
-      "groupId": "gameplay-simulation",
+      "groupId": "gameplay-encounters-world",
       "overviewOrder": 30,
       "description": "Generic Unity GameObject spawning for world spawn requests, prefab providers, pose resolvers, pooling, lifecycle, and diagnostics snapshots.",
       "stableUrl": "https://github.com/Deucarian/World-Spawning.git#main",
@@ -753,8 +715,9 @@
       "displayName": "Deucarian World Navigation",
       "category": "Gameplay",
       "type": "Core",
+      "kind": "Library",
       "ecosystemGroup": "Gameplay",
-      "groupId": "gameplay-simulation",
+      "groupId": "gameplay-encounters-world",
       "overviewOrder": 40,
       "description": "Unity-side centralized navigation for registered movement agents, destination movement, supplied waypoint paths, speed adapters, pose adapters, and diagnostics snapshots.",
       "stableUrl": "https://github.com/Deucarian/World-Navigation.git#main",
@@ -769,8 +732,9 @@
       "displayName": "Deucarian Attacks",
       "category": "Gameplay",
       "type": "Core",
+      "kind": "Library",
       "ecosystemGroup": "Gameplay",
-      "groupId": "gameplay-simulation",
+      "groupId": "gameplay-combat-weapons",
       "overviewOrder": 50,
       "description": "Pure C# attack orchestration for cooldowns, caller-supplied target selection, attack intents, and Combat damage request creation.",
       "stableUrl": "https://github.com/Deucarian/Attacks.git#main",
@@ -787,8 +751,9 @@
       "displayName": "Deucarian Projectiles",
       "category": "Gameplay",
       "type": "Core",
+      "kind": "Library",
       "ecosystemGroup": "Gameplay",
-      "groupId": "gameplay-simulation",
+      "groupId": "gameplay-combat-weapons",
       "overviewOrder": 60,
       "description": "Generic projectile launch, movement, lifetime, impact, and cleanup foundations for Deucarian games.",
       "stableUrl": "https://github.com/Deucarian/Projectiles.git#main",
@@ -806,8 +771,9 @@
       "displayName": "Deucarian Weapon Systems",
       "category": "Gameplay",
       "type": "Core",
+      "kind": "Library",
       "ecosystemGroup": "Gameplay",
-      "groupId": "gameplay-simulation",
+      "groupId": "gameplay-combat-weapons",
       "overviewOrder": 70,
       "description": "Reusable weapon orchestration plus Unity authoring assets/providers for active weapon slots, fire cadence, direct/projectile modes, and deterministic weapon intents.",
       "stableUrl": "https://github.com/Deucarian/Weapon-Systems.git#main",
@@ -825,8 +791,9 @@
       "displayName": "Deucarian Defense Games",
       "category": "Gameplay",
       "type": "Framework",
+      "kind": "Library",
       "ecosystemGroup": "Gameplay",
-      "groupId": "gameplay-frameworks",
+      "groupId": "gameplay-genre-frameworks",
       "overviewOrder": 10,
       "description": "Shared defense-game orchestration for encounter spawn requests, world spawning, world navigation, combat-backed objectives, agents, signals, metrics, and snapshots.",
       "stableUrl": "https://github.com/Deucarian/Defense-Games.git#main",
@@ -844,8 +811,9 @@
       "displayName": "Deucarian Auto Defense",
       "category": "Gameplay",
       "type": "Framework",
+      "kind": "Library",
       "ecosystemGroup": "Gameplay",
-      "groupId": "gameplay-frameworks",
+      "groupId": "gameplay-genre-frameworks",
       "overviewOrder": 20,
       "description": "Idle Auto Defense and Auto Tower Defense orchestration for central objectives, perimeter spawning, mounted weapons, targeting, and lower-package composition.",
       "stableUrl": "https://github.com/Deucarian/Auto-Defense.git#main",
@@ -867,6 +835,7 @@
       "displayName": "Deucarian Test Automation",
       "category": "Tools",
       "type": "Tool",
+      "kind": "Tool",
       "ecosystemGroup": "Tools & Quality",
       "groupId": "tools-quality",
       "overviewOrder": 40,
@@ -880,8 +849,9 @@
       "displayName": "Deucarian Auto Defense Suite",
       "category": "Suites",
       "type": "Suite",
+      "kind": "Suite",
       "ecosystemGroup": "Suites",
-      "groupId": "suites",
+      "groupId": "gameplay-genre-frameworks",
       "overviewOrder": 20,
       "description": "Lean dependency bundle that installs the Deucarian Auto Defense gameplay stack without starter-game content.",
       "stableUrl": "https://github.com/Deucarian/Auto-Defense-Suite.git#main",
@@ -924,18 +894,33 @@
       "displayName": "Deucarian Template Game - Idle Auto Defense",
       "category": "Templates",
       "type": "Template",
+      "kind": "Template",
       "ecosystemGroup": "Templates",
-      "groupId": "templates-games-idle-auto-defense",
+      "groupId": "templates-games",
       "overviewOrder": 10,
       "description": "Starter Unity game template for an idle auto-defense loop built on the Deucarian Auto Defense Suite.",
       "stableUrl": "https://github.com/Deucarian/Template-Game-Idle-Auto-Defense.git#main",
       "developmentUrl": "https://github.com/Deucarian/Template-Game-Idle-Auto-Defense.git#develop",
       "dependencies": [
+        "com.deucarian.attacks",
+        "com.deucarian.auto-defense",
         "com.deucarian.auto-defense-suite",
+        "com.deucarian.combat",
+        "com.deucarian.common",
+        "com.deucarian.defense-games",
         "com.deucarian.editor",
+        "com.deucarian.encounters",
         "com.deucarian.game-content-authoring",
         "com.deucarian.gameplay-foundation",
-        "com.deucarian.monetization"
+        "com.deucarian.idle-progression",
+        "com.deucarian.monetization",
+        "com.deucarian.persistence",
+        "com.deucarian.progression",
+        "com.deucarian.projectiles",
+        "com.deucarian.run-upgrades",
+        "com.deucarian.weapon-systems",
+        "com.deucarian.world-navigation",
+        "com.deucarian.world-spawning"
       ],
       "searchAliases": [
         "idle auto defense template",
@@ -953,8 +938,9 @@
       "displayName": "Deucarian Template Game - Survivors",
       "category": "Templates",
       "type": "Template",
+      "kind": "Template",
       "ecosystemGroup": "Templates",
-      "groupId": "templates-games-survivors",
+      "groupId": "templates-games",
       "overviewOrder": 20,
       "description": "Starter Unity game template for a Survivors-style horde roguelite loop built on Deucarian packages with local genre-kit adapters.",
       "stableUrl": "https://github.com/Deucarian/Template-Game-Survivors.git#main",
@@ -991,8 +977,9 @@
       "displayName": "Deucarian Template Game - Movement FPS",
       "category": "Templates",
       "type": "Template",
+      "kind": "Template",
       "ecosystemGroup": "Templates",
-      "groupId": "templates-games-movement-fps",
+      "groupId": "templates-games",
       "overviewOrder": 30,
       "description": "Starter Unity game template for a Movement-FPS horde arena loop with local wallrunner movement, gunplay, horde escalation, and Deucarian combat/run-upgrade adapters.",
       "stableUrl": "https://github.com/Deucarian/Template-Game-Movement-FPS.git#main",

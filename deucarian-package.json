@@ -19,5 +19,6 @@
   "optionalVersionDefinedDependencies": [],
   "allowedDirectDebugCalls": [],
   "allowedDirectUnityObjectLifetimeCalls": [],
-  "expectedSamplesRoot": ""
+  "expectedSamplesRoot": "",
+  "samplePolicy": "tool"
 }

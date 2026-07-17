@@ -165,6 +165,28 @@ namespace Deucarian.PackageInstaller.Editor
                 : InfrastructureGroupId;
         }
 
+        public static string GetGroupPath(
+            IEnumerable<PackageGraphGroup> groups,
+            string groupId)
+        {
+            Dictionary<string, PackageGraphGroup> groupById = CreateGroups(groups)
+                .ToDictionary(group => group.Id, StringComparer.OrdinalIgnoreCase);
+            List<string> path = new List<string>();
+            HashSet<string> visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            string currentGroupId = NormalizeGroupId(groupId);
+
+            while (!string.IsNullOrWhiteSpace(currentGroupId) &&
+                   visited.Add(currentGroupId) &&
+                   groupById.TryGetValue(currentGroupId, out PackageGraphGroup group))
+            {
+                path.Add(group.DisplayName);
+                currentGroupId = group.ParentGroupId;
+            }
+
+            path.Reverse();
+            return path.Count == 0 ? string.Empty : string.Join(" / ", path.ToArray());
+        }
+
         public static string NormalizeGroupId(string value)
         {
             if (string.IsNullOrWhiteSpace(value))

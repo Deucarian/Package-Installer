@@ -697,7 +697,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 stableUrl ?? "https://github.com/Deucarian/" + displayName.Replace("Deucarian ", string.Empty).Replace(" ", "-") + ".git#main",
                 description,
                 dependencies ?? Array.Empty<string>(),
-                PackageType.Core,
+                PackageKind.Library,
                 developmentUrl,
                 optionalCompanions: optionalCompanions,
                 category: "Core");

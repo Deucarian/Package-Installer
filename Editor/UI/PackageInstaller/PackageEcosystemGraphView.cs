@@ -10337,6 +10337,8 @@ namespace Deucarian.PackageInstaller.Editor
                     return "suite";
                 case PackageGraphNodeType.Integration:
                     return "integration";
+                case PackageGraphNodeType.Template:
+                    return "core";
                 default:
                     return "core";
             }
@@ -10383,6 +10385,8 @@ namespace Deucarian.PackageInstaller.Editor
                     return "Suite";
                 case PackageGraphNodeType.Integration:
                     return "Integration";
+                case PackageGraphNodeType.Template:
+                    return "Template";
                 default:
                     return "Library";
             }

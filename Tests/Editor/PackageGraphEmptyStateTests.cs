@@ -416,7 +416,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 "https://github.com/Deucarian/" + displayName.Replace("Deucarian ", string.Empty) + ".git#main",
                 displayName + " package.",
                 Array.Empty<string>(),
-                PackageType.Core,
+                PackageKind.Library,
                 "https://github.com/Deucarian/" + displayName.Replace("Deucarian ", string.Empty) + ".git#develop",
                 category: category,
                 groupId: groupId);

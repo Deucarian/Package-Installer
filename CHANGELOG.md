@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.70 - 2026-07-17
+
+- Added Package Registry schema v2 support with canonical Library, Tool, Integration, Suite, and Template kinds while retaining schema v1 compatibility.
+- Made registry `groupId` hierarchy and sort order authoritative for package navigation, and derived integration and suite graph relationships from their canonical targets and members.
+- Removed legacy category presentation and category-based package-kind and graph inference.
+- Aligned exact Editor and Logging dependencies with the coordinated portfolio patch release.
+
 ## 1.1.69 - 2026-07-17
 
 - Automatically resume safe bulk package operations after an expected same-session Unity script reload, skipping completed or already-correct targets.

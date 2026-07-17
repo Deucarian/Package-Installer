@@ -161,7 +161,7 @@ namespace Deucarian.PackageInstaller.Editor
 
                     foreach (string recommendedId in package.RecommendedWith)
                     {
-                        if (!IsSuitePackage(recommendedId) ||
+                        if (IsSuitePackage(recommendedId) &&
                             IsDeclaredSuiteMember(recommendedId, package.PackageId))
                         {
                             continue;
@@ -170,11 +170,11 @@ namespace Deucarian.PackageInstaller.Editor
                         AddRelationshipEdge(
                             edges,
                             edgeKeys,
-                            recommendedId,
                             package.PackageId,
-                            PackageGraphEdgeKind.SuiteMembership,
+                            recommendedId,
+                            PackageGraphEdgeKind.Recommended,
                             GetPeerRelationshipState(package.PackageId, recommendedId),
-                            "Suite member");
+                            "Recommended together");
                     }
                 }
 
@@ -279,7 +279,7 @@ namespace Deucarian.PackageInstaller.Editor
                 node = new PackageGraphNode(
                     package.PackageId,
                     package.DisplayName,
-                    package.Category,
+                    package.NavigationGroup,
                     package.Description,
                     GetNodeType(package),
                     PackageGraphHierarchyBuilder.ResolvePackageGroupId(package, _groups),
@@ -488,31 +488,19 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static PackageGraphNodeType GetNodeType(PackageDefinition package)
         {
-            if (package.IsIntegration)
+            switch (package.Kind)
             {
-                return PackageGraphNodeType.Integration;
+                case PackageKind.Tool:
+                    return PackageGraphNodeType.Tool;
+                case PackageKind.Integration:
+                    return PackageGraphNodeType.Integration;
+                case PackageKind.Suite:
+                    return PackageGraphNodeType.Suite;
+                case PackageKind.Template:
+                    return PackageGraphNodeType.Template;
+                default:
+                    return PackageGraphNodeType.Core;
             }
-
-            if (package.IsSuite)
-            {
-                return PackageGraphNodeType.Suite;
-            }
-
-            if (string.Equals(package.MetadataType, "Tool", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(package.Category, "Tools", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(package.Category, "Editor", StringComparison.OrdinalIgnoreCase))
-            {
-                return PackageGraphNodeType.Tool;
-            }
-
-            if (string.Equals(package.MetadataType, "OptionalIntegration", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(package.Category, "UI", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(package.Category, "World", StringComparison.OrdinalIgnoreCase))
-            {
-                return PackageGraphNodeType.Companion;
-            }
-
-            return PackageGraphNodeType.Core;
         }
 
         private static string GetIconKey(PackageDefinition package)
@@ -572,8 +560,10 @@ namespace Deucarian.PackageInstaller.Editor
                     return 3;
                 case PackageGraphNodeType.Suite:
                     return 4;
-                default:
+                case PackageGraphNodeType.Template:
                     return 5;
+                default:
+                    return 6;
             }
         }
 

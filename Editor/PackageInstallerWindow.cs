@@ -2999,7 +2999,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             EditorGUI.BeginChangeCheck();
             string nextSearchText = EditorGUILayout.TextField(
-                new GUIContent("Search", "Find packages by package name, package ID, or category."),
+                new GUIContent("Search", "Find packages by package name, package ID, domain, or kind."),
                 _visibilityFilterState.SearchText);
 
             if (EditorGUI.EndChangeCheck() && _visibilityFilterState.SetSearchText(nextSearchText))
@@ -3054,7 +3054,6 @@ namespace Deucarian.PackageInstaller.Editor
         private void DrawRegistrySidebarSections(IReadOnlyList<PackageCategoryListView> categoryViews)
         {
             bool drewPackageHeader = false;
-            bool drewIntegrationHeader = false;
             bool drewAnyCategory = false;
 
             foreach (PackageCategoryListView categoryView in categoryViews)
@@ -3064,28 +3063,10 @@ namespace Deucarian.PackageInstaller.Editor
                     continue;
                 }
 
-                bool integrationCategory = string.Equals(categoryView.Category, "Integration", StringComparison.OrdinalIgnoreCase);
-
-                if (integrationCategory)
-                {
-                    if (!drewIntegrationHeader && drewPackageHeader)
-                    {
-                        GUILayout.Space(10f);
-                        DrawHorizontalSeparator();
-                        GUILayout.Space(8f);
-                    }
-
-                    DrawSidebarSection("Integration Packages", categoryView, SelectionKind.Integration);
-                    drewIntegrationHeader = true;
-                }
-                else
-                {
-                    DrawSidebarSection(
-                        drewPackageHeader ? null : "Packages",
-                        categoryView,
-                        SelectionKind.Package);
-                    drewPackageHeader = true;
-                }
+                DrawSidebarSection(
+                    drewPackageHeader ? null : "Packages",
+                    categoryView);
+                drewPackageHeader = true;
 
                 drewAnyCategory = true;
                 GUILayout.Space(8f);
@@ -3184,8 +3165,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void DrawSidebarSection(
             string title,
-            PackageCategoryListView categoryView,
-            SelectionKind selectionKind)
+            PackageCategoryListView categoryView)
         {
             if (!string.IsNullOrWhiteSpace(title))
             {
@@ -3205,7 +3185,11 @@ namespace Deucarian.PackageInstaller.Editor
 
             foreach (PackageDefinition packageDefinition in packagesToDraw)
             {
-                DrawSidebarRow(packageDefinition, selectionKind);
+                DrawSidebarRow(
+                    packageDefinition,
+                    packageDefinition.IsIntegration
+                        ? SelectionKind.Integration
+                        : SelectionKind.Package);
                 GUILayout.Space(5f);
             }
         }
@@ -4289,7 +4273,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             DrawStatusBadge(status.Label, status.Kind, GUILayout.Width(150f));
             GUILayout.Space(6f);
-            DrawKeyValueRow("Category", GetPackageHierarchyPath(packageDefinition));
+            DrawKeyValueRow("Domain", GetPackageHierarchyPath(packageDefinition));
             DrawKeyValueRow("Package kind", GetPackageKindDisplayName(packageDefinition));
             DrawKeyValueRow("Package ID", packageDefinition.PackageId);
 
@@ -5199,9 +5183,8 @@ namespace Deucarian.PackageInstaller.Editor
             PackageUpdateStatus updateStatus = _packageUpdateCheckService.GetStatus(packageDefinition, selectedChannel);
 
             DrawSelectableValue("Package ID", packageDefinition.PackageId);
-            DrawSelectableValue("Category", GetPackageHierarchyPath(packageDefinition));
+            DrawSelectableValue("Domain", GetPackageHierarchyPath(packageDefinition));
             DrawSelectableValue("Package kind", GetPackageKindDisplayName(packageDefinition));
-            DrawSelectableValue("Legacy category", packageDefinition.Category);
             DrawSelectableValue("Selected URL", packageDefinition.GetUrl(selectedChannel));
             DrawSelectableValue("Stable URL", packageDefinition.StableUrl);
             DrawSelectableValue("Development URL", packageDefinition.DevelopmentUrl);

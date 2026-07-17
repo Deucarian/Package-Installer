@@ -170,7 +170,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 "https://example.com/Stable-Dependency.git#main",
                 "Stable-only dependency.",
                 Array.Empty<string>(),
-                PackageType.Core,
+                PackageKind.Library,
                 developmentUrl: string.Empty,
                 category: "Core");
             PackageDefinition root = CreatePackage(
@@ -348,7 +348,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 currentTarget,
                 "Retry package.",
                 Array.Empty<string>(),
-                PackageType.Core,
+                PackageKind.Library,
                 "https://example.com/Retry.git#develop",
                 category: "Core");
             PackageOperationTerminalSnapshot snapshot = new PackageOperationTerminalSnapshot(
@@ -1276,7 +1276,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 "https://github.com/Deucarian/" + displayName.Replace(" ", "-") + ".git#main",
                 displayName + " package.",
                 dependencies ?? Array.Empty<string>(),
-                PackageType.Core,
+                PackageKind.Library,
                 "https://github.com/Deucarian/" + displayName.Replace(" ", "-") + ".git#develop",
                 category: "Core");
         }
