@@ -102,7 +102,7 @@ jobs:
           cat > "$PROJECT_PATH/Packages/manifest.json" <<JSON
           {
             "dependencies": {
-              "com.deucarian.editor": "https://github.com/Deucarian/Editor.git#2100e533998b32c9a52a5028f33cbc5f0c55b2ca",
+              "com.deucarian.editor": "https://github.com/Deucarian/Editor.git#8feadd87a22615bb4da085824d3cedc8bbc16ea2",
               "com.deucarian.logging": "https://github.com/Deucarian/Logging.git#683d88858942d2d3c551135cbf1384b4f71cdd75",
               "com.deucarian.package-installer": "https://github.com/Deucarian/Package-Installer.git#${PACKAGE_REVISION}",
               "com.unity.test-framework": "1.1.33"
@@ -200,7 +200,7 @@ jobs:
           manifest = json.loads((project_path / "Packages" / "manifest.json").read_text())
           lock = json.loads((project_path / "Packages" / "packages-lock.json").read_text())
           expected = {
-              "com.deucarian.editor": "https://github.com/Deucarian/Editor.git#2100e533998b32c9a52a5028f33cbc5f0c55b2ca",
+              "com.deucarian.editor": "https://github.com/Deucarian/Editor.git#8feadd87a22615bb4da085824d3cedc8bbc16ea2",
               "com.deucarian.logging": "https://github.com/Deucarian/Logging.git#683d88858942d2d3c551135cbf1384b4f71cdd75",
               "com.deucarian.package-installer": (
                   "https://github.com/Deucarian/Package-Installer.git#"
