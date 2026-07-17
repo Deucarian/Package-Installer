@@ -1911,7 +1911,7 @@ namespace Deucarian.PackageInstaller.Editor
                 step.TargetUrl,
                 string.Empty,
                 Array.Empty<string>(),
-                PackageType.Core,
+                PackageKind.Library,
                 developmentUrl,
                 category: "Tools");
         }

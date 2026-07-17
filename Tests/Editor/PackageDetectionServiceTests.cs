@@ -329,7 +329,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 "https://github.com/Deucarian/Object-Loading.git#main",
                 "Reusable runtime loading pipeline.",
                 Array.Empty<string>(),
-                PackageType.Core,
+                PackageKind.Library,
                 "https://github.com/Deucarian/Object-Loading.git#develop",
                 category: "Core");
         }

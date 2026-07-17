@@ -10,7 +10,8 @@ namespace Deucarian.PackageInstaller.Editor
         Tool,
         Integration,
         Suite,
-        Companion
+        Companion,
+        Template
     }
 
     internal enum PackageGraphNodeKind

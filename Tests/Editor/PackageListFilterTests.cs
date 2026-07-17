@@ -131,7 +131,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 "https://example.com/com.example.source.git#main",
                 "Includes surprising relationship prose.",
                 new[] { "com.example.dependency" },
-                PackageType.Core,
+                PackageKind.Library,
                 "https://example.com/com.example.source.git#develop",
                 category: "Core",
                 optionalIntegrations: new[] { "com.example.integration" },
@@ -227,7 +227,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 "https://example.com/" + packageId + ".git#main",
                 displayName + " package.",
                 Array.Empty<string>(),
-                PackageType.Core,
+                PackageKindParser.Parse(null, metadataType, category),
                 "https://example.com/" + packageId + ".git#develop",
                 category: category,
                 metadataType: metadataType);

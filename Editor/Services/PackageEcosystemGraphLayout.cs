@@ -72,9 +72,9 @@ namespace Deucarian.PackageInstaller.Editor
                 case PackageGraphNodePresentationLevel.Micro:
                     return new PackageGraphNodeMetrics(116f, 44f);
                 case PackageGraphNodePresentationLevel.Compact:
-                    return new PackageGraphNodeMetrics(164f, 76f);
+                    return new PackageGraphNodeMetrics(164f, 90f);
                 default:
-                    return new PackageGraphNodeMetrics(220f, 132f);
+                    return new PackageGraphNodeMetrics(220f, 144f);
             }
         }
 
@@ -500,6 +500,9 @@ namespace Deucarian.PackageInstaller.Editor
 
     internal readonly struct PackageGraphEgoLayoutMetrics
     {
+        internal const float FocusNodeEdgeGap = 72f;
+        internal const float CategoryNodeEdgeGap = 48f;
+
         public PackageGraphEgoLayoutMetrics(
             Vector2 selectedNodeCenter,
             float horizontalLaneGap,
@@ -508,6 +511,10 @@ namespace Deucarian.PackageInstaller.Editor
             float packageSubclusterGap,
             float categoryRailGap,
             float owningCategoryGap,
+            float companionLaneGap,
+            float categoryNodeGap,
+            float contextGroupUpExtent,
+            float contextGroupDownExtent,
             float structuralBusGap,
             PackageGraphNodeMetrics relatedPackageMetrics)
         {
@@ -518,6 +525,10 @@ namespace Deucarian.PackageInstaller.Editor
             PackageSubclusterGap = Mathf.Max(PackageCardGap, packageSubclusterGap);
             CategoryRailGap = Mathf.Max(1f, categoryRailGap);
             OwningCategoryGap = Mathf.Max(1f, owningCategoryGap);
+            CompanionLaneGap = Mathf.Max(1f, companionLaneGap);
+            CategoryNodeGap = Mathf.Max(1f, categoryNodeGap);
+            ContextGroupUpExtent = Mathf.Max(1f, contextGroupUpExtent);
+            ContextGroupDownExtent = Mathf.Max(1f, contextGroupDownExtent);
             StructuralBusGap = Mathf.Max(1f, structuralBusGap);
             RelatedPackageMetrics = relatedPackageMetrics;
         }
@@ -536,6 +547,14 @@ namespace Deucarian.PackageInstaller.Editor
 
         public float OwningCategoryGap { get; }
 
+        public float CompanionLaneGap { get; }
+
+        public float CategoryNodeGap { get; }
+
+        public float ContextGroupUpExtent { get; }
+
+        public float ContextGroupDownExtent { get; }
+
         public float StructuralBusGap { get; }
 
         public PackageGraphNodeMetrics RelatedPackageMetrics { get; }
@@ -550,11 +569,17 @@ namespace Deucarian.PackageInstaller.Editor
 
         public float IntegrationPackageY => SelectedNodeCenter.y + VerticalLaneGap;
 
-        public float IntegrationCategoryY => IntegrationPackageY + CategoryRailGap * 0.82f;
+        public float IntegrationCategoryY => IntegrationPackageY +
+                                             RelatedPackageMetrics.Height * 0.5f +
+                                             CategoryNodeGap +
+                                             ContextGroupUpExtent;
 
-        public float CompanionPackageY => SelectedNodeCenter.y - VerticalLaneGap;
+        public float CompanionPackageY => SelectedNodeCenter.y - CompanionLaneGap;
 
-        public float CompanionCategoryY => CompanionPackageY - CategoryRailGap * 0.82f;
+        public float CompanionCategoryY => CompanionPackageY -
+                                           RelatedPackageMetrics.Height * 0.5f -
+                                           CategoryNodeGap -
+                                           ContextGroupDownExtent;
 
         public float OwningCategoryY => SelectedNodeCenter.y - OwningCategoryGap;
 
@@ -563,16 +588,35 @@ namespace Deucarian.PackageInstaller.Editor
             PackageGraphNodeMetrics selectedMetrics,
             PackageGraphNodeMetrics relatedMetrics)
         {
-            float horizontalLaneGap = Mathf.Max(
-                455f,
-                selectedMetrics.Width * 0.5f + relatedMetrics.Width * 0.5f + 212f);
-            float verticalLaneGap = Mathf.Max(
-                365f,
-                selectedMetrics.Height * 0.5f + relatedMetrics.Height * 0.5f + 195f);
+            const float ContextGroupGap = 32f;
+            float contextGroupWidth = Mathf.Max(
+                PackageGraphLayout.GroupChipHubSize,
+                PackageGraphLayout.GroupChipCaptionWidth);
+            float contextGroupUpExtent = PackageGraphLayout.GroupChipHubSize * 0.5f;
+            float contextGroupDownExtent = PackageGraphLayout.GroupChipHubSize * 0.5f +
+                                           PackageGraphLayout.GroupChipCaptionHeight;
+            float contextGroupHeight = contextGroupUpExtent + contextGroupDownExtent;
+            float horizontalLaneGap = selectedMetrics.Width * 0.5f +
+                                      FocusNodeEdgeGap +
+                                      relatedMetrics.Width * 0.5f;
             float cardGap = Mathf.Max(30f, relatedMetrics.Height * 0.22f);
-            float subclusterGap = Mathf.Max(110f, relatedMetrics.Height * 0.74f);
-            float categoryRailGap = Mathf.Max(230f, relatedMetrics.Width * 1.02f);
-            float owningGap = selectedMetrics.Height * 0.5f + 108f;
+            float verticalLaneGap = selectedMetrics.Height * 0.5f +
+                                    FocusNodeEdgeGap +
+                                    relatedMetrics.Height * 0.5f;
+            float subclusterGap = Mathf.Max(
+                cardGap,
+                contextGroupHeight + ContextGroupGap - relatedMetrics.Height);
+            float categoryRailGap = relatedMetrics.Width * 0.5f +
+                                    CategoryNodeEdgeGap +
+                                    contextGroupWidth * 0.5f;
+            float owningGap = selectedMetrics.Height * 0.5f +
+                              CategoryNodeEdgeGap +
+                              contextGroupDownExtent;
+            float companionLaneGap = selectedMetrics.Height * 0.5f +
+                                     CategoryNodeEdgeGap +
+                                     contextGroupHeight +
+                                     FocusNodeEdgeGap +
+                                     relatedMetrics.Height * 0.5f;
             float structuralBusGap = Mathf.Max(34f, relatedMetrics.Width * 0.16f);
 
             return new PackageGraphEgoLayoutMetrics(
@@ -583,6 +627,10 @@ namespace Deucarian.PackageInstaller.Editor
                 subclusterGap,
                 categoryRailGap,
                 owningGap,
+                companionLaneGap,
+                CategoryNodeEdgeGap,
+                contextGroupUpExtent,
+                contextGroupDownExtent,
                 structuralBusGap,
                 relatedMetrics);
         }
@@ -599,13 +647,13 @@ namespace Deucarian.PackageInstaller.Editor
         private const float HubHeight = 188f;
         private const float GroupHubSize = 72f;
         private const float FocusGroupHubSize = 88f;
-        private const float GroupChipHubSize = 58f;
+        internal const float GroupChipHubSize = 58f;
         private const float GroupCaptionWidth = 154f;
         private const float FocusGroupCaptionWidth = 178f;
-        private const float GroupChipCaptionWidth = 132f;
+        internal const float GroupChipCaptionWidth = 132f;
         private const float GroupCaptionHeight = 78f;
         private const float FocusGroupCaptionHeight = 88f;
-        private const float GroupChipCaptionHeight = 58f;
+        internal const float GroupChipCaptionHeight = 96f;
         private const float NodeGap = 22f;
         private const float MinimumGlobalGroupOrbitRadius = 560f;
         private const float MinimumRootOverviewGroupOrbitRadius = 720f;
@@ -616,7 +664,8 @@ namespace Deucarian.PackageInstaller.Editor
         private const float FocusOrbitRadius = 335f;
         private const float FocusGridGapX = 48f;
         private const float CategoryCaptionClearance = 24f;
-        private const int DenseEgoRows = 6;
+        internal const int DenseEgoRows = 6;
+        internal const float MinimumDenseZoneClearance = 24f;
         private const int DenseEgoColumns = 8;
         private const int DenseEgoVisibleLimit = DenseEgoRows * DenseEgoColumns;
         private const float DenseContextGroupGap = 12f;
@@ -869,6 +918,7 @@ namespace Deucarian.PackageInstaller.Editor
                 providers,
                 PackageGraphEgoLayoutZone.Providers,
                 metrics,
+                float.NaN,
                 nodeRects,
                 nodePresentations,
                 relatedPresentationLevel,
@@ -881,6 +931,7 @@ namespace Deucarian.PackageInstaller.Editor
                 dependents,
                 PackageGraphEgoLayoutZone.Dependents,
                 metrics,
+                float.NaN,
                 nodeRects,
                 nodePresentations,
                 relatedPresentationLevel,
@@ -888,11 +939,29 @@ namespace Deucarian.PackageInstaller.Editor
                 contextGroups,
                 placedGroupIds,
                 overflowSummaries);
+            float integrationPackageY = ResolveHorizontalPackageLaneY(
+                graph,
+                integrationNodes,
+                PackageGraphEgoLayoutZone.Integrations,
+                metrics,
+                nodeRects,
+                contextGroups,
+                placed);
+            float companionPackageY = ResolveHorizontalPackageLaneY(
+                graph,
+                MergeGroups(optionalCompanions, suiteNodes),
+                PackageGraphEgoLayoutZone.CompanionsAndSuites,
+                metrics,
+                nodeRects,
+                contextGroups,
+                placed);
+
             PlaceEgoZone(
                 graph,
                 integrationNodes,
                 PackageGraphEgoLayoutZone.Integrations,
                 metrics,
+                integrationPackageY,
                 nodeRects,
                 nodePresentations,
                 relatedPresentationLevel,
@@ -905,6 +974,7 @@ namespace Deucarian.PackageInstaller.Editor
                 MergeGroups(optionalCompanions, suiteNodes),
                 PackageGraphEgoLayoutZone.CompanionsAndSuites,
                 metrics,
+                companionPackageY,
                 nodeRects,
                 nodePresentations,
                 relatedPresentationLevel,
@@ -971,6 +1041,7 @@ namespace Deucarian.PackageInstaller.Editor
             IReadOnlyList<PackageGraphNode> nodes,
             PackageGraphEgoLayoutZone zone,
             PackageGraphEgoLayoutMetrics metrics,
+            float horizontalPackageY,
             IDictionary<string, Rect> nodeRects,
             IDictionary<string, PackageGraphNodePresentationLevel> nodePresentations,
             PackageGraphNodePresentationLevel relatedPresentationLevel,
@@ -995,6 +1066,7 @@ namespace Deucarian.PackageInstaller.Editor
                     clusters,
                     zone,
                     metrics,
+                    horizontalPackageY,
                     nodeRects,
                     nodePresentations,
                     relatedPresentationLevel,
@@ -1027,6 +1099,7 @@ namespace Deucarian.PackageInstaller.Editor
                 clusters,
                 zone,
                 metrics,
+                horizontalPackageY,
                 nodeRects,
                 nodePresentations,
                 relatedPresentationLevel,
@@ -1087,11 +1160,126 @@ namespace Deucarian.PackageInstaller.Editor
                 .ToArray();
         }
 
+        private static float ResolveHorizontalPackageLaneY(
+            PackageGraphModel graph,
+            IReadOnlyList<PackageGraphNode> nodes,
+            PackageGraphEgoLayoutZone zone,
+            PackageGraphEgoLayoutMetrics metrics,
+            IReadOnlyDictionary<string, Rect> occupiedPackageRects,
+            IReadOnlyCollection<PackageGraphGroupLayoutNode> occupiedGroupNodes,
+            ISet<string> placedPackageIds)
+        {
+            float defaultY = zone == PackageGraphEgoLayoutZone.Integrations
+                ? metrics.IntegrationPackageY
+                : metrics.CompanionPackageY;
+            EgoCategoryCluster[] clusters = CreateEgoCategoryClusters(graph, nodes, placedPackageIds);
+
+            if (clusters.Length == 0)
+            {
+                return defaultY;
+            }
+
+            Rect horizontalSpan = GetHorizontalZoneSpan(clusters, metrics);
+            float packageHalfHeight = metrics.RelatedPackageMetrics.Height * 0.5f;
+
+            if (zone == PackageGraphEgoLayoutZone.Integrations)
+            {
+                float lowerBoundary = float.NegativeInfinity;
+
+                foreach (Rect rect in occupiedPackageRects?.Values ?? Array.Empty<Rect>())
+                {
+                    if (HorizontalRangesOverlap(horizontalSpan, rect))
+                    {
+                        lowerBoundary = Mathf.Max(lowerBoundary, rect.yMax);
+                    }
+                }
+
+                foreach (PackageGraphGroupLayoutNode groupNode in
+                         occupiedGroupNodes ?? Array.Empty<PackageGraphGroupLayoutNode>())
+                {
+                    if (groupNode != null && HorizontalRangesOverlap(horizontalSpan, groupNode.Rect))
+                    {
+                        lowerBoundary = Mathf.Max(lowerBoundary, groupNode.Rect.yMax);
+                    }
+                }
+
+                return float.IsNegativeInfinity(lowerBoundary)
+                    ? defaultY
+                    : Mathf.Max(
+                        defaultY,
+                        lowerBoundary + PackageGraphEgoLayoutMetrics.FocusNodeEdgeGap + packageHalfHeight);
+            }
+
+            float upperBoundary = float.PositiveInfinity;
+
+            foreach (Rect rect in occupiedPackageRects?.Values ?? Array.Empty<Rect>())
+            {
+                if (HorizontalRangesOverlap(horizontalSpan, rect))
+                {
+                    upperBoundary = Mathf.Min(upperBoundary, rect.yMin);
+                }
+            }
+
+            foreach (PackageGraphGroupLayoutNode groupNode in
+                     occupiedGroupNodes ?? Array.Empty<PackageGraphGroupLayoutNode>())
+            {
+                if (groupNode != null && HorizontalRangesOverlap(horizontalSpan, groupNode.Rect))
+                {
+                    upperBoundary = Mathf.Min(upperBoundary, groupNode.Rect.yMin);
+                }
+            }
+
+            return float.IsPositiveInfinity(upperBoundary)
+                ? defaultY
+                : Mathf.Min(
+                    defaultY,
+                    upperBoundary - PackageGraphEgoLayoutMetrics.FocusNodeEdgeGap - packageHalfHeight);
+        }
+
+        private static Rect GetHorizontalZoneSpan(
+            IReadOnlyList<EgoCategoryCluster> clusters,
+            PackageGraphEgoLayoutMetrics metrics)
+        {
+            int packageCount = clusters?.Sum(cluster => cluster.Packages.Count) ?? 0;
+            float minX;
+            float maxX;
+
+            if (packageCount > DenseEgoVisibleLimit)
+            {
+                int visibleCount = Math.Min(DenseEgoVisibleLimit, packageCount);
+                int columnCount = Math.Min(DenseEgoColumns, visibleCount);
+                float rowWidth = columnCount * metrics.RelatedPackageMetrics.Width +
+                                 Mathf.Max(0, columnCount - 1) * FocusGridGapX;
+                minX = metrics.SelectedNodeCenter.x - rowWidth * 0.5f;
+                maxX = metrics.SelectedNodeCenter.x + rowWidth * 0.5f;
+                float lastPackageCenterX = maxX - metrics.RelatedPackageMetrics.Width * 0.5f;
+                float summaryCenterX = lastPackageCenterX +
+                                       metrics.RelatedPackageMetrics.Width * 0.5f +
+                                       144f;
+                maxX = Mathf.Max(maxX, summaryCenterX + OverflowSummaryWidth * 0.5f);
+            }
+            else
+            {
+                float totalWidth = clusters.Sum(cluster => GetHorizontalClusterWidth(cluster, metrics)) +
+                                   Mathf.Max(0, clusters.Count - 1) * metrics.PackageSubclusterGap;
+                minX = metrics.SelectedNodeCenter.x - totalWidth * 0.5f;
+                maxX = metrics.SelectedNodeCenter.x + totalWidth * 0.5f;
+            }
+
+            return Rect.MinMaxRect(minX, 0f, maxX, 0f);
+        }
+
+        private static bool HorizontalRangesOverlap(Rect first, Rect second)
+        {
+            return first.xMin < second.xMax && first.xMax > second.xMin;
+        }
+
         private static void PlaceDenseEgoZone(
             PackageGraphModel graph,
             IReadOnlyList<EgoCategoryCluster> clusters,
             PackageGraphEgoLayoutZone zone,
             PackageGraphEgoLayoutMetrics metrics,
+            float horizontalPackageY,
             IDictionary<string, Rect> nodeRects,
             IDictionary<string, PackageGraphNodePresentationLevel> nodePresentations,
             PackageGraphNodePresentationLevel relatedPresentationLevel,
@@ -1161,9 +1349,11 @@ namespace Deucarian.PackageInstaller.Editor
             else
             {
                 float direction = zone == PackageGraphEgoLayoutZone.Integrations ? 1f : -1f;
-                float baseY = zone == PackageGraphEgoLayoutZone.Integrations
-                    ? metrics.IntegrationPackageY
-                    : metrics.CompanionPackageY;
+                float baseY = float.IsNaN(horizontalPackageY)
+                    ? zone == PackageGraphEgoLayoutZone.Integrations
+                        ? metrics.IntegrationPackageY
+                        : metrics.CompanionPackageY
+                    : horizontalPackageY;
                 float totalWidth = primaryCount * metrics.RelatedPackageMetrics.Width +
                                    Mathf.Max(0, primaryCount - 1) * FocusGridGapX;
                 float startX = metrics.SelectedNodeCenter.x - totalWidth * 0.5f +
@@ -1189,7 +1379,15 @@ namespace Deucarian.PackageInstaller.Editor
                     visiblePackages,
                     vertical,
                     metrics.SelectedNodeCenter.x,
-                    outerPackageY + direction * metrics.CategoryRailGap * 0.82f,
+                    zone == PackageGraphEgoLayoutZone.Integrations
+                        ? outerPackageY +
+                          metrics.RelatedPackageMetrics.Height * 0.5f +
+                          metrics.CategoryNodeGap +
+                          metrics.ContextGroupUpExtent
+                        : outerPackageY -
+                          metrics.RelatedPackageMetrics.Height * 0.5f -
+                          metrics.CategoryNodeGap -
+                          metrics.ContextGroupDownExtent,
                     groupNodes,
                     placedGroupIds);
             }
@@ -1264,9 +1462,16 @@ namespace Deucarian.PackageInstaller.Editor
             ICollection<PackageGraphGroupLayoutNode> groupNodes,
             ISet<string> placedGroupIds)
         {
-            float totalHeight = clusters.Sum(cluster => GetVerticalClusterHeight(cluster, metrics)) +
-                                Mathf.Max(0, clusters.Count - 1) * metrics.PackageSubclusterGap;
-            float cursorY = metrics.SelectedNodeCenter.y - totalHeight * 0.5f;
+            float anchorSpan = 0f;
+
+            for (int index = 0; index < clusters.Count - 1; index++)
+            {
+                anchorSpan += GetVerticalClusterDownExtent(clusters[index], metrics) +
+                              metrics.PackageSubclusterGap +
+                              GetVerticalClusterUpExtent(clusters[index + 1], metrics);
+            }
+
+            float clusterCenterY = metrics.SelectedNodeCenter.y - anchorSpan * 0.5f;
             float packageX = zone == PackageGraphEgoLayoutZone.Providers
                 ? metrics.ProviderPackageX
                 : metrics.DependentPackageX;
@@ -1274,17 +1479,18 @@ namespace Deucarian.PackageInstaller.Editor
                 ? metrics.ProviderCategoryX
                 : metrics.DependentCategoryX;
 
-            foreach (EgoCategoryCluster cluster in clusters)
+            for (int clusterIndex = 0; clusterIndex < clusters.Count; clusterIndex++)
             {
-                float clusterHeight = GetVerticalClusterHeight(cluster, metrics);
-                float clusterCenterY = cursorY + clusterHeight * 0.5f;
+                EgoCategoryCluster cluster = clusters[clusterIndex];
+                float packageStackHeight = GetVerticalPackageStackHeight(cluster, metrics);
+                float packageStartY = clusterCenterY - packageStackHeight * 0.5f;
 
                 for (int index = 0; index < cluster.Packages.Count; index++)
                 {
                     PackageGraphNode node = cluster.Packages[index];
                     Vector2 nodeCenter = new Vector2(
                         packageX,
-                        cursorY + metrics.RelatedPackageMetrics.Height * 0.5f +
+                        packageStartY + metrics.RelatedPackageMetrics.Height * 0.5f +
                         index * (metrics.RelatedPackageMetrics.Height + metrics.PackageCardGap));
                     nodeRects[node.PackageId] = ClampToCanvas(CenteredRect(nodeCenter, metrics.RelatedPackageMetrics));
                     nodePresentations[node.PackageId] = relatedPresentationLevel;
@@ -1297,7 +1503,13 @@ namespace Deucarian.PackageInstaller.Editor
                     new Vector2(categoryX, clusterCenterY),
                     groupNodes,
                     placedGroupIds);
-                cursorY += clusterHeight + metrics.PackageSubclusterGap;
+
+                if (clusterIndex < clusters.Count - 1)
+                {
+                    clusterCenterY += GetVerticalClusterDownExtent(cluster, metrics) +
+                                      metrics.PackageSubclusterGap +
+                                      GetVerticalClusterUpExtent(clusters[clusterIndex + 1], metrics);
+                }
             }
         }
 
@@ -1306,6 +1518,7 @@ namespace Deucarian.PackageInstaller.Editor
             IReadOnlyList<EgoCategoryCluster> clusters,
             PackageGraphEgoLayoutZone zone,
             PackageGraphEgoLayoutMetrics metrics,
+            float horizontalPackageY,
             IDictionary<string, Rect> nodeRects,
             IDictionary<string, PackageGraphNodePresentationLevel> nodePresentations,
             PackageGraphNodePresentationLevel relatedPresentationLevel,
@@ -1316,23 +1529,33 @@ namespace Deucarian.PackageInstaller.Editor
             float totalWidth = clusters.Sum(cluster => GetHorizontalClusterWidth(cluster, metrics)) +
                                Mathf.Max(0, clusters.Count - 1) * metrics.PackageSubclusterGap;
             float cursorX = metrics.SelectedNodeCenter.x - totalWidth * 0.5f;
-            float packageY = zone == PackageGraphEgoLayoutZone.Integrations
-                ? metrics.IntegrationPackageY
-                : metrics.CompanionPackageY;
+            float packageY = float.IsNaN(horizontalPackageY)
+                ? zone == PackageGraphEgoLayoutZone.Integrations
+                    ? metrics.IntegrationPackageY
+                    : metrics.CompanionPackageY
+                : horizontalPackageY;
             float categoryY = zone == PackageGraphEgoLayoutZone.Integrations
-                ? metrics.IntegrationCategoryY
-                : metrics.CompanionCategoryY;
+                ? packageY +
+                  metrics.RelatedPackageMetrics.Height * 0.5f +
+                  metrics.CategoryNodeGap +
+                  metrics.ContextGroupUpExtent
+                : packageY -
+                  metrics.RelatedPackageMetrics.Height * 0.5f -
+                  metrics.CategoryNodeGap -
+                  metrics.ContextGroupDownExtent;
 
             foreach (EgoCategoryCluster cluster in clusters)
             {
                 float clusterWidth = GetHorizontalClusterWidth(cluster, metrics);
                 float clusterCenterX = cursorX + clusterWidth * 0.5f;
+                float packageRowWidth = GetHorizontalPackageRowWidth(cluster, metrics);
+                float packageStartX = clusterCenterX - packageRowWidth * 0.5f;
 
                 for (int index = 0; index < cluster.Packages.Count; index++)
                 {
                     PackageGraphNode node = cluster.Packages[index];
                     Vector2 nodeCenter = new Vector2(
-                        cursorX + metrics.RelatedPackageMetrics.Width * 0.5f +
+                        packageStartX + metrics.RelatedPackageMetrics.Width * 0.5f +
                         index * (metrics.RelatedPackageMetrics.Width + FocusGridGapX),
                         packageY);
                     nodeRects[node.PackageId] = ClampToCanvas(CenteredRect(nodeCenter, metrics.RelatedPackageMetrics));
@@ -1381,7 +1604,34 @@ namespace Deucarian.PackageInstaller.Editor
                     : cluster.Packages.Count + " related packages"));
         }
 
-        private static float GetVerticalClusterHeight(
+        private static float GetVerticalClusterUpExtent(
+            EgoCategoryCluster cluster,
+            PackageGraphEgoLayoutMetrics metrics)
+        {
+            return Mathf.Max(
+                GetVerticalPackageStackHeight(cluster, metrics) * 0.5f,
+                metrics.ContextGroupUpExtent);
+        }
+
+        private static float GetVerticalClusterDownExtent(
+            EgoCategoryCluster cluster,
+            PackageGraphEgoLayoutMetrics metrics)
+        {
+            return Mathf.Max(
+                GetVerticalPackageStackHeight(cluster, metrics) * 0.5f,
+                metrics.ContextGroupDownExtent);
+        }
+
+        private static float GetHorizontalClusterWidth(
+            EgoCategoryCluster cluster,
+            PackageGraphEgoLayoutMetrics metrics)
+        {
+            return Mathf.Max(
+                GetHorizontalPackageRowWidth(cluster, metrics),
+                Mathf.Max(GroupChipHubSize, GroupChipCaptionWidth));
+        }
+
+        private static float GetVerticalPackageStackHeight(
             EgoCategoryCluster cluster,
             PackageGraphEgoLayoutMetrics metrics)
         {
@@ -1392,7 +1642,7 @@ namespace Deucarian.PackageInstaller.Editor
                   Mathf.Max(0, count - 1) * metrics.PackageCardGap;
         }
 
-        private static float GetHorizontalClusterWidth(
+        private static float GetHorizontalPackageRowWidth(
             EgoCategoryCluster cluster,
             PackageGraphEgoLayoutMetrics metrics)
         {

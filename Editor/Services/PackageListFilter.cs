@@ -44,7 +44,10 @@ namespace Deucarian.PackageInstaller.Editor
             foreach (string category in categories)
             {
                 PackageDefinition[] categoryPackages = packageArray
-                    .Where(package => string.Equals(package.Category, category, StringComparison.OrdinalIgnoreCase))
+                    .Where(package => string.Equals(
+                        package.NavigationGroup,
+                        category,
+                        StringComparison.OrdinalIgnoreCase))
                     .ToArray();
 
                 if (categoryPackages.Length == 0)
@@ -79,7 +82,7 @@ namespace Deucarian.PackageInstaller.Editor
             IEnumerable<string> orderedCategories)
         {
             string[] packageCategories = packages
-                .Select(package => package.Category)
+                .Select(package => package.NavigationGroup)
                 .Where(category => !string.IsNullOrWhiteSpace(category))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray();

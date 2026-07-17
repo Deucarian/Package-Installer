@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using Deucarian.Editor;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -10,6 +11,47 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 {
     internal sealed class PackageGraphEmptyStateTests
     {
+        [TestCase(300f, 88f, -150f, -44f)]
+        [TestCase(300f, 132f, -150f, -66f)]
+        [TestCase(420f, 196f, -210f, -98f)]
+        public void EmptyState_CenteredMarginsTrackMeasuredCardSize(
+            float width,
+            float height,
+            float expectedLeft,
+            float expectedTop)
+        {
+            Vector2 margins = PackageGraphView.CalculateEmptyStateCenteredMargins(
+                new Vector2(width, height));
+
+            Assert.AreEqual(expectedLeft, margins.x, 0.001f);
+            Assert.AreEqual(expectedTop, margins.y, 0.001f);
+        }
+
+        [Test]
+        public void EmptyState_MeasuredSizeAppliesCenteredMarginsToTheCard()
+        {
+            PackageGraphView view = new PackageGraphView(
+                _ => { },
+                (_, __) => { },
+                selectionCleared: null,
+                rootFocused: null,
+                groupFocused: null,
+                filterState: new PackageVisibilityFilterState(),
+                filterChanged: null);
+            VisualElement emptyState = FindByClass<VisualElement>(
+                view,
+                "dpi-ecosystem-graph__empty-state");
+            emptyState.style.marginLeft = 0f;
+            emptyState.style.marginTop = 0f;
+
+            PackageGraphView.ApplyEmptyStateCenteredMargins(
+                emptyState,
+                new Vector2(300f, 132f));
+
+            Assert.AreEqual(-150f, emptyState.style.marginLeft.value.value, 0.001f);
+            Assert.AreEqual(-66f, emptyState.style.marginTop.value.value, 0.001f);
+        }
+
         [Test]
         public void EmptyState_SubtreeIsExcludedFromViewportLeftPanCapture()
         {
@@ -51,7 +93,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 () => filterChangedCount++);
             Button action = FindEmptyStateAction(view);
 
-            Assert.AreEqual("Show all packages", action.text);
+            Assert.AreEqual("Show all packages", GetActionText(action));
 
             InvokePointerClick(action);
 
@@ -79,7 +121,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 "infrastructure");
             Button action = FindEmptyStateAction(view);
 
-            Assert.AreEqual("Clear search", action.text);
+            Assert.AreEqual("Clear search", GetActionText(action));
 
             InvokePointerClick(action);
 
@@ -108,7 +150,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 "infrastructure");
             Button action = FindEmptyStateAction(view);
 
-            Assert.AreEqual("Show matching packages", action.text);
+            Assert.AreEqual("Show matching packages", GetActionText(action));
 
             InvokePointerClick(action);
 
@@ -134,7 +176,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 () => filterChangedCount++);
             Button action = FindEmptyStateAction(view);
 
-            Assert.AreEqual("Show matching packages", action.text);
+            Assert.AreEqual("Show matching packages", GetActionText(action));
 
             InvokePointerClick(action);
 
@@ -175,7 +217,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 () => filterChangedCount++);
             Button action = FindEmptyStateAction(view);
 
-            Assert.AreEqual("Show matching packages", action.text);
+            Assert.AreEqual("Show matching packages", GetActionText(action));
 
             InvokePointerClick(action);
 
@@ -203,7 +245,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 "infrastructure");
             Button action = FindEmptyStateAction(view);
 
-            Assert.AreEqual("Search all groups", action.text);
+            Assert.AreEqual("Search all groups", GetActionText(action));
 
             InvokePointerClick(action);
 
@@ -231,7 +273,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 "infrastructure");
             Button action = FindEmptyStateAction(view);
 
-            Assert.AreEqual("Search all groups", action.text);
+            Assert.AreEqual("Search all groups", GetActionText(action));
 
             InvokePointerClick(action);
 
@@ -416,7 +458,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 "https://github.com/Deucarian/" + displayName.Replace("Deucarian ", string.Empty) + ".git#main",
                 displayName + " package.",
                 Array.Empty<string>(),
-                PackageType.Core,
+                PackageKind.Library,
                 "https://github.com/Deucarian/" + displayName.Replace("Deucarian ", string.Empty) + ".git#develop",
                 category: category,
                 groupId: groupId);
@@ -450,6 +492,15 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         private static Button FindEmptyStateAction(VisualElement root)
         {
             return FindByClass<Button>(root, "dpi-ecosystem-graph__empty-action");
+        }
+
+        private static string GetActionText(Button action)
+        {
+            return action?
+                .Query<Label>(className: DeucarianEditorIconTextButton.LabelClass)
+                .ToList()
+                .Select(label => label.text)
+                .FirstOrDefault() ?? string.Empty;
         }
 
         private static TElement FindByClass<TElement>(VisualElement root, string className)
