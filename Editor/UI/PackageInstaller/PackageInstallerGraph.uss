@@ -1,10 +1,10 @@
 .dpi-global-channel-popup {
     position: absolute;
     flex-direction: column;
-    padding-left: 12px;
-    padding-right: 12px;
-    padding-top: 10px;
-    padding-bottom: 10px;
+    padding-left: 10px;
+    padding-right: 10px;
+    padding-top: 8px;
+    padding-bottom: 8px;
     border-top-left-radius: 8px;
     border-top-right-radius: 8px;
     border-bottom-right-radius: 8px;
@@ -44,10 +44,14 @@
 }
 
 .dpi-global-channel-popup__apply {
-    height: 23px;
+    height: 28px;
+    min-height: 28px;
+    max-height: 28px;
     min-width: 106px;
     padding-left: 8px;
     padding-right: 8px;
+    padding-top: 0;
+    padding-bottom: 0;
     border-top-left-radius: 5px;
     border-top-right-radius: 5px;
     border-bottom-right-radius: 5px;
@@ -63,6 +67,10 @@
     background-color: rgba(35, 82, 87, 0.68);
     color: var(--deucarian-text);
     font-size: 10px;
+}
+
+.dpi-global-channel-popup__apply--primary {
+    margin-left: 8px;
 }
 
 .dpi-global-channel-popup__apply:hover {
@@ -125,18 +133,18 @@
     background-color: rgba(12, 22, 31, 0.60);
 }
 
-.dpi-responsive--compact .dpi-graph-details {
+.deucarian-responsive--compact .dpi-graph-details {
     width: 350px;
     min-width: 310px;
     max-width: 370px;
 }
 
-.dpi-responsive--narrow .dpi-graph-content-row {
+.deucarian-responsive--narrow .dpi-graph-content-row {
     flex-direction: column;
     margin-bottom: 6px;
 }
 
-.dpi-responsive--narrow .dpi-graph-details {
+.deucarian-responsive--narrow .dpi-graph-details {
     width: auto;
     min-width: 0;
     max-width: none;
@@ -170,7 +178,7 @@
     background-color: rgba(11, 18, 25, 0.62);
 }
 
-.dpi-responsive--narrow .dpi-ecosystem-graph {
+.deucarian-responsive--narrow .dpi-ecosystem-graph {
     min-width: 0;
     min-height: 300px;
 }
@@ -179,6 +187,10 @@
     flex-shrink: 0;
     flex-direction: column;
     align-items: stretch;
+    padding-left: 10px;
+    padding-right: 10px;
+    padding-top: 8px;
+    padding-bottom: 8px;
     border-bottom-width: 1px;
     border-bottom-color: rgba(59, 166, 154, 0.16);
     border-left-width: 1px;
@@ -196,17 +208,16 @@
     min-height: 36px;
     flex-direction: row;
     align-items: center;
-    padding-left: 10px;
-    padding-right: 8px;
-    padding-top: 6px;
-    padding-bottom: 4px;
+    padding-left: 0;
+    padding-right: 0;
+    padding-top: 0;
+    padding-bottom: 0;
 }
 
 .dpi-ecosystem-graph--compact .dpi-ecosystem-graph__filter-row,
 .dpi-ecosystem-graph--narrow .dpi-ecosystem-graph__filter-row {
     flex-wrap: wrap;
     align-content: flex-start;
-    padding-bottom: 6px;
 }
 
 .dpi-ecosystem-graph--compact .dpi-ecosystem-graph__search {
@@ -241,9 +252,10 @@
     min-height: 24px;
     flex-direction: row;
     align-items: center;
-    padding-left: 10px;
-    padding-right: 8px;
-    padding-bottom: 3px;
+    padding-left: 0;
+    padding-right: 0;
+    padding-top: 0;
+    padding-bottom: 0;
     overflow: hidden;
 }
 
@@ -675,10 +687,10 @@
     margin-top: -44px;
     align-items: center;
     justify-content: center;
-    padding-left: 16px;
-    padding-right: 16px;
-    padding-top: 14px;
-    padding-bottom: 14px;
+    padding-left: 10px;
+    padding-right: 10px;
+    padding-top: 8px;
+    padding-bottom: 8px;
     border-top-left-radius: 8px;
     border-top-right-radius: 8px;
     border-bottom-right-radius: 8px;
@@ -883,7 +895,7 @@
     overflow: hidden;
     padding-left: 10px;
     padding-right: 10px;
-    padding-top: 9px;
+    padding-top: 8px;
     padding-bottom: 8px;
     border-top-left-radius: 8px;
     border-top-right-radius: 8px;
@@ -1188,8 +1200,8 @@
 .dpi-graph-node--presentation-full {
     padding-left: 10px;
     padding-right: 10px;
-    padding-top: 9px;
-    padding-bottom: 9px;
+    padding-top: 8px;
+    padding-bottom: 8px;
 }
 
 .dpi-graph-node--presentation-full .dpi-graph-node__header {
@@ -1275,10 +1287,10 @@
     color: rgba(162, 185, 200, 0.78);
     font-size: 11px;
     -unity-font-style: bold;
-    padding-left: 12px;
-    padding-right: 12px;
-    padding-top: 10px;
-    padding-bottom: 10px;
+    padding-left: 10px;
+    padding-right: 10px;
+    padding-top: 8px;
+    padding-bottom: 8px;
     border-top-left-radius: 6px;
     border-top-right-radius: 6px;
     border-bottom-right-radius: 6px;

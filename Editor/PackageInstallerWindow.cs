@@ -128,6 +128,10 @@ namespace Deucarian.PackageInstaller.Editor
         private const string BootstrapDevelopmentGitUrl = "https://github.com/Deucarian/Bootstrap.git#develop";
         private const float MinWindowWidth = 820f;
         private const float MinWindowHeight = 650f;
+        private const float ViewActionSlotWidth = 152f;
+        private const float ChannelActionSlotWidth = 184f;
+        private const float RefreshActionSlotWidth = 104f;
+        private const float CheckUpdatesActionSlotWidth = 140f;
         private const float SidebarWidth = 340f;
         private const float SidebarRowMinHeight = 94f;
         private const float SidebarRowMaxHeight = 150f;
@@ -210,11 +214,11 @@ namespace Deucarian.PackageInstaller.Editor
 
         internal readonly struct OperationLayoutMetrics
         {
-            public const int InlinePadding = 12;
-            public const int BlockPadding = 6;
+            public const int InlinePadding = DeucarianEditorLayoutMetrics.SurfaceHorizontalPadding;
+            public const int BlockPadding = DeucarianEditorLayoutMetrics.SurfaceVerticalPadding;
             public const int RowGap = 6;
             public const int ControlGap = 8;
-            public const float FooterHeight = 34f;
+            public const float FooterHeight = DeucarianEditorLayoutMetrics.FooterHeight;
             public const float DrawerMaxHeight = 220f;
         }
 
@@ -320,6 +324,9 @@ namespace Deucarian.PackageInstaller.Editor
         private Button _graphGlobalChannelButton;
         private Button _graphRefreshButton;
         private Button _graphCheckUpdatesButton;
+        private VisualElement _graphGlobalChannelSlot;
+        private VisualElement _graphRefreshSlot;
+        private VisualElement _graphCheckUpdatesSlot;
         private Button _graphUpdateAllButton;
         private Button _graphInstallAllButton;
         private VisualElement _globalChannelPopup;
@@ -368,7 +375,6 @@ namespace Deucarian.PackageInstaller.Editor
         private Color _textColor;
         private Color _mutedTextColor;
 
-        private GUIStyle _windowStyle;
         private GUIStyle _sidebarStyle;
         private GUIStyle _detailsStyle;
         private GUIStyle _sampleRowStyle;
@@ -828,22 +834,7 @@ namespace Deucarian.PackageInstaller.Editor
         {
             DeucarianEditorLayoutMode sharedMode =
                 DeucarianEditorResponsiveLayout.ApplyResponsiveClasses(element, width);
-            PackageInstallerResponsiveMode mode = ToPackageInstallerResponsiveMode(sharedMode);
-
-            if (element != null)
-            {
-                element.EnableInClassList(
-                    "dpi-responsive--wide",
-                    mode == PackageInstallerResponsiveMode.Wide);
-                element.EnableInClassList(
-                    "dpi-responsive--compact",
-                    mode == PackageInstallerResponsiveMode.Compact);
-                element.EnableInClassList(
-                    "dpi-responsive--narrow",
-                    mode == PackageInstallerResponsiveMode.Narrow);
-            }
-
-            return mode;
+            return ToPackageInstallerResponsiveMode(sharedMode);
         }
 
         private static PackageInstallerResponsiveMode ToPackageInstallerResponsiveMode(
@@ -883,11 +874,11 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void BuildViewToolbar(VisualElement content)
         {
-            VisualElement toolbar = DeucarianEditorWorkbenchToolbar.CreateToolbar();
-            // The released Package Installer toolbar was unnamed. Keep that domain
-            // contract while sourcing its visual construction from the workbench.
+            VisualElement toolbar = DeucarianEditorCommandBar.Create(
+                DeucarianEditorWorkbenchToolbarLayout.StableActionLanes);
             toolbar.name = null;
-            toolbar.AddToClassList("dpi-view-toolbar");
+            DeucarianEditorCommandBarLanes lanes =
+                DeucarianEditorCommandBar.CreateLanes(toolbar);
 
             foreach (InstallerViewMode viewMode in GetEnabledInstallerViewModes())
             {
@@ -902,44 +893,58 @@ namespace Deucarian.PackageInstaller.Editor
                     _listViewButton = viewButton;
                 }
 
-                toolbar.Add(viewButton);
+                VisualElement viewSlot = DeucarianEditorCommandBar.CreateReservedSlot(
+                    ViewActionSlotWidth);
+                DeucarianEditorCommandBar.SetReservedContent(viewSlot, viewButton);
+                lanes.Leading.Add(viewSlot);
             }
 
-            _viewSummaryLabel = DeucarianEditorWorkbenchToolbar.CreateSummary(string.Empty);
-            _viewSummaryLabel.AddToClassList("dpi-view-toolbar__summary");
-            toolbar.Add(_viewSummaryLabel);
-
-            VisualElement spacer = DeucarianEditorWorkbenchToolbar.CreateSpacer();
-            toolbar.Add(spacer);
+            _viewSummaryLabel = lanes.Summary;
+            _viewSummaryLabel.tooltip = string.Empty;
+            _viewSummaryLabel.style.whiteSpace = WhiteSpace.NoWrap;
+            _viewSummaryLabel.style.overflow = Overflow.Hidden;
+            _viewSummaryLabel.style.textOverflow = TextOverflow.Ellipsis;
 
             _graphGlobalChannelButton = CreateGlobalChannelOverrideButton();
             _graphRefreshButton = CreateGraphActionButton("Refresh", RefreshPackages);
             _graphCheckUpdatesButton = CreateGraphActionButton("Check Updates", () => HandleActionButton(PackageInstallerActionKind.CheckUpdates));
-            toolbar.Add(_graphGlobalChannelButton);
-            toolbar.Add(_graphRefreshButton);
-            toolbar.Add(_graphCheckUpdatesButton);
+
+            _graphGlobalChannelSlot = CreateCommandSlot(
+                ChannelActionSlotWidth,
+                _graphGlobalChannelButton);
+            _graphRefreshSlot = CreateCommandSlot(
+                RefreshActionSlotWidth,
+                _graphRefreshButton);
+            _graphCheckUpdatesSlot = CreateCommandSlot(
+                CheckUpdatesActionSlotWidth,
+                _graphCheckUpdatesButton);
+            lanes.Trailing.Add(_graphGlobalChannelSlot);
+            lanes.Trailing.Add(_graphRefreshSlot);
+            lanes.Trailing.Add(_graphCheckUpdatesSlot);
 
             content.Add(toolbar);
         }
 
+        private static VisualElement CreateCommandSlot(float width, VisualElement content)
+        {
+            VisualElement slot = DeucarianEditorCommandBar.CreateReservedSlot(width);
+            DeucarianEditorCommandBar.SetReservedContent(slot, content);
+            return slot;
+        }
+
         private Button CreateViewToggleButton(string text, InstallerViewMode viewMode)
         {
-            Button button = DeucarianEditorWorkbenchToolbar.CreateToggleButton(
+            return DeucarianEditorCommandBar.CreateToggle(
                 text,
-                () => SetViewMode(viewMode));
-
-            // The generic workbench toggle is intentionally wider than the released
-            // Package Installer view switch. Retain the shared legacy toggle class so
-            // factory adoption does not change the established 116 px geometry.
-            button.RemoveFromClassList(DeucarianEditorWorkbenchToolbar.ActionClass);
-            button.RemoveFromClassList(DeucarianEditorWorkbenchToolbar.ToggleClass);
-            return button;
+                () => SetViewMode(viewMode),
+                false,
+                DeucarianEditorIconIds.CreatePackage,
+                "Show " + text + ".");
         }
 
         private static void SetViewToggleActive(VisualElement toggle, bool active)
         {
-            DeucarianEditorWorkbenchToolbar.SetToggleActive(toggle, active);
-            toggle?.RemoveFromClassList(DeucarianEditorWorkbenchToolbar.ToggleActiveClass);
+            DeucarianEditorCommandBar.SetActive(toggle, active);
         }
 
         private static InstallerViewMode[] GetEnabledInstallerViewModes()
@@ -957,25 +962,27 @@ namespace Deucarian.PackageInstaller.Editor
         private Button CreateGlobalChannelOverrideButton()
         {
             PackageChannelSelection selection = GetGlobalProjectChannelSelection();
-            Button button = DeucarianEditorWorkbenchToolbar.CreateActionButton(
+            Button button = DeucarianEditorCommandBar.CreateAction(
+                DeucarianEditorIconIds.Wrench,
                 FormatGlobalChannelButtonLabel(selection),
                 ToggleGlobalChannelOverridePopup,
-                emphasized: true);
+                emphasized: true,
+                GetGlobalChannelButtonTooltip(selection));
             button.name = GlobalChannelOverrideButtonName;
-            button.tooltip = GetGlobalChannelButtonTooltip(selection);
-            button.AddToClassList("dpi-view-toolbar__action");
-            button.AddToClassList("dpi-view-toolbar__channel-button");
             return button;
         }
 
         private Button CreateGraphActionButton(string text, Action action)
         {
-            Button button = DeucarianEditorWorkbenchToolbar.CreateActionButton(
+            string iconId = string.Equals(text, "Refresh", StringComparison.Ordinal)
+                ? DeucarianEditorIconIds.Refresh
+                : DeucarianEditorIconIds.Check;
+            return DeucarianEditorCommandBar.CreateAction(
+                iconId,
                 text,
-                () => action?.Invoke());
-            button.AddToClassList("dpi-view-toolbar__action");
-            button.AddToClassList("dpi-view-toolbar__graph-action");
-            return button;
+                () => action?.Invoke(),
+                false,
+                text);
         }
 
         private void ToggleGlobalChannelOverridePopup()
@@ -1040,18 +1047,20 @@ namespace Deucarian.PackageInstaller.Editor
             VisualElement actions = new VisualElement();
             actions.AddToClassList("dpi-global-channel-popup__actions");
 
-            Button applyButton = new Button(ApplyGlobalChannelOverrideFromPopup)
-            {
-                text = "Apply Override"
-            };
+            Button applyButton = DeucarianEditorIconTextButton.Create(
+                DeucarianEditorIconIds.Check,
+                "Apply Override",
+                ApplyGlobalChannelOverrideFromPopup,
+                "Apply the selected project-wide package channel override.");
             applyButton.AddToClassList("dpi-global-channel-popup__apply");
+            applyButton.AddToClassList("dpi-global-channel-popup__apply--primary");
 
-            _globalChannelResetButton = new Button(ClearGlobalChannelOverrideFromPopup)
-            {
-                name = GlobalChannelOverrideResetButtonName,
-                text = "Use Default",
-                tooltip = "Remove the explicit project override and use inherited/default channel selection."
-            };
+            _globalChannelResetButton = DeucarianEditorIconTextButton.Create(
+                DeucarianEditorIconIds.Reset,
+                "Use Default",
+                ClearGlobalChannelOverrideFromPopup,
+                "Remove the explicit project override and use inherited/default channel selection.");
+            _globalChannelResetButton.name = GlobalChannelOverrideResetButtonName;
             _globalChannelResetButton.AddToClassList("dpi-global-channel-popup__apply");
             actions.Add(_globalChannelResetButton);
             actions.Add(applyButton);
@@ -1100,7 +1109,9 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             PackageChannelSelection selection = GetGlobalProjectChannelSelection();
-            _graphGlobalChannelButton.text = FormatGlobalChannelButtonLabel(selection);
+            DeucarianEditorCommandBar.SetText(
+                _graphGlobalChannelButton,
+                FormatGlobalChannelButtonLabel(selection));
             _graphGlobalChannelButton.tooltip = GetGlobalChannelButtonTooltip(selection);
         }
 
@@ -1276,41 +1287,36 @@ namespace Deucarian.PackageInstaller.Editor
             out Label verboseLabel,
             out Label messageLabel)
         {
-            VisualElement drawer = new VisualElement { name = OperationDrawerName };
-            drawer.AddToClassList("dpi-operation-surface");
-            drawer.AddToClassList("dpi-operation-drawer");
+            DeucarianEditorWorkbenchDrawer sharedDrawer =
+                DeucarianEditorWorkbenchSurfaces.CreateDrawer(false);
+            VisualElement drawer = sharedDrawer.Root;
+            drawer.name = OperationDrawerName;
 
-            scrollView = new ScrollView(ScrollViewMode.Vertical)
-            {
-                name = OperationDrawerScrollViewName,
-                verticalScrollerVisibility = ScrollerVisibility.Auto,
-                horizontalScrollerVisibility = ScrollerVisibility.Hidden
-            };
-            scrollView.AddToClassList("dpi-operation-drawer__scroll");
-            drawer.Add(scrollView);
+            scrollView = sharedDrawer.ScrollView;
+            scrollView.name = OperationDrawerScrollViewName;
+            scrollView.verticalScrollerVisibility = ScrollerVisibility.Auto;
+            scrollView.horizontalScrollerVisibility = ScrollerVisibility.Hidden;
 
-            content = new VisualElement { name = OperationDrawerContentName };
-            content.AddToClassList("dpi-operation-content");
-            scrollView.Add(content);
+            content = sharedDrawer.Content;
+            content.name = OperationDrawerContentName;
 
-            VisualElement header = new VisualElement();
-            header.AddToClassList("dpi-operation-row");
-            header.AddToClassList("dpi-operation-row--header");
+            VisualElement header = DeucarianEditorWorkbenchSurfaces.CreateRow(
+                DeucarianEditorWorkbenchSurfaces.HeaderRowClass);
             content.Add(header);
 
             titleLabel = new Label("Last Operation Summary") { name = OperationDrawerTitleName };
-            titleLabel.AddToClassList("dpi-operation-text--primary");
-            titleLabel.AddToClassList("dpi-operation-drawer__title");
+            titleLabel.AddToClassList(DeucarianEditorWorkbenchSurfaces.PrimaryTextClass);
+            titleLabel.AddToClassList("deucarian-workbench-operation-drawer__title");
             titleLabel.style.color = DeucarianEditorVisualShell.Text;
             header.Add(titleLabel);
 
-            VisualElement optionRow = new VisualElement();
-            optionRow.AddToClassList("dpi-operation-row");
-            optionRow.AddToClassList("dpi-operation-row--option");
+            VisualElement optionRow = DeucarianEditorWorkbenchSurfaces.CreateRow(
+                DeucarianEditorWorkbenchSurfaces.OptionRowClass);
             content.Add(optionRow);
 
             Toggle localVerboseToggle = new Toggle { name = OperationDrawerVerboseToggleName };
-            localVerboseToggle.AddToClassList("dpi-operation-drawer__toggle");
+            localVerboseToggle.AddToClassList(
+                "deucarian-workbench-operation-drawer__toggle");
             localVerboseToggle.tooltip = "Send normal Package Installer info messages to the Unity Console. Warnings and errors are always logged.";
             if (verboseLoggingChanged != null)
             {
@@ -1320,8 +1326,9 @@ namespace Deucarian.PackageInstaller.Editor
             verboseToggle = localVerboseToggle;
 
             verboseLabel = new Label("Verbose Console Logging") { name = OperationDrawerVerboseLabelName };
-            verboseLabel.AddToClassList("dpi-operation-text--secondary");
-            verboseLabel.AddToClassList("dpi-operation-drawer__option-label");
+            verboseLabel.AddToClassList(DeucarianEditorWorkbenchSurfaces.SecondaryTextClass);
+            verboseLabel.AddToClassList(
+                "deucarian-workbench-operation-drawer__option-label");
             verboseLabel.tooltip = localVerboseToggle.tooltip;
             verboseLabel.style.color = DeucarianEditorVisualShell.MutedText;
             verboseLabel.RegisterCallback<ClickEvent>(_ =>
@@ -1334,35 +1341,30 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 name = OperationDrawerMessageName
             };
-            localMessageLabel.AddToClassList("dpi-operation-row");
-            localMessageLabel.AddToClassList("dpi-operation-row--message");
-            localMessageLabel.AddToClassList("dpi-operation-text--secondary");
-            localMessageLabel.AddToClassList("dpi-operation-drawer__message");
+            localMessageLabel.AddToClassList(DeucarianEditorWorkbenchSurfaces.RowClass);
+            localMessageLabel.AddToClassList(DeucarianEditorWorkbenchSurfaces.MessageRowClass);
+            localMessageLabel.AddToClassList(DeucarianEditorWorkbenchSurfaces.SecondaryTextClass);
+            localMessageLabel.AddToClassList(
+                "deucarian-workbench-operation-drawer__message");
             localMessageLabel.style.color = DeucarianEditorVisualShell.MutedText;
             content.Add(localMessageLabel);
             messageLabel = localMessageLabel;
 
-            VisualElement reportActions = new VisualElement();
-            reportActions.AddToClassList("dpi-operation-row");
-            reportActions.AddToClassList("dpi-operation-row--option");
-            Button retryButton = new Button(retryAction)
-            {
-                name = OperationDrawerRetryButtonName,
-                text = "Retry",
-                tooltip = "Retry the latest failed or canceled activity."
-            };
-            retryButton.AddToClassList("dpi-operation-drawer__copy");
+            VisualElement reportActions = DeucarianEditorWorkbenchSurfaces.CreateRow(
+                DeucarianEditorWorkbenchSurfaces.OptionRowClass);
+            Button retryButton = DeucarianEditorWorkbenchSurfaces.CreateDrawerAction(
+                DeucarianEditorIconIds.Refresh,
+                "Retry",
+                retryAction,
+                "Retry the latest failed or canceled activity.");
+            retryButton.name = OperationDrawerRetryButtonName;
             retryButton.style.display = DisplayStyle.None;
             reportActions.Add(retryButton);
-            Button copyDetailsButton = new Button(() =>
-            {
-                GUIUtility.systemCopyBuffer = localMessageLabel.text ?? string.Empty;
-            })
-            {
-                text = "Copy details",
-                tooltip = "Copy the chronological operation report to the clipboard."
-            };
-            copyDetailsButton.AddToClassList("dpi-operation-drawer__copy");
+            Button copyDetailsButton = DeucarianEditorWorkbenchSurfaces.CreateDrawerAction(
+                DeucarianEditorIconIds.Copy,
+                "Copy details",
+                () => GUIUtility.systemCopyBuffer = localMessageLabel.text ?? string.Empty,
+                "Copy the chronological operation report to the clipboard.");
             reportActions.Add(copyDetailsButton);
             content.Add(reportActions);
 
@@ -1438,11 +1440,12 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             bool canRetry = retryKind != PackageInstallerRetryKind.None && !isBusy;
-            retryButton.text = retryKind == PackageInstallerRetryKind.RestartOperation
+            string text = retryKind == PackageInstallerRetryKind.RestartOperation
                 ? "Retry package operation"
                 : retryKind == PackageInstallerRetryKind.ReplanOperation
                     ? "Retry package plan"
                     : "Retry";
+            DeucarianEditorIconTextButton.SetText(retryButton, text);
             retryButton.tooltip = retryKind == PackageInstallerRetryKind.RestartOperation
                 ? "Refresh installed and registry state, then replan the affected package operation."
                 : retryKind == PackageInstallerRetryKind.ReplanOperation
@@ -1542,10 +1545,8 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            drawer.style.display = DisplayStyle.Flex;
             drawer.style.opacity = 1f;
-            drawer.EnableInClassList("dpi-operation-drawer--expanded", expanded);
-            drawer.EnableInClassList("dpi-operation-drawer--collapsed", !expanded);
+            DeucarianEditorWorkbenchSurfaces.SetDrawerExpanded(drawer, expanded);
 
             float drawerHeight = CalculateOperationDrawerContainerHeight(
                 expanded,
@@ -1604,92 +1605,57 @@ namespace Deucarian.PackageInstaller.Editor
             Action detailsToggleAction,
             Action cancelAction = null)
         {
-            VisualElement footer = new VisualElement { name = OperationFooterRowName };
-            footer.AddToClassList("dpi-operation-surface");
-            footer.AddToClassList("dpi-operation-footer");
-            footer.style.flexDirection = FlexDirection.Row;
-            footer.style.alignItems = Align.Center;
-            footer.style.flexShrink = 0f;
+            DeucarianEditorWorkbenchFooter sharedFooter =
+                DeucarianEditorWorkbenchSurfaces.CreateFooter(
+                    "i",
+                    "Idle",
+                    "No operation running.",
+                    "Cancel",
+                    cancelAction,
+                    GetFooterVersionText());
+            VisualElement footer = sharedFooter.Root;
+            footer.name = OperationFooterRowName;
             footer.style.height = OperationFooterHeight;
             footer.style.minHeight = OperationFooterHeight;
             footer.style.maxHeight = OperationFooterHeight;
-            footer.style.overflow = Overflow.Hidden;
+            footer.style.paddingLeft = DeucarianEditorLayoutMetrics.FooterHorizontalPadding;
+            footer.style.paddingRight = DeucarianEditorLayoutMetrics.FooterHorizontalPadding;
+            footer.style.paddingTop = DeucarianEditorLayoutMetrics.FooterVerticalPadding;
+            footer.style.paddingBottom = DeucarianEditorLayoutMetrics.FooterVerticalPadding;
             footer.style.opacity = 1f;
-            footer.style.paddingLeft = OperationInlinePadding;
-            footer.style.paddingRight = OperationInlinePadding;
 
-            VisualElement statusGroup = new VisualElement { name = OperationFooterStatusGroupName };
-            statusGroup.AddToClassList("dpi-operation-footer__status");
-            statusGroup.style.flexDirection = FlexDirection.Row;
-            statusGroup.style.alignItems = Align.Center;
-            statusGroup.style.flexShrink = 0f;
-            statusGroup.style.opacity = 1f;
-            statusGroup.style.marginRight = OperationControlGap;
+            sharedFooter.Status.name = OperationFooterStatusGroupName;
+            sharedFooter.StatusIcon.name = OperationFooterStatusIconName;
+            sharedFooter.StatusLabel.name = OperationFooterStatusLabelName;
+            sharedFooter.Summary.name = OperationFooterSummaryName;
+            sharedFooter.Version.name = OperationFooterVersionName;
+            sharedFooter.Status.style.opacity = 1f;
+            sharedFooter.StatusIcon.style.opacity = 1f;
+            sharedFooter.StatusLabel.style.opacity = 1f;
+            sharedFooter.Summary.style.opacity = 1f;
+            sharedFooter.Version.style.opacity = 1f;
 
-            Label statusIcon = new Label { name = OperationFooterStatusIconName };
-            statusIcon.AddToClassList("dpi-operation-footer__status-icon");
-            statusIcon.style.flexShrink = 0f;
-            statusIcon.style.opacity = 1f;
-            statusGroup.Add(statusIcon);
-
-            Label statusLabel = new Label { name = OperationFooterStatusLabelName };
-            statusLabel.AddToClassList("dpi-operation-footer__status-label");
-            statusLabel.style.flexShrink = 0f;
-            statusLabel.style.opacity = 1f;
-            statusGroup.Add(statusLabel);
-            footer.Add(statusGroup);
-
-            Label summaryLabel = new Label { name = OperationFooterSummaryName };
-            summaryLabel.AddToClassList("dpi-operation-footer__summary");
-            summaryLabel.style.flexGrow = 1f;
-            summaryLabel.style.flexShrink = 1f;
-            summaryLabel.style.minWidth = 0f;
-            summaryLabel.style.opacity = 1f;
-            summaryLabel.style.marginRight = OperationControlGap;
-            footer.Add(summaryLabel);
-
-            VisualElement spacer = new VisualElement();
-            spacer.AddToClassList("dpi-operation-footer__spacer");
-            spacer.style.flexGrow = 0f;
-            spacer.style.flexShrink = 0f;
-            footer.Add(spacer);
-
-            Button cancelButton = new Button { name = OperationFooterCancelButtonName, text = "Cancel" };
-            if (cancelAction != null)
-            {
-                cancelButton.clicked += cancelAction;
-            }
-            cancelButton.AddToClassList("dpi-operation-footer__details-button");
-            cancelButton.style.flexShrink = 0f;
-            cancelButton.style.width = 92f;
-            cancelButton.style.height = 24f;
-            cancelButton.style.minHeight = 24f;
-            cancelButton.style.maxHeight = 24f;
-            cancelButton.style.marginRight = OperationControlGap;
+            Button cancelButton = sharedFooter.Action;
+            cancelButton.name = OperationFooterCancelButtonName;
+            DeucarianEditorWorkbenchToolbar.SetButtonIcon(
+                cancelButton,
+                DeucarianEditorIconIds.Warning,
+                "Cancel",
+                "Cancel the active Package Installer operation.");
+            cancelButton.style.width = 124f;
+            cancelButton.style.minWidth = 124f;
+            cancelButton.style.maxWidth = 124f;
             cancelButton.style.display = DisplayStyle.None;
-            footer.Add(cancelButton);
 
-            Button detailsButton = new Button { name = OperationFooterDetailsButtonName };
-            if (detailsToggleAction != null)
-            {
-                detailsButton.clicked += detailsToggleAction;
-            }
-
-            detailsButton.AddToClassList("dpi-operation-footer__details-button");
-            detailsButton.style.flexShrink = 0f;
-            detailsButton.style.width = 96f;
-            detailsButton.style.height = 24f;
-            detailsButton.style.minHeight = 24f;
-            detailsButton.style.maxHeight = 24f;
+            Button detailsButton = DeucarianEditorWorkbenchSurfaces.AddFooterAction(
+                sharedFooter,
+                DeucarianEditorIconIds.History,
+                "Show Details",
+                detailsToggleAction,
+                "Show the last operation details.",
+                128f);
+            detailsButton.name = OperationFooterDetailsButtonName;
             detailsButton.style.opacity = 1f;
-            detailsButton.style.marginRight = OperationControlGap;
-            footer.Add(detailsButton);
-
-            Label versionLabel = new Label { name = OperationFooterVersionName };
-            versionLabel.AddToClassList("dpi-operation-footer__version");
-            versionLabel.style.flexShrink = 0f;
-            versionLabel.style.opacity = 1f;
-            footer.Add(versionLabel);
 
             ApplyOperationFooterData(
                 footer,
@@ -1760,13 +1726,14 @@ namespace Deucarian.PackageInstaller.Editor
             cancelButton.style.display = installBusy || sampleBusy || checkBusy || registryBusy
                 ? DisplayStyle.Flex
                 : DisplayStyle.None;
-            cancelButton.text = sampleBusy
+            string text = sampleBusy
                 ? "Cancel Import"
                 : checkBusy
                     ? "Cancel Check"
                     : registryBusy
                         ? "Cancel Check"
                         : "Cancel";
+            DeucarianEditorIconTextButton.SetText(cancelButton, text);
         }
 
         private void CancelCurrentContextualOperation()
@@ -1819,9 +1786,6 @@ namespace Deucarian.PackageInstaller.Editor
             string statusMarker = GetStatusMarker(statusKind);
             Color statusColor = GetStatusColor(statusKind);
 
-            footer.EnableInClassList("dpi-operation-footer--expanded", detailsExpanded);
-            footer.EnableInClassList("dpi-operation-footer--collapsed", !detailsExpanded);
-
             Label statusIcon = footer.Q<Label>(OperationFooterStatusIconName);
             Label statusLabel = footer.Q<Label>(OperationFooterStatusLabelName);
             Label summaryLabel = footer.Q<Label>(OperationFooterSummaryName);
@@ -1850,7 +1814,9 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (detailsButton != null)
             {
-                detailsButton.text = detailsExpanded ? "Hide Details" : "Show Details";
+                DeucarianEditorIconTextButton.SetText(
+                    detailsButton,
+                    detailsExpanded ? "Hide Details" : "Show Details");
                 detailsButton.tooltip = detailsExpanded
                     ? "Hide the last operation details."
                     : "Show the last operation details.";
@@ -1870,34 +1836,44 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            element.RemoveFromClassList("dpi-operation-footer__status-icon--installed");
-            element.RemoveFromClassList("dpi-operation-footer__status-icon--not-installed");
-            element.RemoveFromClassList("dpi-operation-footer__status-icon--attention");
-            element.RemoveFromClassList("dpi-operation-footer__status-icon--failed");
-            element.RemoveFromClassList("dpi-operation-footer__status-icon--busy");
-            element.RemoveFromClassList("dpi-operation-footer__status-icon--info");
+            element.RemoveFromClassList(
+                DeucarianEditorWorkbenchSurfaces.FooterStatusSuccessClass);
+            element.RemoveFromClassList(
+                DeucarianEditorWorkbenchSurfaces.FooterStatusNeutralClass);
+            element.RemoveFromClassList(
+                DeucarianEditorWorkbenchSurfaces.FooterStatusWarningClass);
+            element.RemoveFromClassList(
+                DeucarianEditorWorkbenchSurfaces.FooterStatusErrorClass);
+            element.RemoveFromClassList(
+                DeucarianEditorWorkbenchSurfaces.FooterStatusBusyClass);
 
             switch (statusKind)
             {
                 case VisualStatusKind.Installed:
-                    element.AddToClassList("dpi-operation-footer__status-icon--installed");
+                    element.AddToClassList(
+                        DeucarianEditorWorkbenchSurfaces.FooterStatusSuccessClass);
                     break;
                 case VisualStatusKind.NotInstalled:
-                    element.AddToClassList("dpi-operation-footer__status-icon--not-installed");
+                    element.AddToClassList(
+                        DeucarianEditorWorkbenchSurfaces.FooterStatusNeutralClass);
                     break;
                 case VisualStatusKind.UpdateAvailable:
-                    element.AddToClassList("dpi-operation-footer__status-icon--attention");
+                    element.AddToClassList(
+                        DeucarianEditorWorkbenchSurfaces.FooterStatusWarningClass);
                     break;
                 case VisualStatusKind.Failed:
-                    element.AddToClassList("dpi-operation-footer__status-icon--failed");
+                    element.AddToClassList(
+                        DeucarianEditorWorkbenchSurfaces.FooterStatusErrorClass);
                     break;
                 case VisualStatusKind.Busy:
-                    element.AddToClassList("dpi-operation-footer__status-icon--busy");
+                    element.AddToClassList(
+                        DeucarianEditorWorkbenchSurfaces.FooterStatusBusyClass);
                     break;
                 case VisualStatusKind.Info:
                 case VisualStatusKind.Integration:
                 default:
-                    element.AddToClassList("dpi-operation-footer__status-icon--info");
+                    element.AddToClassList(
+                        DeucarianEditorWorkbenchSurfaces.FooterStatusNeutralClass);
                     break;
             }
         }
@@ -2103,7 +2079,9 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (_graphGlobalChannelButton != null)
             {
-                _graphGlobalChannelButton.style.display = graphMode ? DisplayStyle.Flex : DisplayStyle.None;
+                DeucarianEditorCommandBar.SetReservedVisible(
+                    _graphGlobalChannelSlot,
+                    graphMode);
                 _graphGlobalChannelButton.SetEnabled(!busy);
                 UpdateGlobalChannelOverrideButton();
 
@@ -2115,7 +2093,9 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (_graphRefreshButton != null)
             {
-                _graphRefreshButton.style.display = graphMode ? DisplayStyle.Flex : DisplayStyle.None;
+                DeucarianEditorCommandBar.SetReservedVisible(
+                    _graphRefreshSlot,
+                    graphMode);
                 _graphRefreshButton.SetEnabled(!busy);
             }
 
@@ -2127,8 +2107,10 @@ namespace Deucarian.PackageInstaller.Editor
                     _cancelingActionKind,
                     busy,
                     packagesWithUpdates.Length > 0);
-                _graphCheckUpdatesButton.style.display = graphMode ? DisplayStyle.Flex : DisplayStyle.None;
-                _graphCheckUpdatesButton.text = state.Label;
+                DeucarianEditorCommandBar.SetReservedVisible(
+                    _graphCheckUpdatesSlot,
+                    graphMode);
+                DeucarianEditorCommandBar.SetText(_graphCheckUpdatesButton, state.Label);
                 _graphCheckUpdatesButton.SetEnabled(state.Enabled);
             }
 
@@ -2141,7 +2123,7 @@ namespace Deucarian.PackageInstaller.Editor
                     busy,
                     packagesWithUpdates.Length > 0);
                 _graphUpdateAllButton.style.display = graphMode ? DisplayStyle.Flex : DisplayStyle.None;
-                _graphUpdateAllButton.text = state.Label;
+                DeucarianEditorCommandBar.SetText(_graphUpdateAllButton, state.Label);
                 _graphUpdateAllButton.SetEnabled(state.Enabled);
             }
 
@@ -2154,13 +2136,17 @@ namespace Deucarian.PackageInstaller.Editor
                     busy,
                     packagesWithUpdates.Length > 0);
                 _graphInstallAllButton.style.display = graphMode ? DisplayStyle.Flex : DisplayStyle.None;
-                _graphInstallAllButton.text = state.Label;
+                DeucarianEditorCommandBar.SetText(_graphInstallAllButton, state.Label);
                 _graphInstallAllButton.SetEnabled(state.Enabled);
             }
 
             if (_viewSummaryLabel != null)
             {
-                _viewSummaryLabel.text = PackageRegistryProvider.All.Count + " packages - " + PackageRegistryProvider.StatusMessage;
+                string summary = PackageRegistryProvider.All.Count +
+                                 " packages - " +
+                                 PackageRegistryProvider.StatusMessage;
+                _viewSummaryLabel.text = summary;
+                _viewSummaryLabel.tooltip = summary;
             }
         }
 
@@ -2528,18 +2514,22 @@ namespace Deucarian.PackageInstaller.Editor
         private void DrawGraphDetailsGui()
         {
             EnsureStyles();
-            DrawDetailsPane();
+            using (DeucarianEditorWorkbenchGUI.BeginEmbeddedPage(
+                       GUILayout.ExpandHeight(true)))
+            {
+                DrawDetailsPane();
+            }
         }
 
         private void DrawListViewGui()
         {
             EnsureStyles();
-            DrawWindowBackground();
             EnsureValidSelection();
 
-            using (new EditorGUILayout.VerticalScope(_windowStyle))
+            using (DeucarianEditorWorkbenchGUI.BeginEmbeddedPage(
+                       GUILayout.ExpandHeight(true)))
             {
-                DrawHeader();
+                // DrawHeader();
 
                 using (new EditorGUILayout.HorizontalScope(GUILayout.ExpandHeight(true)))
                 {
@@ -2583,7 +2573,6 @@ namespace Deucarian.PackageInstaller.Editor
 
             // Keep the released per-window ownership semantics while sourcing every
             // initial value from the shared Editor workbench contract.
-            _windowStyle = new GUIStyle(DeucarianEditorWorkbenchGUI.WindowStyle);
             _sidebarStyle = new GUIStyle(DeucarianEditorWorkbenchGUI.SidebarStyle);
             _detailsStyle = new GUIStyle(DeucarianEditorWorkbenchGUI.DetailsStyle);
             _sampleRowStyle = new GUIStyle(DeucarianEditorWorkbenchGUI.SampleRowStyle);

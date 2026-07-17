@@ -1,5 +1,6 @@
 using NUnit.Framework;
 using System;
+using Deucarian.Editor;
 using UnityEngine.UIElements;
 
 namespace Deucarian.PackageInstaller.Editor.Tests
@@ -132,13 +133,19 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 PackageInstallerRetryKind.Refresh,
                 PackageInstallerWindow.ResolveContextualRetryKindForTests(refresh, null));
 
-            Button retryButton = new Button();
+            Button retryButton = DeucarianEditorWorkbenchSurfaces.CreateDrawerAction(
+                DeucarianEditorIconIds.Refresh,
+                "Retry",
+                null,
+                "Retry the latest failed or canceled activity.");
             PackageInstallerWindow.ApplyContextualRetryButtonStateForTests(
                 retryButton,
                 PackageInstallerRetryKind.RestartOperation,
                 isBusy: false);
             Assert.AreEqual(DisplayStyle.Flex, retryButton.style.display.value);
-            Assert.AreEqual("Retry package operation", retryButton.text);
+            Assert.AreEqual(
+                "Retry package operation",
+                retryButton.Q<Label>(className: DeucarianEditorIconTextButton.LabelClass)?.text);
             StringAssert.Contains("replan", retryButton.tooltip);
         }
 

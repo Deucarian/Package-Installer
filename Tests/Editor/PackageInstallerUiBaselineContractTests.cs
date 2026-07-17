@@ -22,7 +22,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         private const BindingFlags InstancePrivate = BindingFlags.Instance | BindingFlags.NonPublic;
 
         [Test]
-        public void Toolbar_VisualTreeNamesClassesAndOrderMatchBaseline()
+        public void Toolbar_UsesCanonicalLanesComposedActionsAndFixedGeometry()
         {
             PackageInstallerWindow window = ScriptableObject.CreateInstance<PackageInstallerWindow>();
 
@@ -36,20 +36,43 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 InvokePrivate(window, "BuildViewToolbar", content);
 
                 Assert.AreEqual(1, content.childCount);
-                Assert.AreEqual(
-                    NormalizeLines(@"
-VisualElement|-|deucarian-toolbar-row,deucarian-workbench-toolbar,dpi-view-toolbar|-
-  Button|-|deucarian-toggle-button|Ecosystem Graph
-  Label|-|deucarian-workbench-toolbar__summary,dpi-view-toolbar__summary|-
-  VisualElement|-|deucarian-workbench-toolbar__spacer,deucarian-toolbar-spacer|-
-  Button|package-installer-global-channel-override|deucarian-workbench-toolbar__action,deucarian-workbench-toolbar__action--emphasized,dpi-view-toolbar__action,dpi-view-toolbar__channel-button|Channel: Stable
-  Button|-|deucarian-workbench-toolbar__action,deucarian-workbench-toolbar__action--standard,dpi-view-toolbar__action,dpi-view-toolbar__graph-action|Refresh
-  Button|-|deucarian-workbench-toolbar__action,deucarian-workbench-toolbar__action--standard,dpi-view-toolbar__action,dpi-view-toolbar__graph-action|Check Updates"),
-                    SerializeVisualTree(content.ElementAt(0)));
+                VisualElement toolbar = content.ElementAt(0);
+                Assert.IsTrue(toolbar.ClassListContains(DeucarianEditorCommandBar.RootClass));
+                Assert.IsTrue(toolbar.ClassListContains(
+                    DeucarianEditorWorkbenchToolbar.StableActionLanesClass));
+                Assert.IsFalse(toolbar.GetClasses().Any(className =>
+                    className.StartsWith("dpi-view-toolbar", StringComparison.Ordinal)));
+                Assert.AreEqual(3, toolbar.childCount);
 
-                Assert.IsTrue(
-                    content.ElementAt(0).ClassListContains(
-                        DeucarianEditorWorkbenchToolbar.ToolbarClass));
+                VisualElement leading = toolbar.ElementAt(0);
+                Label summary = toolbar.ElementAt(1) as Label;
+                VisualElement trailing = toolbar.ElementAt(2);
+                Assert.IsTrue(leading.ClassListContains(
+                    DeucarianEditorCommandBar.LeadingLaneClass));
+                Assert.NotNull(summary);
+                Assert.IsTrue(summary.ClassListContains(
+                    DeucarianEditorCommandBar.SummaryLaneClass));
+                Assert.AreEqual(WhiteSpace.NoWrap, summary.style.whiteSpace.value);
+                Assert.AreEqual(Overflow.Hidden, summary.style.overflow.value);
+                Assert.AreEqual(TextOverflow.Ellipsis, summary.style.textOverflow.value);
+                Assert.IsTrue(trailing.ClassListContains(
+                    DeucarianEditorCommandBar.TrailingLaneClass));
+
+                Assert.AreEqual(1, leading.childCount);
+                Assert.AreEqual(3, trailing.childCount);
+                VisualElement viewSlot = leading.ElementAt(0);
+                VisualElement channelSlot = trailing.ElementAt(0);
+                VisualElement refreshSlot = trailing.ElementAt(1);
+                VisualElement checkSlot = trailing.ElementAt(2);
+                AssertReservedSlot(viewSlot, 152f);
+                AssertReservedSlot(channelSlot, 184f);
+                AssertReservedSlot(refreshSlot, 104f);
+                AssertReservedSlot(checkSlot, 140f);
+
+                AssertComposedAction(viewSlot.ElementAt(0) as Button, "Ecosystem Graph");
+                AssertComposedAction(channelSlot.ElementAt(0) as Button, "Channel: Stable");
+                AssertComposedAction(refreshSlot.ElementAt(0) as Button, "Refresh");
+                AssertComposedAction(checkSlot.ElementAt(0) as Button, "Check Updates");
             }
             finally
             {
@@ -91,20 +114,17 @@ VisualElement|-|deucarian-toolbar-row,deucarian-workbench-toolbar,dpi-view-toolb
                 root,
                 899.999f,
                 PackageInstallerResponsiveMode.Narrow,
-                DeucarianEditorResponsiveLayout.NarrowClass,
-                "dpi-responsive--narrow");
+                DeucarianEditorResponsiveLayout.NarrowClass);
             AssertResponsiveClasses(
                 root,
                 900f,
                 PackageInstallerResponsiveMode.Compact,
-                DeucarianEditorResponsiveLayout.CompactClass,
-                "dpi-responsive--compact");
+                DeucarianEditorResponsiveLayout.CompactClass);
             AssertResponsiveClasses(
                 root,
                 1180f,
                 PackageInstallerResponsiveMode.Wide,
-                DeucarianEditorResponsiveLayout.WideClass,
-                "dpi-responsive--wide");
+                DeucarianEditorResponsiveLayout.WideClass);
         }
 
         [Test]
@@ -155,12 +175,13 @@ VisualElement|-|deucarian-toolbar-row,deucarian-workbench-toolbar,dpi-view-toolb
         }
 
         [Test]
-        public void OperationDrawerAndFooter_GeometryAndChildOrderMatchBaseline()
+        public void OperationDrawerAndFooter_UseGenericFactoriesAndMetrics()
         {
             VisualElement collapsedDrawer = PackageInstallerWindow.CreateOperationDrawerForTests(
                 expanded: false,
                 report: "One line");
-            Assert.IsTrue(collapsedDrawer.ClassListContains("dpi-operation-drawer--collapsed"));
+            Assert.IsTrue(collapsedDrawer.ClassListContains(
+                DeucarianEditorWorkbenchSurfaces.DrawerCollapsedClass));
             Assert.AreEqual(0f, collapsedDrawer.style.height.value.value);
             Assert.AreEqual(0f, collapsedDrawer.style.minHeight.value.value);
             Assert.AreEqual(0f, collapsedDrawer.style.maxHeight.value.value);
@@ -168,7 +189,8 @@ VisualElement|-|deucarian-toolbar-row,deucarian-workbench-toolbar,dpi-view-toolb
             VisualElement expandedDrawer = PackageInstallerWindow.CreateOperationDrawerForTests(
                 expanded: true,
                 report: "One line");
-            Assert.IsTrue(expandedDrawer.ClassListContains("dpi-operation-drawer--expanded"));
+            Assert.IsTrue(expandedDrawer.ClassListContains(
+                DeucarianEditorWorkbenchSurfaces.DrawerExpandedClass));
             Assert.AreEqual(88f, expandedDrawer.style.height.value.value);
             Assert.AreEqual(88f, expandedDrawer.style.minHeight.value.value);
             Assert.AreEqual(88f, expandedDrawer.style.maxHeight.value.value);
@@ -185,40 +207,60 @@ VisualElement|-|deucarian-toolbar-row,deucarian-workbench-toolbar,dpi-view-toolb
             CollectionAssert.AreEqual(
                 new[]
                 {
-                    "dpi-operation-row dpi-operation-row--header",
-                    "dpi-operation-row dpi-operation-row--option",
-                    "dpi-operation-row dpi-operation-row--message dpi-operation-text--secondary dpi-operation-drawer__message",
-                    "dpi-operation-row dpi-operation-row--option"
+                    "deucarian-workbench-operation-row deucarian-workbench-operation-row--header",
+                    "deucarian-workbench-operation-row deucarian-workbench-operation-row--option",
+                    "deucarian-workbench-operation-row deucarian-workbench-operation-row--message deucarian-workbench-operation-text--secondary deucarian-workbench-operation-drawer__message",
+                    "deucarian-workbench-operation-row deucarian-workbench-operation-row--option"
                 },
                 drawerContent.Children().Select(SerializeCustomClasses).ToArray());
+            Button retry = expandedDrawer.Q<Button>(
+                PackageInstallerWindow.OperationDrawerRetryButtonName);
+            AssertComposedAction(retry, "Retry");
+            Assert.IsTrue(retry.ClassListContains(
+                DeucarianEditorWorkbenchSurfaces.DrawerActionClass));
 
             VisualElement footer = PackageInstallerWindow.CreateOperationFooterForTests();
-            Assert.AreEqual(34f, footer.style.height.value.value);
-            Assert.AreEqual(34f, footer.style.minHeight.value.value);
-            Assert.AreEqual(34f, footer.style.maxHeight.value.value);
-            Assert.AreEqual(12f, footer.style.paddingLeft.value.value);
-            Assert.AreEqual(12f, footer.style.paddingRight.value.value);
-            Assert.AreEqual(Overflow.Hidden, footer.style.overflow.value);
+            Assert.AreEqual(
+                DeucarianEditorLayoutMetrics.FooterHeight,
+                footer.style.height.value.value);
+            Assert.AreEqual(
+                DeucarianEditorLayoutMetrics.FooterHeight,
+                footer.style.minHeight.value.value);
+            Assert.AreEqual(
+                DeucarianEditorLayoutMetrics.FooterHeight,
+                footer.style.maxHeight.value.value);
+            Assert.AreEqual(
+                DeucarianEditorLayoutMetrics.FooterHorizontalPadding,
+                footer.style.paddingLeft.value.value);
+            Assert.AreEqual(
+                DeucarianEditorLayoutMetrics.FooterHorizontalPadding,
+                footer.style.paddingRight.value.value);
+            Assert.AreEqual(
+                DeucarianEditorLayoutMetrics.FooterVerticalPadding,
+                footer.style.paddingTop.value.value);
+            Assert.AreEqual(
+                DeucarianEditorLayoutMetrics.FooterVerticalPadding,
+                footer.style.paddingBottom.value.value);
+            Assert.IsTrue(footer.ClassListContains(
+                DeucarianEditorWorkbenchSurfaces.FooterClass));
             CollectionAssert.AreEqual(
                 new[]
                 {
                     PackageInstallerWindow.OperationFooterStatusGroupName,
                     PackageInstallerWindow.OperationFooterSummaryName,
                     string.Empty,
-                    PackageInstallerWindow.OperationFooterCancelButtonName,
-                    PackageInstallerWindow.OperationFooterDetailsButtonName,
+                    string.Empty,
                     PackageInstallerWindow.OperationFooterVersionName
                 },
                 footer.Children().Select(element => element.name ?? string.Empty).ToArray());
 
             Button cancel = footer.Q<Button>(PackageInstallerWindow.OperationFooterCancelButtonName);
             Button details = footer.Q<Button>(PackageInstallerWindow.OperationFooterDetailsButtonName);
-            Assert.AreEqual(92f, cancel.style.width.value.value);
-            Assert.AreEqual(24f, cancel.style.height.value.value);
+            Assert.AreEqual(124f, cancel.style.width.value.value);
             Assert.AreEqual(DisplayStyle.None, cancel.style.display.value);
-            Assert.AreEqual(96f, details.style.width.value.value);
-            Assert.AreEqual(24f, details.style.height.value.value);
-            Assert.AreEqual(8f, details.style.marginRight.value.value);
+            Assert.AreEqual(128f, details.style.width.value.value);
+            AssertComposedAction(cancel, "Cancel");
+            AssertComposedAction(details, "Show Details");
         }
 
         [Test]
@@ -234,141 +276,95 @@ VisualElement|-|deucarian-toolbar-row,deucarian-workbench-toolbar,dpi-view-toolb
                 "com.deucarian.package-installer",
                 "Editor/PackageInstallerWindow.cs");
 
-            Assert.That(
-                installerSource,
-                Does.Contain("DeucarianEditorWorkbenchToolbar.CreateToolbar();"));
-            Assert.That(
-                installerSource,
-                Does.Contain("DeucarianEditorWorkbenchToolbar.CreateToggleButton("));
-            Assert.That(
-                installerSource,
-                Does.Contain("DeucarianEditorWorkbenchToolbar.CreateActionButton("));
-            Assert.That(
-                installerSource,
-                Does.Contain("DeucarianEditorWorkbenchToolbar.CreateSummary(string.Empty);"));
-            Assert.That(
-                installerSource,
-                Does.Contain("DeucarianEditorWorkbenchToolbar.CreateSpacer();"));
+            Assert.That(installerSource, Does.Contain("DeucarianEditorCommandBar.Create("));
+            Assert.That(installerSource, Does.Contain("DeucarianEditorCommandBar.CreateLanes(toolbar)"));
+            Assert.That(installerSource, Does.Contain("DeucarianEditorCommandBar.CreateToggle("));
+            Assert.That(installerSource, Does.Contain("DeucarianEditorCommandBar.CreateAction("));
+            Assert.That(installerSource, Does.Contain("DeucarianEditorCommandBar.CreateReservedSlot("));
+            Assert.That(installerSource, Does.Not.Contain("dpi-view-toolbar"));
+            Assert.That(installerSource, Does.Not.Contain("dpi-responsive--"));
 
-            foreach (string migratedSelector in new[]
+            foreach (string selector in new[]
                      {
-                         ".dpi-view-toolbar",
-                         ".dpi-view-toolbar__summary",
-                         ".dpi-view-toolbar__action",
-                         ".dpi-view-toolbar__graph-action:hover",
-                         ".dpi-view-toolbar__graph-action:active",
-                         ".dpi-view-toolbar__channel-button",
-                         ".dpi-view-toolbar__channel-button:hover",
-                         ".dpi-responsive--compact .dpi-view-toolbar__action",
-                         ".dpi-responsive--compact .dpi-view-toolbar__channel-button",
-                         ".dpi-responsive--narrow .dpi-view-toolbar",
-                         ".dpi-responsive--narrow .dpi-view-toolbar__summary"
+                         ".deucarian-command-bar",
+                         ".deucarian-command-bar__action",
+                         ".deucarian-command-bar__summary",
+                         ".deucarian-command-bar__reserved-slot",
+                         ".deucarian-icon-text-button"
                      })
             {
-                AssertNoRuleSelector(installerCss, migratedSelector);
+                AssertNoRuleSelector(installerCss, selector);
             }
 
-            AssertRuleValues(editorCss, ".dpi-view-toolbar",
-                "margin-bottom", "8px",
-                "border-top-left-radius", "7px",
-                "border-top-right-radius", "7px",
-                "border-bottom-right-radius", "7px",
-                "border-bottom-left-radius", "7px",
-                "border-left-width", "1px",
-                "border-right-width", "1px",
-                "border-top-width", "1px",
-                "border-bottom-width", "1px",
-                "border-left-color", "rgba(90, 111, 160, 0.24)",
-                "border-right-color", "rgba(90, 111, 160, 0.20)",
-                "border-top-color", "rgba(128, 160, 192, 0.26)",
-                "border-bottom-color", "rgba(59, 166, 154, 0.14)",
-                "background-color", "rgba(12, 22, 31, 0.48)");
-
-            AssertRuleValues(editorCss, ".dpi-view-toolbar__action",
-                "height", "24px",
-                "min-width", "86px",
-                "margin-left", "4px",
-                "border-top-left-radius", "5px",
-                "border-top-right-radius", "5px",
-                "border-bottom-right-radius", "5px",
-                "border-bottom-left-radius", "5px",
-                "border-left-width", "1px",
-                "border-right-width", "1px",
-                "border-top-width", "1px",
-                "border-bottom-width", "1px",
-                "border-left-color", "rgba(90, 111, 160, 0.30)",
-                "border-right-color", "rgba(90, 111, 160, 0.24)",
-                "border-top-color", "rgba(126, 172, 202, 0.26)",
-                "border-bottom-color", "rgba(59, 166, 154, 0.18)",
-                "background-color", "rgba(22, 38, 48, 0.52)");
-            AssertRuleValues(editorCss, ".dpi-view-toolbar__graph-action:hover",
-                "border-left-color", "rgba(59, 209, 191, 0.48)",
-                "border-right-color", "rgba(59, 209, 191, 0.38)",
-                "border-top-color", "rgba(126, 172, 202, 0.38)",
-                "border-bottom-color", "rgba(59, 209, 191, 0.34)",
-                "background-color", "rgba(28, 56, 64, 0.66)",
-                "color", "rgba(230, 244, 246, 0.96)");
-            AssertRuleValues(editorCss, ".dpi-view-toolbar__graph-action:active",
-                "border-left-color", "rgba(59, 209, 191, 0.72)",
-                "border-right-color", "rgba(59, 209, 191, 0.58)",
-                "border-top-color", "rgba(126, 172, 202, 0.52)",
-                "border-bottom-color", "rgba(59, 209, 191, 0.52)",
-                "background-color", "rgba(19, 43, 52, 0.78)",
-                "color", "rgba(238, 250, 251, 1.00)");
-            AssertRuleValues(editorCss, ".dpi-view-toolbar__channel-button",
-                "min-width", "124px",
-                "margin-right", "2px",
-                "border-left-color", "rgba(59, 166, 154, 0.42)",
-                "border-right-color", "rgba(59, 166, 154, 0.32)",
-                "border-top-color", "rgba(126, 172, 202, 0.30)",
-                "border-bottom-color", "rgba(59, 166, 154, 0.26)",
-                "background-color", "rgba(25, 53, 57, 0.54)");
-            AssertRuleValues(editorCss, ".dpi-view-toolbar__channel-button:hover",
-                "border-left-color", "rgba(59, 209, 191, 0.58)",
-                "border-right-color", "rgba(59, 209, 191, 0.44)",
-                "border-top-color", "rgba(126, 172, 202, 0.42)",
-                "border-bottom-color", "rgba(59, 209, 191, 0.38)",
-                "background-color", "rgba(31, 70, 73, 0.68)");
-
             AssertRuleValues(editorCss, ".deucarian-toolbar-row",
-                "min-height", "34px",
-                "margin-bottom", "8px",
+                "height", "46px",
+                "min-height", "46px",
+                "max-height", "46px",
+                "padding-left", "10px",
+                "padding-right", "10px",
+                "padding-top", "8px",
+                "padding-bottom", "8px");
+            AssertRuleValues(editorCss, ".deucarian-command-bar__action",
+                "height", "28px",
+                "min-height", "28px",
+                "max-height", "28px",
+                "padding-left", "0",
+                "padding-right", "0");
+            AssertRuleValues(editorCss, ".deucarian-command-bar__summary",
+                "height", "18px",
+                "min-height", "18px",
+                "max-height", "18px",
+                "min-width", "0");
+            AssertRuleValues(editorCss, ".deucarian-command-bar__reserved-slot",
+                "height", "28px",
+                "min-height", "28px",
+                "max-height", "28px",
+                "flex-shrink", "0");
+            AssertRuleValues(editorCss, ".deucarian-icon-text-button",
                 "padding-left", "8px",
                 "padding-right", "8px",
-                "padding-top", "6px",
-                "padding-bottom", "6px",
-                "border-top-left-radius", "8px",
-                "border-top-right-radius", "8px",
-                "border-bottom-right-radius", "8px",
-                "border-bottom-left-radius", "8px",
-                "border-left-width", "1px",
-                "border-right-width", "1px",
-                "border-top-width", "1px",
-                "border-bottom-width", "1px");
-            AssertRuleValues(editorCss, ".deucarian-toggle-button",
-                "height", "24px",
-                "min-width", "116px",
-                "margin-right", "4px",
-                "border-top-left-radius", "5px",
-                "border-top-right-radius", "5px",
-                "border-bottom-right-radius", "5px",
-                "border-bottom-left-radius", "5px",
-                "background-color", "rgba(32, 47, 56, 0.44)",
-                "border-left-color", "rgba(90, 111, 160, 0.25)",
-                "border-right-color", "rgba(90, 111, 160, 0.25)",
-                "border-top-color", "rgba(90, 111, 160, 0.25)",
-                "border-bottom-color", "rgba(90, 111, 160, 0.25)");
-            AssertRuleValues(editorCss, ".deucarian-toggle-button:hover",
-                "background-color", "rgba(32, 47, 56, 0.68)",
-                "color", "var(--deucarian-text)");
-            AssertRuleValues(editorCss, ".deucarian-toggle-button--active",
-                "background-color", "rgba(39, 96, 101, 0.52)",
-                "border-left-color", "var(--deucarian-border-active)",
-                "border-right-color", "var(--deucarian-border-active)",
-                "border-top-color", "var(--deucarian-border-active)",
-                "border-bottom-color", "var(--deucarian-border-active)",
-                "color", "var(--deucarian-text)",
-                "-unity-font-style", "bold");
+                "padding-top", "0",
+                "padding-bottom", "0");
+        }
+
+        [Test]
+        public void Stylesheets_VisibleSurfacesUseCanonicalPaddingExactlyOnce()
+        {
+            string installerCss = ReadPackageFile(
+                "com.deucarian.package-installer",
+                "Editor/UI/PackageInstaller/PackageInstallerGraph.uss");
+
+            foreach (string selector in new[]
+                     {
+                         ".dpi-global-channel-popup",
+                         ".dpi-ecosystem-graph__header",
+                         ".dpi-ecosystem-graph__empty-state",
+                         ".dpi-graph-node",
+                         ".dpi-graph-node--presentation-full",
+                         ".dpi-graph-unrelated-summary"
+                     })
+            {
+                AssertRuleValues(installerCss, selector,
+                    "padding-left", "10px",
+                    "padding-right", "10px",
+                    "padding-top", "8px",
+                    "padding-bottom", "8px");
+            }
+
+            // The graph header owns the surface inset. Its internal layout rows must
+            // stay at zero padding so the canonical inset is never applied twice.
+            foreach (string selector in new[]
+                     {
+                         ".dpi-ecosystem-graph__filter-row",
+                         ".dpi-ecosystem-graph__breadcrumbs"
+                     })
+            {
+                AssertRuleValues(installerCss, selector,
+                    "padding-left", "0",
+                    "padding-right", "0",
+                    "padding-top", "0",
+                    "padding-bottom", "0");
+            }
         }
 
         [Test]
@@ -380,50 +376,43 @@ VisualElement|-|deucarian-toolbar-row,deucarian-workbench-toolbar,dpi-view-toolb
             string editorCss = ReadPackageFile(
                 "com.deucarian.editor",
                 "Editor/Assets/Styles/DeucarianEditor.uss");
+            string installerSource = ReadPackageFile(
+                "com.deucarian.package-installer",
+                "Editor/PackageInstallerWindow.cs");
 
-            foreach (string migratedSelector in new[]
+            foreach (string genericSelector in new[]
                      {
-                         ".dpi-operation-surface",
-                         ".dpi-operation-drawer",
-                         ".dpi-operation-drawer--expanded",
-                         ".dpi-operation-drawer--collapsed",
-                         ".dpi-operation-drawer__scroll",
-                         ".dpi-operation-content",
-                         ".dpi-operation-row",
-                         ".dpi-operation-row--header",
-                         ".dpi-operation-row--option",
-                         ".dpi-operation-row--message",
-                         ".dpi-operation-text--primary",
-                         ".dpi-operation-text--secondary",
-                         ".dpi-operation-drawer__title",
-                         ".dpi-operation-drawer__toggle",
-                         ".dpi-operation-drawer__option-label",
-                         ".dpi-operation-drawer__message",
-                         ".dpi-operation-footer",
-                         ".dpi-operation-footer__status",
-                         ".dpi-operation-footer__status-icon",
-                         ".dpi-operation-footer__status-label",
-                         ".dpi-operation-footer__summary",
-                         ".dpi-operation-footer__spacer",
-                         ".dpi-operation-footer__details-button",
-                         ".dpi-operation-footer__version"
+                         ".deucarian-workbench-operation-surface",
+                         ".deucarian-workbench-operation-drawer",
+                         ".deucarian-workbench-operation-drawer--expanded",
+                         ".deucarian-workbench-operation-drawer--collapsed",
+                         ".deucarian-workbench-operation-content",
+                         ".deucarian-workbench-operation-footer",
+                         ".deucarian-workbench-operation-footer__action"
                      })
             {
-                AssertNoRuleSelector(installerCss, migratedSelector);
+                AssertNoRuleSelector(installerCss, genericSelector);
             }
 
-            AssertRuleValues(editorCss, ".dpi-operation-surface",
-                "--deucarian-workbench-operation-inline-padding", "12px",
-                "--deucarian-workbench-operation-block-padding", "6px",
+            Assert.That(installerSource, Does.Contain(
+                "DeucarianEditorWorkbenchSurfaces.CreateDrawer(false)"));
+            Assert.That(installerSource, Does.Contain(
+                "DeucarianEditorWorkbenchSurfaces.CreateFooter("));
+            Assert.That(installerSource, Does.Contain(
+                "DeucarianEditorWorkbenchSurfaces.AddFooterAction("));
+            Assert.That(installerSource, Does.Not.Contain("dpi-operation"));
+            StringAssert.Contains(".dpi-operation-surface", editorCss,
+                "Editor retains the released alias as a compatibility shim.");
+
+            AssertRuleValues(editorCss, ".deucarian-workbench-operation-surface",
+                "--deucarian-workbench-operation-inline-padding", "10px",
+                "--deucarian-workbench-operation-block-padding", "8px",
+                "--deucarian-workbench-operation-footer-inline-padding", "10px",
+                "--deucarian-workbench-operation-footer-block-padding", "0px",
                 "--deucarian-workbench-operation-row-gap", "6px",
                 "--deucarian-workbench-operation-control-gap", "8px",
-                "--deucarian-workbench-operation-footer-height", "34px",
-                "--dpi-operation-inline-padding", "12px",
-                "--dpi-operation-block-padding", "6px",
-                "--dpi-operation-row-gap", "6px",
-                "--dpi-operation-control-gap", "8px",
-                "--dpi-operation-footer-height", "34px");
-            AssertRuleValues(editorCss, ".dpi-operation-drawer",
+                "--deucarian-workbench-operation-footer-height", "34px");
+            AssertRuleValues(editorCss, ".deucarian-workbench-operation-drawer",
                 "flex-shrink", "0",
                 "height", "0",
                 "min-height", "0",
@@ -442,19 +431,21 @@ VisualElement|-|deucarian-toolbar-row,deucarian-workbench-toolbar,dpi-view-toolb
                 "border-bottom-right-radius", "8px",
                 "border-bottom-left-radius", "8px",
                 "overflow", "hidden");
-            AssertRuleValues(editorCss, ".dpi-operation-drawer--expanded",
+            AssertRuleValues(editorCss, ".deucarian-workbench-operation-drawer--expanded",
                 "margin-bottom", "6px",
                 "border-left-width", "1px",
                 "border-right-width", "1px",
                 "border-top-width", "1px",
                 "border-bottom-width", "1px",
-                "background-color", "rgba(10, 20, 30, 0.62)");
-            AssertRuleValues(editorCss, ".dpi-operation-footer",
+                "background-color", "rgba(10, 20, 30, 0.96)");
+            AssertRuleValues(editorCss, ".deucarian-workbench-operation-footer",
                 "height", "var(--deucarian-workbench-operation-footer-height)",
                 "min-height", "var(--deucarian-workbench-operation-footer-height)",
                 "max-height", "var(--deucarian-workbench-operation-footer-height)",
-                "padding-left", "var(--deucarian-workbench-operation-inline-padding)",
-                "padding-right", "var(--deucarian-workbench-operation-inline-padding)",
+                "padding-left", "var(--deucarian-workbench-operation-footer-inline-padding)",
+                "padding-right", "var(--deucarian-workbench-operation-footer-inline-padding)",
+                "padding-top", "var(--deucarian-workbench-operation-footer-block-padding)",
+                "padding-bottom", "var(--deucarian-workbench-operation-footer-block-padding)",
                 "border-top-left-radius", "6px",
                 "border-top-right-radius", "6px",
                 "border-bottom-right-radius", "6px",
@@ -464,13 +455,13 @@ VisualElement|-|deucarian-toolbar-row,deucarian-workbench-toolbar,dpi-view-toolb
                 "border-top-width", "1px",
                 "border-bottom-width", "1px",
                 "overflow", "hidden");
-            AssertRuleValues(editorCss, ".dpi-operation-footer__details-button",
+            AssertRuleValues(editorCss, ".deucarian-workbench-operation-footer__action",
                 "width", "96px",
                 "min-width", "96px",
                 "max-width", "96px",
-                "height", "24px",
-                "min-height", "24px",
-                "max-height", "24px",
+                "height", "28px",
+                "min-height", "28px",
+                "max-height", "28px",
                 "margin-right", "var(--deucarian-workbench-operation-control-gap)",
                 "border-top-left-radius", "5px",
                 "border-top-right-radius", "5px",
@@ -510,7 +501,6 @@ VisualElement|-|deucarian-toolbar-row,deucarian-workbench-toolbar,dpi-view-toolb
                          "_rowSelectedColor = DeucarianEditorWorkbenchGUI.RowSelectedColor;",
                          "_operationDrawerBackgroundColor.a = 0.52f;",
                          "_operationDrawerBorderColor.a = 0.38f;",
-                         "_windowStyle = new GUIStyle(DeucarianEditorWorkbenchGUI.WindowStyle);",
                          "_sidebarStyle = new GUIStyle(DeucarianEditorWorkbenchGUI.SidebarStyle);",
                          "_detailsStyle = new GUIStyle(DeucarianEditorWorkbenchGUI.DetailsStyle);",
                          "_sampleRowStyle = new GUIStyle(DeucarianEditorWorkbenchGUI.SampleRowStyle);",
@@ -530,7 +520,8 @@ VisualElement|-|deucarian-toolbar-row,deucarian-workbench-toolbar,dpi-view-toolb
                          "DeucarianEditorWorkbenchGUI.DrawSurface(rect, backgroundColor, borderColor);",
                          "DeucarianEditorWorkbenchGUI.DrawSeparator();",
                          "DeucarianEditorWorkbenchGUI.DrawStatusRow(",
-                         "DeucarianEditorWorkbenchGUI.DrawKeyValueRow(label, value);"
+                         "DeucarianEditorWorkbenchGUI.DrawKeyValueRow(label, value);",
+                         "DeucarianEditorWorkbenchGUI.BeginEmbeddedPage("
                      })
             {
                 Assert.That(installerSource, Does.Contain(declaration));
@@ -538,19 +529,24 @@ VisualElement|-|deucarian-toolbar-row,deucarian-workbench-toolbar,dpi-view-toolb
 
             Assert.That(
                 editorStylesSource,
-                Does.Contain("sectionBox.padding = new RectOffset(10, 10, 8, 8);"));
+                Does.Contain("DeucarianEditorLayoutMetrics.SurfaceHorizontalPadding"));
             Assert.That(
                 editorStylesSource,
-                Does.Contain("sectionBox.margin = new RectOffset(0, 0, 0, 8);"));
+                Does.Contain("DeucarianEditorLayoutMetrics.SurfaceSpacing"));
 
             foreach (string declaration in new[]
                      {
                          "public const float DetailLabelWidth = 118f;",
-                         "windowStyle = new GUIStyle { padding = new RectOffset(12, 12, 10, 10) };",
-                         "sidebarStyle = new GUIStyle { padding = new RectOffset(10, 10, 10, 10) };",
-                         "detailsStyle = new GUIStyle { padding = new RectOffset(10, 10, 10, 10) };",
-                         "padding = new RectOffset(10, 10, 8, 8),",
-                         "margin = new RectOffset(0, 0, 2, 6)",
+                         "public const float ButtonHeight = DeucarianEditorLayoutMetrics.CommandControlHeight;",
+                         "embeddedPageStyle = new GUIStyle",
+                         "padding = new RectOffset(0, 0, 0, 0)",
+                         "margin = new RectOffset(0, 0, 0, 0)",
+                         "DeucarianEditorLayoutMetrics.PageHorizontalPadding",
+                         "DeucarianEditorLayoutMetrics.PageTopPadding",
+                         "DeucarianEditorLayoutMetrics.PageBottomPadding",
+                         "DeucarianEditorLayoutMetrics.SurfaceHorizontalPadding",
+                         "DeucarianEditorLayoutMetrics.SurfaceVerticalPadding",
+                         "DeucarianEditorLayoutMetrics.SurfaceSpacing)",
                          "titleStyle.fontSize = 15;",
                          "primaryButtonStyle.fixedHeight = ButtonHeight;",
                          "secondaryButtonStyle.fixedHeight = ButtonHeight;"
@@ -559,7 +555,7 @@ VisualElement|-|deucarian-toolbar-row,deucarian-workbench-toolbar,dpi-view-toolb
                 Assert.That(workbenchSource, Does.Contain(declaration));
             }
 
-            Assert.That(installerSource, Does.Not.Contain("_windowStyle.padding ="));
+            Assert.That(installerSource, Does.Not.Contain("_windowStyle"));
             Assert.That(installerSource, Does.Not.Contain("_rowBackgroundColor = new Color"));
 
             // Preserve the released status-row color composition exactly: the
@@ -585,20 +581,55 @@ VisualElement|-|deucarian-toolbar-row,deucarian-workbench-toolbar,dpi-view-toolb
                 ensureStylesStart - drawColoredLabelStart);
             Assert.That(drawColoredLabelSource, Does.Not.Contain("new GUIStyle(style)"));
 
+            Assert.AreEqual(10, DeucarianEditorLayoutMetrics.PageHorizontalPadding);
+            Assert.AreEqual(8, DeucarianEditorLayoutMetrics.PageVerticalPadding);
+            Assert.AreEqual(10, DeucarianEditorLayoutMetrics.SurfaceHorizontalPadding);
+            Assert.AreEqual(8, DeucarianEditorLayoutMetrics.SurfaceVerticalPadding);
+            Assert.AreEqual(10, DeucarianEditorLayoutMetrics.FooterHorizontalPadding);
+            Assert.AreEqual(0, DeucarianEditorLayoutMetrics.FooterVerticalPadding);
+            Assert.AreEqual(34, DeucarianEditorLayoutMetrics.FooterHeight);
+            Assert.AreEqual(28, DeucarianEditorLayoutMetrics.CommandControlHeight);
+            Assert.AreEqual(18, DeucarianEditorLayoutMetrics.TextLineHeight);
             Assert.AreEqual(8f, DeucarianEditorVisualShell.SurfaceRadius);
             Assert.AreEqual(118f, DeucarianEditorWorkbenchGUI.DetailLabelWidth);
-            Assert.AreEqual(12, DeucarianEditorWorkbenchGUI.WindowStyle.padding.left);
-            Assert.AreEqual(12, DeucarianEditorWorkbenchGUI.WindowStyle.padding.right);
-            Assert.AreEqual(10, DeucarianEditorWorkbenchGUI.WindowStyle.padding.top);
-            Assert.AreEqual(10, DeucarianEditorWorkbenchGUI.WindowStyle.padding.bottom);
-            Assert.AreEqual(10, DeucarianEditorWorkbenchGUI.SidebarStyle.padding.left);
-            Assert.AreEqual(10, DeucarianEditorWorkbenchGUI.DetailsStyle.padding.left);
-            Assert.AreEqual(10, DeucarianEditorWorkbenchGUI.SampleRowStyle.padding.left);
-            Assert.AreEqual(8, DeucarianEditorWorkbenchGUI.SampleRowStyle.padding.top);
-            Assert.AreEqual(6, DeucarianEditorWorkbenchGUI.SampleRowStyle.margin.bottom);
+            Assert.AreEqual(
+                DeucarianEditorLayoutMetrics.PageHorizontalPadding,
+                DeucarianEditorWorkbenchGUI.WindowStyle.padding.left);
+            Assert.AreEqual(
+                DeucarianEditorLayoutMetrics.PageHorizontalPadding,
+                DeucarianEditorWorkbenchGUI.WindowStyle.padding.right);
+            Assert.AreEqual(
+                DeucarianEditorLayoutMetrics.PageTopPadding,
+                DeucarianEditorWorkbenchGUI.WindowStyle.padding.top);
+            Assert.AreEqual(
+                DeucarianEditorLayoutMetrics.PageBottomPadding,
+                DeucarianEditorWorkbenchGUI.WindowStyle.padding.bottom);
+            Assert.AreEqual(0, DeucarianEditorWorkbenchGUI.EmbeddedPageStyle.padding.left);
+            Assert.AreEqual(0, DeucarianEditorWorkbenchGUI.EmbeddedPageStyle.padding.right);
+            Assert.AreEqual(0, DeucarianEditorWorkbenchGUI.EmbeddedPageStyle.padding.top);
+            Assert.AreEqual(0, DeucarianEditorWorkbenchGUI.EmbeddedPageStyle.padding.bottom);
+            Assert.AreEqual(
+                DeucarianEditorLayoutMetrics.SurfaceHorizontalPadding,
+                DeucarianEditorWorkbenchGUI.SidebarStyle.padding.left);
+            Assert.AreEqual(
+                DeucarianEditorLayoutMetrics.SurfaceHorizontalPadding,
+                DeucarianEditorWorkbenchGUI.DetailsStyle.padding.left);
+            Assert.AreEqual(
+                DeucarianEditorLayoutMetrics.SurfaceHorizontalPadding,
+                DeucarianEditorWorkbenchGUI.SampleRowStyle.padding.left);
+            Assert.AreEqual(
+                DeucarianEditorLayoutMetrics.SurfaceVerticalPadding,
+                DeucarianEditorWorkbenchGUI.SampleRowStyle.padding.top);
+            Assert.AreEqual(
+                DeucarianEditorLayoutMetrics.SurfaceSpacing,
+                DeucarianEditorWorkbenchGUI.SampleRowStyle.margin.bottom);
             Assert.AreEqual(15, DeucarianEditorWorkbenchGUI.TitleStyle.fontSize);
-            Assert.AreEqual(24f, DeucarianEditorWorkbenchGUI.PrimaryButtonStyle.fixedHeight);
-            Assert.AreEqual(24f, DeucarianEditorWorkbenchGUI.SecondaryButtonStyle.fixedHeight);
+            Assert.AreEqual(
+                DeucarianEditorLayoutMetrics.CommandControlHeight,
+                DeucarianEditorWorkbenchGUI.PrimaryButtonStyle.fixedHeight);
+            Assert.AreEqual(
+                DeucarianEditorLayoutMetrics.CommandControlHeight,
+                DeucarianEditorWorkbenchGUI.SecondaryButtonStyle.fixedHeight);
             Assert.AreEqual(
                 DeucarianEditorVisualShell.DeepBackground,
                 DeucarianEditorWorkbenchGUI.MainBackgroundColor);
@@ -644,12 +675,52 @@ VisualElement|-|deucarian-toolbar-row,deucarian-workbench-toolbar,dpi-view-toolb
             Assert.AreEqual(ScaleMode.ScaleAndCrop, element.style.unityBackgroundScaleMode.value);
         }
 
+        private static void AssertReservedSlot(VisualElement slot, float expectedWidth)
+        {
+            Assert.NotNull(slot);
+            Assert.IsTrue(slot.ClassListContains(
+                DeucarianEditorCommandBar.ReservedSlotClass));
+            Assert.AreEqual(expectedWidth, slot.style.width.value.value);
+            Assert.AreEqual(expectedWidth, slot.style.minWidth.value.value);
+            Assert.AreEqual(expectedWidth, slot.style.maxWidth.value.value);
+            Assert.AreEqual(1, slot.childCount);
+        }
+
+        private static void AssertComposedAction(Button button, string expectedText)
+        {
+            Assert.NotNull(button);
+            Assert.AreEqual(string.Empty, button.text);
+            Assert.IsTrue(button.ClassListContains(DeucarianEditorIconTextButton.RootClass));
+            VisualElement content = button.Q<VisualElement>(
+                className: DeucarianEditorIconTextButton.ContentClass);
+            Image icon = button.Q<Image>(
+                className: DeucarianEditorIconTextButton.IconClass);
+            VisualElement gap = button.Q<VisualElement>(
+                className: DeucarianEditorIconTextButton.GapClass);
+            Label label = button.Q<Label>(
+                className: DeucarianEditorIconTextButton.LabelClass);
+            Assert.NotNull(content);
+            Assert.NotNull(icon);
+            Assert.NotNull(icon.image);
+            Assert.NotNull(gap);
+            Assert.NotNull(label);
+            Assert.AreEqual(expectedText, label.text);
+            Assert.AreEqual(
+                DeucarianEditorLayoutMetrics.IconTextGap,
+                gap.style.width.value.value);
+            Assert.AreEqual(
+                DeucarianEditorLayoutMetrics.CommandControlHorizontalPadding,
+                button.style.paddingLeft.value.value);
+            Assert.AreEqual(
+                DeucarianEditorLayoutMetrics.CommandControlHorizontalPadding,
+                button.style.paddingRight.value.value);
+        }
+
         private static void AssertResponsiveClasses(
             VisualElement element,
             float width,
             PackageInstallerResponsiveMode expectedMode,
-            string expectedSharedClass,
-            string expectedLegacyClass)
+            string expectedSharedClass)
         {
             Assert.AreEqual(
                 expectedMode,
@@ -661,23 +732,13 @@ VisualElement|-|deucarian-toolbar-row,deucarian-workbench-toolbar,dpi-view-toolb
                 DeucarianEditorResponsiveLayout.CompactClass,
                 DeucarianEditorResponsiveLayout.NarrowClass
             };
-            string[] legacyClasses =
-            {
-                "dpi-responsive--wide",
-                "dpi-responsive--compact",
-                "dpi-responsive--narrow"
-            };
-
             Assert.AreEqual(
                 1,
                 sharedClasses.Count(element.ClassListContains),
                 "Exactly one shared responsive class must be active.");
-            Assert.AreEqual(
-                1,
-                legacyClasses.Count(element.ClassListContains),
-                "Exactly one legacy responsive alias must be active.");
             Assert.IsTrue(element.ClassListContains(expectedSharedClass));
-            Assert.IsTrue(element.ClassListContains(expectedLegacyClass));
+            Assert.IsFalse(element.GetClasses().Any(className =>
+                className.StartsWith("dpi-responsive--", StringComparison.Ordinal)));
         }
 
         private static string SerializeVisualTree(VisualElement root)
