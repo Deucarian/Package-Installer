@@ -331,12 +331,14 @@ VisualElement|-|deucarian-toolbar-row,deucarian-workbench-toolbar,dpi-view-toolb
                 "background-color", "rgba(31, 70, 73, 0.68)");
 
             AssertRuleValues(editorCss, ".deucarian-toolbar-row",
-                "min-height", "34px",
+                "height", "46px",
+                "min-height", "46px",
+                "max-height", "46px",
                 "margin-bottom", "8px",
-                "padding-left", "8px",
-                "padding-right", "8px",
-                "padding-top", "6px",
-                "padding-bottom", "6px",
+                "padding-left", "10px",
+                "padding-right", "10px",
+                "padding-top", "8px",
+                "padding-bottom", "8px",
                 "border-top-left-radius", "8px",
                 "border-top-right-radius", "8px",
                 "border-bottom-right-radius", "8px",
@@ -452,7 +454,7 @@ VisualElement|-|deucarian-toolbar-row,deucarian-workbench-toolbar,dpi-view-toolb
                 "border-right-width", "1px",
                 "border-top-width", "1px",
                 "border-bottom-width", "1px",
-                "background-color", "rgba(10, 20, 30, 0.62)");
+                "background-color", "rgba(10, 20, 30, 0.96)");
             AssertRuleValues(editorCss, ".dpi-operation-footer",
                 "height", "var(--deucarian-workbench-operation-footer-height)",
                 "min-height", "var(--deucarian-workbench-operation-footer-height)",
@@ -560,11 +562,14 @@ VisualElement|-|deucarian-toolbar-row,deucarian-workbench-toolbar,dpi-view-toolb
             foreach (string declaration in new[]
                      {
                          "public const float DetailLabelWidth = 118f;",
-                         "windowStyle = new GUIStyle { padding = new RectOffset(12, 12, 10, 10) };",
-                         "sidebarStyle = new GUIStyle { padding = new RectOffset(10, 10, 10, 10) };",
-                         "detailsStyle = new GUIStyle { padding = new RectOffset(10, 10, 10, 10) };",
-                         "padding = new RectOffset(10, 10, 8, 8),",
-                         "margin = new RectOffset(0, 0, 2, 6)",
+                         "public const float ButtonHeight = DeucarianEditorLayoutMetrics.CommandControlHeight;",
+                         "public const float PanelSpacing = DeucarianEditorLayoutMetrics.SurfaceSpacing;",
+                         "DeucarianEditorLayoutMetrics.PageHorizontalPadding",
+                         "DeucarianEditorLayoutMetrics.PageTopPadding",
+                         "DeucarianEditorLayoutMetrics.PageBottomPadding",
+                         "DeucarianEditorLayoutMetrics.SurfaceHorizontalPadding",
+                         "DeucarianEditorLayoutMetrics.SurfaceVerticalPadding",
+                         "DeucarianEditorLayoutMetrics.SurfaceSpacing",
                          "titleStyle.fontSize = 15;",
                          "primaryButtonStyle.fixedHeight = ButtonHeight;",
                          "secondaryButtonStyle.fixedHeight = ButtonHeight;"
@@ -601,18 +606,40 @@ VisualElement|-|deucarian-toolbar-row,deucarian-workbench-toolbar,dpi-view-toolb
 
             Assert.AreEqual(8f, DeucarianEditorVisualShell.SurfaceRadius);
             Assert.AreEqual(118f, DeucarianEditorWorkbenchGUI.DetailLabelWidth);
-            Assert.AreEqual(12, DeucarianEditorWorkbenchGUI.WindowStyle.padding.left);
-            Assert.AreEqual(12, DeucarianEditorWorkbenchGUI.WindowStyle.padding.right);
-            Assert.AreEqual(10, DeucarianEditorWorkbenchGUI.WindowStyle.padding.top);
-            Assert.AreEqual(10, DeucarianEditorWorkbenchGUI.WindowStyle.padding.bottom);
-            Assert.AreEqual(10, DeucarianEditorWorkbenchGUI.SidebarStyle.padding.left);
-            Assert.AreEqual(10, DeucarianEditorWorkbenchGUI.DetailsStyle.padding.left);
-            Assert.AreEqual(10, DeucarianEditorWorkbenchGUI.SampleRowStyle.padding.left);
-            Assert.AreEqual(8, DeucarianEditorWorkbenchGUI.SampleRowStyle.padding.top);
-            Assert.AreEqual(6, DeucarianEditorWorkbenchGUI.SampleRowStyle.margin.bottom);
+            Assert.AreEqual(
+                DeucarianEditorLayoutMetrics.PageHorizontalPadding,
+                DeucarianEditorWorkbenchGUI.WindowStyle.padding.left);
+            Assert.AreEqual(
+                DeucarianEditorLayoutMetrics.PageHorizontalPadding,
+                DeucarianEditorWorkbenchGUI.WindowStyle.padding.right);
+            Assert.AreEqual(
+                DeucarianEditorLayoutMetrics.PageTopPadding,
+                DeucarianEditorWorkbenchGUI.WindowStyle.padding.top);
+            Assert.AreEqual(
+                DeucarianEditorLayoutMetrics.PageBottomPadding,
+                DeucarianEditorWorkbenchGUI.WindowStyle.padding.bottom);
+            Assert.AreEqual(
+                DeucarianEditorLayoutMetrics.SurfaceHorizontalPadding,
+                DeucarianEditorWorkbenchGUI.SidebarStyle.padding.left);
+            Assert.AreEqual(
+                DeucarianEditorLayoutMetrics.SurfaceHorizontalPadding,
+                DeucarianEditorWorkbenchGUI.DetailsStyle.padding.left);
+            Assert.AreEqual(
+                DeucarianEditorLayoutMetrics.SurfaceHorizontalPadding,
+                DeucarianEditorWorkbenchGUI.SampleRowStyle.padding.left);
+            Assert.AreEqual(
+                DeucarianEditorLayoutMetrics.SurfaceVerticalPadding,
+                DeucarianEditorWorkbenchGUI.SampleRowStyle.padding.top);
+            Assert.AreEqual(
+                DeucarianEditorLayoutMetrics.SurfaceSpacing,
+                DeucarianEditorWorkbenchGUI.SampleRowStyle.margin.bottom);
             Assert.AreEqual(15, DeucarianEditorWorkbenchGUI.TitleStyle.fontSize);
-            Assert.AreEqual(24f, DeucarianEditorWorkbenchGUI.PrimaryButtonStyle.fixedHeight);
-            Assert.AreEqual(24f, DeucarianEditorWorkbenchGUI.SecondaryButtonStyle.fixedHeight);
+            Assert.AreEqual(
+                DeucarianEditorLayoutMetrics.CommandControlHeight,
+                DeucarianEditorWorkbenchGUI.PrimaryButtonStyle.fixedHeight);
+            Assert.AreEqual(
+                DeucarianEditorLayoutMetrics.CommandControlHeight,
+                DeucarianEditorWorkbenchGUI.SecondaryButtonStyle.fixedHeight);
             Assert.AreEqual(
                 DeucarianEditorVisualShell.DeepBackground,
                 DeucarianEditorWorkbenchGUI.MainBackgroundColor);
