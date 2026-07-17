@@ -49,6 +49,7 @@ namespace Deucarian.PackageInstaller.Editor
         private int _hiddenRelatedCount;
         private bool _hasAppliedGraphFrame;
         private PackageInstallerResponsiveMode _responsiveMode = PackageInstallerResponsiveMode.Wide;
+        private bool _suppressNextResponsiveFit;
 
         public PackageGraphView(
             Action<PackageDefinition> packageSelected,
@@ -255,8 +256,32 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (changed)
             {
-                schedule.Execute(FitCurrentContext).ExecuteLater(80);
+                if (_suppressNextResponsiveFit)
+                {
+                    _suppressNextResponsiveFit = false;
+                }
+                else
+                {
+                    schedule.Execute(FitCurrentContext).ExecuteLater(80);
+                }
             }
+        }
+
+        internal PackageGraphCameraState GetCameraStateForReload()
+        {
+            return _viewport.GetCameraState();
+        }
+
+        internal void PrepareCameraRestoreAfterReload()
+        {
+            _suppressNextResponsiveFit = true;
+        }
+
+        internal void RestoreCameraAfterReload(PackageGraphCameraState camera)
+        {
+            _suppressNextResponsiveFit = false;
+            _viewport.ApplyPreviewCamera(camera);
+            _canvas.SetViewportZoom(_viewport.Zoom);
         }
 
         public void SetGraph(PackageGraphModel graph, string selectedPackageId, bool actionsEnabled)

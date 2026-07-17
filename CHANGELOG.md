@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.75 - 2026-07-18
+
+- Preserve Package Installer search, visibility filters, package or group focus, graph camera, and scroll positions across expected Unity script reloads.
+- Restore reload state only within the current editor session, consume it once, and fall back safely when registry packages or groups changed while compiling.
+- Avoid replaying the automatic graph fit that previously replaced a restored zoom and pan after responsive layout initialization.
+
 ## 1.1.74 - 2026-07-18
 
 - Anchored focused category membership connectors to explicit ports on the visible category status ring and package-card edges.
