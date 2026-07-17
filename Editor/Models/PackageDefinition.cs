@@ -28,7 +28,8 @@ namespace Deucarian.PackageInstaller.Editor
             int overviewOrder = 0,
             IEnumerable<string> searchAliases = null,
             IEnumerable<string> searchTags = null,
-            string navigationGroup = null)
+            string navigationGroup = null,
+            string iconKey = null)
         {
             if (string.IsNullOrWhiteSpace(displayName))
             {
@@ -72,6 +73,9 @@ namespace Deucarian.PackageInstaller.Editor
             OptionalCompanions = ToReadOnlyList(optionalCompanions);
             SearchAliases = ToReadOnlyList(searchAliases);
             SearchTags = ToReadOnlyList(searchTags);
+            IconKey = string.IsNullOrWhiteSpace(iconKey)
+                ? string.Empty
+                : iconKey.Trim();
         }
 
         public string DisplayName { get; }
@@ -121,6 +125,8 @@ namespace Deucarian.PackageInstaller.Editor
         public IReadOnlyList<string> SearchAliases { get; }
 
         public IReadOnlyList<string> SearchTags { get; }
+
+        public string IconKey { get; }
 
         public bool IsIntegration => Kind == PackageKind.Integration;
 

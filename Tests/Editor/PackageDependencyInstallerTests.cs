@@ -403,11 +403,11 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                         channelSelector,
                         includeInstalledRequestedPackages: false);
                     PackageDependencyInstallPlan reviewedPlan = null;
-                    fixture.Installer.PreflightConfirmation = (plan, operationName) =>
+                    fixture.Installer.PreflightConfirmation = (plan, operationName, completed) =>
                     {
                         reviewedPlan = plan;
                         Assert.AreEqual("Install conflicting roots", operationName);
-                        return false;
+                        completed(false);
                     };
 
                     LogAssert.Expect(

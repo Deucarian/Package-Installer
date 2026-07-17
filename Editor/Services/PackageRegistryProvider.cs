@@ -212,7 +212,8 @@ namespace Deucarian.PackageInstaller.Editor
                 overviewOrder: entry.overviewOrder,
                 searchAliases: entry.searchAliases,
                 searchTags: entry.searchTags,
-                navigationGroup: navigationGroup);
+                navigationGroup: navigationGroup,
+                iconKey: entry.iconKey);
         }
 
         private static IReadOnlyList<PackageDefinition> EnsureInstallerPackageDefinition(
@@ -248,7 +249,8 @@ namespace Deucarian.PackageInstaller.Editor
                 overviewOrder: 20,
                 searchAliases: new[] { "installer" },
                 searchTags: new[] { "package-management", "upm" },
-                navigationGroup: "Tools & Quality");
+                navigationGroup: "Tools & Quality",
+                iconKey: "package-plus");
         }
 
         private static void StartRemoteRefresh(bool replaceExisting = false)

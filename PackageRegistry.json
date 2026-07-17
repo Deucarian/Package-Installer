@@ -8,7 +8,7 @@
       "parentGroupId": "",
       "sortOrder": 10,
       "description": "Cross-cutting shared infrastructure used by multiple Deucarian packages.",
-      "iconKey": "editor",
+      "iconKey": "network",
       "styleKey": "infrastructure"
     },
     {
@@ -17,7 +17,7 @@
       "parentGroupId": "",
       "sortOrder": 20,
       "description": "Generic state, data, repository, and selection primitives.",
-      "iconKey": "core-state",
+      "iconKey": "database",
       "styleKey": "state-data"
     },
     {
@@ -26,7 +26,7 @@
       "parentGroupId": "",
       "sortOrder": 30,
       "description": "Application-facing runtime API, session, and loading services.",
-      "iconKey": "object-loading",
+      "iconKey": "server-cog",
       "styleKey": "runtime-services"
     },
     {
@@ -35,7 +35,7 @@
       "parentGroupId": "",
       "sortOrder": 40,
       "description": "UI, presentation, interaction, selection, and user/world experience systems.",
-      "iconKey": "generic-ui-items",
+      "iconKey": "mouse-pointer-click",
       "styleKey": "experience-interaction"
     },
     {
@@ -44,7 +44,7 @@
       "parentGroupId": "experience-interaction",
       "sortOrder": 41,
       "description": "User interface binding, flow, and presentation systems.",
-      "iconKey": "generic-ui-items",
+      "iconKey": "panels-top-left",
       "styleKey": "ui-presentation"
     },
     {
@@ -53,7 +53,7 @@
       "parentGroupId": "experience-interaction",
       "sortOrder": 42,
       "description": "World-object interaction, selection, XR controls, and input-facing systems.",
-      "iconKey": "selection",
+      "iconKey": "scan",
       "styleKey": "world-interaction"
     },
     {
@@ -62,7 +62,7 @@
       "parentGroupId": "",
       "sortOrder": 50,
       "description": "Installer, diagnostics, and development quality tooling.",
-      "iconKey": "package-installer",
+      "iconKey": "wrench",
       "styleKey": "tools"
     },
     {
@@ -71,7 +71,7 @@
       "parentGroupId": "",
       "sortOrder": 60,
       "description": "Reusable gameplay foundations, systems, simulation modules, and genre frameworks.",
-      "iconKey": "gameplay-foundation",
+      "iconKey": "gamepad-2",
       "styleKey": "gameplay"
     },
     {
@@ -80,7 +80,7 @@
       "parentGroupId": "gameplay",
       "sortOrder": 61,
       "description": "Low-level gameplay primitives and deterministic foundation types.",
-      "iconKey": "gameplay-foundation",
+      "iconKey": "blocks",
       "styleKey": "gameplay"
     },
     {
@@ -89,7 +89,7 @@
       "parentGroupId": "gameplay",
       "sortOrder": 62,
       "description": "Reusable progression, upgrade, and idle-calculation systems.",
-      "iconKey": "progression",
+      "iconKey": "trending-up",
       "styleKey": "gameplay"
     },
     {
@@ -98,7 +98,7 @@
       "parentGroupId": "gameplay",
       "sortOrder": 63,
       "description": "Combat, attack, projectile, and weapon simulation modules.",
-      "iconKey": "combat",
+      "iconKey": "swords",
       "styleKey": "simulation"
     },
     {
@@ -107,7 +107,7 @@
       "parentGroupId": "gameplay",
       "sortOrder": 64,
       "description": "Encounter orchestration, world spawning, and gameplay navigation modules.",
-      "iconKey": "world-spawning",
+      "iconKey": "map-pinned",
       "styleKey": "simulation"
     },
     {
@@ -116,7 +116,7 @@
       "parentGroupId": "gameplay",
       "sortOrder": 65,
       "description": "Higher-level genre composition packages built on gameplay foundations and systems.",
-      "iconKey": "auto-defense",
+      "iconKey": "puzzle",
       "styleKey": "gameplay"
     },
     {
@@ -125,7 +125,7 @@
       "parentGroupId": "",
       "sortOrder": 70,
       "description": "Starter project templates and sample game foundations.",
-      "iconKey": "selection",
+      "iconKey": "layout-template",
       "styleKey": "template"
     },
     {
@@ -134,7 +134,7 @@
       "parentGroupId": "templates",
       "sortOrder": 71,
       "description": "Playable starter game templates.",
-      "iconKey": "auto-defense",
+      "iconKey": "gamepad-2",
       "styleKey": "template"
     }
   ],
@@ -148,6 +148,7 @@
       "ecosystemGroup": "Infrastructure",
       "overviewOrder": 5,
       "description": "Tiny dependency-free runtime primitives shared across Deucarian packages.",
+      "iconKey": "blocks",
       "stableUrl": "https://github.com/Deucarian/Common.git#main",
       "developmentUrl": "https://github.com/Deucarian/Common.git#develop",
       "dependencies": [],
@@ -162,6 +163,7 @@
       "ecosystemGroup": "Infrastructure",
       "overviewOrder": 10,
       "description": "Shared editor tooling and branded editor UI helpers for Deucarian Unity packages.",
+      "iconKey": "wrench",
       "stableUrl": "https://github.com/Deucarian/Editor.git#main",
       "developmentUrl": "https://github.com/Deucarian/Editor.git#develop",
       "dependencies": [],
@@ -176,6 +178,7 @@
       "ecosystemGroup": "Tools & Quality",
       "overviewOrder": 30,
       "description": "Shared Deucarian editor shell and provider API for game content authoring packages.",
+      "iconKey": "file-pen-line",
       "stableUrl": "https://github.com/Deucarian/Game-Content-Authoring.git#main",
       "developmentUrl": "https://github.com/Deucarian/Game-Content-Authoring.git#develop",
       "dependencies": [
@@ -194,6 +197,7 @@
       "ecosystemGroup": "State & Data",
       "overviewOrder": 10,
       "description": "Generic repository and selection state services for Unity.",
+      "iconKey": "database",
       "stableUrl": "https://github.com/Deucarian/Core-State.git#main",
       "developmentUrl": "https://github.com/Deucarian/Core-State.git#develop",
       "dependencies": [],
@@ -208,6 +212,7 @@
       "ecosystemGroup": "Runtime Services",
       "overviewOrder": 10,
       "description": "Reusable API client for Unity.",
+      "iconKey": "cloud",
       "stableUrl": "https://github.com/Deucarian/API.git#main",
       "developmentUrl": "https://github.com/Deucarian/API.git#develop",
       "dependencies": [
@@ -224,6 +229,7 @@
       "ecosystemGroup": "Infrastructure",
       "overviewOrder": 20,
       "description": "Small dependency-light logging wrapper for Deucarian Unity packages.",
+      "iconKey": "scroll-text",
       "stableUrl": "https://github.com/Deucarian/Logging.git#main",
       "developmentUrl": "https://github.com/Deucarian/Logging.git#develop",
       "dependencies": [
@@ -240,6 +246,7 @@
       "ecosystemGroup": "Runtime Services",
       "overviewOrder": 30,
       "description": "Reusable runtime loading pipeline for resolved object and scene content sources.",
+      "iconKey": "folder-open",
       "stableUrl": "https://github.com/Deucarian/Object-Loading.git#main",
       "developmentUrl": "https://github.com/Deucarian/Object-Loading.git#develop",
       "dependencies": [
@@ -260,6 +267,7 @@
       "ecosystemGroup": "Runtime Services",
       "overviewOrder": 20,
       "description": "Reusable session management for Unity.",
+      "iconKey": "key-round",
       "stableUrl": "https://github.com/Deucarian/Session.git#main",
       "developmentUrl": "https://github.com/Deucarian/Session.git#develop",
       "dependencies": [
@@ -276,6 +284,7 @@
       "ecosystemGroup": "Runtime Services",
       "overviewOrder": 25,
       "description": "SDK-free monetization placement abstractions, mock/no-op ad providers, pacing policies, entitlements, consent, and rewarded claim identity for Deucarian games.",
+      "iconKey": "circle-dollar-sign",
       "stableUrl": "https://github.com/Deucarian/Monetization.git#main",
       "developmentUrl": "https://github.com/Deucarian/Monetization.git#develop",
       "dependencies": [],
@@ -290,6 +299,7 @@
       "ecosystemGroup": "Experience & Interaction",
       "overviewOrder": 10,
       "description": "Data-driven UI Binding containers for Unity.",
+      "iconKey": "link",
       "stableUrl": "https://github.com/Deucarian/UI-Binding.git#main",
       "developmentUrl": "https://github.com/Deucarian/UI-Binding.git#develop",
       "dependencies": [
@@ -306,6 +316,7 @@
       "ecosystemGroup": "Experience & Interaction",
       "overviewOrder": 12,
       "description": "Reusable Deucarian UI motion, glass, icon, control island, and UI Toolkit/uGUI presentation primitives.",
+      "iconKey": "panels-top-left",
       "stableUrl": "https://github.com/Deucarian/UI.git#main",
       "developmentUrl": "https://github.com/Deucarian/UI.git#develop",
       "dependencies": [
@@ -323,6 +334,7 @@
       "ecosystemGroup": "Experience & Interaction",
       "overviewOrder": 15,
       "description": "Deterministic asynchronous UI navigation with route assets, channels, guards, transitions, Back handling, action assets, and typed modal presentations.",
+      "iconKey": "workflow",
       "stableUrl": "https://github.com/Deucarian/UI-FLow.git#main",
       "developmentUrl": "https://github.com/Deucarian/UI-FLow.git#develop",
       "dependencies": [
@@ -340,6 +352,7 @@
       "ecosystemGroup": "Experience & Interaction",
       "overviewOrder": 30,
       "description": "Designer-friendly ScriptableObject theming with color role assets, palettes, themes, and Unity component adapters.",
+      "iconKey": "palette",
       "stableUrl": "https://github.com/Deucarian/Theming.git#main",
       "developmentUrl": "https://github.com/Deucarian/Theming.git#develop",
       "dependencies": [
@@ -357,6 +370,7 @@
       "ecosystemGroup": "Experience & Interaction",
       "overviewOrder": 28,
       "description": "Standalone XR-ready uGUI pressable controls, world canvas helpers, poke affordances, and neutral visual settings.",
+      "iconKey": "headset",
       "stableUrl": "https://github.com/Deucarian/XR-UI.git#main",
       "developmentUrl": "https://github.com/Deucarian/XR-UI.git#develop",
       "dependencies": [
@@ -373,6 +387,7 @@
       "ecosystemGroup": "Experience & Interaction",
       "overviewOrder": 25,
       "description": "Reusable camera pose, framing, transition, orbit, fly, top-down, and waypoint navigation primitives.",
+      "iconKey": "camera",
       "stableUrl": "https://github.com/Deucarian/Camera-Navigation.git#main",
       "developmentUrl": "https://github.com/Deucarian/Camera-Navigation.git#develop",
       "dependencies": [
@@ -389,6 +404,7 @@
       "ecosystemGroup": "Experience & Interaction",
       "overviewOrder": 20,
       "description": "Keyed world-object selection, raycast input adapters, hover tracking, and highlight hooks for Unity.",
+      "iconKey": "mouse-pointer-click",
       "stableUrl": "https://github.com/Deucarian/Object-Selection.git#main",
       "developmentUrl": "https://github.com/Deucarian/Object-Selection.git#develop",
       "dependencies": [
@@ -405,6 +421,7 @@
       "ecosystemGroup": "Tools & Quality",
       "overviewOrder": 20,
       "description": "Editor installer window for installing and composing Deucarian Unity UPM packages.",
+      "iconKey": "package-plus",
       "stableUrl": "https://github.com/Deucarian/Package-Installer.git#main",
       "developmentUrl": "https://github.com/Deucarian/Package-Installer.git#develop",
       "dependencies": [
@@ -422,6 +439,7 @@
       "ecosystemGroup": "Tools & Quality",
       "overviewOrder": 50,
       "description": "Editor-only Build Pipeline Manager, provider workflows, profile policies, drift validation, artifact manifests, and CI build entry points.",
+      "iconKey": "hammer",
       "stableUrl": "https://github.com/Deucarian/Build-Pipeline.git#main",
       "developmentUrl": "https://github.com/Deucarian/Build-Pipeline.git#develop",
       "dependencies": [
@@ -439,6 +457,7 @@
       "ecosystemGroup": "Tools & Quality",
       "overviewOrder": 10,
       "description": "Local diagnostics snapshots, providers, JSON export, and developer-facing runtime/editor views for Deucarian Unity projects.",
+      "iconKey": "stethoscope",
       "stableUrl": "https://github.com/Deucarian/Diagnostics.git#main",
       "developmentUrl": "https://github.com/Deucarian/Diagnostics.git#develop",
       "dependencies": [
@@ -455,6 +474,7 @@
       "kind": "Integration",
       "overviewOrder": 10,
       "description": "Integration package connecting Session authentication to API.",
+      "iconKey": "plug-zap",
       "stableUrl": "https://github.com/Deucarian/Session-API-Integration.git#main",
       "developmentUrl": "https://github.com/Deucarian/Session-API-Integration.git#develop",
       "dependencies": [
@@ -476,6 +496,7 @@
       "kind": "Integration",
       "overviewOrder": 20,
       "description": "Optional integration package that provides optimized API-backed UnityWebRequestAssetBundle transport for Object Loading.",
+      "iconKey": "plug-zap",
       "stableUrl": "https://github.com/Deucarian/ObjectLoading-API-Integration.git#main",
       "developmentUrl": "https://github.com/Deucarian/ObjectLoading-API-Integration.git#develop",
       "dependencies": [
@@ -497,6 +518,7 @@
       "kind": "Integration",
       "overviewOrder": 30,
       "description": "Integration package connecting UI Binding containers to Core State repositories and selection services.",
+      "iconKey": "plug-zap",
       "stableUrl": "https://github.com/Deucarian/UIBinding-CoreState-Integration.git#main",
       "developmentUrl": "https://github.com/Deucarian/UIBinding-CoreState-Integration.git#develop",
       "dependencies": [
@@ -518,6 +540,7 @@
       "kind": "Integration",
       "overviewOrder": 35,
       "description": "Optional integration that maps Deucarian Theming color roles into Deucarian XR UI palettes.",
+      "iconKey": "plug-zap",
       "stableUrl": "https://github.com/Deucarian/XR-UI-Theming-Integration.git#main",
       "developmentUrl": "https://github.com/Deucarian/XR-UI-Theming-Integration.git#develop",
       "dependencies": [
@@ -539,6 +562,7 @@
       "kind": "Integration",
       "overviewOrder": 40,
       "description": "Integration package synchronizing Object Selection and Core State selections through shared keys.",
+      "iconKey": "plug-zap",
       "stableUrl": "https://github.com/Deucarian/ObjectSelection-CoreState-Integration.git#main",
       "developmentUrl": "https://github.com/Deucarian/ObjectSelection-CoreState-Integration.git#develop",
       "dependencies": [
@@ -561,6 +585,7 @@
       "kind": "Suite",
       "overviewOrder": 10,
       "description": "Curated bundle that installs Core State, UI Binding, Object Selection, and both Core State selection integrations.",
+      "iconKey": "boxes",
       "stableUrl": "https://github.com/Deucarian/Selection-Suite.git#main",
       "developmentUrl": "https://github.com/Deucarian/Selection-Suite.git#develop",
       "dependencies": [
@@ -590,6 +615,7 @@
       "groupId": "gameplay-foundations",
       "overviewOrder": 10,
       "description": "Pure C# gameplay identifiers, deterministic random, clocks, ticks, tags, stats, modifiers, and generic timing primitives.",
+      "iconKey": "gamepad-2",
       "stableUrl": "https://github.com/Deucarian/Gameplay-Foundation.git#main",
       "developmentUrl": "https://github.com/Deucarian/Gameplay-Foundation.git#develop",
       "dependencies": []
@@ -604,6 +630,7 @@
       "groupId": "state-data",
       "overviewOrder": 10,
       "description": "Versioned local document persistence with migrations, validation, atomic file writes, backups, and recovery.",
+      "iconKey": "save",
       "stableUrl": "https://github.com/Deucarian/Persistence.git#main",
       "developmentUrl": "https://github.com/Deucarian/Persistence.git#develop",
       "dependencies": []
@@ -618,6 +645,7 @@
       "groupId": "gameplay-progression-meta",
       "overviewOrder": 20,
       "description": "Pure C# progression foundations for currencies, tracks, rewards, unlocks, research graphs, milestones, snapshots, and deterministic result deltas.",
+      "iconKey": "trending-up",
       "stableUrl": "https://github.com/Deucarian/Progression.git#main",
       "developmentUrl": "https://github.com/Deucarian/Progression.git#develop",
       "dependencies": [
@@ -634,6 +662,7 @@
       "groupId": "gameplay-progression-meta",
       "overviewOrder": 30,
       "description": "Pure C# roguelite run upgrade core plus Unity authoring assets/providers for definitions, drafts, choices, prerequisites, exclusions, and snapshots.",
+      "iconKey": "sparkles",
       "stableUrl": "https://github.com/Deucarian/Run-Upgrades.git#main",
       "developmentUrl": "https://github.com/Deucarian/Run-Upgrades.git#develop",
       "dependencies": [
@@ -654,6 +683,7 @@
       "groupId": "gameplay-progression-meta",
       "overviewOrder": 40,
       "description": "Pure C# idle/offline progression elapsed-time, capped catch-up, cycle rewards, and Progression reward-bundle calculation.",
+      "iconKey": "timer",
       "stableUrl": "https://github.com/Deucarian/Idle-Progression.git#main",
       "developmentUrl": "https://github.com/Deucarian/Idle-Progression.git#develop",
       "dependencies": [
@@ -671,6 +701,7 @@
       "groupId": "gameplay-combat-weapons",
       "overviewOrder": 10,
       "description": "Pure C# combat rules for health, shields, damage, mitigation, critical hits, statuses, targeting, snapshots, and deterministic results.",
+      "iconKey": "swords",
       "stableUrl": "https://github.com/Deucarian/Combat.git#main",
       "developmentUrl": "https://github.com/Deucarian/Combat.git#develop",
       "dependencies": [
@@ -687,6 +718,7 @@
       "groupId": "gameplay-encounters-world",
       "overviewOrder": 20,
       "description": "Pure C# encounter foundations for stages, waves, spawn request scheduling, weighted selection, objective state, reward references, scaling descriptors, and snapshots.",
+      "iconKey": "radar",
       "stableUrl": "https://github.com/Deucarian/Encounters.git#main",
       "developmentUrl": "https://github.com/Deucarian/Encounters.git#develop",
       "dependencies": [
@@ -703,6 +735,7 @@
       "groupId": "gameplay-encounters-world",
       "overviewOrder": 30,
       "description": "Generic Unity GameObject spawning for world spawn requests, prefab providers, pose resolvers, pooling, lifecycle, and diagnostics snapshots.",
+      "iconKey": "map-pinned",
       "stableUrl": "https://github.com/Deucarian/World-Spawning.git#main",
       "developmentUrl": "https://github.com/Deucarian/World-Spawning.git#develop",
       "dependencies": [
@@ -720,6 +753,7 @@
       "groupId": "gameplay-encounters-world",
       "overviewOrder": 40,
       "description": "Unity-side centralized navigation for registered movement agents, destination movement, supplied waypoint paths, speed adapters, pose adapters, and diagnostics snapshots.",
+      "iconKey": "route",
       "stableUrl": "https://github.com/Deucarian/World-Navigation.git#main",
       "developmentUrl": "https://github.com/Deucarian/World-Navigation.git#develop",
       "dependencies": [
@@ -737,6 +771,7 @@
       "groupId": "gameplay-combat-weapons",
       "overviewOrder": 50,
       "description": "Pure C# attack orchestration for cooldowns, caller-supplied target selection, attack intents, and Combat damage request creation.",
+      "iconKey": "zap",
       "stableUrl": "https://github.com/Deucarian/Attacks.git#main",
       "developmentUrl": "https://github.com/Deucarian/Attacks.git#develop",
       "dependencies": [
@@ -756,6 +791,7 @@
       "groupId": "gameplay-combat-weapons",
       "overviewOrder": 60,
       "description": "Generic projectile launch, movement, lifetime, impact, and cleanup foundations for Deucarian games.",
+      "iconKey": "rocket",
       "stableUrl": "https://github.com/Deucarian/Projectiles.git#main",
       "developmentUrl": "https://github.com/Deucarian/Projectiles.git#develop",
       "dependencies": [
@@ -776,6 +812,7 @@
       "groupId": "gameplay-combat-weapons",
       "overviewOrder": 70,
       "description": "Reusable weapon orchestration plus Unity authoring assets/providers for active weapon slots, fire cadence, direct/projectile modes, and deterministic weapon intents.",
+      "iconKey": "crosshair",
       "stableUrl": "https://github.com/Deucarian/Weapon-Systems.git#main",
       "developmentUrl": "https://github.com/Deucarian/Weapon-Systems.git#develop",
       "dependencies": [
@@ -796,6 +833,7 @@
       "groupId": "gameplay-genre-frameworks",
       "overviewOrder": 10,
       "description": "Shared defense-game orchestration for encounter spawn requests, world spawning, world navigation, combat-backed objectives, agents, signals, metrics, and snapshots.",
+      "iconKey": "shield",
       "stableUrl": "https://github.com/Deucarian/Defense-Games.git#main",
       "developmentUrl": "https://github.com/Deucarian/Defense-Games.git#develop",
       "dependencies": [
@@ -816,6 +854,7 @@
       "groupId": "gameplay-genre-frameworks",
       "overviewOrder": 20,
       "description": "Idle Auto Defense and Auto Tower Defense orchestration for central objectives, perimeter spawning, mounted weapons, targeting, and lower-package composition.",
+      "iconKey": "shield-check",
       "stableUrl": "https://github.com/Deucarian/Auto-Defense.git#main",
       "developmentUrl": "https://github.com/Deucarian/Auto-Defense.git#develop",
       "dependencies": [
@@ -840,6 +879,7 @@
       "groupId": "tools-quality",
       "overviewOrder": 40,
       "description": "Editor-only Unity batch test runner helpers for durable EditMode and PlayMode validation results.",
+      "iconKey": "flask-conical",
       "stableUrl": "https://github.com/Deucarian/Test-Automation.git#main",
       "developmentUrl": "https://github.com/Deucarian/Test-Automation.git#develop",
       "dependencies": []
@@ -854,6 +894,7 @@
       "groupId": "gameplay-genre-frameworks",
       "overviewOrder": 20,
       "description": "Lean dependency bundle that installs the Deucarian Auto Defense gameplay stack without starter-game content.",
+      "iconKey": "shield-plus",
       "stableUrl": "https://github.com/Deucarian/Auto-Defense-Suite.git#main",
       "developmentUrl": "https://github.com/Deucarian/Auto-Defense-Suite.git#develop",
       "dependencies": [
@@ -899,6 +940,7 @@
       "groupId": "templates-games",
       "overviewOrder": 10,
       "description": "Starter Unity game template for an idle auto-defense loop built on the Deucarian Auto Defense Suite.",
+      "iconKey": "shield-check",
       "stableUrl": "https://github.com/Deucarian/Template-Game-Idle-Auto-Defense.git#main",
       "developmentUrl": "https://github.com/Deucarian/Template-Game-Idle-Auto-Defense.git#develop",
       "dependencies": [
@@ -943,6 +985,7 @@
       "groupId": "templates-games",
       "overviewOrder": 20,
       "description": "Starter Unity game template for a Survivors-style horde roguelite loop built on Deucarian packages with local genre-kit adapters.",
+      "iconKey": "skull",
       "stableUrl": "https://github.com/Deucarian/Template-Game-Survivors.git#main",
       "developmentUrl": "https://github.com/Deucarian/Template-Game-Survivors.git#develop",
       "dependencies": [
@@ -982,6 +1025,7 @@
       "groupId": "templates-games",
       "overviewOrder": 30,
       "description": "Starter Unity game template for a Movement-FPS horde arena loop with local wallrunner movement, gunplay, horde escalation, and Deucarian combat/run-upgrade adapters.",
+      "iconKey": "crosshair",
       "stableUrl": "https://github.com/Deucarian/Template-Game-Movement-FPS.git#main",
       "developmentUrl": "https://github.com/Deucarian/Template-Game-Movement-FPS.git#develop",
       "dependencies": [

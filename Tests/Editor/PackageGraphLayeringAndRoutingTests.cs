@@ -34,6 +34,18 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void EdgeLayer_HasNoPersistentIdleAnimationSchedule()
+        {
+            BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public;
+
+            Assert.IsFalse(
+                typeof(PackageGraphEdgeLayer)
+                    .GetFields(flags)
+                    .Any(field => field.FieldType == typeof(IVisualElementScheduledItem)));
+            Assert.IsNull(typeof(PackageGraphEdgeLayer).GetMethod("UpdateAnimation", flags));
+        }
+
+        [Test]
         public void Canvas_CreatesSizedOcclusionMasksForPackageAndCategorySymbol()
         {
             PackageGraphCanvas canvas = CreateFocusedCanvas();
@@ -169,7 +181,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
-        public void FocusedOwningCategory_DirectSegmentIsClippedAcrossCaptionBounds()
+        public void FocusedOwningCategory_RoutesContinuouslyAroundCaptionBounds()
         {
             PackageGraphCanvas canvas = CreateFocusedCanvas();
             PackageGraphMembershipLayer membershipLayer =
@@ -183,54 +195,49 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 null,
                 new[] { typeof(string) },
                 null);
-            MethodInfo clipMethod = typeof(PackageGraphMembershipLayer).GetMethod(
-                "TryGetSegmentRectInterval",
-                BindingFlags.Static | BindingFlags.NonPublic);
 
             Assert.NotNull(membershipLayer);
             Assert.NotNull(captionMethod);
-            Assert.NotNull(clipMethod);
 
             Rect captionRect = (Rect)captionMethod.Invoke(membershipLayer, new object[] { GroupId });
-            object[] clipArguments = { segment.From, segment.To, captionRect, 0f, 0f };
-            bool intersects = (bool)clipMethod.Invoke(null, clipArguments);
-            float entry = (float)clipArguments[3];
-            float exit = (float)clipArguments[4];
+            IReadOnlyList<Vector2> path = PackageGraphMembershipLayer.BuildCaptionAvoidingPathForTests(
+                segment.From,
+                segment.To,
+                captionRect);
 
             Assert.That(captionRect.width, Is.GreaterThan(0f));
             Assert.That(captionRect.height, Is.GreaterThan(0f));
-            Assert.IsTrue(intersects);
-            Assert.That(entry, Is.InRange(0f, 1f));
-            Assert.That(exit, Is.InRange(0f, 1f));
-            Assert.Less(entry, exit);
-            Assert.IsTrue(captionRect.Contains(Vector2.Lerp(segment.From, segment.To, (entry + exit) * 0.5f)));
-        }
+            Assert.That(path.Count, Is.GreaterThan(2));
+            Assert.That(Vector2.Distance(path[0], segment.From), Is.LessThan(0.01f));
+            Assert.That(Vector2.Distance(path[path.Count - 1], segment.To), Is.LessThan(0.01f));
 
-        [Test]
-        public void CaptionClipInterval_RejectsSegmentThatMissesCaption()
-        {
-            MethodInfo clipMethod = typeof(PackageGraphMembershipLayer).GetMethod(
-                "TryGetSegmentRectInterval",
-                BindingFlags.Static | BindingFlags.NonPublic);
-            object[] arguments =
+            for (int index = 0; index < path.Count - 1; index++)
             {
-                new Vector2(0f, 0f),
-                new Vector2(0f, 100f),
-                new Rect(20f, 30f, 20f, 40f),
-                0f,
-                0f
-            };
-
-            Assert.NotNull(clipMethod);
-            Assert.IsFalse((bool)clipMethod.Invoke(null, arguments));
+                Assert.IsFalse(SegmentIntersectsRect(
+                    new PackageGraphStructuralMembershipSegment(path[index], path[index + 1]),
+                    captionRect));
+            }
         }
 
         [Test]
-        public void NestedGroupSpokes_ClipBothParentAndChildCaptionText()
+        public void CaptionAvoidingPath_LeavesUnobstructedSegmentStraight()
+        {
+            Vector2 from = new Vector2(0f, 0f);
+            Vector2 to = new Vector2(0f, 100f);
+            IReadOnlyList<Vector2> path = PackageGraphMembershipLayer.BuildCaptionAvoidingPathForTests(
+                from,
+                to,
+                new Rect(20f, 30f, 20f, 40f));
+
+            Assert.AreEqual(2, path.Count);
+            Assert.AreEqual(from, path[0]);
+            Assert.AreEqual(to, path[1]);
+        }
+
+        [Test]
+        public void NestedGroupOrbit_UsesShortTangentAttachmentCaps()
         {
             PackageGraphCanvas canvas = CreateNestedGroupCanvas();
-            PackageGraphMembershipLayer membershipLayer =
-                canvas.Q<PackageGraphMembershipLayer>("ecosystem-graph-membership-layer");
             PackageGraphGroupLayoutNode parent = canvas.GroupLayoutNodesForTests.Single(candidate =>
                 string.Equals(candidate.GroupId, ParentGroupId, StringComparison.OrdinalIgnoreCase));
             PackageGraphGroupLayoutNode[] children = canvas.GroupLayoutNodesForTests
@@ -239,67 +246,117 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                     string.Equals(candidate.Group.ParentGroupId, ParentGroupId, StringComparison.OrdinalIgnoreCase))
                 .OrderBy(candidate => candidate.Group.SortOrder)
                 .ToArray();
-            bool parentCaptionCrossed = false;
-            bool childCaptionCrossed = false;
+            float orbitRadius = canvas.AnimatedGroupOrbitRadiiForTests[ParentGroupId];
 
-            Assert.NotNull(membershipLayer);
             Assert.AreEqual(3, children.Length);
+            Assert.That(orbitRadius, Is.GreaterThan(0f));
 
             foreach (PackageGraphGroupLayoutNode child in children)
             {
-                IReadOnlyList<Rect> captionOcclusions =
-                    membershipLayer.SpokeCaptionOcclusionsForTests(ParentGroupId, child.GroupId);
+                IReadOnlyList<PackageGraphStructuralMembershipSegment> caps =
+                    PackageGraphMembershipLayer.CreateOrbitAttachmentCapsForTests(
+                        parent.HubCenter,
+                        orbitRadius,
+                        child.HubRect);
+                Vector2 radial = (child.HubCenter - parent.HubCenter).normalized;
+                Vector2 tangent = new Vector2(-radial.y, radial.x);
 
-                Assert.AreEqual(2, captionOcclusions.Count, child.GroupId);
-                Assert.That(captionOcclusions[0].width, Is.GreaterThan(0f));
-                Assert.That(captionOcclusions[1].width, Is.GreaterThan(0f));
-                Assert.IsTrue(PackageGraphMembershipLayer.TryCreateSpokeSegmentForTests(
-                    parent.HubRect,
-                    child.HubRect,
-                    out PackageGraphStructuralMembershipSegment spoke));
-
-                parentCaptionCrossed |= SegmentIntersectsRect(spoke, captionOcclusions[0]);
-                childCaptionCrossed |= SegmentIntersectsRect(spoke, captionOcclusions[1]);
-
-                IReadOnlyList<PackageGraphStructuralMembershipSegment> visibleSegments =
-                    PackageGraphMembershipLayer.VisibleLineSegmentsForTests(
-                        spoke.From,
-                        spoke.To,
-                        captionOcclusions[0],
-                        captionOcclusions[1]);
-
-                Assert.IsNotEmpty(visibleSegments, child.GroupId);
-                Assert.IsFalse(visibleSegments.Any(segment =>
-                    SegmentIntersectsRect(segment, captionOcclusions[0]) ||
-                    SegmentIntersectsRect(segment, captionOcclusions[1])), child.GroupId);
+                Assert.AreEqual(2, caps.Count, child.GroupId);
+                foreach (PackageGraphStructuralMembershipSegment cap in caps)
+                {
+                    Assert.That(cap.Length, Is.EqualTo(10f).Within(0.05f), child.GroupId);
+                    Assert.That(
+                        Mathf.Abs(Vector2.Dot((cap.To - cap.From).normalized, tangent)),
+                        Is.GreaterThan(0.99f),
+                        child.GroupId);
+                    Assert.IsFalse(SegmentIntersectsRect(cap, child.HubRect), child.GroupId);
+                }
             }
-
-            Assert.IsTrue(parentCaptionCrossed, "No nested spoke exercised the parent caption clip.");
-            Assert.IsTrue(childCaptionCrossed, "No nested spoke exercised the child caption clip.");
         }
 
         [Test]
-        public void TwoCaptionClip_PreservesOnlyTheThreeReadableLineSections()
+        public void OrbitAttachmentCaps_AreStableForAnimatedRadialPositions()
         {
-            Vector2 from = new Vector2(0f, 0f);
-            Vector2 to = new Vector2(0f, 100f);
-            Rect sourceCaption = new Rect(-5f, 20f, 10f, 10f);
-            Rect targetCaption = new Rect(-5f, 60f, 10f, 10f);
+            Vector2 center = new Vector2(400f, 300f);
+            float[] radii = { 96f, 180f, 260f };
 
-            IReadOnlyList<PackageGraphStructuralMembershipSegment> visibleSegments =
-                PackageGraphMembershipLayer.VisibleLineSegmentsForTests(
-                    from,
-                    to,
-                    sourceCaption,
-                    targetCaption);
+            foreach (float radius in radii)
+            {
+                Rect card = new Rect(center.x + radius - 60f, center.y - 32f, 120f, 64f);
+                IReadOnlyList<PackageGraphStructuralMembershipSegment> caps =
+                    PackageGraphMembershipLayer.CreateOrbitAttachmentCapsForTests(center, radius, card);
 
-            Assert.AreEqual(3, visibleSegments.Count);
-            Assert.That(visibleSegments[0].From.y, Is.EqualTo(0f).Within(0.01f));
-            Assert.Less(visibleSegments[0].To.y, sourceCaption.yMin);
-            Assert.Greater(visibleSegments[1].From.y, sourceCaption.yMax);
-            Assert.Less(visibleSegments[1].To.y, targetCaption.yMin);
-            Assert.Greater(visibleSegments[2].From.y, targetCaption.yMax);
-            Assert.That(visibleSegments[2].To.y, Is.EqualTo(100f).Within(0.01f));
+                Assert.AreEqual(2, caps.Count);
+                Assert.IsTrue(caps.All(cap => cap.Length > 9.9f && cap.Length < 10.1f));
+            }
+        }
+
+        [Test]
+        public void OverviewToGroupFocus_OrbitAttachmentsRemainContinuousThroughoutTransition()
+        {
+            PackageGraphModel graph = CreateNestedGroupGraph();
+            PackageGraphCanvas canvas = new PackageGraphCanvas(_ => { }, (_, __) => { }, () => { });
+
+            canvas.SetGraph(
+                graph,
+                string.Empty,
+                string.Empty,
+                string.Empty,
+                actionsEnabled: true,
+                visiblePackageIds: null);
+            canvas.SetGraph(
+                graph,
+                string.Empty,
+                string.Empty,
+                ParentGroupId,
+                actionsEnabled: true,
+                visiblePackageIds: null);
+
+            PackageGraphGroupLayoutNode[] children = canvas.GroupLayoutNodesForTests
+                .Where(candidate =>
+                    candidate.Group != null &&
+                    string.Equals(candidate.Group.ParentGroupId, ParentGroupId, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(candidate => candidate.Group.SortOrder)
+                .ToArray();
+            float[] samples = { 0.05f, 0.1f, 0.25f, 0.5f, 0.75f, 0.9f, 1f };
+
+            Assert.AreEqual(3, children.Length);
+
+            foreach (float progress in samples)
+            {
+                canvas.EvaluateLayoutTransitionForTests(progress);
+                Vector2 parentCenter = canvas.AnimatedGroupCentersForTests[ParentGroupId];
+                float parentRadius = canvas.AnimatedGroupOrbitRadiiForTests[ParentGroupId];
+
+                Assert.IsTrue(IsFinite(parentCenter), $"Parent center at {progress:0.00}");
+                Assert.That(parentRadius, Is.GreaterThan(0f), $"Parent radius at {progress:0.00}");
+
+                foreach (PackageGraphGroupLayoutNode child in children)
+                {
+                    Rect childHubRect = GetAnimatedHubRect(
+                        child,
+                        canvas.AnimatedGroupRectsForTests[child.GroupId]);
+                    IReadOnlyList<PackageGraphStructuralMembershipSegment> caps =
+                        PackageGraphMembershipLayer.CreateOrbitAttachmentCapsForTests(
+                            parentCenter,
+                            parentRadius,
+                            childHubRect);
+
+                    Assert.AreEqual(2, caps.Count, $"{child.GroupId} at {progress:0.00}");
+                    foreach (PackageGraphStructuralMembershipSegment cap in caps)
+                    {
+                        Assert.IsTrue(IsFinite(cap.From), $"{child.GroupId} start at {progress:0.00}");
+                        Assert.IsTrue(IsFinite(cap.To), $"{child.GroupId} end at {progress:0.00}");
+                        Assert.That(
+                            cap.Length,
+                            Is.EqualTo(10f).Within(0.05f),
+                            $"{child.GroupId} at {progress:0.00}");
+                        Assert.IsFalse(
+                            SegmentIntersectsRect(cap, childHubRect),
+                            $"{child.GroupId} at {progress:0.00}");
+                    }
+                }
+            }
         }
 
         private static PackageGraphCanvas CreateFocusedCanvas()
@@ -356,6 +413,21 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
         private static PackageGraphCanvas CreateNestedGroupCanvas()
         {
+            PackageGraphModel graph = CreateNestedGroupGraph();
+            PackageGraphCanvas canvas = new PackageGraphCanvas(_ => { }, (_, __) => { }, () => { });
+
+            canvas.SetGraph(
+                graph,
+                string.Empty,
+                string.Empty,
+                ParentGroupId,
+                actionsEnabled: true,
+                visiblePackageIds: null);
+            return canvas;
+        }
+
+        private static PackageGraphModel CreateNestedGroupGraph()
+        {
             PackageGraphGroup[] groups =
             {
                 new PackageGraphGroup(
@@ -397,17 +469,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 CreateNestedPackage("Child B Package", "com.example.child-b", "child-b"),
                 CreateNestedPackage("Child C Package", "com.example.child-c", "child-c")
             };
-            PackageGraphModel graph = new PackageGraphBuilder(_ => true).Build(packages, groups);
-            PackageGraphCanvas canvas = new PackageGraphCanvas(_ => { }, (_, __) => { }, () => { });
-
-            canvas.SetGraph(
-                graph,
-                string.Empty,
-                string.Empty,
-                ParentGroupId,
-                actionsEnabled: true,
-                visiblePackageIds: null);
-            return canvas;
+            return new PackageGraphBuilder(_ => true).Build(packages, groups);
         }
 
         private static PackageDefinition CreateNestedPackage(
@@ -435,6 +497,24 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.NotNull(clipMethod);
             object[] arguments = { segment.From, segment.To, rect, 0f, 0f };
             return (bool)clipMethod.Invoke(null, arguments);
+        }
+
+        private static Rect GetAnimatedHubRect(PackageGraphGroupLayoutNode groupNode, Rect animatedGroupRect)
+        {
+            Vector2 offset = groupNode.HubRect.position - groupNode.Rect.position;
+            return new Rect(
+                animatedGroupRect.x + offset.x,
+                animatedGroupRect.y + offset.y,
+                groupNode.HubRect.width,
+                groupNode.HubRect.height);
+        }
+
+        private static bool IsFinite(Vector2 point)
+        {
+            return !float.IsNaN(point.x) &&
+                   !float.IsInfinity(point.x) &&
+                   !float.IsNaN(point.y) &&
+                   !float.IsInfinity(point.y);
         }
 
         private static void AssertStyleRect(VisualElement element, Rect expected)

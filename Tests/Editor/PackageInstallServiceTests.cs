@@ -618,12 +618,12 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                     () => new[] { package });
                 int confirmationCount = 0;
                 PackageDependencyInstallPlan confirmedPlan = null;
-                installer.PreflightConfirmation = (plan, operationName) =>
+                installer.PreflightConfirmation = (plan, operationName, completed) =>
                 {
                     confirmationCount++;
                     confirmedPlan = plan;
                     Assert.AreEqual("Reinstall Reinstall", operationName);
-                    return false;
+                    completed(false);
                 };
 
                 installer.ReinstallWithDependencies(package, _ => PackageChannel.Stable);
@@ -634,6 +634,174 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 Assert.IsTrue(confirmedPlan.RequiresPreflight);
                 CollectionAssert.IsEmpty(client.AddedUrls);
                 Assert.IsFalse(service.IsBusy);
+            }
+        }
+
+        [Test]
+        public void ReinstallPreflightWaitsForAsynchronousAcceptance()
+        {
+            PackageDefinition package = CreatePackage("Async Reinstall", "com.deucarian.async-reinstall");
+            ControlledPackageInstallClient client = new ControlledPackageInstallClient();
+            PackageOperationStateRepository repository =
+                new PackageOperationStateRepository(_temporaryProjectRoot);
+
+            using (PackageInstallService service = new PackageInstallService(client, repository))
+            using (PackageDetectionService detection = new PackageDetectionService())
+            {
+                PackageDependencyInstaller installer = new PackageDependencyInstaller(
+                    service,
+                    detection,
+                    () => new[] { package });
+                Action<bool> completePreflight = null;
+                int completedEvents = 0;
+                installer.PreflightCompleted += () => completedEvents++;
+                installer.PreflightConfirmation = (_, __, completed) =>
+                    completePreflight = completed;
+
+                installer.ReinstallWithDependencies(package, _ => PackageChannel.Stable);
+
+                Assert.IsTrue(installer.IsAwaitingPreflight);
+                Assert.IsNotNull(completePreflight);
+                Assert.IsFalse(service.IsBusy);
+                CollectionAssert.IsEmpty(client.AddedUrls);
+
+                completePreflight(true);
+
+                Assert.IsFalse(installer.IsAwaitingPreflight);
+                Assert.AreEqual(1, completedEvents);
+                Assert.IsTrue(service.IsBusy);
+                CollectionAssert.AreEqual(new[] { package.StableUrl }, client.AddedUrls);
+
+                completePreflight(true);
+                Assert.AreEqual(1, completedEvents);
+                CollectionAssert.AreEqual(new[] { package.StableUrl }, client.AddedUrls);
+
+                client.Requests.Single().CompleteSuccess(package.PackageId, "1.0.0");
+                service.UpdateForTests();
+                Assert.IsFalse(service.IsBusy);
+            }
+        }
+
+        [Test]
+        public void PendingPreflightBlocksReplacementAndCancelInvalidatesStaleCallback()
+        {
+            PackageDefinition first = CreatePackage("First Reinstall", "com.deucarian.first-reinstall");
+            PackageDefinition second = CreatePackage("Second Reinstall", "com.deucarian.second-reinstall");
+            ControlledPackageInstallClient client = new ControlledPackageInstallClient();
+            PackageOperationStateRepository repository =
+                new PackageOperationStateRepository(_temporaryProjectRoot);
+
+            using (PackageInstallService service = new PackageInstallService(client, repository))
+            using (PackageDetectionService detection = new PackageDetectionService())
+            {
+                PackageDependencyInstaller installer = new PackageDependencyInstaller(
+                    service,
+                    detection,
+                    () => new[] { first, second });
+                Action<bool> staleCompletion = null;
+                int confirmationCount = 0;
+                int completedEvents = 0;
+                installer.PreflightCompleted += () => completedEvents++;
+                installer.PreflightConfirmation = (_, __, completed) =>
+                {
+                    confirmationCount++;
+                    staleCompletion = completed;
+                };
+
+                installer.ReinstallWithDependencies(first, _ => PackageChannel.Stable);
+                installer.ReinstallWithDependencies(second, _ => PackageChannel.Stable);
+
+                Assert.IsTrue(installer.IsAwaitingPreflight);
+                Assert.AreEqual(1, confirmationCount);
+                installer.CancelPendingPreflight();
+
+                Assert.IsFalse(installer.IsAwaitingPreflight);
+                Assert.AreEqual(1, completedEvents);
+                CollectionAssert.IsEmpty(client.AddedUrls);
+
+                staleCompletion(true);
+
+                Assert.AreEqual(1, completedEvents);
+                Assert.IsFalse(service.IsBusy);
+                CollectionAssert.IsEmpty(client.AddedUrls);
+            }
+        }
+
+        [Test]
+        public void FooterCancellationDismissesSinglePackageRiskConfirmation()
+        {
+            PackageDefinition package = CreatePackage(
+                "Single Risky Reinstall",
+                "com.deucarian.single-risky-reinstall");
+            ControlledPackageInstallClient client = new ControlledPackageInstallClient();
+            PackageOperationStateRepository repository =
+                new PackageOperationStateRepository(_temporaryProjectRoot);
+
+            using (PackageInstallService service = new PackageInstallService(client, repository))
+            using (PackageDetectionService detection = new PackageDetectionService())
+            {
+                PackageDependencyInstaller installer = new PackageDependencyInstaller(
+                    service,
+                    detection,
+                    () => new[] { package });
+                Action<bool> staleCompletion = null;
+                int dismissCount = 0;
+                installer.PreflightConfirmation = (_, __, completed) =>
+                    staleCompletion = completed;
+
+                installer.ReinstallWithDependencies(package, _ => PackageChannel.Stable);
+
+                Assert.IsTrue(installer.IsAwaitingPreflight);
+                Assert.IsTrue(PackageInstallerWindow.CancelAwaitingPreflightForTests(
+                    installer,
+                    () => dismissCount++));
+                Assert.AreEqual(1, dismissCount);
+                Assert.IsFalse(installer.IsAwaitingPreflight);
+                Assert.IsFalse(service.IsBusy);
+                CollectionAssert.IsEmpty(client.AddedUrls);
+
+                staleCompletion(true);
+
+                Assert.IsFalse(service.IsBusy);
+                CollectionAssert.IsEmpty(client.AddedUrls);
+                Assert.IsFalse(PackageInstallerWindow.CancelAwaitingPreflightForTests(
+                    installer,
+                    () => dismissCount++));
+                Assert.AreEqual(1, dismissCount);
+            }
+        }
+
+        [Test]
+        public void AcceptedPreflightDoesNotStartAfterRegistryStateChanges()
+        {
+            PackageDefinition package = CreatePackage("Stale Reinstall", "com.deucarian.stale-reinstall");
+            PackageDefinition addedLater = CreatePackage("Added Later", "com.deucarian.added-later");
+            PackageDefinition[] registry = { package };
+            ControlledPackageInstallClient client = new ControlledPackageInstallClient();
+            PackageOperationStateRepository repository =
+                new PackageOperationStateRepository(_temporaryProjectRoot);
+
+            using (PackageInstallService service = new PackageInstallService(client, repository))
+            using (PackageDetectionService detection = new PackageDetectionService())
+            {
+                PackageDependencyInstaller installer = new PackageDependencyInstaller(
+                    service,
+                    detection,
+                    () => registry);
+                Action<bool> completePreflight = null;
+                int completedEvents = 0;
+                installer.PreflightCompleted += () => completedEvents++;
+                installer.PreflightConfirmation = (_, __, completed) =>
+                    completePreflight = completed;
+
+                installer.ReinstallWithDependencies(package, _ => PackageChannel.Stable);
+                registry = new[] { package, addedLater };
+                completePreflight(true);
+
+                Assert.IsFalse(installer.IsAwaitingPreflight);
+                Assert.AreEqual(1, completedEvents);
+                Assert.IsFalse(service.IsBusy);
+                CollectionAssert.IsEmpty(client.AddedUrls);
             }
         }
 
@@ -653,10 +821,10 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                     detection,
                     () => new[] { package });
                 int confirmationCount = 0;
-                installer.PreflightConfirmation = (_, __) =>
+                installer.PreflightConfirmation = (_, __, completed) =>
                 {
                     confirmationCount++;
-                    return true;
+                    completed(true);
                 };
 
                 installer.InstallWithDependencies(package, _ => PackageChannel.Stable);
@@ -697,13 +865,13 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                     detection,
                     () => new[] { shared, firstRoot, secondRoot });
                 int confirmationCount = 0;
-                installer.PreflightConfirmation = (plan, _) =>
+                installer.PreflightConfirmation = (plan, _, completed) =>
                 {
                     confirmationCount++;
                     Assert.AreEqual(1, plan.Steps.Count);
                     Assert.IsTrue(plan.IsBulk);
                     Assert.IsFalse(plan.IsMultiStep);
-                    return false;
+                    completed(false);
                 };
 
                 installer.InstallManyWithDependencies(
