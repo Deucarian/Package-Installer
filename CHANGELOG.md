@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.74 - 2026-07-18
+
+- Anchored focused category membership connectors to explicit ports on the visible category status ring and package-card edges.
+- Routed multi-package membership through padded orthogonal buses with centered card stems instead of overlapping card borders.
+- Routed downward category connections around external category captions so structural lines remain continuously visible.
+
 ## 1.1.73 - 2026-07-17
 
 - Derived focused graph lanes from complete node and category bounds with consistent edge clearances instead of worst-case fixed center distances.

@@ -154,7 +154,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.IsNotNull(method, "Structural membership route factory was not found.");
             return (PackageGraphStructuralMembershipRoute)method.Invoke(
                 null,
-                new object[] { "tools-quality", groupRect, packageRects });
+                new object[] { "tools-quality", groupRect, groupRect, packageRects });
         }
 
         private static PackageGraphCategoryStatusKey ResolveSegmentStatus(

@@ -4868,6 +4868,19 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 canvas.StructuralMembershipRoutesForTests.Single(route => route.GroupId == "integrations");
             PackageGraphStructuralMembershipRoute owningRoute =
                 canvas.StructuralMembershipRoutesForTests.Single(route => route.GroupId == "runtime-services");
+            PackageGraphStructuralMembershipRoute infrastructureRoute =
+                canvas.StructuralMembershipRoutesForTests.Single(route => route.GroupId == "infrastructure");
+            PackageGraphGroupLayoutNode integrationGroup = canvas.GroupLayoutNodesForTests.Single(group =>
+                group.GroupId == "integrations");
+            PackageGraphGroupLayoutNode infrastructureGroup = canvas.GroupLayoutNodesForTests.Single(group =>
+                group.GroupId == "infrastructure");
+            CategoryStatusRingVisualState integrationRing = canvas.StatusRingVisualStatesForTests.Single(ring =>
+                ring.RingId == "group:integrations:status");
+            CategoryStatusRingVisualState infrastructureRing = canvas.StatusRingVisualStatesForTests.Single(ring =>
+                ring.RingId == "group:infrastructure:status");
+            Rect logging = canvas.NodeRectsForTests["com.deucarian.logging"];
+            Rect sessionIntegration = canvas.NodeRectsForTests["com.deucarian.session.api-integration"];
+            Rect objectLoadingIntegration = canvas.NodeRectsForTests["com.deucarian.object-loading.api-integration"];
 
             Assert.IsTrue(integrationRoute.UsesBus);
             Assert.AreEqual(2, integrationRoute.PackageIds.Count);
@@ -4885,6 +4898,56 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual("com.deucarian.api", owningRoute.PackageIds.Single());
             Assert.IsTrue(owningRoute.Segments.All(segment =>
                 segment.PackageId == "com.deucarian.api"));
+
+            Assert.IsFalse(infrastructureRoute.UsesBus);
+            PackageGraphStructuralMembershipSegment infrastructureConnector =
+                infrastructureRoute.Segments.Single();
+            Assert.That(infrastructureConnector.From.x,
+                Is.EqualTo(infrastructureRing.Center.x + infrastructureRing.Radius).Within(0.05f));
+            Assert.That(infrastructureConnector.From.y,
+                Is.EqualTo(infrastructureRing.Center.y).Within(0.05f));
+            Assert.That(infrastructureConnector.To.x, Is.EqualTo(logging.xMin).Within(0.05f));
+            Assert.That(infrastructureConnector.To.y, Is.EqualTo(logging.center.y).Within(0.05f));
+            Assert.That(infrastructureConnector.From.y,
+                Is.EqualTo(infrastructureConnector.To.y).Within(0.05f));
+            Assert.Less(infrastructureGroup.HubCenter.x, logging.xMin);
+
+            float packageBottom = Mathf.Max(sessionIntegration.yMax, objectLoadingIntegration.yMax);
+            float expectedBusY = packageBottom + 20f;
+            PackageGraphStructuralMembershipSegment categoryStem = integrationRoute.Segments.Single(segment =>
+                segment.PackageIds.Count == 2 &&
+                Mathf.Abs(segment.From.x - segment.To.x) <= 0.01f &&
+                Mathf.Abs(segment.From.x - integrationRing.Center.x) <= 0.05f);
+            Assert.That(categoryStem.From.x, Is.EqualTo(integrationRing.Center.x).Within(0.05f));
+            Assert.That(categoryStem.From.y,
+                Is.EqualTo(integrationRing.Center.y - integrationRing.Radius).Within(0.05f));
+            Assert.That(categoryStem.To.y, Is.EqualTo(expectedBusY).Within(0.05f));
+            Assert.Less(expectedBusY, integrationRing.Center.y - integrationRing.Radius);
+            Assert.Greater(expectedBusY, packageBottom);
+            Assert.That(integrationGroup.HubCenter.y, Is.GreaterThan(expectedBusY));
+
+            foreach (KeyValuePair<string, Rect> package in new[]
+                     {
+                         new KeyValuePair<string, Rect>(
+                             "com.deucarian.session.api-integration",
+                             sessionIntegration),
+                         new KeyValuePair<string, Rect>(
+                             "com.deucarian.object-loading.api-integration",
+                             objectLoadingIntegration)
+                     })
+            {
+                PackageGraphStructuralMembershipSegment branch = integrationRoute.Segments.Single(segment =>
+                    segment.PackageId == package.Key &&
+                    Mathf.Abs(segment.From.x - segment.To.x) <= 0.01f);
+                Assert.That(branch.From.x, Is.EqualTo(package.Value.center.x).Within(0.05f));
+                Assert.That(branch.From.y, Is.EqualTo(expectedBusY).Within(0.05f));
+                Assert.That(branch.To.x, Is.EqualTo(package.Value.center.x).Within(0.05f));
+                Assert.That(branch.To.y, Is.EqualTo(package.Value.yMax).Within(0.05f));
+            }
+
+            Assert.IsTrue(integrationRoute.Segments
+                .Where(segment => Mathf.Abs(segment.From.y - segment.To.y) <= 0.01f)
+                .All(segment => Mathf.Abs(segment.From.y - expectedBusY) <= 0.05f));
         }
 
         [Test]

@@ -165,39 +165,45 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             PackageGraphCanvas canvas = CreateFocusedCanvas();
             PackageGraphStructuralMembershipRoute route = canvas.StructuralMembershipRoutesForTests.Single(candidate =>
                 string.Equals(candidate.GroupId, GroupId, StringComparison.OrdinalIgnoreCase));
-            PackageGraphStructuralMembershipSegment segment = route.Segments.Single();
             Rect packageRect = canvas.NodeRectsForTests[PackageId];
             PackageGraphGroupLayoutNode group = canvas.GroupLayoutNodesForTests.Single(candidate =>
                 string.Equals(candidate.GroupId, GroupId, StringComparison.OrdinalIgnoreCase));
+            CategoryStatusRingVisualState ring = canvas.StatusRingVisualStatesForTests.Single(candidate =>
+                string.Equals(candidate.RingId, "group:" + GroupId + ":status", StringComparison.OrdinalIgnoreCase));
+            PackageGraphStructuralMembershipSegment first = route.Segments.First();
+            PackageGraphStructuralMembershipSegment last = route.Segments.Last();
 
             Assert.IsFalse(route.UsesBus);
             CollectionAssert.AreEqual(new[] { PackageId }, route.PackageIds);
-            CollectionAssert.AreEqual(new[] { PackageId }, segment.PackageIds);
-            Assert.That(segment.From.x, Is.EqualTo(group.Rect.center.x).Within(0.01f));
-            Assert.That(segment.To.x, Is.EqualTo(packageRect.center.x).Within(0.01f));
-            Assert.That(segment.From.x, Is.EqualTo(segment.To.x).Within(0.01f));
-            Assert.Less(segment.From.y, segment.To.y);
-            Assert.That(segment.From.y, Is.EqualTo(group.Rect.yMax - 2f).Within(0.05f));
-            Assert.That(segment.To.y, Is.EqualTo(packageRect.yMin + 2f).Within(0.05f));
+            Assert.IsTrue(route.Segments.All(segment => segment.PackageId == PackageId));
+            Assert.IsTrue(route.Segments.All(segment =>
+                Mathf.Abs(segment.From.x - segment.To.x) <= 0.01f ||
+                Mathf.Abs(segment.From.y - segment.To.y) <= 0.01f));
+            Assert.That(first.From.x, Is.EqualTo(ring.Center.x + ring.Radius).Within(0.05f));
+            Assert.That(first.From.y, Is.EqualTo(ring.Center.y).Within(0.05f));
+            Assert.That(last.To.x, Is.EqualTo(packageRect.center.x).Within(0.05f));
+            Assert.That(last.To.y, Is.EqualTo(packageRect.yMin).Within(0.05f));
+            Assert.Greater(first.To.x, group.Rect.xMax);
         }
 
         [Test]
         public void FocusedOwningCategory_ConnectorDoesNotCrossCategoryContent()
         {
             PackageGraphCanvas canvas = CreateFocusedCanvas();
-            PackageGraphStructuralMembershipSegment segment = canvas.StructuralMembershipRoutesForTests
-                .Single(candidate => string.Equals(candidate.GroupId, GroupId, StringComparison.OrdinalIgnoreCase))
-                .Segments.Single();
+            PackageGraphStructuralMembershipRoute route = canvas.StructuralMembershipRoutesForTests
+                .Single(candidate => string.Equals(candidate.GroupId, GroupId, StringComparison.OrdinalIgnoreCase));
             PackageGraphGroupLayoutNode group = canvas.GroupLayoutNodesForTests.Single(candidate =>
                 string.Equals(candidate.GroupId, GroupId, StringComparison.OrdinalIgnoreCase));
-            Rect categoryInterior = group.Rect;
-            categoryInterior.xMin += 3f;
-            categoryInterior.xMax -= 3f;
-            categoryInterior.yMin += 3f;
-            categoryInterior.yMax -= 3f;
+            Rect captionInterior = group.Rect;
+            captionInterior.xMin += 3f;
+            captionInterior.xMax -= 3f;
+            captionInterior.yMin = group.HubRect.yMax + 8f;
+            captionInterior.yMax -= 3f;
 
-            Assert.IsFalse(categoryInterior.Contains(segment.From));
-            Assert.IsFalse(SegmentIntersectsRect(segment, categoryInterior));
+            Assert.IsTrue(route.Segments.All(segment =>
+                !captionInterior.Contains(segment.From) &&
+                !captionInterior.Contains(segment.To) &&
+                !SegmentIntersectsRect(segment, captionInterior)));
         }
 
         [Test]
