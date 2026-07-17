@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.69 - 2026-07-17
+
+- Automatically resume safe bulk package operations after an expected same-session Unity script reload, skipping completed or already-correct targets.
+- Keep manual recovery for editor restarts, registry drift, invalid state, failures, blocked steps, and cancellations.
+
 ## 1.1.68 - 2026-07-17
 
 - Persisted completed package update-check results in a project-scoped, atomically written cache so window, editor, and assembly reloads restore truthful status.
