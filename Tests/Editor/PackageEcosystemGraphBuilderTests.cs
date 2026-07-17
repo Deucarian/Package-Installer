@@ -730,11 +730,10 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             VisualElement footer = PackageInstallerWindow.CreateOperationFooterForTests();
 
             Assert.AreEqual(PackageInstallerWindow.OperationFooterRowName, footer.name);
-            Assert.IsTrue(footer.ClassListContains("dpi-operation-surface"));
-            Assert.IsTrue(footer.ClassListContains("dpi-operation-footer"));
-            Assert.AreEqual(FlexDirection.Row, footer.style.flexDirection.value);
-            Assert.AreEqual(Align.Center, footer.style.alignItems.value);
-            Assert.AreEqual(0f, footer.style.flexShrink.value);
+            Assert.IsTrue(footer.ClassListContains(
+                DeucarianEditorWorkbenchSurfaces.OperationSurfaceClass));
+            Assert.IsTrue(footer.ClassListContains(
+                DeucarianEditorWorkbenchSurfaces.FooterClass));
             Assert.AreEqual(34f, footer.style.height.value.value);
             Assert.AreEqual(PackageInstallerWindow.OperationInlinePaddingForTests, footer.style.paddingLeft.value.value);
             Assert.AreEqual(PackageInstallerWindow.OperationInlinePaddingForTests, footer.style.paddingRight.value.value);
@@ -756,10 +755,9 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.IsFalse(string.IsNullOrWhiteSpace(statusIcon.text));
             Assert.IsFalse(string.IsNullOrWhiteSpace(statusLabel.text));
             Assert.IsFalse(string.IsNullOrWhiteSpace(summaryLabel.text));
-            Assert.AreEqual(PackageInstallerWindow.OperationControlGapForTests, statusGroup.style.marginRight.value.value);
-            Assert.AreEqual(PackageInstallerWindow.OperationControlGapForTests, summaryLabel.style.marginRight.value.value);
-            Assert.AreEqual(PackageInstallerWindow.OperationControlGapForTests, detailsButton.style.marginRight.value.value);
-            Assert.IsTrue(detailsButton.text == "Show Details" || detailsButton.text == "Hide Details");
+            Assert.IsTrue(
+                GetComposedButtonText(detailsButton) == "Show Details" ||
+                GetComposedButtonText(detailsButton) == "Hide Details");
             Assert.IsFalse(string.IsNullOrWhiteSpace(versionLabel.text));
             StringAssert.Contains(PackageInstallerWindow.PackageIdForTests, versionLabel.text);
             StringAssert.Contains(PackageInstallerWindow.PackageVersionForTests, versionLabel.text);
@@ -772,12 +770,12 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Button detailsButton = footer.Q<Button>(PackageInstallerWindow.OperationFooterDetailsButtonName);
             Label versionLabel = footer.Q<Label>(PackageInstallerWindow.OperationFooterVersionName);
 
-            Assert.AreEqual("Show Details", detailsButton.text);
+            Assert.AreEqual("Show Details", GetComposedButtonText(detailsButton));
             StringAssert.Contains(PackageInstallerWindow.PackageIdForTests, versionLabel.text);
 
             PackageInstallerWindow.SetOperationFooterExpandedForTests(footer, true);
 
-            Assert.AreEqual("Hide Details", detailsButton.text);
+            Assert.AreEqual("Hide Details", GetComposedButtonText(detailsButton));
             AssertFooterElementVisible(versionLabel);
             StringAssert.Contains(PackageInstallerWindow.PackageIdForTests, versionLabel.text);
             StringAssert.Contains(PackageInstallerWindow.PackageVersionForTests, versionLabel.text);
@@ -792,14 +790,14 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
             foreach (string responsiveClass in new[]
                      {
-                         "dpi-responsive--wide",
-                         "dpi-responsive--compact",
-                         "dpi-responsive--narrow"
+                         DeucarianEditorResponsiveLayout.WideClass,
+                         DeucarianEditorResponsiveLayout.CompactClass,
+                         DeucarianEditorResponsiveLayout.NarrowClass
                      })
             {
-                root.RemoveFromClassList("dpi-responsive--wide");
-                root.RemoveFromClassList("dpi-responsive--compact");
-                root.RemoveFromClassList("dpi-responsive--narrow");
+                root.RemoveFromClassList(DeucarianEditorResponsiveLayout.WideClass);
+                root.RemoveFromClassList(DeucarianEditorResponsiveLayout.CompactClass);
+                root.RemoveFromClassList(DeucarianEditorResponsiveLayout.NarrowClass);
                 root.AddToClassList(responsiveClass);
 
                 AssertFooterElementVisible(footer.Q<VisualElement>(PackageInstallerWindow.OperationFooterStatusGroupName));
@@ -845,9 +843,12 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Button retry = drawer.Q<Button>(PackageInstallerWindow.OperationDrawerRetryButtonName);
 
             Assert.AreEqual(PackageInstallerWindow.OperationDrawerName, drawer.name);
-            Assert.IsTrue(drawer.ClassListContains("dpi-operation-surface"));
-            Assert.IsTrue(drawer.ClassListContains("dpi-operation-drawer"));
-            Assert.IsTrue(drawer.ClassListContains("dpi-operation-drawer--expanded"));
+            Assert.IsTrue(drawer.ClassListContains(
+                DeucarianEditorWorkbenchSurfaces.OperationSurfaceClass));
+            Assert.IsTrue(drawer.ClassListContains(
+                DeucarianEditorWorkbenchSurfaces.DrawerClass));
+            Assert.IsTrue(drawer.ClassListContains(
+                DeucarianEditorWorkbenchSurfaces.DrawerExpandedClass));
             AssertFooterElementVisible(drawer);
             AssertFooterElementVisible(scrollView);
             AssertFooterElementVisible(content);
@@ -872,14 +873,17 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Label summaryLabel = footer.Q<Label>(PackageInstallerWindow.OperationFooterSummaryName);
             Button detailsButton = footer.Q<Button>(PackageInstallerWindow.OperationFooterDetailsButtonName);
 
-            Assert.AreEqual(12, PackageInstallerWindow.OperationInlinePaddingForTests);
+            Assert.AreEqual(10, PackageInstallerWindow.OperationInlinePaddingForTests);
             Assert.AreEqual(8, PackageInstallerWindow.OperationControlGapForTests);
             Assert.AreEqual(34f, PackageInstallerWindow.OperationFooterHeightForTests);
-            Assert.AreEqual(12f, footer.style.paddingLeft.value.value);
-            Assert.AreEqual(12f, footer.style.paddingRight.value.value);
-            Assert.AreEqual(8f, statusGroup.style.marginRight.value.value);
-            Assert.AreEqual(8f, summaryLabel.style.marginRight.value.value);
-            Assert.AreEqual(8f, detailsButton.style.marginRight.value.value);
+            Assert.AreEqual(10f, footer.style.paddingLeft.value.value);
+            Assert.AreEqual(10f, footer.style.paddingRight.value.value);
+            Assert.IsTrue(statusGroup.ClassListContains(
+                DeucarianEditorWorkbenchSurfaces.FooterStatusClass));
+            Assert.IsTrue(summaryLabel.ClassListContains(
+                DeucarianEditorWorkbenchSurfaces.FooterSummaryClass));
+            Assert.IsTrue(detailsButton.ClassListContains(
+                DeucarianEditorWorkbenchSurfaces.FooterActionClass));
         }
 
         [Test]
@@ -5616,6 +5620,13 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.NotNull(element);
             Assert.AreNotEqual(DisplayStyle.None, element.style.display.value);
             Assert.That(element.style.opacity.value, Is.GreaterThan(0.01f));
+        }
+
+        private static string GetComposedButtonText(Button button)
+        {
+            Label label = button?.Q<Label>(
+                className: DeucarianEditorIconTextButton.LabelClass);
+            return label != null ? label.text : button?.text ?? string.Empty;
         }
 
         private static void AssertFixedDecorativeLayer(VisualElement element, string className)
