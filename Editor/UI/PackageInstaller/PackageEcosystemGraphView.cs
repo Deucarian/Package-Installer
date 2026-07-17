@@ -6269,6 +6269,9 @@ namespace Deucarian.PackageInstaller.Editor
 
     internal sealed class PackageGraphMembershipLayer : VisualElement
     {
+        private const float GroupStatusRingOffset = 5f;
+        private const float StructuralMembershipBusClearance = 20f;
+
         private readonly Dictionary<string, Rect> _nodeRects =
             new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, Rect> _groupRects =
@@ -6502,7 +6505,7 @@ namespace Deucarian.PackageInstaller.Editor
                 states.Add(new CategoryStatusRingVisualState(
                     "group:" + groupNode.GroupId + ":status",
                     groupHubRect.center,
-                    Mathf.Min(groupHubRect.width, groupHubRect.height) * 0.5f + 5f,
+                    Mathf.Min(groupHubRect.width, groupHubRect.height) * 0.5f + GroupStatusRingOffset,
                     emphasized ? 4.8f : 4f,
                     PackageGraphCategoryStatusVisuals.CreateSlices(groupNode.StatusSummary),
                     emphasized,
@@ -6639,6 +6642,8 @@ namespace Deucarian.PackageInstaller.Editor
                 }
 
                 Rect groupRect = GetGroupRect(groupNode);
+                Rect groupHubRect = GetAnimatedGroupHubRect(groupNode, groupRect);
+                Rect groupPortRect = ExpandRect(groupHubRect, GroupStatusRingOffset);
                 List<KeyValuePair<string, Rect>> packageRects = groupNode.RepresentedPackageIds
                     .Where(packageId => !string.IsNullOrWhiteSpace(packageId) &&
                                         _nodeRects.ContainsKey(packageId))
@@ -6650,7 +6655,11 @@ namespace Deucarian.PackageInstaller.Editor
                     continue;
                 }
 
-                routes.Add(CreateStructuralMembershipRoute(groupNode.GroupId, groupRect, packageRects));
+                routes.Add(CreateStructuralMembershipRoute(
+                    groupNode.GroupId,
+                    groupPortRect,
+                    groupRect,
+                    packageRects));
             }
 
             return routes;
@@ -6658,12 +6667,12 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static PackageGraphStructuralMembershipRoute CreateStructuralMembershipRoute(
             string groupId,
-            Rect groupRect,
+            Rect groupPortRect,
+            Rect groupContentRect,
             IReadOnlyList<KeyValuePair<string, Rect>> packageRects)
         {
             Vector2 packageAverage = CalculateAverageRectCenter(packageRects.Select(pair => pair.Value));
-            Vector2 categoryAnchor = GetRectBorderPoint(groupRect, packageAverage, 2f);
-            Vector2 direction = packageAverage - groupRect.center;
+            Vector2 direction = packageAverage - groupPortRect.center;
             bool horizontalBus = Mathf.Abs(direction.y) >= Mathf.Abs(direction.x);
             List<PackageGraphStructuralMembershipSegment> segments = new List<PackageGraphStructuralMembershipSegment>();
             string[] packageIds = packageRects.Select(pair => pair.Key).ToArray();
@@ -6672,7 +6681,8 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 AddDirectStructuralSegments(
                     segments,
-                    groupRect,
+                    groupPortRect,
+                    groupContentRect,
                     packageRects[0].Value,
                     packageRects[0].Key);
                 return new PackageGraphStructuralMembershipRoute(groupId, packageIds, segments, usesBus: false);
@@ -6680,28 +6690,69 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (horizontalBus)
             {
+                bool packagesBelow = direction.y >= 0f;
                 KeyValuePair<string, Rect>[] ordered = packageRects
                     .OrderBy(pair => pair.Value.center.x)
                     .ThenBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
                     .ToArray();
-                float busY = GetBusAxis(categoryAnchor.y, packageAverage.y);
-                AddCategoryToHorizontalBusSegments(
-                    segments,
-                    categoryAnchor,
-                    busY,
-                    packageIds);
+                float facingPackageEdge = packagesBelow
+                    ? ordered.Min(pair => pair.Value.yMin)
+                    : ordered.Max(pair => pair.Value.yMax);
+                float categoryBoundary = packagesBelow
+                    ? Mathf.Max(groupContentRect.yMax, groupPortRect.yMax)
+                    : groupPortRect.yMin;
+                float busY = GetClearBusAxis(
+                    facingPackageEdge,
+                    categoryBoundary,
+                    StructuralMembershipBusClearance);
+                float categoryJoinX;
+
+                if (packagesBelow)
+                {
+                    bool exitRight = packageAverage.x >= groupPortRect.center.x;
+                    Vector2 categoryAnchor = new Vector2(
+                        exitRight ? groupPortRect.xMax : groupPortRect.xMin,
+                        groupPortRect.center.y);
+                    categoryJoinX = exitRight
+                        ? Mathf.Max(groupContentRect.xMax, groupPortRect.xMax) + StructuralMembershipBusClearance
+                        : Mathf.Min(groupContentRect.xMin, groupPortRect.xMin) - StructuralMembershipBusClearance;
+                    Vector2 escapedCategory = new Vector2(categoryJoinX, categoryAnchor.y);
+                    segments.Add(new PackageGraphStructuralMembershipSegment(
+                        categoryAnchor,
+                        escapedCategory,
+                        packageIds));
+                    segments.Add(new PackageGraphStructuralMembershipSegment(
+                        escapedCategory,
+                        new Vector2(categoryJoinX, busY),
+                        packageIds));
+                }
+                else
+                {
+                    Vector2 categoryAnchor = new Vector2(
+                        groupPortRect.center.x,
+                        groupPortRect.yMin);
+                    categoryJoinX = categoryAnchor.x;
+                    AddCategoryToHorizontalBusSegments(
+                        segments,
+                        categoryAnchor,
+                        busY,
+                        packageIds);
+                }
+
                 AddSplitStructuralBusSegments(
                     segments,
                     ordered
                         .Select(pair => new KeyValuePair<string, float>(pair.Key, pair.Value.center.x))
                         .ToArray(),
-                    categoryAnchor.x,
+                    categoryJoinX,
                     axis => new Vector2(axis, busY));
 
                 foreach (KeyValuePair<string, Rect> package in ordered)
                 {
                     Vector2 branch = new Vector2(package.Value.center.x, busY);
-                    Vector2 endpoint = GetRectBorderPoint(package.Value, branch, 2f);
+                    Vector2 endpoint = new Vector2(
+                        package.Value.center.x,
+                        packagesBelow ? package.Value.yMin : package.Value.yMax);
                     segments.Add(new PackageGraphStructuralMembershipSegment(
                         branch,
                         endpoint,
@@ -6715,21 +6766,33 @@ namespace Deucarian.PackageInstaller.Editor
                 .OrderBy(pair => pair.Value.center.y)
                 .ThenBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
-            float busX = GetBusAxis(categoryAnchor.x, packageAverage.x);
-            Vector2 trunk = new Vector2(busX, categoryAnchor.y);
-            segments.Add(new PackageGraphStructuralMembershipSegment(categoryAnchor, trunk, packageIds));
+            bool packagesOnRight = direction.x >= 0f;
+            Vector2 verticalCategoryAnchor = new Vector2(
+                packagesOnRight ? groupPortRect.xMax : groupPortRect.xMin,
+                groupPortRect.center.y);
+            float facingVerticalPackageEdge = packagesOnRight
+                ? verticalOrdered.Min(pair => pair.Value.xMin)
+                : verticalOrdered.Max(pair => pair.Value.xMax);
+            float busX = GetClearBusAxis(
+                facingVerticalPackageEdge,
+                verticalCategoryAnchor.x,
+                StructuralMembershipBusClearance);
+            Vector2 trunk = new Vector2(busX, verticalCategoryAnchor.y);
+            segments.Add(new PackageGraphStructuralMembershipSegment(verticalCategoryAnchor, trunk, packageIds));
             AddSplitStructuralBusSegments(
                 segments,
                 verticalOrdered
                     .Select(pair => new KeyValuePair<string, float>(pair.Key, pair.Value.center.y))
                     .ToArray(),
-                categoryAnchor.y,
+                verticalCategoryAnchor.y,
                 axis => new Vector2(busX, axis));
 
             foreach (KeyValuePair<string, Rect> package in verticalOrdered)
             {
                 Vector2 branch = new Vector2(busX, package.Value.center.y);
-                Vector2 endpoint = GetRectBorderPoint(package.Value, branch, 2f);
+                Vector2 endpoint = new Vector2(
+                    packagesOnRight ? package.Value.xMin : package.Value.xMax,
+                    package.Value.center.y);
                 segments.Add(new PackageGraphStructuralMembershipSegment(
                     branch,
                     endpoint,
@@ -6741,65 +6804,29 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static void AddDirectStructuralSegments(
             ICollection<PackageGraphStructuralMembershipSegment> segments,
-            Rect groupRect,
+            Rect groupPortRect,
+            Rect groupContentRect,
             Rect packageRect,
             string packageId)
         {
-            const float EndpointPadding = 2f;
-            float overlapMinX = Mathf.Max(groupRect.xMin, packageRect.xMin) + EndpointPadding;
-            float overlapMaxX = Mathf.Min(groupRect.xMax, packageRect.xMax) - EndpointPadding;
-            float overlapMinY = Mathf.Max(groupRect.yMin, packageRect.yMin) + EndpointPadding;
-            float overlapMaxY = Mathf.Min(groupRect.yMax, packageRect.yMax) - EndpointPadding;
-            bool hasHorizontalOverlap = overlapMinX <= overlapMaxX;
-            bool hasVerticalOverlap = overlapMinY <= overlapMaxY;
-
-            if (hasVerticalOverlap &&
-                (groupRect.xMax <= packageRect.xMin || packageRect.xMax <= groupRect.xMin))
-            {
-                float sharedY = Mathf.Clamp(
-                    (groupRect.center.y + packageRect.center.y) * 0.5f,
-                    overlapMinY,
-                    overlapMaxY);
-                bool packageOnRight = packageRect.center.x >= groupRect.center.x;
-                Vector2 from = new Vector2(
-                    packageOnRight ? groupRect.xMax - EndpointPadding : groupRect.xMin + EndpointPadding,
-                    sharedY);
-                Vector2 to = new Vector2(
-                    packageOnRight ? packageRect.xMin + EndpointPadding : packageRect.xMax - EndpointPadding,
-                    sharedY);
-                AddOrthogonalStructuralSegment(segments, from, to, packageId);
-                return;
-            }
-
-            if (hasHorizontalOverlap &&
-                (groupRect.yMax <= packageRect.yMin || packageRect.yMax <= groupRect.yMin))
-            {
-                float sharedX = Mathf.Clamp(
-                    (groupRect.center.x + packageRect.center.x) * 0.5f,
-                    overlapMinX,
-                    overlapMaxX);
-                bool packageBelow = packageRect.center.y >= groupRect.center.y;
-                Vector2 from = new Vector2(
-                    sharedX,
-                    packageBelow ? groupRect.yMax - EndpointPadding : groupRect.yMin + EndpointPadding);
-                Vector2 to = new Vector2(
-                    sharedX,
-                    packageBelow ? packageRect.yMin + EndpointPadding : packageRect.yMax - EndpointPadding);
-                AddOrthogonalStructuralSegment(segments, from, to, packageId);
-                return;
-            }
-
-            Vector2 delta = packageRect.center - groupRect.center;
+            Vector2 delta = packageRect.center - groupPortRect.center;
 
             if (Mathf.Abs(delta.x) >= Mathf.Abs(delta.y))
             {
                 bool packageOnRight = delta.x >= 0f;
                 Vector2 from = new Vector2(
-                    packageOnRight ? groupRect.xMax - EndpointPadding : groupRect.xMin + EndpointPadding,
-                    Mathf.Clamp(packageRect.center.y, groupRect.yMin + EndpointPadding, groupRect.yMax - EndpointPadding));
+                    packageOnRight ? groupPortRect.xMax : groupPortRect.xMin,
+                    groupPortRect.center.y);
                 Vector2 to = new Vector2(
-                    packageOnRight ? packageRect.xMin + EndpointPadding : packageRect.xMax - EndpointPadding,
-                    Mathf.Clamp(groupRect.center.y, packageRect.yMin + EndpointPadding, packageRect.yMax - EndpointPadding));
+                    packageOnRight ? packageRect.xMin : packageRect.xMax,
+                    packageRect.center.y);
+
+                if (Mathf.Abs(from.y - to.y) <= 0.01f)
+                {
+                    AddOrthogonalStructuralSegment(segments, from, to, packageId);
+                    return;
+                }
+
                 float elbowX = (from.x + to.x) * 0.5f;
                 AddOrthogonalStructuralSegment(segments, from, new Vector2(elbowX, from.y), packageId);
                 AddOrthogonalStructuralSegment(segments, new Vector2(elbowX, from.y), new Vector2(elbowX, to.y), packageId);
@@ -6808,12 +6835,31 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             bool packageBelowGroup = delta.y >= 0f;
+
+            if (packageBelowGroup)
+            {
+                AddCaptionAvoidingDownwardStructuralSegments(
+                    segments,
+                    groupPortRect,
+                    groupContentRect,
+                    packageRect,
+                    packageId);
+                return;
+            }
+
             Vector2 verticalFrom = new Vector2(
-                Mathf.Clamp(packageRect.center.x, groupRect.xMin + EndpointPadding, groupRect.xMax - EndpointPadding),
-                packageBelowGroup ? groupRect.yMax - EndpointPadding : groupRect.yMin + EndpointPadding);
+                groupPortRect.center.x,
+                groupPortRect.yMin);
             Vector2 verticalTo = new Vector2(
-                Mathf.Clamp(groupRect.center.x, packageRect.xMin + EndpointPadding, packageRect.xMax - EndpointPadding),
-                packageBelowGroup ? packageRect.yMin + EndpointPadding : packageRect.yMax - EndpointPadding);
+                packageRect.center.x,
+                packageRect.yMax);
+
+            if (Mathf.Abs(verticalFrom.x - verticalTo.x) <= 0.01f)
+            {
+                AddOrthogonalStructuralSegment(segments, verticalFrom, verticalTo, packageId);
+                return;
+            }
+
             float elbowY = (verticalFrom.y + verticalTo.y) * 0.5f;
             AddOrthogonalStructuralSegment(
                 segments,
@@ -6830,6 +6876,35 @@ namespace Deucarian.PackageInstaller.Editor
                 new Vector2(verticalTo.x, elbowY),
                 verticalTo,
                 packageId);
+        }
+
+        private static void AddCaptionAvoidingDownwardStructuralSegments(
+            ICollection<PackageGraphStructuralMembershipSegment> segments,
+            Rect groupPortRect,
+            Rect groupContentRect,
+            Rect packageRect,
+            string packageId)
+        {
+            bool exitRight = packageRect.center.x >= groupPortRect.center.x;
+            Vector2 categoryAnchor = new Vector2(
+                exitRight ? groupPortRect.xMax : groupPortRect.xMin,
+                groupPortRect.center.y);
+            float escapeX = exitRight
+                ? Mathf.Max(groupContentRect.xMax, groupPortRect.xMax) + StructuralMembershipBusClearance
+                : Mathf.Min(groupContentRect.xMin, groupPortRect.xMin) - StructuralMembershipBusClearance;
+            float clearY = GetClearBusAxis(
+                packageRect.yMin,
+                Mathf.Max(groupContentRect.yMax, groupPortRect.yMax),
+                StructuralMembershipBusClearance);
+            Vector2 escapedCategory = new Vector2(escapeX, categoryAnchor.y);
+            Vector2 lowerCorner = new Vector2(escapeX, clearY);
+            Vector2 packageApproach = new Vector2(packageRect.center.x, clearY);
+            Vector2 packagePort = new Vector2(packageRect.center.x, packageRect.yMin);
+
+            AddOrthogonalStructuralSegment(segments, categoryAnchor, escapedCategory, packageId);
+            AddOrthogonalStructuralSegment(segments, escapedCategory, lowerCorner, packageId);
+            AddOrthogonalStructuralSegment(segments, lowerCorner, packageApproach, packageId);
+            AddOrthogonalStructuralSegment(segments, packageApproach, packagePort, packageId);
         }
 
         private static void AddOrthogonalStructuralSegment(
@@ -6918,9 +6993,21 @@ namespace Deucarian.PackageInstaller.Editor
                    midpoint <= Mathf.Max(joinAxis, branchAxis) + 0.01f;
         }
 
-        private static float GetBusAxis(float categoryAxis, float packageAxis)
+        private static float GetClearBusAxis(
+            float facingPackageEdge,
+            float categoryAnchor,
+            float preferredClearance)
         {
-            return Mathf.Lerp(categoryAxis, packageAxis, 0.52f);
+            float gap = categoryAnchor - facingPackageEdge;
+            float direction = Mathf.Sign(gap);
+            float distance = Mathf.Abs(gap);
+
+            if (distance <= preferredClearance * 2f)
+            {
+                return (facingPackageEdge + categoryAnchor) * 0.5f;
+            }
+
+            return facingPackageEdge + direction * preferredClearance;
         }
 
         private static Vector2 CalculateAverageRectCenter(IEnumerable<Rect> rects)
@@ -6935,6 +7022,16 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             return count == 0 ? Vector2.zero : total / count;
+        }
+
+        private static Rect ExpandRect(Rect rect, float amount)
+        {
+            float safeAmount = Mathf.Max(0f, amount);
+            return new Rect(
+                rect.xMin - safeAmount,
+                rect.yMin - safeAmount,
+                rect.width + safeAmount * 2f,
+                rect.height + safeAmount * 2f);
         }
 
         private void DrawStructuralMembershipRoute(
@@ -7266,25 +7363,6 @@ namespace Deucarian.PackageInstaller.Editor
 
             exit = Mathf.Min(exit, ratio);
             return true;
-        }
-
-        private static Vector2 GetRectBorderPoint(Rect rect, Vector2 externalPoint, float padding)
-        {
-            Vector2 center = rect.center;
-            Vector2 direction = center - externalPoint;
-
-            if (direction.sqrMagnitude <= 0.01f)
-            {
-                return center;
-            }
-
-            float halfWidth = Mathf.Max(0.01f, rect.width * 0.5f);
-            float halfHeight = Mathf.Max(0.01f, rect.height * 0.5f);
-            Vector2 normalized = direction.normalized;
-            float scaleX = Mathf.Abs(normalized.x) > 0.001f ? halfWidth / Mathf.Abs(normalized.x) : float.PositiveInfinity;
-            float scaleY = Mathf.Abs(normalized.y) > 0.001f ? halfHeight / Mathf.Abs(normalized.y) : float.PositiveInfinity;
-            float distance = Mathf.Max(0f, Mathf.Min(scaleX, scaleY) - padding);
-            return center - normalized * distance;
         }
 
         private static void DrawCircle(PackageGraphPainter painter, Vector2 center, float radius)
