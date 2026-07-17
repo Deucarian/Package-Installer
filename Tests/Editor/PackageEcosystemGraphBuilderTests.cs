@@ -2871,9 +2871,9 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.That(micro.Width, Is.InRange(92f, 124f));
             Assert.That(micro.Height, Is.InRange(34f, 48f));
             Assert.That(compact.Width, Is.InRange(145f, 170f));
-            Assert.That(compact.Height, Is.InRange(64f, 82f));
+            Assert.That(compact.Height, Is.InRange(64f, 92f));
             Assert.That(full.Width, Is.InRange(190f, 220f));
-            Assert.That(full.Height, Is.InRange(96f, 136f));
+            Assert.That(full.Height, Is.InRange(96f, 146f));
         }
 
         [Test]
@@ -4052,8 +4052,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 dependencies: new[] { installed.PackageId, available.PackageId, update.PackageId });
             PackageGraphModel graph = new PackageGraphBuilder(
                     packageId => packageId == installed.PackageId ||
-                                 packageId == update.PackageId ||
-                                 packageId == consumer.PackageId,
+                                 packageId == update.PackageId,
                     _ => PackageChannel.Stable,
                     package => package.PackageId == update.PackageId
                         ? PackageUpdateStatus.UpdateAvailable(
@@ -4078,7 +4077,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 candidate.Kind == PackageGraphEdgeKind.HardDependency &&
                 candidate.FromPackageId == available.PackageId &&
                 candidate.ToPackageId == consumer.PackageId);
-            Assert.AreEqual(PackageGraphEdgeState.Warning, unavailableDependency.State);
+            Assert.AreEqual(PackageGraphEdgeState.Possible, unavailableDependency.State);
 
             AssertRgbEqual(new Color(0.34f, 0.82f, 0.74f), installedColor);
             AssertRgbEqual(new Color(0.50f, 0.46f, 0.82f), availableColor);

@@ -774,6 +774,7 @@
 .dpi-ecosystem-graph__guide-layer,
 .dpi-ecosystem-graph__membership-layer,
 .dpi-ecosystem-graph__edge-layer,
+.dpi-ecosystem-graph__occlusion-layer,
 .dpi-ecosystem-graph__node-layer {
     position: absolute;
     left: 0;
@@ -1215,11 +1216,34 @@
 
 .dpi-graph-node--presentation-compact .dpi-graph-node__action {
     min-width: 58px;
+    min-height: 16px;
     height: 16px;
     max-height: 16px;
     padding-left: 6px;
     padding-right: 6px;
+    padding-top: 0;
+    padding-bottom: 0;
     font-size: 8px;
+}
+
+.dpi-graph-occlusion {
+    position: absolute;
+    background-color: rgba(8, 16, 25, 1.00);
+}
+
+.dpi-graph-occlusion--package {
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    border-bottom-right-radius: 8px;
+    border-bottom-left-radius: 8px;
+}
+
+.dpi-graph-occlusion--hub,
+.dpi-graph-occlusion--group-symbol {
+    border-top-left-radius: 999px;
+    border-top-right-radius: 999px;
+    border-bottom-right-radius: 999px;
+    border-bottom-left-radius: 999px;
 }
 
 .dpi-graph-node--presentation-full {
@@ -1903,10 +1927,15 @@
 
 .dpi-graph-node__action {
     min-width: 76px;
+    min-height: 23px;
     height: 23px;
     max-height: 23px;
     padding-left: 8px;
     padding-right: 8px;
+    padding-top: 0;
+    padding-bottom: 0;
+    flex-shrink: 0;
+    -unity-text-align: middle-center;
     border-top-left-radius: 5px;
     border-top-right-radius: 5px;
     border-bottom-right-radius: 5px;
