@@ -6235,33 +6235,6 @@ namespace Deucarian.PackageInstaller.Editor
         public float Length => Vector2.Distance(From, To);
     }
 
-    internal readonly struct PackageGraphMembershipTarget
-    {
-        public PackageGraphMembershipTarget(
-            Rect rect,
-            PackageGraphCategoryStatusKey statusKey,
-            string packageId,
-            string groupId,
-            bool searchRelevant)
-        {
-            Rect = rect;
-            StatusKey = statusKey;
-            PackageId = packageId ?? string.Empty;
-            GroupId = groupId ?? string.Empty;
-            SearchRelevant = searchRelevant;
-        }
-
-        public Rect Rect { get; }
-
-        public PackageGraphCategoryStatusKey StatusKey { get; }
-
-        public string PackageId { get; }
-
-        public string GroupId { get; }
-
-        public bool SearchRelevant { get; }
-    }
-
     internal readonly struct PackageGraphStructuralMembershipRoute
     {
         public PackageGraphStructuralMembershipRoute(
@@ -6470,40 +6443,6 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            foreach (PackageGraphGroupLayoutNode groupNode in _layout.GroupNodes)
-            {
-                if (groupNode == null || groupNode.Group == null || groupNode.Collapsed)
-                {
-                    continue;
-                }
-
-                PackageGraphMembershipTarget[] childTargets =
-                    GetDirectChildTargets(groupNode.GroupId, groupNodeById).ToArray();
-                float orbitRadius = GetGroupOrbitRadius(groupNode);
-
-                if (orbitRadius <= 0.01f)
-                {
-                    continue;
-                }
-
-                Rect groupRect = GetGroupRect(groupNode);
-                Rect groupHubRect = GetAnimatedGroupHubRect(groupNode, groupRect);
-                foreach (PackageGraphMembershipTarget childTarget in childTargets)
-                {
-                    bool hoverActive = !_interactionsLocked && !string.IsNullOrWhiteSpace(_hoveredGroupId);
-                    bool emphasized = hoverActive &&
-                                      IsGroupInHoverContext(groupNode.GroupId, _hoveredGroupId, groupNodeById);
-                    bool muted = (hoverActive && !emphasized) || !childTarget.SearchRelevant;
-                    DrawOrbitAttachmentCaps(
-                        painter,
-                        groupHubRect.center,
-                        orbitRadius,
-                        childTarget.Rect,
-                        emphasized,
-                        muted);
-                }
-            }
-
             PackageGraphPainterCompatibility.Complete(painter);
         }
 
@@ -6700,7 +6639,6 @@ namespace Deucarian.PackageInstaller.Editor
                 }
 
                 Rect groupRect = GetGroupRect(groupNode);
-                Rect groupHubRect = GetAnimatedGroupHubRect(groupNode, groupRect);
                 List<KeyValuePair<string, Rect>> packageRects = groupNode.RepresentedPackageIds
                     .Where(packageId => !string.IsNullOrWhiteSpace(packageId) &&
                                         _nodeRects.ContainsKey(packageId))
@@ -6712,7 +6650,7 @@ namespace Deucarian.PackageInstaller.Editor
                     continue;
                 }
 
-                routes.Add(CreateStructuralMembershipRoute(groupNode.GroupId, groupRect, groupHubRect, packageRects));
+                routes.Add(CreateStructuralMembershipRoute(groupNode.GroupId, groupRect, packageRects));
             }
 
             return routes;
@@ -6721,11 +6659,11 @@ namespace Deucarian.PackageInstaller.Editor
         private static PackageGraphStructuralMembershipRoute CreateStructuralMembershipRoute(
             string groupId,
             Rect groupRect,
-            Rect groupHubRect,
             IReadOnlyList<KeyValuePair<string, Rect>> packageRects)
         {
             Vector2 packageAverage = CalculateAverageRectCenter(packageRects.Select(pair => pair.Value));
-            Vector2 direction = packageAverage - groupHubRect.center;
+            Vector2 categoryAnchor = GetRectBorderPoint(groupRect, packageAverage, 2f);
+            Vector2 direction = packageAverage - groupRect.center;
             bool horizontalBus = Mathf.Abs(direction.y) >= Mathf.Abs(direction.x);
             List<PackageGraphStructuralMembershipSegment> segments = new List<PackageGraphStructuralMembershipSegment>();
             string[] packageIds = packageRects.Select(pair => pair.Key).ToArray();
@@ -6734,7 +6672,7 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 AddDirectStructuralSegments(
                     segments,
-                    groupHubRect,
+                    groupRect,
                     packageRects[0].Value,
                     packageRects[0].Key);
                 return new PackageGraphStructuralMembershipRoute(groupId, packageIds, segments, usesBus: false);
@@ -6746,10 +6684,10 @@ namespace Deucarian.PackageInstaller.Editor
                     .OrderBy(pair => pair.Value.center.x)
                     .ThenBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
                     .ToArray();
-                float busY = GetBusAxis(groupHubRect.center.y, packageAverage.y);
+                float busY = GetBusAxis(categoryAnchor.y, packageAverage.y);
                 AddCategoryToHorizontalBusSegments(
                     segments,
-                    groupHubRect,
+                    categoryAnchor,
                     busY,
                     packageIds);
                 AddSplitStructuralBusSegments(
@@ -6757,7 +6695,7 @@ namespace Deucarian.PackageInstaller.Editor
                     ordered
                         .Select(pair => new KeyValuePair<string, float>(pair.Key, pair.Value.center.x))
                         .ToArray(),
-                    groupHubRect.center.x,
+                    categoryAnchor.x,
                     axis => new Vector2(axis, busY));
 
                 foreach (KeyValuePair<string, Rect> package in ordered)
@@ -6777,16 +6715,15 @@ namespace Deucarian.PackageInstaller.Editor
                 .OrderBy(pair => pair.Value.center.y)
                 .ThenBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
-            float busX = GetBusAxis(groupHubRect.center.x, packageAverage.x);
-            Vector2 hubStart = GetHubBorderPoint(groupHubRect, new Vector2(busX, groupHubRect.center.y), 2f);
-            Vector2 trunk = new Vector2(busX, groupHubRect.center.y);
-            segments.Add(new PackageGraphStructuralMembershipSegment(hubStart, trunk, packageIds));
+            float busX = GetBusAxis(categoryAnchor.x, packageAverage.x);
+            Vector2 trunk = new Vector2(busX, categoryAnchor.y);
+            segments.Add(new PackageGraphStructuralMembershipSegment(categoryAnchor, trunk, packageIds));
             AddSplitStructuralBusSegments(
                 segments,
                 verticalOrdered
                     .Select(pair => new KeyValuePair<string, float>(pair.Key, pair.Value.center.y))
                     .ToArray(),
-                groupHubRect.center.y,
+                categoryAnchor.y,
                 axis => new Vector2(busX, axis));
 
             foreach (KeyValuePair<string, Rect> package in verticalOrdered)
@@ -6804,25 +6741,24 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static void AddDirectStructuralSegments(
             ICollection<PackageGraphStructuralMembershipSegment> segments,
-            Rect groupHubRect,
+            Rect groupRect,
             Rect packageRect,
             string packageId)
         {
-            Vector2 from = GetHubBorderPoint(groupHubRect, packageRect.center, 2f);
-            Vector2 to = GetRectBorderPoint(packageRect, groupHubRect.center, 2f);
+            Vector2 from = GetRectBorderPoint(groupRect, packageRect.center, 2f);
+            Vector2 to = GetRectBorderPoint(packageRect, from, 2f);
             segments.Add(new PackageGraphStructuralMembershipSegment(from, to, packageId));
         }
 
         private static void AddCategoryToHorizontalBusSegments(
             ICollection<PackageGraphStructuralMembershipSegment> segments,
-            Rect groupHubRect,
+            Vector2 categoryAnchor,
             float busY,
             IReadOnlyList<string> packageIds)
         {
-            Vector2 busJoin = new Vector2(groupHubRect.center.x, busY);
-            Vector2 startDirect = GetHubBorderPoint(groupHubRect, busJoin, 2f);
+            Vector2 busJoin = new Vector2(categoryAnchor.x, busY);
             segments.Add(new PackageGraphStructuralMembershipSegment(
-                startDirect,
+                categoryAnchor,
                 busJoin,
                 packageIds));
         }
@@ -6905,20 +6841,6 @@ namespace Deucarian.PackageInstaller.Editor
             return count == 0 ? Vector2.zero : total / count;
         }
 
-        private static Vector2 GetHubBorderPoint(Rect hubRect, Vector2 externalPoint, float padding)
-        {
-            Vector2 center = hubRect.center;
-            Vector2 direction = externalPoint - center;
-
-            if (direction.sqrMagnitude <= 0.01f)
-            {
-                return center;
-            }
-
-            return center + direction.normalized *
-                   (Mathf.Min(hubRect.width, hubRect.height) * 0.5f + Mathf.Max(0f, padding));
-        }
-
         private void DrawStructuralMembershipRoute(
             PackageGraphPainter painter,
             PackageGraphStructuralMembershipRoute route,
@@ -6926,7 +6848,6 @@ namespace Deucarian.PackageInstaller.Editor
             bool muted)
         {
             PackageGraphCategoryStatusKey aggregateStatus = ResolveAggregateStatus(route.PackageIds);
-            Rect captionOcclusion = GetGroupCaptionOcclusionRect(route.GroupId);
 
             foreach (PackageGraphStructuralMembershipSegment segment in route.Segments
                          .OrderBy(candidate => candidate.PackageIds != null && candidate.PackageIds.Count == 1 ? 1 : 0))
@@ -6938,185 +6859,8 @@ namespace Deucarian.PackageInstaller.Editor
                 color.a = muted ? 0.045f : emphasized ? 0.82f : 0.48f;
                 painter.strokeColor = color;
                 painter.lineWidth = emphasized ? 1.8f : 1.25f;
-                DrawContinuousLineAroundRect(
-                    painter,
-                    segment.From,
-                    segment.To,
-                    captionOcclusion);
+                StrokeLine(painter, segment.From, segment.To);
             }
-        }
-
-        private static void DrawContinuousLineAroundRect(
-            PackageGraphPainter painter,
-            Vector2 from,
-            Vector2 to,
-            Rect obstacle)
-        {
-            IReadOnlyList<Vector2> points = BuildCaptionAvoidingPath(from, to, obstacle);
-
-            if (points.Count < 2)
-            {
-                return;
-            }
-
-            StrokeRoundedPolyline(painter, points, 8f);
-        }
-
-        private static IReadOnlyList<Vector2> BuildCaptionAvoidingPath(
-            Vector2 from,
-            Vector2 to,
-            Rect obstacle)
-        {
-            const float Clearance = 12f;
-            Rect padded = new Rect(
-                obstacle.xMin - Clearance,
-                obstacle.yMin - Clearance,
-                obstacle.width + Clearance * 2f,
-                obstacle.height + Clearance * 2f);
-
-            if (obstacle.width <= 0.01f || obstacle.height <= 0.01f ||
-                !TryGetSegmentRectInterval(from, to, padded, out _, out _))
-            {
-                return new[] { from, to };
-            }
-
-            bool routeLeft = to.x < padded.center.x ||
-                             (Mathf.Abs(to.x - padded.center.x) <= 0.01f && from.x <= padded.center.x);
-            float sideX = routeLeft ? padded.xMin : padded.xMax;
-            float exitY;
-
-            if (to.y >= padded.yMax)
-            {
-                exitY = padded.yMax;
-            }
-            else if (to.y <= padded.yMin)
-            {
-                exitY = padded.yMin;
-            }
-            else
-            {
-                float topCost = Mathf.Abs(from.y - padded.yMin) + Mathf.Abs(to.y - padded.yMin);
-                float bottomCost = Mathf.Abs(from.y - padded.yMax) + Mathf.Abs(to.y - padded.yMax);
-                exitY = topCost <= bottomCost ? padded.yMin : padded.yMax;
-            }
-
-            List<Vector2> points = new List<Vector2>
-            {
-                from,
-                new Vector2(sideX, from.y),
-                new Vector2(sideX, exitY),
-                new Vector2(to.x, exitY),
-                to
-            };
-            return RemoveDuplicateAndCollinearPoints(points);
-        }
-
-        internal static IReadOnlyList<Vector2> BuildCaptionAvoidingPathForTests(
-            Vector2 from,
-            Vector2 to,
-            Rect obstacle)
-        {
-            return BuildCaptionAvoidingPath(from, to, obstacle);
-        }
-
-        private static IReadOnlyList<Vector2> RemoveDuplicateAndCollinearPoints(IReadOnlyList<Vector2> points)
-        {
-            List<Vector2> result = new List<Vector2>();
-
-            foreach (Vector2 point in points ?? Array.Empty<Vector2>())
-            {
-                if (result.Count > 0 && Vector2.Distance(result[result.Count - 1], point) <= 0.01f)
-                {
-                    continue;
-                }
-
-                if (result.Count >= 2)
-                {
-                    Vector2 previous = result[result.Count - 1] - result[result.Count - 2];
-                    Vector2 next = point - result[result.Count - 1];
-
-                    if (Mathf.Abs(previous.x * next.y - previous.y * next.x) <= 0.01f &&
-                        Vector2.Dot(previous, next) >= 0f)
-                    {
-                        result[result.Count - 1] = point;
-                        continue;
-                    }
-                }
-
-                result.Add(point);
-            }
-
-            return result;
-        }
-
-        private static void StrokeRoundedPolyline(
-            PackageGraphPainter painter,
-            IReadOnlyList<Vector2> points,
-            float radius)
-        {
-            if (points == null || points.Count < 2)
-            {
-                return;
-            }
-
-            painter.BeginPath();
-            painter.MoveTo(points[0]);
-
-            for (int index = 1; index < points.Count - 1; index++)
-            {
-                Vector2 previous = points[index - 1];
-                Vector2 corner = points[index];
-                Vector2 next = points[index + 1];
-                Vector2 incoming = corner - previous;
-                Vector2 outgoing = next - corner;
-                float cornerRadius = Mathf.Min(
-                    Mathf.Max(0f, radius),
-                    Mathf.Min(incoming.magnitude, outgoing.magnitude) * 0.5f);
-
-                if (cornerRadius <= 0.01f || incoming.sqrMagnitude <= 0.01f || outgoing.sqrMagnitude <= 0.01f)
-                {
-                    painter.LineTo(corner);
-                    continue;
-                }
-
-                Vector2 entry = corner - incoming.normalized * cornerRadius;
-                Vector2 exit = corner + outgoing.normalized * cornerRadius;
-                painter.LineTo(entry);
-                painter.BezierCurveTo(
-                    Vector2.Lerp(entry, corner, 0.72f),
-                    Vector2.Lerp(exit, corner, 0.72f),
-                    exit);
-            }
-
-            painter.LineTo(points[points.Count - 1]);
-            painter.Stroke();
-        }
-
-        private Rect GetGroupCaptionOcclusionRect(string groupId)
-        {
-            PackageGraphGroupLayoutNode groupNode = _layout != null
-                ? _layout.GroupNodes.FirstOrDefault(candidate =>
-                    candidate != null &&
-                    string.Equals(candidate.GroupId, groupId, StringComparison.OrdinalIgnoreCase))
-                : null;
-            return GetGroupCaptionOcclusionRect(groupNode);
-        }
-
-        private Rect GetGroupCaptionOcclusionRect(PackageGraphGroupLayoutNode groupNode)
-        {
-            if (groupNode == null)
-            {
-                return default(Rect);
-            }
-
-            Rect groupRect = GetGroupRect(groupNode);
-            Rect hubRect = GetAnimatedGroupHubRect(groupNode, groupRect);
-            float top = hubRect.yMax + 3f;
-            return new Rect(
-                groupRect.x - 3f,
-                top,
-                groupRect.width + 6f,
-                Mathf.Max(0f, groupRect.yMax - top + 5f));
         }
 
         private PackageGraphCategoryStatusKey ResolveSegmentStatus(
@@ -7190,45 +6934,6 @@ namespace Deucarian.PackageInstaller.Editor
             return hasInstalled
                 ? PackageGraphCategoryStatusKey.Installed
                 : PackageGraphCategoryStatusKey.Unknown;
-        }
-
-        private IEnumerable<PackageGraphMembershipTarget> GetDirectChildTargets(
-            string groupId,
-            IReadOnlyDictionary<string, PackageGraphGroupLayoutNode> groupNodeById)
-        {
-            foreach (PackageGraphNode node in _graph.Nodes)
-            {
-                if (node == null ||
-                    !string.Equals(node.GroupId, groupId, StringComparison.OrdinalIgnoreCase) ||
-                    !_nodeRects.TryGetValue(node.PackageId, out Rect rect))
-                {
-                    continue;
-                }
-
-                yield return new PackageGraphMembershipTarget(
-                    rect,
-                    PackageGraphCategoryStatusClassifier.Classify(node),
-                    node.PackageId,
-                    string.Empty,
-                    !IsPackageSearchMuted(node.PackageId));
-            }
-
-            foreach (PackageGraphGroup group in _graph.Groups)
-            {
-                if (group == null ||
-                    !string.Equals(group.ParentGroupId, groupId, StringComparison.OrdinalIgnoreCase) ||
-                    !groupNodeById.TryGetValue(group.Id, out PackageGraphGroupLayoutNode groupNode))
-                {
-                    continue;
-                }
-
-                yield return new PackageGraphMembershipTarget(
-                    GetAnimatedGroupHubRect(groupNode, GetGroupRect(groupNode)),
-                    ResolveAggregateStatus(groupNode.RepresentedPackageIds),
-                    string.Empty,
-                    group.Id,
-                    !IsGroupSearchMuted(group.Id));
-            }
         }
 
         private bool IsPackageSearchMuted(string packageId)
@@ -7398,80 +7103,6 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             painter.Stroke();
-        }
-
-        private static void DrawOrbitAttachmentCaps(
-            PackageGraphPainter painter,
-            Vector2 orbitCenter,
-            float orbitRadius,
-            Rect targetRect,
-            bool emphasized,
-            bool muted)
-        {
-            IReadOnlyList<PackageGraphStructuralMembershipSegment> caps =
-                CreateOrbitAttachmentCaps(orbitCenter, orbitRadius, targetRect);
-
-            if (caps.Count == 0)
-            {
-                return;
-            }
-
-            Color color = new Color(0.42f, 0.70f, 0.78f, muted ? 0.055f : emphasized ? 0.76f : 0.44f);
-            painter.strokeColor = color;
-            painter.fillColor = color;
-            painter.lineWidth = emphasized ? 2.2f : 1.55f;
-
-            foreach (PackageGraphStructuralMembershipSegment cap in caps)
-            {
-                StrokeLine(painter, cap.From, cap.To);
-                DrawCircle(painter, cap.To, emphasized ? 2.4f : 1.9f);
-            }
-        }
-
-        private static IReadOnlyList<PackageGraphStructuralMembershipSegment> CreateOrbitAttachmentCaps(
-            Vector2 orbitCenter,
-            float orbitRadius,
-            Rect targetRect)
-        {
-            Vector2 radial = targetRect.center - orbitCenter;
-
-            if (orbitRadius <= 0.01f || radial.sqrMagnitude <= 0.01f ||
-                targetRect.width <= 0.01f || targetRect.height <= 0.01f)
-            {
-                return Array.Empty<PackageGraphStructuralMembershipSegment>();
-            }
-
-            Vector2 tangent = new Vector2(-radial.y, radial.x).normalized;
-            const float InnerGap = 2f;
-            const float CapLength = 10f;
-            Vector2 positiveBorder = GetRectBorderPoint(
-                targetRect,
-                targetRect.center + tangent * Mathf.Max(targetRect.width, targetRect.height) * 2f,
-                0f);
-            Vector2 negativeBorder = GetRectBorderPoint(
-                targetRect,
-                targetRect.center - tangent * Mathf.Max(targetRect.width, targetRect.height) * 2f,
-                0f);
-            Vector2 positiveNear = positiveBorder + tangent * InnerGap;
-            Vector2 negativeNear = negativeBorder - tangent * InnerGap;
-
-            return new[]
-            {
-                new PackageGraphStructuralMembershipSegment(
-                    positiveNear + tangent * CapLength,
-                    positiveNear),
-                new PackageGraphStructuralMembershipSegment(
-                    negativeNear - tangent * CapLength,
-                    negativeNear)
-            };
-        }
-
-        internal static IReadOnlyList<PackageGraphStructuralMembershipSegment> CreateOrbitAttachmentCapsForTests(
-            Vector2 orbitCenter,
-            float orbitRadius,
-            Rect targetRect)
-        {
-            return CreateOrbitAttachmentCaps(orbitCenter, orbitRadius, targetRect);
         }
 
         private static void StrokeLine(PackageGraphPainter painter, Vector2 from, Vector2 to)
@@ -10803,7 +10434,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             Image icon = new Image
             {
-                image = DeucarianEditorIcons.GetIcon(groupNode.Group.IconKey),
+                image = DeucarianEditorIcons.GetPackageIcon(groupNode.Group.IconKey),
                 scaleMode = ScaleMode.ScaleToFit,
                 tintColor = DeucarianEditorTheme.Text
             };

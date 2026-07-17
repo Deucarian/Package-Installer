@@ -1042,6 +1042,45 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void GraphView_ResolvesLegacyRegistryIconAliasesForCategoryHubs()
+        {
+            const string groupId = "runtime-services";
+            const string legacyRegistryIconKey = "object-loading";
+            PackageGraphGroup group = new PackageGraphGroup(
+                groupId,
+                "Runtime Services",
+                string.Empty,
+                "Runtime-facing services.",
+                30,
+                legacyRegistryIconKey,
+                groupId);
+            PackageDefinition package = new PackageDefinition(
+                "Object Loading",
+                "com.deucarian.object-loading",
+                "https://example.com/object-loading.git#main",
+                "Object loading package.",
+                groupId: groupId);
+            PackageGraphModel graph = new PackageGraphBuilder(_ => true)
+                .Build(new[] { package }, new[] { group });
+            PackageGraphView view = new PackageGraphView(_ => { }, (_, __) => { });
+
+            view.SetGraph(
+                graph,
+                string.Empty,
+                string.Empty,
+                groupId,
+                actionsEnabled: true,
+                visiblePackageIds: null,
+                filterCounts: null,
+                hiddenRelatedCount: 0);
+
+            Assert.AreSame(
+                DeucarianEditorIcons.GetPackageIcon(legacyRegistryIconKey),
+                FindGraphGroup(view, groupId)
+                    .Q<Image>(className: "dpi-graph-group__icon").image);
+        }
+
+        [Test]
         public void LegacyFallbackStructuralGroupsUseLucideIds()
         {
             IReadOnlyList<PackageGraphGroup> groups = PackageGraphHierarchyBuilder.CreateGroups(
