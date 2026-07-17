@@ -6,7 +6,7 @@
 
 It is the Deucarian ecosystem front door for installing standalone packages, integration packages, suite packages, templates, and explicitly declared package samples from Package Registry metadata.
 
-Current package version: `1.1.70`.
+Current package version: `1.1.71`.
 
 ## When to use it
 
@@ -181,6 +181,7 @@ The canonical registry uses `schemaVersion` 2. The installer also reads legacy s
 - `id`: the Unity package name, such as `com.deucarian.api`. This must exactly match the target package's `package.json` `name` value.
 - `displayName`: the name shown in the installer window.
 - `kind`: the package artifact kind: `Library`, `Tool`, `Integration`, `Suite`, or `Template`.
+- `iconKey`: the required vendored Lucide icon ID used consistently in package lists, graph nodes, details, and package actions. IDs must be lowercase safe slugs and must exist in `com.deucarian.editor`'s icon catalog.
 - `description`: explanatory text shown in the detail pane.
 - `stableUrl`: the stable Git URL or UPM identifier passed to `UnityEditor.PackageManager.Client.Add`.
 - `developmentUrl`: optional development-channel Git URL or UPM identifier. If this is empty, the Development channel is disabled for that package.
@@ -264,6 +265,8 @@ Packages, groups, summaries, breadcrumbs, and back targets support keyboard focu
 
 Search preserves the graph's spatial map: root and category positions stay fixed, direct matches and their category path are emphasized, and unrelated results are muted. Installed and Not installed remain visibility filters, but filtered package slots stay reserved so the remaining graph does not reflow. Empty search/filter states provide a contextual recovery action without turning the graph into a new permanent control surface.
 
+Overview and category focus use neutral orbit rails with short attachment caps at each child instead of long spokes that can disappear behind animated cards. Package focus keeps structural membership buses continuous by routing around category captions, while dependency, integration, optional, and suite relationships retain their own stable visual treatment. Graph repaint schedules run only for finite camera and layout transitions; an open, idle graph does not maintain a background animation loop.
+
 ## Integration Packages
 
 Integration packages keep the core packages standalone while providing explicit composition packages for projects that want the combined behavior.
@@ -326,7 +329,7 @@ Keeping the installer editor-only ensures:
 
 ## Versioning
 
-Current package version: `1.1.70`.
+Current package version: `1.1.71`.
 
 Branch strategy:
 

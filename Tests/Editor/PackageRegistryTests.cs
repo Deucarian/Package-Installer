@@ -1,7 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using Deucarian.Editor;
 using NUnit.Framework;
 using UnityEditor.PackageManager;
 
@@ -320,6 +323,27 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.IsEmpty(legacy.EcosystemGroup);
             Assert.AreEqual(0, legacy.OverviewOrder);
             Assert.IsFalse(legacy.HasOverviewOrder);
+        }
+
+        [Test]
+        public void PackageIconMetadataParsesAndMapsWithoutChangingSemanticIds()
+        {
+            const string explicitIconId = "server-cog";
+            string json =
+                "{ \"schemaVersion\": 1, \"packages\": [" +
+                "{ \"id\": \"com.deucarian.session\", \"displayName\": \"Session\", \"category\": \"Core\", \"stableUrl\": \"https://example.com/session.git#main\", \"iconKey\": \"  " + explicitIconId + "  \", \"dependencies\": [] }" +
+                "] }";
+
+            PackageRegistryLoadResult result = new PackageRegistryLoader()
+                .LoadFromJson(json, PackageRegistrySource.Bundled);
+            PackageRegistryEntry registryEntry = result.Registry.packages.Single();
+            PackageDefinition package = PackageRegistryProvider
+                .CreatePackageDefinitions(result.Registry)
+                .Single(definition => definition.PackageId == "com.deucarian.session");
+
+            Assert.IsTrue(result.IsValid, result.ErrorMessage);
+            Assert.AreEqual("  " + explicitIconId + "  ", registryEntry.iconKey);
+            Assert.AreEqual(explicitIconId, package.IconKey);
         }
 
         [Test]
@@ -779,6 +803,58 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             CollectionAssert.AreEqual(new[] { "com.deucarian.editor" }, logging.dependencies);
             CollectionAssert.AreEqual(new[] { "com.deucarian.editor", "com.deucarian.logging" }, theming.dependencies);
             CollectionAssert.AreEqual(new[] { "com.deucarian.editor", "com.deucarian.logging" }, packageInstaller.dependencies);
+        }
+
+        [Test]
+        public void BundledRegistryIconMetadataUsesVendoredLucideIds()
+        {
+            PackageRegistryLoadResult result = new PackageRegistryLoader().LoadBundled();
+            Assert.IsTrue(result.IsValid, result.ErrorMessage);
+            Assert.IsNotNull(result.Registry);
+
+            var violations = new List<string>();
+            foreach (PackageRegistryGroupEntry group in result.Registry.groups ??
+                         Array.Empty<PackageRegistryGroupEntry>())
+            {
+                ValidateBundledIconKey("group " + (group?.id ?? "<null>"), group?.iconKey, violations);
+            }
+
+            foreach (PackageRegistryEntry package in result.Registry.packages ??
+                         Array.Empty<PackageRegistryEntry>())
+            {
+                ValidateBundledIconKey("package " + (package?.id ?? "<null>"), package?.iconKey, violations);
+            }
+
+            Assert.That(
+                violations,
+                Is.Empty,
+                "Every bundled registry group and package must use a safe, vendored Lucide icon ID:\n" +
+                string.Join("\n", violations));
+        }
+
+        private static void ValidateBundledIconKey(
+            string owner,
+            string iconKey,
+            ICollection<string> violations)
+        {
+            string normalized = iconKey?.Trim() ?? string.Empty;
+            if (normalized.Length == 0)
+            {
+                violations.Add(owner + " has no iconKey.");
+                return;
+            }
+
+            if (!string.Equals(iconKey, normalized, StringComparison.Ordinal) ||
+                !Regex.IsMatch(normalized, "^[a-z0-9]+(?:-[a-z0-9]+)*$"))
+            {
+                violations.Add(owner + " has unsafe iconKey '" + iconKey + "'.");
+                return;
+            }
+
+            if (!DeucarianEditorIcons.IsKnownIconId(normalized))
+            {
+                violations.Add(owner + " references unknown Lucide icon '" + normalized + "'.");
+            }
         }
 
         [Test]

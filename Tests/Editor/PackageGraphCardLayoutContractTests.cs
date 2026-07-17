@@ -42,9 +42,9 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             AssertRuleValues(
                 stylesheet,
                 ".dpi-graph-node--presentation-compact .dpi-graph-node__action",
-                "height", "16px",
-                "min-height", "16px",
-                "max-height", "16px",
+                "height", "18px",
+                "min-height", "18px",
+                "max-height", "18px",
                 "padding-left", "6px",
                 "padding-right", "6px",
                 "padding-top", "0",

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using Deucarian.Editor;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.UIElements;
@@ -92,7 +93,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 () => filterChangedCount++);
             Button action = FindEmptyStateAction(view);
 
-            Assert.AreEqual("Show all packages", action.text);
+            Assert.AreEqual("Show all packages", GetActionText(action));
 
             InvokePointerClick(action);
 
@@ -120,7 +121,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 "infrastructure");
             Button action = FindEmptyStateAction(view);
 
-            Assert.AreEqual("Clear search", action.text);
+            Assert.AreEqual("Clear search", GetActionText(action));
 
             InvokePointerClick(action);
 
@@ -149,7 +150,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 "infrastructure");
             Button action = FindEmptyStateAction(view);
 
-            Assert.AreEqual("Show matching packages", action.text);
+            Assert.AreEqual("Show matching packages", GetActionText(action));
 
             InvokePointerClick(action);
 
@@ -175,7 +176,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 () => filterChangedCount++);
             Button action = FindEmptyStateAction(view);
 
-            Assert.AreEqual("Show matching packages", action.text);
+            Assert.AreEqual("Show matching packages", GetActionText(action));
 
             InvokePointerClick(action);
 
@@ -216,7 +217,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 () => filterChangedCount++);
             Button action = FindEmptyStateAction(view);
 
-            Assert.AreEqual("Show matching packages", action.text);
+            Assert.AreEqual("Show matching packages", GetActionText(action));
 
             InvokePointerClick(action);
 
@@ -244,7 +245,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 "infrastructure");
             Button action = FindEmptyStateAction(view);
 
-            Assert.AreEqual("Search all groups", action.text);
+            Assert.AreEqual("Search all groups", GetActionText(action));
 
             InvokePointerClick(action);
 
@@ -272,7 +273,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 "infrastructure");
             Button action = FindEmptyStateAction(view);
 
-            Assert.AreEqual("Search all groups", action.text);
+            Assert.AreEqual("Search all groups", GetActionText(action));
 
             InvokePointerClick(action);
 
@@ -491,6 +492,15 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         private static Button FindEmptyStateAction(VisualElement root)
         {
             return FindByClass<Button>(root, "dpi-ecosystem-graph__empty-action");
+        }
+
+        private static string GetActionText(Button action)
+        {
+            return action?
+                .Query<Label>(className: DeucarianEditorIconTextButton.LabelClass)
+                .ToList()
+                .Select(label => label.text)
+                .FirstOrDefault() ?? string.Empty;
         }
 
         private static TElement FindByClass<TElement>(VisualElement root, string className)

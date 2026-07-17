@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.71 - 2026-07-17
+
+- Completed Lucide icon coverage across Package Installer toolbars, package lists, details, actions, statuses, activity surfaces, recovery choices, and confirmations.
+- Added registry-to-package `iconKey` plumbing with exact semantic-ID preservation, legacy fallback behavior, and bundled-catalog validation against the shared Editor icon catalog.
+- Replaced native Unity confirmation popups with the responsive branded Editor dialog API and updated the Editor dependency to `1.0.4`.
+- Reworked category membership rendering into neutral orbit rails with short local attachment caps, routed focused membership buses continuously around captions, and removed the persistent semantic-edge repaint loop.
+
 ## 1.1.70 - 2026-07-17
 
 - Added Package Registry schema v2 support with canonical Library, Tool, Integration, Suite, and Template kinds while retaining schema v1 compatibility.

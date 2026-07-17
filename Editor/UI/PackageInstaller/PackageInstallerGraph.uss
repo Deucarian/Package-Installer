@@ -220,12 +220,12 @@
     align-content: flex-start;
 }
 
-.dpi-ecosystem-graph--compact .dpi-ecosystem-graph__search {
+.dpi-ecosystem-graph--compact .dpi-ecosystem-graph__search-control {
     flex-basis: 220px;
     max-width: none;
 }
 
-.dpi-ecosystem-graph--narrow .dpi-ecosystem-graph__search {
+.dpi-ecosystem-graph--narrow .dpi-ecosystem-graph__search-control {
     flex-basis: 100%;
     width: 100%;
     max-width: none;
@@ -332,18 +332,41 @@
 
 .dpi-ecosystem-graph__breadcrumb-separator {
     width: 12px;
-    color: rgba(112, 143, 156, 0.70);
-    -unity-text-align: middle-center;
-    font-size: 10px;
+    min-width: 12px;
+    max-width: 12px;
+    height: 12px;
+    margin-left: 3px;
+    margin-right: 3px;
+    opacity: 0.70;
+}
+
+.dpi-ecosystem-graph__search-control {
+    flex-grow: 1;
+    flex-shrink: 1;
+    flex-direction: row;
+    align-items: center;
+    min-width: 130px;
+    max-width: 360px;
+    height: 24px;
+    margin-right: 6px;
+}
+
+.dpi-ecosystem-graph__search-icon {
+    width: 14px;
+    min-width: 14px;
+    max-width: 14px;
+    height: 14px;
+    margin-left: 6px;
+    margin-right: -20px;
+    opacity: 0.72;
 }
 
 .dpi-ecosystem-graph__search {
     flex-grow: 1;
     flex-shrink: 1;
-    min-width: 130px;
-    max-width: 360px;
+    min-width: 0;
     height: 24px;
-    margin-right: 6px;
+    padding-left: 20px;
 }
 
 .dpi-ecosystem-graph__filter-toggle,
@@ -429,6 +452,7 @@
 .dpi-ecosystem-graph__filter-icon {
     width: 14px;
     min-width: 14px;
+    max-width: 14px;
     height: 14px;
     margin-right: 5px;
     padding-left: 0;
@@ -441,9 +465,7 @@
     border-right-width: 1px;
     border-top-width: 1px;
     border-bottom-width: 1px;
-    -unity-text-align: middle-center;
-    -unity-font-style: bold;
-    font-size: 9px;
+    opacity: 0.92;
 }
 
 .dpi-ecosystem-graph__filter-icon--installed {
@@ -579,12 +601,13 @@
 }
 
 .dpi-graph-legend__line {
-    min-width: 44px;
+    width: 18px;
+    min-width: 18px;
+    max-width: 18px;
     height: 16px;
     margin-right: 5px;
-    -unity-text-align: middle-center;
-    font-size: 8px;
-    color: rgba(211, 230, 238, 0.72);
+    padding-bottom: 2px;
+    opacity: 0.82;
     border-bottom-width: 2px;
     border-bottom-color: rgba(90, 111, 160, 0.44);
 }
@@ -1115,7 +1138,10 @@
     min-width: 10px;
     height: 10px;
     margin-right: 0;
-    font-size: 6px;
+    padding-left: 1px;
+    padding-right: 1px;
+    padding-top: 1px;
+    padding-bottom: 1px;
 }
 
 .dpi-graph-node--presentation-micro {
@@ -1147,7 +1173,10 @@
     min-width: 10px;
     height: 10px;
     margin-right: 2px;
-    font-size: 6px;
+    padding-left: 1px;
+    padding-right: 1px;
+    padding-top: 1px;
+    padding-bottom: 1px;
 }
 
 .dpi-graph-node--presentation-micro .dpi-graph-node__title {
@@ -1180,7 +1209,10 @@
     min-width: 10px;
     height: 10px;
     margin-right: 3px;
-    font-size: 6px;
+    padding-left: 1px;
+    padding-right: 1px;
+    padding-top: 1px;
+    padding-bottom: 1px;
 }
 
 .dpi-graph-node--presentation-compact .dpi-graph-node__title {
@@ -1216,9 +1248,9 @@
 
 .dpi-graph-node--presentation-compact .dpi-graph-node__action {
     min-width: 58px;
-    min-height: 16px;
-    height: 16px;
-    max-height: 16px;
+    min-height: 18px;
+    height: 18px;
+    max-height: 18px;
     padding-left: 6px;
     padding-right: 6px;
     padding-top: 0;
@@ -1634,13 +1666,43 @@
 }
 
 .dpi-graph-group__stat {
-    height: 15px;
+    height: 18px;
+    min-height: 18px;
+    max-height: 18px;
     margin-right: 4px;
     margin-bottom: 3px;
     padding-left: 0;
     padding-right: 6px;
     background-color: rgba(0, 0, 0, 0);
     color: rgba(209, 222, 228, 0.84);
+    font-size: 8px;
+}
+
+.dpi-graph-group__stat .deucarian-icon-text-button__content {
+    height: 14px;
+    min-height: 14px;
+    max-height: 14px;
+}
+
+.dpi-graph-group__stat .deucarian-icon-text-button__icon {
+    width: 10px;
+    min-width: 10px;
+    max-width: 10px;
+    height: 10px;
+    min-height: 10px;
+    max-height: 10px;
+}
+
+.dpi-graph-group__stat .deucarian-icon-text-button__gap {
+    width: 3px;
+    min-width: 3px;
+    max-width: 3px;
+}
+
+.dpi-graph-group__stat .deucarian-icon-text-button__label {
+    height: 14px;
+    min-height: 14px;
+    max-height: 14px;
     font-size: 8px;
 }
 
@@ -1757,10 +1819,11 @@
     border-right-color: rgba(111, 136, 163, 0.36);
     border-top-color: rgba(111, 136, 163, 0.36);
     border-bottom-color: rgba(111, 136, 163, 0.36);
-    -unity-text-align: middle-center;
-    font-size: 10px;
-    -unity-font-style: bold;
-    color: rgba(228, 241, 244, 0.90);
+    padding-left: 3px;
+    padding-right: 3px;
+    padding-top: 3px;
+    padding-bottom: 3px;
+    opacity: 0.94;
     background-color: rgba(0, 0, 0, 0);
 }
 

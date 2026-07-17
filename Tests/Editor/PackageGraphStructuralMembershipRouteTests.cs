@@ -217,7 +217,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 "https://example.com/" + packageId + ".git#main",
                 displayName + " package.",
                 Array.Empty<string>(),
-                PackageType.Core,
+                PackageKind.Tool,
                 "https://example.com/" + packageId + ".git#develop",
                 category: "Tools",
                 metadataType: "Tool",

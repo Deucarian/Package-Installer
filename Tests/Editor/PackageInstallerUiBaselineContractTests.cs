@@ -22,6 +22,24 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         private const BindingFlags InstancePrivate = BindingFlags.Instance | BindingFlags.NonPublic;
 
         [Test]
+        public void Window_UsesSharedLucideActionsStatusesAndResponsiveDialogs()
+        {
+            string source = ReadPackageFile(
+                "com.deucarian.package-installer",
+                "Editor/PackageInstallerWindow.cs");
+
+            Assert.That(source, Does.Contain("DeucarianEditorIcons.GetIconContent("));
+            Assert.That(source, Does.Contain("DeucarianEditorWorkbenchGUI.DrawCompactIconAction("));
+            Assert.That(source, Does.Contain("DeucarianEditorWorkbenchGUI.DrawStatusIconRow("));
+            Assert.That(source, Does.Contain("DeucarianEditorDialog.Show("));
+            Assert.That(source, Does.Not.Contain("EditorUtility.DisplayDialog"));
+            Assert.That(source, Does.Not.Contain("GUILayout.Button("));
+            Assert.That(source, Does.Not.Contain("GUI.Button("));
+            Assert.That(source, Does.Not.Contain("\\u2713"));
+            Assert.That(source, Does.Not.Contain("\\u25CB"));
+        }
+
+        [Test]
         public void Toolbar_UsesCanonicalLanesComposedActionsAndFixedGeometry()
         {
             PackageInstallerWindow window = ScriptableObject.CreateInstance<PackageInstallerWindow>();
@@ -546,14 +564,11 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                          "_rowTitleStyle = new GUIStyle(DeucarianEditorWorkbenchGUI.RowTitleStyle);",
                          "_rowSubLabelStyle = new GUIStyle(DeucarianEditorWorkbenchGUI.RowSubLabelStyle);",
                          "_rowStatusStyle = new GUIStyle(DeucarianEditorWorkbenchGUI.RowStatusStyle);",
-                         "_markerStyle = new GUIStyle(DeucarianEditorWorkbenchGUI.MarkerStyle);",
                          "_foldoutStyle = new GUIStyle(DeucarianEditorWorkbenchGUI.FoldoutStyle);",
-                         "_primaryButtonStyle = new GUIStyle(DeucarianEditorWorkbenchGUI.PrimaryButtonStyle);",
-                         "_secondaryButtonStyle = new GUIStyle(DeucarianEditorWorkbenchGUI.SecondaryButtonStyle);",
                          "DeucarianEditorWorkbenchGUI.DrawPanel(title, content, options);",
                          "DeucarianEditorWorkbenchGUI.DrawSurface(rect, backgroundColor, borderColor);",
                          "DeucarianEditorWorkbenchGUI.DrawSeparator();",
-                         "DeucarianEditorWorkbenchGUI.DrawStatusRow(",
+                         "DeucarianEditorWorkbenchGUI.DrawStatusIconRow(",
                          "DeucarianEditorWorkbenchGUI.DrawKeyValueRow(label, value);",
                          "DeucarianEditorWorkbenchGUI.BeginEmbeddedPage("
                      })

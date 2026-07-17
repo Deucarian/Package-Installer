@@ -505,7 +505,17 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static string GetIconKey(PackageDefinition package)
         {
-            if (package == null || string.IsNullOrWhiteSpace(package.PackageId))
+            if (package == null)
+            {
+                return "package";
+            }
+
+            if (!string.IsNullOrWhiteSpace(package.IconKey))
+            {
+                return package.IconKey.Trim();
+            }
+
+            if (string.IsNullOrWhiteSpace(package.PackageId))
             {
                 return "package";
             }

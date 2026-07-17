@@ -103,6 +103,43 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void ConfirmationStateAllowsOnePromptAndRejectsStaleCompletions()
+        {
+            var state = new PackageInstallerConfirmationState();
+
+            Assert.IsTrue(state.TryBegin(out long firstGeneration));
+            Assert.IsTrue(state.IsPending);
+            Assert.IsFalse(state.TryBegin(out _));
+
+            Assert.IsTrue(state.CancelPending());
+            Assert.IsFalse(state.IsPending);
+            Assert.IsFalse(state.TryComplete(firstGeneration));
+
+            Assert.IsTrue(state.TryBegin(out long secondGeneration));
+            Assert.AreNotEqual(firstGeneration, secondGeneration);
+            Assert.IsFalse(state.TryComplete(firstGeneration));
+            Assert.IsTrue(state.TryComplete(secondGeneration));
+            Assert.IsFalse(state.IsPending);
+        }
+
+        [Test]
+        public void PendingUpdateInvalidationsSurviveAsyncPreflight()
+        {
+            Assert.IsTrue(
+                PackageInstallerWindow.ShouldRetainPendingUpdateStatusInvalidationsForTests(
+                    installBusy: false,
+                    awaitingPreflight: true));
+            Assert.IsTrue(
+                PackageInstallerWindow.ShouldRetainPendingUpdateStatusInvalidationsForTests(
+                    installBusy: true,
+                    awaitingPreflight: false));
+            Assert.IsFalse(
+                PackageInstallerWindow.ShouldRetainPendingUpdateStatusInvalidationsForTests(
+                    installBusy: false,
+                    awaitingPreflight: false));
+        }
+
+        [Test]
         public void Window_EcosystemUpdateAllIsVisibleOnlyWhenUpdatesExist()
         {
             Assert.IsEmpty(PackageInstallerWindow.CreateEcosystemOverviewActionsForTests(0));
@@ -238,13 +275,13 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         public void Window_FormatsEcosystemOverviewGroupRowsWithGraphStatusSummary()
         {
             Assert.AreEqual(
-                "! 1 attention   \u2713 2 installed   \u25CB 3 not installed",
+                "1 attention   2 installed   3 not installed",
                 PackageInstallerWindow.FormatEcosystemOverviewGroupStatusSummaryForTests(2, 3, 1, 0));
             Assert.AreEqual(
-                "\u2713 1 installed",
+                "1 installed",
                 PackageInstallerWindow.FormatEcosystemOverviewGroupStatusSummaryForTests(1, 0, 0, 0));
             Assert.AreEqual(
-                "\u25CB 2 not installed   ? 1 unknown",
+                "2 not installed   1 unknown",
                 PackageInstallerWindow.FormatEcosystemOverviewGroupStatusSummaryForTests(0, 2, 0, 1));
         }
 
@@ -739,7 +776,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual(PackageInstallerWindow.OperationInlinePaddingForTests, footer.style.paddingRight.value.value);
 
             VisualElement statusGroup = footer.Q<VisualElement>(PackageInstallerWindow.OperationFooterStatusGroupName);
-            Label statusIcon = footer.Q<Label>(PackageInstallerWindow.OperationFooterStatusIconName);
+            Image statusIcon = footer.Q<Image>(PackageInstallerWindow.OperationFooterStatusIconName);
             Label statusLabel = footer.Q<Label>(PackageInstallerWindow.OperationFooterStatusLabelName);
             Label summaryLabel = footer.Q<Label>(PackageInstallerWindow.OperationFooterSummaryName);
             Button detailsButton = footer.Q<Button>(PackageInstallerWindow.OperationFooterDetailsButtonName);
@@ -752,7 +789,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             AssertFooterElementVisible(detailsButton);
             AssertFooterElementVisible(versionLabel);
 
-            Assert.IsFalse(string.IsNullOrWhiteSpace(statusIcon.text));
+            Assert.IsNotNull(statusIcon.image);
+            Assert.IsFalse(string.IsNullOrWhiteSpace(statusIcon.tooltip));
             Assert.IsFalse(string.IsNullOrWhiteSpace(statusLabel.text));
             Assert.IsFalse(string.IsNullOrWhiteSpace(summaryLabel.text));
             Assert.IsTrue(
@@ -937,6 +975,131 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void Build_PrefersExplicitIconIdWithoutTruncatingDottedSemantics()
+        {
+            PackageDefinition package = new PackageDefinition(
+                "Semantic Icon",
+                "com.deucarian.semantic-icon",
+                "https://example.com/semantic-icon.git#main",
+                "Package with an explicit semantic icon identifier.",
+                iconKey: "runtime.services.server-cog");
+
+            PackageGraphNode node = new PackageGraphBuilder(_ => false)
+                .Build(new[] { package })
+                .Nodes
+                .Single();
+
+            Assert.AreEqual("runtime.services.server-cog", node.IconKey);
+        }
+
+        [Test]
+        public void Build_KeepsLegacyPackageIdIconInferenceAsCompatibilityFallback()
+        {
+            PackageDefinition package = new PackageDefinition(
+                "Legacy Semantic Icon",
+                "com.deucarian.object-selection.core-state-integration",
+                "https://example.com/legacy-semantic-icon.git#main",
+                "Package without explicit icon metadata.");
+
+            PackageGraphNode node = new PackageGraphBuilder(_ => false)
+                .Build(new[] { package })
+                .Nodes
+                .Single();
+
+            Assert.IsEmpty(package.IconKey);
+            Assert.AreEqual("selection", node.IconKey);
+        }
+
+        [TestCase("com.deucarian.object-selection", "selection")]
+        [TestCase("com.deucarian.api", "api-helper")]
+        [TestCase("com.deucarian.ui-binding", "generic-ui-items")]
+        public void GraphView_ResolvesLegacyPackageIconAliasesForCardsAndBreadcrumbs(
+            string packageId,
+            string expectedLegacyKey)
+        {
+            PackageDefinition package = new PackageDefinition(
+                "Legacy Icon Package",
+                packageId,
+                "https://example.com/legacy-icon.git#main",
+                "Package without explicit icon metadata.");
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(new[] { package });
+            PackageGraphNode node = graph.Nodes.Single();
+            PackageGraphView view = new PackageGraphView(_ => { }, (_, __) => { });
+
+            view.SetGraph(graph, packageId, actionsEnabled: true);
+
+            Assert.AreEqual(expectedLegacyKey, node.IconKey);
+            Assert.AreSame(
+                DeucarianEditorIcons.GetPackageIcon(expectedLegacyKey),
+                FindGraphNode(view, packageId)
+                    .Q<Image>(className: "dpi-graph-node__icon").image);
+            Assert.AreSame(
+                DeucarianEditorIcons.GetPackageIcon(expectedLegacyKey),
+                FindByClass(view, "dpi-ecosystem-graph__breadcrumb-current")
+                    .Single()
+                    .Q<Image>(className: DeucarianEditorIconTextButton.IconClass).image);
+        }
+
+        [Test]
+        public void LegacyFallbackStructuralGroupsUseLucideIds()
+        {
+            IReadOnlyList<PackageGraphGroup> groups = PackageGraphHierarchyBuilder.CreateGroups(
+                (IEnumerable<PackageGraphGroup>)null);
+            IReadOnlyDictionary<string, string> expectedIconIds = new Dictionary<string, string>
+            {
+                { "infrastructure", "network" },
+                { "state-data", "database" },
+                { "runtime-services", "server-cog" },
+                { "experience-interaction", "mouse-pointer-click" },
+                { "ui-presentation", "panels-top-left" },
+                { "world-interaction", "scan" },
+                { "tools-quality", "wrench" },
+                { "integrations", "plug" },
+                { "suites", "boxes" }
+            };
+
+            Assert.AreEqual(expectedIconIds.Count, groups.Count);
+            CollectionAssert.AreEquivalent(expectedIconIds.Keys, groups.Select(group => group.Id));
+
+            foreach (PackageGraphGroup group in groups)
+            {
+                Assert.AreEqual(expectedIconIds[group.Id], group.IconKey, group.Id);
+            }
+        }
+
+        [Test]
+        public void RegistryGroupsWithoutIconMetadataUseKnownGroupIcons()
+        {
+            IReadOnlyList<PackageGraphGroup> groups = PackageGraphHierarchyBuilder.CreateGroups(
+                new[]
+                {
+                    new PackageRegistryGroupEntry
+                    {
+                        id = "runtime-services",
+                        displayName = "Runtime Services",
+                        iconKey = string.Empty
+                    },
+                    new PackageRegistryGroupEntry
+                    {
+                        id = "tools-quality",
+                        displayName = "Tools & Quality",
+                        iconKey = "sparkles"
+                    },
+                    new PackageRegistryGroupEntry
+                    {
+                        id = "consumer-defined",
+                        displayName = "Consumer Defined",
+                        iconKey = string.Empty
+                    }
+                });
+
+            Assert.AreEqual("server-cog", groups.Single(group => group.Id == "runtime-services").IconKey);
+            Assert.AreEqual("sparkles", groups.Single(group => group.Id == "tools-quality").IconKey);
+            Assert.AreEqual("package", groups.Single(group => group.Id == "consumer-defined").IconKey);
+        }
+
+        [Test]
         public void Build_CreatesStructuralGroupsAndKeepsSuiteAndIntegrationAsPackages()
         {
             PackageGraphModel graph = new PackageGraphBuilder(_ => false)
@@ -1076,7 +1239,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 rows.Single(row => row.Id == "infrastructure");
             Assert.IsTrue(infrastructureRow.HasAttention);
             Assert.AreEqual(1, infrastructureRow.StatusSummary.AttentionCount);
-            StringAssert.Contains("! 1 attention", infrastructureRow.Summary);
+            StringAssert.Contains("1 attention", infrastructureRow.Summary);
         }
 
         [Test]
@@ -1164,12 +1327,12 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             selectedView.SetGraph(graph, update.PackageId, actionsEnabled: true);
 
             Assert.AreEqual(1, FindByClass(selectedView, "dpi-graph-node--status-update").Count);
-            Assert.AreEqual(
-                "!",
+            Assert.AreSame(
+                DeucarianEditorIcons.GetIcon(DeucarianEditorIconIds.Update),
                 FindByClass(selectedView, "dpi-graph-node__status-icon--update")
-                    .OfType<Label>()
+                    .OfType<Image>()
                     .Single()
-                    .text);
+                    .image);
             Label updateBadge = FindByClass(selectedView, "dpi-graph-node__badge--update")
                 .OfType<Label>()
                 .Single();
@@ -1177,7 +1340,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Button selectedAction = FindByClass(selectedView, "dpi-graph-node__action")
                 .OfType<Button>()
                 .Single();
-            Assert.AreEqual("Update", selectedAction.text);
+            Assert.AreEqual("Update", GetIconButtonText(selectedAction));
             Assert.IsTrue(selectedAction.enabledSelf);
         }
 
@@ -1225,7 +1388,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                     PackageGraphNavigationState.Overview());
             Assert.IsTrue(rows.Single(row => row.Id == "infrastructure").HasAttention);
             Assert.IsFalse(rows.Single(row => row.Id == "runtime-services").HasAttention);
-            StringAssert.Contains("! 1 attention", rows.Single(row => row.Id == "infrastructure").Summary);
+            StringAssert.Contains("1 attention", rows.Single(row => row.Id == "infrastructure").Summary);
         }
 
         [Test]
@@ -1305,24 +1468,24 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual(1, FindByClass(FindGraphNode(view, update.PackageId), "dpi-graph-node__status-icon--update").Count);
             Assert.AreEqual(1, FindByClass(FindGraphNode(view, dependency.PackageId), "dpi-graph-node__status-icon--warning").Count);
             Assert.AreEqual(1, FindByClass(FindGraphNode(missingView, "com.example.missing"), "dpi-graph-node__status-icon--missing").Count);
-            Assert.AreEqual(
-                "\u2713",
+            Assert.AreSame(
+                DeucarianEditorIcons.GetIcon(DeucarianEditorIconIds.Success),
                 FindByClass(FindGraphNode(view, installed.PackageId), "dpi-graph-node__status-icon--installed")
-                    .OfType<Label>()
+                    .OfType<Image>()
                     .Single()
-                    .text);
-            Assert.AreEqual(
-                "\u25CB",
+                    .image);
+            Assert.AreSame(
+                DeucarianEditorIcons.GetIcon(DeucarianEditorIconIds.Available),
                 FindByClass(FindGraphNode(view, notInstalled.PackageId), "dpi-graph-node__status-icon--available")
-                    .OfType<Label>()
+                    .OfType<Image>()
                     .Single()
-                    .text);
-            Assert.AreEqual(
-                "!",
+                    .image);
+            Assert.AreSame(
+                DeucarianEditorIcons.GetIcon(DeucarianEditorIconIds.Update),
                 FindByClass(FindGraphNode(view, update.PackageId), "dpi-graph-node__status-icon--update")
-                    .OfType<Label>()
+                    .OfType<Image>()
                     .Single()
-                    .text);
+                    .image);
             Assert.IsEmpty(FindByClass(view, "dpi-graph-node__badge--warning"));
             Assert.IsEmpty(FindByClass(view, "dpi-graph-node__badge--missing"));
             Assert.IsEmpty(FindByClass(view, "deucarian-badge"));
@@ -2564,17 +2727,17 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Button[] filterButtons = FindByClass(view, "dpi-ecosystem-graph__filter-toggle")
                 .OfType<Button>()
                 .ToArray();
-            Label installedIcon = FindByClass(view, "dpi-ecosystem-graph__filter-icon--installed")
-                .OfType<Label>()
+            Image installedIcon = FindByClass(view, "dpi-ecosystem-graph__filter-icon--installed")
+                .OfType<Image>()
                 .Single();
-            Label notInstalledIcon = FindByClass(view, "dpi-ecosystem-graph__filter-icon--not-installed")
-                .OfType<Label>()
+            Image notInstalledIcon = FindByClass(view, "dpi-ecosystem-graph__filter-icon--not-installed")
+                .OfType<Image>()
                 .Single();
 
             Assert.AreEqual(2, filterButtons.Length);
             Assert.IsFalse(filterButtons.Any(button => (button.text ?? string.Empty).Contains("[")));
-            Assert.AreEqual("\u2713", installedIcon.text);
-            Assert.AreEqual("\u25CB", notInstalledIcon.text);
+            Assert.AreSame(DeucarianEditorIcons.GetIcon(DeucarianEditorIconIds.Success), installedIcon.image);
+            Assert.AreSame(DeucarianEditorIcons.GetIcon(DeucarianEditorIconIds.Available), notInstalledIcon.image);
             CollectionAssert.AreEquivalent(
                 new[] { "Installed", "Not installed" },
                 FindByClass(view, "dpi-ecosystem-graph__filter-label")
@@ -3349,7 +3512,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Button selectedAction = FindByClass(view, "dpi-graph-node__action")
                 .OfType<Button>()
                 .Single();
-            Assert.AreEqual("Install", selectedAction.text);
+            Assert.AreEqual("Install", GetIconButtonText(selectedAction));
             Assert.IsFalse(selectedAction.enabledSelf);
         }
 
@@ -3367,13 +3530,13 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.IsEmpty(FindByClass(overview, "dpi-graph-node__action"));
             Assert.AreEqual(
                 "Install",
-                FindGraphNodeAction(focused, "com.deucarian.session").text);
+                GetIconButtonText(FindGraphNodeAction(focused, "com.deucarian.session")));
             Assert.AreEqual(
                 "Install",
-                FindGraphNodeAction(focused, "com.deucarian.logging").text);
+                GetIconButtonText(FindGraphNodeAction(focused, "com.deucarian.logging")));
             Assert.AreEqual(
                 "Install Integration",
-                FindGraphNodeAction(focused, "com.deucarian.session.api-integration").text);
+                GetIconButtonText(FindGraphNodeAction(focused, "com.deucarian.session.api-integration")));
             Assert.IsEmpty(FindByClass(overview, "dpi-graph-node--overview"));
             Assert.AreEqual(7, FindByClass(overview, "dpi-graph-group--overview").Count);
             Assert.Less(FindByClass(focused, "dpi-graph-node").Count, graph.Nodes.Count);
@@ -3411,7 +3574,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.IsTrue(
                 FindByClass(groupFocused, "dpi-graph-legend__label")
                     .OfType<Label>()
-                    .Any(label => label.text == "Structural membership"));
+                    .Any(label => label.text == "Category orbit"));
             Assert.IsFalse(
                 FindByClass(groupFocused, "dpi-graph-legend__label")
                     .OfType<Label>()
@@ -3447,12 +3610,10 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                     .Any(label => label.text.Contains("package")));
             Assert.IsTrue(
                 FindByClass(runtimeGroup, "dpi-graph-group__stat--installed")
-                    .OfType<Label>()
-                    .Any(label => label.text.Contains("installed")));
+                    .Any(element => GetComposedText(element).Contains("installed")));
             Assert.IsTrue(
                 FindByClass(runtimeGroup, "dpi-graph-group__stat--available")
-                    .OfType<Label>()
-                    .Any(label => label.text.Contains("not installed")));
+                    .Any(element => GetComposedText(element).Contains("not installed")));
             Assert.IsEmpty(FindByClass(runtimeGroup, "dpi-graph-group__stat--attention"));
             Assert.IsEmpty(FindByClass(runtimeGroup, "dpi-graph-node__action"));
         }
@@ -3493,8 +3654,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             VisualElement activeNestedGroup = FindGraphGroup(nestedGroupFocused, "ui-presentation");
             VisualElement selectedPackage = FindGraphNode(packageFocused, "com.deucarian.session");
             VisualElement relatedPackage = FindGraphNode(packageFocused, "com.deucarian.logging");
-            Label packageBack = FindByClass(selectedPackage, "dpi-graph-node__back-hint")
-                .OfType<Label>()
+            VisualElement packageBack = FindByClass(selectedPackage, "dpi-graph-node__back-hint")
                 .Single();
 
             Assert.IsFalse(inactiveOverviewGroup.ClassListContains("dpi-graph-group--has-back"));
@@ -3531,7 +3691,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual("Deucarian Overview", overviewRows[0].DisplayName);
             Assert.AreEqual("package-installer", overviewRows[0].IconKey);
             Assert.AreEqual(
-                "\u25CB " + graph.Nodes.Count + " not installed",
+                graph.Nodes.Count + " not installed",
                 overviewRows[0].Summary);
             Assert.AreEqual(graph.Nodes.Count, overviewRows[0].StatusSummary.NotInstalledCount);
             Assert.IsTrue(overviewRows[0].IsOverview);
@@ -3725,36 +3885,43 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
             Assert.IsTrue(
                 FindByClass(groupFocused, "dpi-ecosystem-graph__breadcrumb-current")
-                    .OfType<Label>()
-                    .Any(label => label.text == "Runtime Services"));
+                    .Any(element => GetComposedText(element) == "Runtime Services"));
             Assert.IsFalse(
                 FindByClass(groupFocused, "dpi-ecosystem-graph__breadcrumb")
                     .OfType<Button>()
-                    .Any(button => button.text == "Runtime Services"));
+                    .Any(button => GetIconButtonText(button) == "Runtime Services"));
             Assert.IsTrue(
                 FindByClass(packageFocused, "dpi-ecosystem-graph__breadcrumb-current")
-                    .OfType<Label>()
-                    .Any(label => label.text == "Deucarian Session"));
+                    .Any(element => GetComposedText(element) == "Deucarian Session"));
+            VisualElement currentPackageBreadcrumb =
+                FindByClass(packageFocused, "dpi-ecosystem-graph__breadcrumb-current")
+                    .Single(element => GetComposedText(element) == "Deucarian Session");
+            Assert.AreSame(
+                DeucarianEditorIcons.GetPackageIcon("session"),
+                currentPackageBreadcrumb.Q<Image>(
+                    className: DeucarianEditorIconTextButton.IconClass).image);
+            Assert.AreSame(
+                DeucarianEditorIcons.GetPackageIcon("session"),
+                FindGraphNode(packageFocused, "com.deucarian.session")
+                    .Q<Image>(className: "dpi-graph-node__icon").image);
             Assert.IsTrue(
                 FindByClass(packageFocused, "dpi-ecosystem-graph__breadcrumb")
                     .OfType<Button>()
-                    .Any(button => button.text == "Runtime Services"));
-            Assert.IsTrue(
-                FindByClass(packageFocused, "dpi-ecosystem-graph__breadcrumb-separator")
-                    .OfType<Label>()
-                    .All(label => label.text == ">"));
-            Assert.IsTrue(
-                FindByClass(nestedPackageFocused, "dpi-ecosystem-graph__breadcrumb")
-                    .OfType<Button>()
-                    .Any(button => button.text == "Experience & Interaction"));
+                    .Any(button => GetIconButtonText(button) == "Runtime Services"));
+            Assert.IsTrue(FindByClass(packageFocused, "dpi-ecosystem-graph__breadcrumb-separator")
+                .OfType<Image>()
+                .All(separator => separator.image == DeucarianEditorIcons.GetIcon(DeucarianEditorIconIds.ChevronRight)));
             Assert.IsTrue(
                 FindByClass(nestedPackageFocused, "dpi-ecosystem-graph__breadcrumb")
                     .OfType<Button>()
-                    .Any(button => button.text == "UI & Presentation"));
+                    .Any(button => GetIconButtonText(button) == "Experience & Interaction"));
+            Assert.IsTrue(
+                FindByClass(nestedPackageFocused, "dpi-ecosystem-graph__breadcrumb")
+                    .OfType<Button>()
+                    .Any(button => GetIconButtonText(button) == "UI & Presentation"));
             Assert.IsTrue(
                 FindByClass(nestedPackageFocused, "dpi-ecosystem-graph__breadcrumb-current")
-                    .OfType<Label>()
-                    .Any(label => label.text == "Deucarian UI Binding"));
+                    .Any(element => GetComposedText(element) == "Deucarian UI Binding"));
         }
 
         [Test]
@@ -3779,9 +3946,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual(
                 "Deucarian",
                 FindByClass(view, "dpi-ecosystem-graph__breadcrumb-current")
-                    .OfType<Label>()
-                    .Single()
-                    .text);
+                    .Select(GetComposedText)
+                    .Single());
         }
 
         [Test]
@@ -3849,7 +4015,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 rows.Single(row => row.Id == "infrastructure");
             Assert.IsTrue(infrastructureRow.HasAttention);
             Assert.AreEqual(1, infrastructureRow.StatusSummary.AttentionCount);
-            StringAssert.Contains("! 1 attention", infrastructureRow.Summary);
+            StringAssert.Contains("1 attention", infrastructureRow.Summary);
         }
 
         [Test]
@@ -3921,7 +4087,10 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                     .Any(label => label.text == "Dependency flow"));
             Assert.IsTrue(
                 FindByClass(view, "dpi-graph-legend__item")
-                    .Any(item => item.tooltip.Contains("Animated flow markers")));
+                    .Any(item => item.tooltip.Contains("routed edge direction")));
+            Assert.IsFalse(
+                FindByClass(view, "dpi-graph-legend__item")
+                    .Any(item => item.tooltip.Contains("Animated")));
             Assert.IsTrue(
                 FindByClass(view, "dpi-graph-legend__label")
                     .OfType<Label>()
@@ -5806,6 +5975,26 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             return FindByClass(FindGraphNode(root, packageId), "dpi-graph-node__action")
                 .OfType<Button>()
                 .Single();
+        }
+
+        private static string GetIconButtonText(Button button)
+        {
+            return button == null
+                ? string.Empty
+                : GetComposedText(button);
+        }
+
+        private static string GetComposedText(VisualElement element)
+        {
+            if (element == null)
+            {
+                return string.Empty;
+            }
+
+            Label label = FindByClass(element, DeucarianEditorIconTextButton.LabelClass)
+                .OfType<Label>()
+                .FirstOrDefault();
+            return label != null ? label.text : (element as TextElement)?.text ?? string.Empty;
         }
 
         private static void CollectByClass(VisualElement element, string className, ICollection<VisualElement> matches)
