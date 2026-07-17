@@ -26,6 +26,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                     graph,
                     PackageGraphLayoutMode.Focus,
                     focusNode.PackageId,
+                    string.Empty,
                     Vector2.zero,
                     PackageGraphNodePresentationLevel.Full);
                 Rect[] visibleBounds = layout.NodeRects.Values
@@ -110,6 +111,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 graph,
                 PackageGraphLayoutMode.Focus,
                 "com.deucarian.session",
+                string.Empty,
                 Vector2.zero,
                 PackageGraphNodePresentationLevel.Full);
             Rect session = layout.NodeRects["com.deucarian.session"];
