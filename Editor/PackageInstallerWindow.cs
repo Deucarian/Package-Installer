@@ -1931,7 +1931,11 @@ namespace Deucarian.PackageInstaller.Editor
         private bool ShouldCheckForUpdatesOnGraphOpen()
         {
             return _viewMode == InstallerViewMode.EcosystemGraph &&
-                   PackageUpdateCheckPreferences.ShouldCheckOnWindowOpen(DateTime.UtcNow);
+                   PackageUpdateCheckPreferences.ShouldCheckOnWindowOpen(
+                       DateTime.UtcNow,
+                       _packageUpdateCheckService != null
+                           ? _packageUpdateCheckService.LastCheckedUtc
+                           : null);
         }
 
         private void RequestAutomaticGraphUpdateCheck()
@@ -1952,7 +1956,7 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             PackageRegistryProvider.RefreshRemote();
-            _packageUpdateCheckService.InvalidateAll();
+            _packageUpdateCheckService.PrepareForUpdateCheck();
 
             if (!_packageDetectionService.IsRefreshing)
             {
@@ -2194,7 +2198,11 @@ namespace Deucarian.PackageInstaller.Editor
             if (_packageDetectionService != null &&
                 _packageDetectionService.RefreshIfManifestStateChanged())
             {
-                if (_packageUpdateCheckService != null && _packageUpdateCheckService.HasStatuses)
+                bool hadUpdateStatuses =
+                    _packageUpdateCheckService != null && _packageUpdateCheckService.HasStatuses;
+                _packageUpdateCheckService?.InvalidateIfManifestStateChanged();
+
+                if (hadUpdateStatuses)
                 {
                     QueueDeferredUpdateCheck(PackageInstallerActionKind.CheckUpdates);
                 }
@@ -2823,7 +2831,6 @@ namespace Deucarian.PackageInstaller.Editor
             InvalidateGraphModelCache("manual refresh");
             PackageRegistryProvider.RefreshRemote();
             _packageDetectionService.Refresh();
-            _packageUpdateCheckService.InvalidateAll();
             RefreshGraphView("manual refresh");
         }
 
@@ -2902,7 +2909,7 @@ namespace Deucarian.PackageInstaller.Editor
             _cancelingActionKind = PackageInstallerActionKind.None;
             QueueDeferredUpdateCheck(actionKind);
             PackageRegistryProvider.RefreshRemote();
-            _packageUpdateCheckService.InvalidateAll();
+            _packageUpdateCheckService.PrepareForUpdateCheck();
 
             if (!_packageDetectionService.IsRefreshing)
             {
@@ -6707,10 +6714,13 @@ namespace Deucarian.PackageInstaller.Editor
         private void HandleRegistryChanged()
         {
             InvalidateGraphModelCache("registry changed");
-            if (_cancelingActionKind != PackageInstallerActionKind.CheckUpdates ||
-                _checkUpdatesAfterDetectionRefresh)
+            if (_packageDetectionService != null &&
+                _packageDetectionService.HasSuccessfulRefresh &&
+                !PackageRegistryProvider.IsRemoteRefreshing)
             {
-                _packageUpdateCheckService?.InvalidateAll();
+                _packageUpdateCheckService?.ReconcileCachedStatuses(
+                    PackageRegistryProvider.All,
+                    GetSelectedChannel);
             }
 
             EnsureValidSelection();
@@ -6788,6 +6798,26 @@ namespace Deucarian.PackageInstaller.Editor
         {
             InvalidateGraphModelCache("installed package manifest changed");
             _packageSampleDiscoveryService?.ClearCache();
+            bool hadUpdateStatuses =
+                _packageUpdateCheckService != null && _packageUpdateCheckService.HasStatuses;
+            bool manifestChanged =
+                _packageUpdateCheckService != null &&
+                _packageUpdateCheckService.InvalidateIfManifestStateChanged();
+
+            if (manifestChanged && hadUpdateStatuses)
+            {
+                QueueDeferredUpdateCheck(PackageInstallerActionKind.CheckUpdates);
+            }
+
+            if (_packageDetectionService != null &&
+                _packageDetectionService.HasSuccessfulRefresh &&
+                !PackageRegistryProvider.IsRemoteRefreshing)
+            {
+                _packageUpdateCheckService?.ReconcileCachedStatuses(
+                    PackageRegistryProvider.All,
+                    GetSelectedChannel);
+            }
+
             RefreshGraphView("installed package refresh completed");
 
             TryPromptForSavedOperationRecovery();

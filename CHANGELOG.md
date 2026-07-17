@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.68 - 2026-07-17
+
+- Persisted completed package update-check results in a project-scoped, atomically written cache so window, editor, and assembly reloads restore truthful status.
+- Preserved matching results across unchanged registry refreshes while invalidating cache entries when installed package state, selected channels, or registry targets change.
+- Made the project cache authoritative for update-check summaries and the existing window-open freshness throttle without persisting transient or canceled checks.
+
 ## 1.1.67 - 2026-07-16
 
 - Refreshed the bundled Package Registry catalog with Build Pipeline capability ownership and its direct Deucarian Editor and Logging dependencies.

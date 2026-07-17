@@ -414,6 +414,54 @@ namespace Deucarian.PackageInstaller.Editor
                 Message);
         }
 
+        internal PackageUpdateStatus WithPackageDefinition(PackageDefinition packageDefinition)
+        {
+            if (packageDefinition == null)
+            {
+                return this;
+            }
+
+            return new PackageUpdateStatus(
+                Kind,
+                packageDefinition.PackageId,
+                packageDefinition.DisplayName,
+                Channel,
+                SelectedUrl,
+                InstalledRevision,
+                LatestRevision,
+                InstalledVersion,
+                LatestVersion,
+                RunningVersion,
+                Message);
+        }
+
+        internal static PackageUpdateStatus Restore(
+            PackageUpdateStatusKind kind,
+            string packageId,
+            string displayName,
+            PackageChannel channel,
+            string selectedUrl,
+            string installedRevision,
+            string latestRevision,
+            string installedVersion,
+            string latestVersion,
+            string runningVersion,
+            string message)
+        {
+            return new PackageUpdateStatus(
+                kind,
+                packageId,
+                displayName,
+                channel,
+                selectedUrl,
+                installedRevision,
+                latestRevision,
+                installedVersion,
+                latestVersion,
+                runningVersion,
+                message);
+        }
+
         private static string ShortenRevision(string revision)
         {
             if (string.IsNullOrWhiteSpace(revision) || revision.Length <= ShortRevisionLength)

@@ -14,12 +14,14 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         public void SetUp()
         {
             PackageUpdateCheckService.ResetForTests();
+            PackageUpdateCheckService.SetDefaultCacheEnabledForTests(false);
         }
 
         [TearDown]
         public void TearDown()
         {
             PackageUpdateCheckService.ResetForTests();
+            PackageUpdateCheckService.SetDefaultCacheEnabledForTests(true);
         }
 
         [Test]
@@ -53,6 +55,29 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 now,
                 lastChecked,
                 PackageUpdateCheckPreferences.WindowOpenThrottle));
+        }
+
+        [Test]
+        public void WindowOpenThrottleUsesProvidedProjectTimestamp()
+        {
+            bool previous = PackageUpdateCheckPreferences.CheckOnWindowOpen;
+
+            try
+            {
+                PackageUpdateCheckPreferences.CheckOnWindowOpen = true;
+                DateTime now = new DateTime(2026, 7, 17, 12, 0, 0, DateTimeKind.Utc);
+
+                Assert.IsFalse(PackageUpdateCheckPreferences.ShouldCheckOnWindowOpen(
+                    now,
+                    now.AddMinutes(-10)));
+                Assert.IsTrue(PackageUpdateCheckPreferences.ShouldCheckOnWindowOpen(
+                    now,
+                    now.AddMinutes(-31)));
+            }
+            finally
+            {
+                PackageUpdateCheckPreferences.CheckOnWindowOpen = previous;
+            }
         }
 
         [Test]
@@ -920,20 +945,10 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         public void InvalidateAllDetachesBulkCheckAndSuppressesItsLateCompletion()
         {
             PackageDefinition package = CreatePackageWithRevisionChannels();
-            DateTime? previousLastCheckedUtc = PackageUpdateCheckPreferences.LastCheckedUtc;
-            DateTime sentinelLastCheckedUtc = new DateTime(
-                2026,
-                1,
-                2,
-                3,
-                4,
-                5,
-                DateTimeKind.Utc);
             using (ManualResetEventSlim oldCheckStarted = new ManualResetEventSlim(false))
             using (ManualResetEventSlim releaseOldCheck = new ManualResetEventSlim(false))
             using (ManualResetEventSlim oldCheckCompleted = new ManualResetEventSlim(false))
             {
-                PackageUpdateCheckPreferences.LastCheckedUtc = sentinelLastCheckedUtc;
                 PackageInstallerActivityService.ClearForTests();
                 PackageUpdateCheckService.GitPackageVersionResolverForTests = (_, channel, __) =>
                 {
@@ -969,9 +984,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
                         Assert.IsFalse(updateCheckService.IsChecking);
                         Assert.AreEqual(0, PackageInstallerActivityService.Recent.Count);
-                        Assert.AreEqual(
-                            sentinelLastCheckedUtc,
-                            PackageUpdateCheckPreferences.LastCheckedUtc);
+                        Assert.IsFalse(updateCheckService.LastCheckedUtc.HasValue);
 
                         updateCheckService.CheckForUpdates(
                             new[] { package },
@@ -981,9 +994,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
                         Assert.AreEqual(1, PackageInstallerActivityService.Recent.Count);
                         DateTime? acceptedLastCheckedUtc =
-                            PackageUpdateCheckPreferences.LastCheckedUtc;
+                            updateCheckService.LastCheckedUtc;
                         Assert.IsTrue(acceptedLastCheckedUtc.HasValue);
-                        Assert.AreNotEqual(sentinelLastCheckedUtc, acceptedLastCheckedUtc.Value);
 
                         releaseOldCheck.Set();
                         Assert.IsTrue(oldCheckCompleted.Wait(TimeSpan.FromSeconds(2)));
@@ -993,7 +1005,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                         Assert.AreEqual(1, PackageInstallerActivityService.Recent.Count);
                         Assert.AreEqual(
                             acceptedLastCheckedUtc,
-                            PackageUpdateCheckPreferences.LastCheckedUtc);
+                            updateCheckService.LastCheckedUtc);
                         PackageUpdateStatus finalStatus = updateCheckService.GetStatus(
                             package,
                             PackageChannel.Development);
@@ -1006,7 +1018,6 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 finally
                 {
                     releaseOldCheck.Set();
-                    PackageUpdateCheckPreferences.LastCheckedUtc = previousLastCheckedUtc;
                     PackageInstallerActivityService.ClearForTests();
                 }
             }
