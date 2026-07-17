@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.73 - 2026-07-17
+
+- Derived focused graph lanes from complete node and category bounds with consistent edge clearances instead of worst-case fixed center distances.
+- Included the full category caption footprint when spacing owning categories, related package rows, and category clusters.
+- Routed every structural category membership connection orthogonally, including single-package categories.
+- Added bundled-catalog coverage for every package focus and category focus across all 44 packages and 15 categories.
+
 ## 1.1.72 - 2026-07-17
 
 - Removed decorative tangent caps from category orbit rails so package and nested-category cards no longer have disconnected protrusions.
