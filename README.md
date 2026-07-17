@@ -6,7 +6,7 @@
 
 It is the Deucarian ecosystem front door for installing standalone packages, integration packages, suite packages, templates, and explicitly declared package samples from Package Registry metadata.
 
-Current package version: `1.1.67`.
+Current package version: `1.1.69`.
 
 ## When to use it
 
@@ -247,7 +247,7 @@ Progress summaries use one chronological activity/result stream with copyable de
 
 Failed prerequisites block their transitive dependents while unrelated requested roots continue. Cancellation lets the active Unity Package Manager request settle but submits no additional requests.
 
-Interrupted plans are stored project-locally beneath `Library/Deucarian/PackageInstaller`. After reload, the installer waits for installed-package and registry refreshes, then offers Resume, Restart, or Discard. Exact saved URLs are reusable only while the registry fingerprint still matches; registry drift requires review of a freshly resolved plan.
+Interrupted plans are stored project-locally beneath `Library/Deucarian/PackageInstaller`. After an expected same-session Unity script reload, safe bulk operations automatically resume once installed-package and registry refreshes finish; completed and exactly-installed targets are skipped. Editor restarts, registry drift, invalid state, failures, blocked steps, and cancellations still offer Resume, Restart, or Discard. Exact saved URLs are reusable only while the registry fingerprint still matches; registry drift requires review of a freshly resolved plan.
 
 ## Ecosystem Graph UX
 
@@ -321,7 +321,7 @@ Keeping the installer editor-only ensures:
 
 ## Versioning
 
-Current package version: `1.1.67`.
+Current package version: `1.1.69`.
 
 Branch strategy:
 

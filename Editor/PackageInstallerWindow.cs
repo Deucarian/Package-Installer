@@ -30,6 +30,12 @@ namespace Deucarian.PackageInstaller.Editor
         Package
     }
 
+    internal enum PackageOperationRecoveryDisposition
+    {
+        Prompt,
+        AutoResume
+    }
+
     internal readonly struct PackageGraphNavigationState
     {
         private PackageGraphNavigationState(
@@ -1931,7 +1937,11 @@ namespace Deucarian.PackageInstaller.Editor
         private bool ShouldCheckForUpdatesOnGraphOpen()
         {
             return _viewMode == InstallerViewMode.EcosystemGraph &&
-                   PackageUpdateCheckPreferences.ShouldCheckOnWindowOpen(DateTime.UtcNow);
+                   PackageUpdateCheckPreferences.ShouldCheckOnWindowOpen(
+                       DateTime.UtcNow,
+                       _packageUpdateCheckService != null
+                           ? _packageUpdateCheckService.LastCheckedUtc
+                           : null);
         }
 
         private void RequestAutomaticGraphUpdateCheck()
@@ -1952,7 +1962,7 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             PackageRegistryProvider.RefreshRemote();
-            _packageUpdateCheckService.InvalidateAll();
+            _packageUpdateCheckService.PrepareForUpdateCheck();
 
             if (!_packageDetectionService.IsRefreshing)
             {
@@ -2194,7 +2204,11 @@ namespace Deucarian.PackageInstaller.Editor
             if (_packageDetectionService != null &&
                 _packageDetectionService.RefreshIfManifestStateChanged())
             {
-                if (_packageUpdateCheckService != null && _packageUpdateCheckService.HasStatuses)
+                bool hadUpdateStatuses =
+                    _packageUpdateCheckService != null && _packageUpdateCheckService.HasStatuses;
+                _packageUpdateCheckService?.InvalidateIfManifestStateChanged();
+
+                if (hadUpdateStatuses)
                 {
                     QueueDeferredUpdateCheck(PackageInstallerActionKind.CheckUpdates);
                 }
@@ -2823,7 +2837,6 @@ namespace Deucarian.PackageInstaller.Editor
             InvalidateGraphModelCache("manual refresh");
             PackageRegistryProvider.RefreshRemote();
             _packageDetectionService.Refresh();
-            _packageUpdateCheckService.InvalidateAll();
             RefreshGraphView("manual refresh");
         }
 
@@ -2902,7 +2915,7 @@ namespace Deucarian.PackageInstaller.Editor
             _cancelingActionKind = PackageInstallerActionKind.None;
             QueueDeferredUpdateCheck(actionKind);
             PackageRegistryProvider.RefreshRemote();
-            _packageUpdateCheckService.InvalidateAll();
+            _packageUpdateCheckService.PrepareForUpdateCheck();
 
             if (!_packageDetectionService.IsRefreshing)
             {
@@ -6707,10 +6720,13 @@ namespace Deucarian.PackageInstaller.Editor
         private void HandleRegistryChanged()
         {
             InvalidateGraphModelCache("registry changed");
-            if (_cancelingActionKind != PackageInstallerActionKind.CheckUpdates ||
-                _checkUpdatesAfterDetectionRefresh)
+            if (_packageDetectionService != null &&
+                _packageDetectionService.HasSuccessfulRefresh &&
+                !PackageRegistryProvider.IsRemoteRefreshing)
             {
-                _packageUpdateCheckService?.InvalidateAll();
+                _packageUpdateCheckService?.ReconcileCachedStatuses(
+                    PackageRegistryProvider.All,
+                    GetSelectedChannel);
             }
 
             EnsureValidSelection();
@@ -6788,6 +6804,26 @@ namespace Deucarian.PackageInstaller.Editor
         {
             InvalidateGraphModelCache("installed package manifest changed");
             _packageSampleDiscoveryService?.ClearCache();
+            bool hadUpdateStatuses =
+                _packageUpdateCheckService != null && _packageUpdateCheckService.HasStatuses;
+            bool manifestChanged =
+                _packageUpdateCheckService != null &&
+                _packageUpdateCheckService.InvalidateIfManifestStateChanged();
+
+            if (manifestChanged && hadUpdateStatuses)
+            {
+                QueueDeferredUpdateCheck(PackageInstallerActionKind.CheckUpdates);
+            }
+
+            if (_packageDetectionService != null &&
+                _packageDetectionService.HasSuccessfulRefresh &&
+                !PackageRegistryProvider.IsRemoteRefreshing)
+            {
+                _packageUpdateCheckService?.ReconcileCachedStatuses(
+                    PackageRegistryProvider.All,
+                    GetSelectedChannel);
+            }
+
             RefreshGraphView("installed package refresh completed");
 
             TryPromptForSavedOperationRecovery();
@@ -7209,6 +7245,7 @@ namespace Deucarian.PackageInstaller.Editor
                     out string recoveryError) ||
                 recovery == null)
             {
+                PackageOperationAutoResumeState.ClearReloadMarker();
                 if (!string.IsNullOrWhiteSpace(recoveryError) &&
                     recoveryError.IndexOf("No saved", StringComparison.OrdinalIgnoreCase) < 0)
                 {
@@ -7222,6 +7259,44 @@ namespace Deucarian.PackageInstaller.Editor
 
             PackageDependencyInstallPlan freshPlan = CreateFreshRecoveryPlan(recovery);
             bool canReuseExactTargets = CanReuseSavedExactTargets(recovery, freshPlan);
+            bool hasMatchingReloadMarker =
+                PackageOperationAutoResumeState.HasMatchingReloadMarker(
+                    recovery.OperationId,
+                    recovery.RegistryFingerprint);
+
+            if (GetRecoveryDisposition(
+                    recovery,
+                    freshPlan,
+                    hasMatchingReloadMarker) ==
+                PackageOperationRecoveryDisposition.AutoResume)
+            {
+                bool resumed = _packageInstallService.ResumeSavedOperation(
+                    freshPlan.RegistryFingerprint);
+                bool reconciledWithoutRemainingWork =
+                    !resumed && !_packageInstallService.HasSavedOperation;
+
+                if (resumed || reconciledWithoutRemainingWork)
+                {
+                    PackageOperationAutoResumeState.AcknowledgeReloadMarker(
+                        recovery.OperationId);
+                    string operationName = string.IsNullOrWhiteSpace(recovery.OperationName)
+                        ? "Bulk package operation"
+                        : recovery.OperationName;
+                    string message = resumed
+                        ? "Resuming " + operationName + " after Unity script reload."
+                        : operationName +
+                          " completed after Unity script reload; all targets are already correct.";
+                    PackageInstallerLog.Install.Info(message);
+                    PackageInstallerActivityService.Record(
+                        "Packages",
+                        PackageInstallerActivitySeverity.Info,
+                        message);
+                    UpdateOperationFooter();
+                    return;
+                }
+            }
+
+            PackageOperationAutoResumeState.ClearReloadMarker();
             int remainingSteps = recovery.Steps.Count(step =>
                 step.State == PackageInstallProgressItemState.Pending ||
                 step.State == PackageInstallProgressItemState.Active ||
@@ -7491,6 +7566,28 @@ namespace Deucarian.PackageInstaller.Editor
                    PackageInstallService.CanReuseSavedTargets(
                        recovery,
                        freshPlan.RegistryFingerprint);
+        }
+
+        internal static PackageOperationRecoveryDisposition GetRecoveryDispositionForTests(
+            PackageOperationRecoveryRecord recovery,
+            PackageDependencyInstallPlan freshPlan,
+            bool hasMatchingReloadMarker)
+        {
+            return GetRecoveryDisposition(recovery, freshPlan, hasMatchingReloadMarker);
+        }
+
+        private static PackageOperationRecoveryDisposition GetRecoveryDisposition(
+            PackageOperationRecoveryRecord recovery,
+            PackageDependencyInstallPlan freshPlan,
+            bool hasMatchingReloadMarker)
+        {
+            return hasMatchingReloadMarker &&
+                   recovery != null &&
+                   recovery.CanResume &&
+                   !recovery.RequiresManualRecovery &&
+                   CanReuseSavedExactTargets(recovery, freshPlan)
+                ? PackageOperationRecoveryDisposition.AutoResume
+                : PackageOperationRecoveryDisposition.Prompt;
         }
 
         private void TrackPendingUpdateStatusInvalidations(IEnumerable<PackageDefinition> packageDefinitions)

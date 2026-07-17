@@ -21,6 +21,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(_temporaryProjectRoot);
             PackageInstallerSelfUpdateState.Clear();
+            PackageOperationAutoResumeState.ResetForTests();
             PackageInstallerActivityService.ClearForTests();
         }
 
@@ -28,6 +29,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         public void TearDown()
         {
             PackageInstallerSelfUpdateState.Clear();
+            PackageOperationAutoResumeState.ResetForTests();
             PackageInstallerActivityService.ClearForTests();
 
             if (Directory.Exists(_temporaryProjectRoot))
@@ -480,6 +482,63 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                     GetProgress(reader, package.PackageId).State);
                 Assert.IsFalse(reader.IsBusy);
                 Assert.IsFalse(File.Exists(repository.StatePathForTests));
+            }
+        }
+
+        [Test]
+        public void BulkResumeRearmsAutomaticRecoveryForRepeatedReloads()
+        {
+            PackageDefinition first = CreatePackage("First", "com.deucarian.first");
+            PackageDefinition second = CreatePackage("Second", "com.deucarian.second");
+            PackageDependencyInstallPlan plan = CreateIndependentPlan(first, second);
+            PackageOperationStateRepository repository =
+                new PackageOperationStateRepository(_temporaryProjectRoot);
+
+            using (PackageInstallService writer = new PackageInstallService(
+                       new ControlledPackageInstallClient(),
+                       repository))
+            {
+                Assert.IsTrue(writer.InstallPlan(plan, "Update All Packages"));
+                Assert.IsFalse(PackageOperationAutoResumeState.HasMatchingReloadMarker(
+                    plan.OperationId,
+                    plan.RegistryFingerprint));
+
+                PackageOperationAutoResumeState.SimulateBeforeAssemblyReloadForTests();
+
+                Assert.IsTrue(PackageOperationAutoResumeState.HasMatchingReloadMarker(
+                    plan.OperationId,
+                    plan.RegistryFingerprint));
+            }
+
+            PackageOperationAutoResumeState.SimulateNewDomainForTests();
+            ControlledPackageInstallClient resumedClient = new ControlledPackageInstallClient();
+            using (PackageInstallService resumed = new PackageInstallService(
+                       resumedClient,
+                       repository))
+            {
+                resumed.ExactTargetAlreadyInstalled =
+                    (packageId, targetUrl, previousIdentity) =>
+                        packageId == first.PackageId && targetUrl == first.StableUrl;
+
+                Assert.IsTrue(resumed.ResumeSavedOperation(plan.RegistryFingerprint));
+                CollectionAssert.AreEqual(new[] { second.StableUrl }, resumedClient.AddedUrls);
+                Assert.AreEqual(
+                    PackageInstallProgressItemState.AlreadyCorrect,
+                    GetProgress(resumed, first.PackageId).State);
+
+                PackageOperationAutoResumeState.AcknowledgeReloadMarker(plan.OperationId);
+                Assert.IsFalse(PackageOperationAutoResumeState.HasMatchingReloadMarker(
+                    plan.OperationId,
+                    plan.RegistryFingerprint));
+
+                PackageOperationAutoResumeState.SimulateBeforeAssemblyReloadForTests();
+                Assert.IsTrue(PackageOperationAutoResumeState.HasMatchingReloadMarker(
+                    plan.OperationId,
+                    plan.RegistryFingerprint));
+
+                Assert.IsTrue(resumed.CancelCurrentOperation());
+                resumedClient.Requests[0].CompleteSuccess(second.PackageId, "1.0.0");
+                resumed.UpdateForTests();
             }
         }
 
