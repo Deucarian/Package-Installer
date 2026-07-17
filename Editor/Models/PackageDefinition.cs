@@ -12,7 +12,7 @@ namespace Deucarian.PackageInstaller.Editor
             string stableUrl,
             string description,
             IEnumerable<string> dependencies = null,
-            PackageType packageType = PackageType.Core,
+            PackageKind packageKind = PackageKind.Library,
             string developmentUrl = null,
             string displayVersion = null,
             IEnumerable<PackageExtraDefinition> extras = null,
@@ -27,7 +27,9 @@ namespace Deucarian.PackageInstaller.Editor
             string groupId = null,
             int overviewOrder = 0,
             IEnumerable<string> searchAliases = null,
-            IEnumerable<string> searchTags = null)
+            IEnumerable<string> searchTags = null,
+            string navigationGroup = null,
+            string iconKey = null)
         {
             if (string.IsNullOrWhiteSpace(displayName))
             {
@@ -49,9 +51,9 @@ namespace Deucarian.PackageInstaller.Editor
             IntegrationTargets = ToReadOnlyList(integrationTargets);
             SuiteMembers = ToReadOnlyList(suiteMembers);
             RecommendedWith = ToReadOnlyList(recommendedWith);
-            PackageType = packageType;
+            Kind = packageKind;
             Category = string.IsNullOrWhiteSpace(category)
-                ? GetDefaultCategory(packageType)
+                ? GetDefaultCategory(packageKind)
                 : category.Trim();
             MetadataType = string.IsNullOrWhiteSpace(metadataType)
                 ? string.Empty
@@ -62,12 +64,18 @@ namespace Deucarian.PackageInstaller.Editor
             GroupId = string.IsNullOrWhiteSpace(groupId)
                 ? string.Empty
                 : groupId.Trim();
+            NavigationGroup = string.IsNullOrWhiteSpace(navigationGroup)
+                ? Category
+                : navigationGroup.Trim();
             OverviewOrder = Math.Max(0, overviewOrder);
             DisplayVersion = displayVersion ?? string.Empty;
             Extras = ToReadOnlyList(extras);
             OptionalCompanions = ToReadOnlyList(optionalCompanions);
             SearchAliases = ToReadOnlyList(searchAliases);
             SearchTags = ToReadOnlyList(searchTags);
+            IconKey = string.IsNullOrWhiteSpace(iconKey)
+                ? string.Empty
+                : iconKey.Trim();
         }
 
         public string DisplayName { get; }
@@ -98,7 +106,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         public IReadOnlyList<string> OptionalCompanions { get; }
 
-        public PackageType PackageType { get; }
+        public PackageKind Kind { get; }
 
         public string Category { get; }
 
@@ -108,6 +116,8 @@ namespace Deucarian.PackageInstaller.Editor
 
         public string GroupId { get; }
 
+        public string NavigationGroup { get; }
+
         public int OverviewOrder { get; }
 
         public bool HasOverviewOrder => OverviewOrder > 0;
@@ -116,19 +126,13 @@ namespace Deucarian.PackageInstaller.Editor
 
         public IReadOnlyList<string> SearchTags { get; }
 
-        public bool IsIntegration =>
-            string.Equals(Category, "Integration", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(MetadataType, "Integration", StringComparison.OrdinalIgnoreCase);
+        public string IconKey { get; }
 
-        public bool IsSuite =>
-            string.Equals(Category, "Suites", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(Category, "Suite", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(MetadataType, "Suite", StringComparison.OrdinalIgnoreCase);
+        public bool IsIntegration => Kind == PackageKind.Integration;
 
-        public bool IsTemplate =>
-            string.Equals(Category, "Templates", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(Category, "Template", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(MetadataType, "Template", StringComparison.OrdinalIgnoreCase);
+        public bool IsSuite => Kind == PackageKind.Suite;
+
+        public bool IsTemplate => Kind == PackageKind.Template;
 
         public bool HasPackageReference => !string.IsNullOrWhiteSpace(GetUrl(PackageChannel.Stable));
 
@@ -177,14 +181,18 @@ namespace Deucarian.PackageInstaller.Editor
                 .ToArray();
         }
 
-        private static string GetDefaultCategory(PackageType packageType)
+        private static string GetDefaultCategory(PackageKind packageKind)
         {
-            switch (packageType)
+            switch (packageKind)
             {
-                case PackageType.UI:
-                    return "UI";
-                case PackageType.Integration:
+                case PackageKind.Tool:
+                    return "Tools";
+                case PackageKind.Integration:
                     return "Integration";
+                case PackageKind.Suite:
+                    return "Suites";
+                case PackageKind.Template:
+                    return "Templates";
                 default:
                     return "Core";
             }

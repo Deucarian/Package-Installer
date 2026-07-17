@@ -1710,7 +1710,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 stableUrl,
                 "Reusable runtime loading pipeline.",
                 Array.Empty<string>(),
-                PackageType.Core,
+                PackageKind.Library,
                 "https://github.com/Deucarian/Object-Loading.git#develop",
                 category: "Core");
         }
@@ -1723,7 +1723,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 "https://github.com/Deucarian/Package-Installer.git#main",
                 "Package management.",
                 Array.Empty<string>(),
-                PackageType.Core,
+                PackageKind.Library,
                 "https://github.com/Deucarian/Package-Installer.git#develop",
                 category: "Tools");
         }
@@ -1736,7 +1736,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 "https://github.com/Deucarian/Object-Loading.git#" + StableRevision,
                 "Reusable runtime loading pipeline.",
                 Array.Empty<string>(),
-                PackageType.Core,
+                PackageKind.Library,
                 "https://github.com/Deucarian/Object-Loading.git#" + DevelopmentRevision,
                 category: "Core");
         }
@@ -1751,7 +1751,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                     ".git#" + StableRevision,
                     "Concurrent update-check package.",
                     Array.Empty<string>(),
-                    PackageType.Core,
+                    PackageKind.Library,
                     "https://github.com/Deucarian/" + prefix + "-" + index +
                     ".git#" + DevelopmentRevision,
                     category: "Core"))

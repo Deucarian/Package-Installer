@@ -1,10 +1,10 @@
 .dpi-global-channel-popup {
     position: absolute;
     flex-direction: column;
-    padding-left: 12px;
-    padding-right: 12px;
-    padding-top: 10px;
-    padding-bottom: 10px;
+    padding-left: 10px;
+    padding-right: 10px;
+    padding-top: 8px;
+    padding-bottom: 8px;
     border-top-left-radius: 8px;
     border-top-right-radius: 8px;
     border-bottom-right-radius: 8px;
@@ -44,10 +44,14 @@
 }
 
 .dpi-global-channel-popup__apply {
-    height: 23px;
+    height: 28px;
+    min-height: 28px;
+    max-height: 28px;
     min-width: 106px;
     padding-left: 8px;
     padding-right: 8px;
+    padding-top: 0;
+    padding-bottom: 0;
     border-top-left-radius: 5px;
     border-top-right-radius: 5px;
     border-bottom-right-radius: 5px;
@@ -63,6 +67,10 @@
     background-color: rgba(35, 82, 87, 0.68);
     color: var(--deucarian-text);
     font-size: 10px;
+}
+
+.dpi-global-channel-popup__apply--primary {
+    margin-left: 8px;
 }
 
 .dpi-global-channel-popup__apply:hover {
@@ -125,18 +133,18 @@
     background-color: rgba(12, 22, 31, 0.60);
 }
 
-.dpi-responsive--compact .dpi-graph-details {
+.deucarian-responsive--compact .dpi-graph-details {
     width: 350px;
     min-width: 310px;
     max-width: 370px;
 }
 
-.dpi-responsive--narrow .dpi-graph-content-row {
+.deucarian-responsive--narrow .dpi-graph-content-row {
     flex-direction: column;
     margin-bottom: 6px;
 }
 
-.dpi-responsive--narrow .dpi-graph-details {
+.deucarian-responsive--narrow .dpi-graph-details {
     width: auto;
     min-width: 0;
     max-width: none;
@@ -170,7 +178,7 @@
     background-color: rgba(11, 18, 25, 0.62);
 }
 
-.dpi-responsive--narrow .dpi-ecosystem-graph {
+.deucarian-responsive--narrow .dpi-ecosystem-graph {
     min-width: 0;
     min-height: 300px;
 }
@@ -179,6 +187,10 @@
     flex-shrink: 0;
     flex-direction: column;
     align-items: stretch;
+    padding-left: 10px;
+    padding-right: 10px;
+    padding-top: 8px;
+    padding-bottom: 8px;
     border-bottom-width: 1px;
     border-bottom-color: rgba(59, 166, 154, 0.16);
     border-left-width: 1px;
@@ -196,25 +208,24 @@
     min-height: 36px;
     flex-direction: row;
     align-items: center;
-    padding-left: 10px;
-    padding-right: 8px;
-    padding-top: 6px;
-    padding-bottom: 4px;
+    padding-left: 0;
+    padding-right: 0;
+    padding-top: 0;
+    padding-bottom: 0;
 }
 
 .dpi-ecosystem-graph--compact .dpi-ecosystem-graph__filter-row,
 .dpi-ecosystem-graph--narrow .dpi-ecosystem-graph__filter-row {
     flex-wrap: wrap;
     align-content: flex-start;
-    padding-bottom: 6px;
 }
 
-.dpi-ecosystem-graph--compact .dpi-ecosystem-graph__search {
+.dpi-ecosystem-graph--compact .dpi-ecosystem-graph__search-control {
     flex-basis: 220px;
     max-width: none;
 }
 
-.dpi-ecosystem-graph--narrow .dpi-ecosystem-graph__search {
+.dpi-ecosystem-graph--narrow .dpi-ecosystem-graph__search-control {
     flex-basis: 100%;
     width: 100%;
     max-width: none;
@@ -241,9 +252,10 @@
     min-height: 24px;
     flex-direction: row;
     align-items: center;
-    padding-left: 10px;
-    padding-right: 8px;
-    padding-bottom: 3px;
+    padding-left: 0;
+    padding-right: 0;
+    padding-top: 0;
+    padding-bottom: 0;
     overflow: hidden;
 }
 
@@ -320,18 +332,41 @@
 
 .dpi-ecosystem-graph__breadcrumb-separator {
     width: 12px;
-    color: rgba(112, 143, 156, 0.70);
-    -unity-text-align: middle-center;
-    font-size: 10px;
+    min-width: 12px;
+    max-width: 12px;
+    height: 12px;
+    margin-left: 3px;
+    margin-right: 3px;
+    opacity: 0.70;
+}
+
+.dpi-ecosystem-graph__search-control {
+    flex-grow: 1;
+    flex-shrink: 1;
+    flex-direction: row;
+    align-items: center;
+    min-width: 130px;
+    max-width: 360px;
+    height: 24px;
+    margin-right: 6px;
+}
+
+.dpi-ecosystem-graph__search-icon {
+    width: 14px;
+    min-width: 14px;
+    max-width: 14px;
+    height: 14px;
+    margin-left: 6px;
+    margin-right: -20px;
+    opacity: 0.72;
 }
 
 .dpi-ecosystem-graph__search {
     flex-grow: 1;
     flex-shrink: 1;
-    min-width: 130px;
-    max-width: 360px;
+    min-width: 0;
     height: 24px;
-    margin-right: 6px;
+    padding-left: 20px;
 }
 
 .dpi-ecosystem-graph__filter-toggle,
@@ -417,6 +452,7 @@
 .dpi-ecosystem-graph__filter-icon {
     width: 14px;
     min-width: 14px;
+    max-width: 14px;
     height: 14px;
     margin-right: 5px;
     padding-left: 0;
@@ -429,9 +465,7 @@
     border-right-width: 1px;
     border-top-width: 1px;
     border-bottom-width: 1px;
-    -unity-text-align: middle-center;
-    -unity-font-style: bold;
-    font-size: 9px;
+    opacity: 0.92;
 }
 
 .dpi-ecosystem-graph__filter-icon--installed {
@@ -567,12 +601,13 @@
 }
 
 .dpi-graph-legend__line {
-    min-width: 44px;
+    width: 18px;
+    min-width: 18px;
+    max-width: 18px;
     height: 16px;
     margin-right: 5px;
-    -unity-text-align: middle-center;
-    font-size: 8px;
-    color: rgba(211, 230, 238, 0.72);
+    padding-bottom: 2px;
+    opacity: 0.82;
     border-bottom-width: 2px;
     border-bottom-color: rgba(90, 111, 160, 0.44);
 }
@@ -675,10 +710,10 @@
     margin-top: -44px;
     align-items: center;
     justify-content: center;
-    padding-left: 16px;
-    padding-right: 16px;
-    padding-top: 14px;
-    padding-bottom: 14px;
+    padding-left: 10px;
+    padding-right: 10px;
+    padding-top: 8px;
+    padding-bottom: 8px;
     border-top-left-radius: 8px;
     border-top-right-radius: 8px;
     border-bottom-right-radius: 8px;
@@ -695,16 +730,26 @@
 }
 
 .dpi-ecosystem-graph__empty-title {
+    align-self: stretch;
+    flex-shrink: 0;
     color: var(--deucarian-text);
     font-size: 12px;
     -unity-font-style: bold;
     -unity-text-align: middle-center;
+    white-space: normal;
 }
 
 .dpi-ecosystem-graph__empty-action {
-    height: 24px;
+    height: auto;
+    min-height: 24px;
     min-width: 108px;
+    max-width: 100%;
+    flex-shrink: 0;
     margin-top: 10px;
+    padding-left: 8px;
+    padding-right: 8px;
+    padding-top: 3px;
+    padding-bottom: 3px;
     border-top-left-radius: 5px;
     border-top-right-radius: 5px;
     border-bottom-right-radius: 5px;
@@ -719,6 +764,8 @@
     border-bottom-color: rgba(59, 166, 154, 0.42);
     background-color: rgba(27, 48, 58, 0.76);
     color: var(--deucarian-text);
+    -unity-text-align: middle-center;
+    white-space: normal;
 }
 
 .dpi-ecosystem-graph__empty-action:hover {
@@ -750,6 +797,7 @@
 .dpi-ecosystem-graph__guide-layer,
 .dpi-ecosystem-graph__membership-layer,
 .dpi-ecosystem-graph__edge-layer,
+.dpi-ecosystem-graph__occlusion-layer,
 .dpi-ecosystem-graph__node-layer {
     position: absolute;
     left: 0;
@@ -883,7 +931,7 @@
     overflow: hidden;
     padding-left: 10px;
     padding-right: 10px;
-    padding-top: 9px;
+    padding-top: 8px;
     padding-bottom: 8px;
     border-top-left-radius: 8px;
     border-top-right-radius: 8px;
@@ -919,15 +967,15 @@
 }
 
 .dpi-graph-node__status-rail--installed {
-    background-color: rgba(59, 166, 154, 0.82);
+    background-color: rgba(87, 209, 189, 0.88);
 }
 
 .dpi-graph-node__status-rail--available {
-    background-color: rgba(130, 119, 204, 0.76);
+    background-color: rgba(128, 117, 209, 0.82);
 }
 
 .dpi-graph-node__status-rail--update {
-    background-color: rgba(224, 178, 72, 0.96);
+    background-color: rgba(235, 173, 71, 0.92);
 }
 
 .dpi-graph-node__status-rail--warning {
@@ -939,7 +987,7 @@
 }
 
 .dpi-graph-node__status-rail--checking {
-    background-color: rgba(82, 171, 205, 0.72);
+    background-color: rgba(128, 153, 168, 0.72);
 }
 
 .dpi-graph-node:hover {
@@ -1012,24 +1060,37 @@
     background-color: rgba(27, 59, 66, 0.90);
 }
 
+.dpi-graph-node.dpi-graph-search--owner {
+    border-left-width: 3px;
+    border-right-width: 3px;
+    border-top-width: 3px;
+    border-bottom-width: 3px;
+    border-left-color: rgba(92, 213, 203, 1.00);
+    border-right-color: rgba(99, 184, 222, 0.88);
+    border-top-color: rgba(99, 184, 222, 0.88);
+    border-bottom-color: rgba(99, 184, 222, 0.88);
+    background-color: rgba(28, 64, 72, 0.96);
+    opacity: 1.00;
+}
+
 .dpi-graph-node.dpi-graph-search--context {
     border-left-color: rgba(82, 171, 205, 0.48);
     border-right-color: rgba(82, 171, 205, 0.32);
     border-top-color: rgba(82, 171, 205, 0.32);
     border-bottom-color: rgba(82, 171, 205, 0.32);
-    opacity: 0.78;
+    opacity: 0.68;
 }
 
 .dpi-graph-node.dpi-graph-search--dimmed {
-    opacity: 0.46;
+    opacity: 0.24;
 }
 
 .dpi-graph-node.dpi-graph-search--dimmed.dpi-graph-node--hover-context {
-    border-left-color: rgba(59, 209, 191, 0.64);
-    border-right-color: rgba(59, 209, 191, 0.42);
-    border-top-color: rgba(59, 209, 191, 0.42);
-    border-bottom-color: rgba(59, 209, 191, 0.42);
-    opacity: 0.72;
+    border-left-color: rgba(59, 209, 191, 0.28);
+    border-right-color: rgba(59, 209, 191, 0.18);
+    border-top-color: rgba(59, 209, 191, 0.18);
+    border-bottom-color: rgba(59, 209, 191, 0.18);
+    opacity: 0.34;
 }
 
 .dpi-graph-node--dimmed {
@@ -1077,7 +1138,10 @@
     min-width: 10px;
     height: 10px;
     margin-right: 0;
-    font-size: 6px;
+    padding-left: 1px;
+    padding-right: 1px;
+    padding-top: 1px;
+    padding-bottom: 1px;
 }
 
 .dpi-graph-node--presentation-micro {
@@ -1109,7 +1173,10 @@
     min-width: 10px;
     height: 10px;
     margin-right: 2px;
-    font-size: 6px;
+    padding-left: 1px;
+    padding-right: 1px;
+    padding-top: 1px;
+    padding-bottom: 1px;
 }
 
 .dpi-graph-node--presentation-micro .dpi-graph-node__title {
@@ -1142,7 +1209,10 @@
     min-width: 10px;
     height: 10px;
     margin-right: 3px;
-    font-size: 6px;
+    padding-left: 1px;
+    padding-right: 1px;
+    padding-top: 1px;
+    padding-bottom: 1px;
 }
 
 .dpi-graph-node--presentation-compact .dpi-graph-node__title {
@@ -1178,18 +1248,41 @@
 
 .dpi-graph-node--presentation-compact .dpi-graph-node__action {
     min-width: 58px;
-    height: 16px;
-    max-height: 16px;
+    min-height: 18px;
+    height: 18px;
+    max-height: 18px;
     padding-left: 6px;
     padding-right: 6px;
+    padding-top: 0;
+    padding-bottom: 0;
     font-size: 8px;
+}
+
+.dpi-graph-occlusion {
+    position: absolute;
+    background-color: rgba(8, 16, 25, 1.00);
+}
+
+.dpi-graph-occlusion--package {
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    border-bottom-right-radius: 8px;
+    border-bottom-left-radius: 8px;
+}
+
+.dpi-graph-occlusion--hub,
+.dpi-graph-occlusion--group-symbol {
+    border-top-left-radius: 999px;
+    border-top-right-radius: 999px;
+    border-bottom-right-radius: 999px;
+    border-bottom-left-radius: 999px;
 }
 
 .dpi-graph-node--presentation-full {
     padding-left: 10px;
     padding-right: 10px;
-    padding-top: 9px;
-    padding-bottom: 9px;
+    padding-top: 8px;
+    padding-bottom: 8px;
 }
 
 .dpi-graph-node--presentation-full .dpi-graph-node__header {
@@ -1275,10 +1368,10 @@
     color: rgba(162, 185, 200, 0.78);
     font-size: 11px;
     -unity-font-style: bold;
-    padding-left: 12px;
-    padding-right: 12px;
-    padding-top: 10px;
-    padding-bottom: 10px;
+    padding-left: 10px;
+    padding-right: 10px;
+    padding-top: 8px;
+    padding-bottom: 8px;
     border-top-left-radius: 6px;
     border-top-right-radius: 6px;
     border-bottom-right-radius: 6px;
@@ -1447,6 +1540,22 @@
     background-color: rgba(24, 58, 64, 0.92);
 }
 
+.dpi-graph-group.dpi-graph-search--owner .dpi-graph-group__symbol {
+    border-left-width: 3px;
+    border-right-width: 3px;
+    border-top-width: 3px;
+    border-bottom-width: 3px;
+    border-left-color: rgba(92, 213, 203, 1.00);
+    border-right-color: rgba(99, 184, 222, 0.92);
+    border-top-color: rgba(99, 184, 222, 0.92);
+    border-bottom-color: rgba(99, 184, 222, 0.92);
+    background-color: rgba(28, 64, 72, 0.98);
+}
+
+.dpi-graph-group.dpi-graph-search--owner {
+    opacity: 1.00;
+}
+
 .dpi-graph-group.dpi-graph-search--context .dpi-graph-group__symbol {
     border-left-color: rgba(82, 171, 205, 0.52);
     border-right-color: rgba(82, 171, 205, 0.36);
@@ -1455,15 +1564,15 @@
 }
 
 .dpi-graph-group.dpi-graph-search--context {
-    opacity: 0.78;
+    opacity: 0.64;
 }
 
 .dpi-graph-group.dpi-graph-search--dimmed {
-    opacity: 0.44;
+    opacity: 0.22;
 }
 
 .dpi-graph-group.dpi-graph-search--dimmed.dpi-graph-group--hover-context {
-    opacity: 0.72;
+    opacity: 0.30;
 }
 
 .dpi-graph-group--integration .dpi-graph-group__symbol {
@@ -1484,7 +1593,8 @@
 
 .dpi-graph-group--focused.dpi-graph-group--attention .dpi-graph-group__symbol,
 .dpi-graph-group--hover-context.dpi-graph-group--attention .dpi-graph-group__symbol,
-.dpi-graph-group.dpi-graph-search--match.dpi-graph-group--attention .dpi-graph-group__symbol {
+.dpi-graph-group.dpi-graph-search--match.dpi-graph-group--attention .dpi-graph-group__symbol,
+.dpi-graph-group.dpi-graph-search--owner.dpi-graph-group--attention .dpi-graph-group__symbol {
     border-left-color: rgba(255, 226, 184, 0.96);
 }
 
@@ -1556,13 +1666,43 @@
 }
 
 .dpi-graph-group__stat {
-    height: 15px;
+    height: 18px;
+    min-height: 18px;
+    max-height: 18px;
     margin-right: 4px;
     margin-bottom: 3px;
     padding-left: 0;
     padding-right: 6px;
     background-color: rgba(0, 0, 0, 0);
     color: rgba(209, 222, 228, 0.84);
+    font-size: 8px;
+}
+
+.dpi-graph-group__stat .deucarian-icon-text-button__content {
+    height: 14px;
+    min-height: 14px;
+    max-height: 14px;
+}
+
+.dpi-graph-group__stat .deucarian-icon-text-button__icon {
+    width: 10px;
+    min-width: 10px;
+    max-width: 10px;
+    height: 10px;
+    min-height: 10px;
+    max-height: 10px;
+}
+
+.dpi-graph-group__stat .deucarian-icon-text-button__gap {
+    width: 3px;
+    min-width: 3px;
+    max-width: 3px;
+}
+
+.dpi-graph-group__stat .deucarian-icon-text-button__label {
+    height: 14px;
+    min-height: 14px;
+    max-height: 14px;
     font-size: 8px;
 }
 
@@ -1679,10 +1819,11 @@
     border-right-color: rgba(111, 136, 163, 0.36);
     border-top-color: rgba(111, 136, 163, 0.36);
     border-bottom-color: rgba(111, 136, 163, 0.36);
-    -unity-text-align: middle-center;
-    font-size: 10px;
-    -unity-font-style: bold;
-    color: rgba(228, 241, 244, 0.90);
+    padding-left: 3px;
+    padding-right: 3px;
+    padding-top: 3px;
+    padding-bottom: 3px;
+    opacity: 0.94;
     background-color: rgba(0, 0, 0, 0);
 }
 
@@ -1849,10 +1990,15 @@
 
 .dpi-graph-node__action {
     min-width: 76px;
+    min-height: 23px;
     height: 23px;
     max-height: 23px;
     padding-left: 8px;
     padding-right: 8px;
+    padding-top: 0;
+    padding-bottom: 0;
+    flex-shrink: 0;
+    -unity-text-align: middle-center;
     border-top-left-radius: 5px;
     border-top-right-radius: 5px;
     border-bottom-right-radius: 5px;

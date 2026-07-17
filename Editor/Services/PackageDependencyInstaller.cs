@@ -313,11 +313,44 @@ namespace Deucarian.PackageInstaller.Editor
         private readonly PackageDetectionService _packageDetectionService;
         private readonly Func<IEnumerable<PackageDefinition>> _registeredPackagesProvider;
         private PackagePlannerRetryRequest _lastPlannerRetryRequest;
+        private long _preflightGeneration;
+        private string _pendingPreflightOperationName = string.Empty;
 
-        internal Func<PackageDependencyInstallPlan, string, bool> PreflightConfirmation { get; set; }
+        internal Action<PackageDependencyInstallPlan, string, Action<bool>> PreflightConfirmation { get; set; }
+
+        internal event Action PreflightCompleted;
+
+        internal bool IsAwaitingPreflight { get; private set; }
+
+        internal void CancelPendingPreflight()
+        {
+            if (!IsAwaitingPreflight)
+            {
+                return;
+            }
+
+            string operationName = _pendingPreflightOperationName;
+            InvalidatePendingPreflight();
+            PackageInstallerLog.Install.Info(operationName + " canceled during preflight.");
+            PackageInstallerActivityService.Record(
+                "Planner",
+                PackageInstallerActivitySeverity.Warning,
+                operationName + " canceled during preflight.");
+            PreflightCompleted?.Invoke();
+        }
 
         internal bool CanRetryLastPlannerFailure =>
             _lastPlannerRetryRequest != null && _lastPlannerRetryRequest.RootRequests.Count > 0;
+
+        internal bool IsPlanStillCurrent(PackageDependencyInstallPlan plan)
+        {
+            return plan != null &&
+                   !_packageInstallService.IsBusy &&
+                   string.Equals(
+                       plan.RegistryFingerprint,
+                       ComputeRegistryFingerprint(GetRegisteredPackages()),
+                       StringComparison.Ordinal);
+        }
 
         public PackageDependencyInstaller(
             PackageInstallService packageInstallService,
@@ -642,6 +675,18 @@ namespace Deucarian.PackageInstaller.Editor
             string alreadyInstalledMessage,
             PackageOperationRisk additionalRisks = PackageOperationRisk.None)
         {
+            if (IsAwaitingPreflight)
+            {
+                const string message =
+                    "A package operation is already awaiting confirmation. Complete or cancel it before starting another operation.";
+                PackageInstallerLog.Install.Warning(message);
+                PackageInstallerActivityService.Record(
+                    "Planner",
+                    PackageInstallerActivitySeverity.Warning,
+                    message);
+                return;
+            }
+
             PackageDependencyInstallPlan installPlan = CreateInstallPlan(
                 packageDefinitions,
                 channelSelector,
@@ -656,7 +701,7 @@ namespace Deucarian.PackageInstaller.Editor
                 {
                     // Conflicts cannot be executed, but they still use the contextual
                     // review surface so every affected root path is visible in place.
-                    PreflightConfirmation(installPlan, operationName);
+                    PreflightConfirmation(installPlan, operationName, _ => { });
                 }
 
                 _lastPlannerRetryRequest = installPlan.RootRequests.Count > 0
@@ -693,19 +738,81 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            if (installPlan.RequiresPreflight &&
-                PreflightConfirmation != null &&
-                !PreflightConfirmation(installPlan, operationName))
+            if (installPlan.RequiresPreflight && PreflightConfirmation != null)
+            {
+                IsAwaitingPreflight = true;
+                _pendingPreflightOperationName = string.IsNullOrWhiteSpace(operationName)
+                    ? "Package operation"
+                    : operationName;
+                long preflightGeneration = ++_preflightGeneration;
+                try
+                {
+                    PreflightConfirmation(
+                        installPlan,
+                        operationName,
+                        accepted => CompletePreflight(
+                            preflightGeneration,
+                            installPlan,
+                            operationName,
+                            accepted));
+                }
+                catch
+                {
+                    InvalidatePendingPreflight();
+                    PreflightCompleted?.Invoke();
+                    throw;
+                }
+                return;
+            }
+
+            _packageInstallService.InstallPlan(installPlan, operationName);
+        }
+
+        private void CompletePreflight(
+            long preflightGeneration,
+            PackageDependencyInstallPlan installPlan,
+            string operationName,
+            bool accepted)
+        {
+            if (!IsAwaitingPreflight || preflightGeneration != _preflightGeneration)
+            {
+                return;
+            }
+
+            InvalidatePendingPreflight();
+            if (!accepted)
             {
                 PackageInstallerLog.Install.Info(operationName + " canceled during preflight.");
                 PackageInstallerActivityService.Record(
                     "Planner",
                     PackageInstallerActivitySeverity.Warning,
                     operationName + " canceled during preflight.");
+                PreflightCompleted?.Invoke();
+                return;
+            }
+
+            if (!IsPlanStillCurrent(installPlan))
+            {
+                string message = operationName +
+                    " was not started because package state changed while confirmation was open. Review the operation again.";
+                PackageInstallerLog.Install.Warning(message);
+                PackageInstallerActivityService.Record(
+                    "Planner",
+                    PackageInstallerActivitySeverity.Warning,
+                    message);
+                PreflightCompleted?.Invoke();
                 return;
             }
 
             _packageInstallService.InstallPlan(installPlan, operationName);
+            PreflightCompleted?.Invoke();
+        }
+
+        private void InvalidatePendingPreflight()
+        {
+            IsAwaitingPreflight = false;
+            _pendingPreflightOperationName = string.Empty;
+            _preflightGeneration++;
         }
 
         private sealed class PackagePlannerRetryRequest

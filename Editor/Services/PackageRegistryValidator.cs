@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Deucarian.PackageInstaller.Editor
 {
     internal static class PackageRegistryValidator
     {
-        public const int SupportedSchemaVersion = 1;
+        public const int LegacySchemaVersion = 1;
+        public const int SupportedSchemaVersion = 2;
 
         public static bool Validate(PackageRegistry registry, out string message)
         {
@@ -15,7 +17,8 @@ namespace Deucarian.PackageInstaller.Editor
                 return false;
             }
 
-            if (registry.schemaVersion != SupportedSchemaVersion)
+            if (registry.schemaVersion < LegacySchemaVersion ||
+                registry.schemaVersion > SupportedSchemaVersion)
             {
                 message = "Unsupported registry schemaVersion: " + registry.schemaVersion + ".";
                 return false;
@@ -27,7 +30,20 @@ namespace Deucarian.PackageInstaller.Editor
                 return false;
             }
 
+            bool usesCanonicalSchema = registry.schemaVersion == SupportedSchemaVersion;
+
+            if (usesCanonicalSchema && (registry.groups == null || registry.groups.Length == 0))
+            {
+                message = "Registry schemaVersion 2 requires groups.";
+                return false;
+            }
+
             if (!PackageGraphHierarchyBuilder.ValidateGroups(registry.groups, out message))
+            {
+                return false;
+            }
+
+            if (usesCanonicalSchema && !ValidateCanonicalGroupDepth(registry.groups, out message))
             {
                 return false;
             }
@@ -67,9 +83,23 @@ namespace Deucarian.PackageInstaller.Editor
                     return false;
                 }
 
-                if (string.IsNullOrWhiteSpace(package.category))
+                if (!usesCanonicalSchema && string.IsNullOrWhiteSpace(package.category))
                 {
                     message = "Package category cannot be empty for " + package.id + ".";
+                    return false;
+                }
+
+                if (usesCanonicalSchema &&
+                    !PackageKindParser.TryParseCanonical(package.kind, out PackageKind ignoredKind))
+                {
+                    message = "Package " + package.id + " has unknown kind " +
+                              (package.kind ?? "(empty)") + ".";
+                    return false;
+                }
+
+                if (usesCanonicalSchema && string.IsNullOrWhiteSpace(package.groupId))
+                {
+                    message = "Package groupId cannot be empty for " + package.id + ".";
                     return false;
                 }
 
@@ -130,10 +160,15 @@ namespace Deucarian.PackageInstaller.Editor
                 }
 
                 if (!ValidateKnownRelationshipIds(package, package.optionalCompanions, "optional companion", packageIds, out message) ||
-                    !ValidateOptionalRelationshipIds(package, package.optionalIntegrations, "optionalIntegrations", out message) ||
-                    !ValidateOptionalRelationshipIds(package, package.integrationTargets, "integrationTargets", out message) ||
-                    !ValidateOptionalRelationshipIds(package, package.suiteMembers, "suiteMembers", out message) ||
-                    !ValidateOptionalRelationshipIds(package, package.recommendedWith, "recommendedWith", out message))
+                    !ValidateRelationshipIds(package, package.optionalIntegrations, "optionalIntegrations", packageIds, usesCanonicalSchema, out message) ||
+                    !ValidateRelationshipIds(package, package.integrationTargets, "integrationTargets", packageIds, usesCanonicalSchema, out message) ||
+                    !ValidateRelationshipIds(package, package.suiteMembers, "suiteMembers", packageIds, usesCanonicalSchema, out message) ||
+                    !ValidateRelationshipIds(package, package.recommendedWith, "recommendedWith", packageIds, usesCanonicalSchema, out message))
+                {
+                    return false;
+                }
+
+                if (usesCanonicalSchema && !ValidateCanonicalKindContract(package, out message))
                 {
                     return false;
                 }
@@ -273,10 +308,12 @@ namespace Deucarian.PackageInstaller.Editor
             return true;
         }
 
-        private static bool ValidateOptionalRelationshipIds(
+        private static bool ValidateRelationshipIds(
             PackageRegistryEntry package,
             IEnumerable<string> relationshipIds,
             string fieldName,
+            ISet<string> knownPackageIds,
+            bool requireKnownIds,
             out string message)
         {
             if (relationshipIds == null)
@@ -285,6 +322,8 @@ namespace Deucarian.PackageInstaller.Editor
                 return true;
             }
 
+            HashSet<string> seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
             foreach (string relationshipId in relationshipIds)
             {
                 if (string.IsNullOrWhiteSpace(relationshipId))
@@ -292,10 +331,147 @@ namespace Deucarian.PackageInstaller.Editor
                     message = "Package " + package.id + " contains an empty " + fieldName + " id.";
                     return false;
                 }
+
+                string normalizedId = relationshipId.Trim();
+
+                if (string.Equals(package.id.Trim(), normalizedId, StringComparison.OrdinalIgnoreCase))
+                {
+                    message = "Package " + package.id + " cannot reference itself in " + fieldName + ".";
+                    return false;
+                }
+
+                if (!seen.Add(normalizedId))
+                {
+                    message = "Package " + package.id + " contains duplicate " + fieldName +
+                              " id " + relationshipId + ".";
+                    return false;
+                }
+
+                if (requireKnownIds && !knownPackageIds.Contains(normalizedId))
+                {
+                    message = "Package " + package.id + " references unknown " + fieldName +
+                              " id " + relationshipId + ".";
+                    return false;
+                }
             }
 
             message = string.Empty;
             return true;
+        }
+
+        private static bool ValidateCanonicalKindContract(
+            PackageRegistryEntry package,
+            out string message)
+        {
+            PackageKindParser.TryParseCanonical(package.kind, out PackageKind kind);
+
+            if (kind == PackageKind.Integration)
+            {
+                if (package.integrationTargets == null || package.integrationTargets.Length == 0)
+                {
+                    message = "Integration package " + package.id + " requires integrationTargets.";
+                    return false;
+                }
+
+                if (!ContainsEvery(package.dependencies, package.integrationTargets))
+                {
+                    message = "Integration package " + package.id +
+                              " must directly depend on every integration target.";
+                    return false;
+                }
+            }
+            else if (package.integrationTargets != null && package.integrationTargets.Length > 0)
+            {
+                message = "Package " + package.id +
+                          " declares integrationTargets but its kind is not Integration.";
+                return false;
+            }
+
+            if (kind == PackageKind.Suite)
+            {
+                if (package.suiteMembers == null || package.suiteMembers.Length == 0)
+                {
+                    message = "Suite package " + package.id + " requires suiteMembers.";
+                    return false;
+                }
+
+                if (!SetsEqual(package.dependencies, package.suiteMembers))
+                {
+                    message = "Suite package " + package.id +
+                              " dependencies must exactly match suiteMembers.";
+                    return false;
+                }
+            }
+            else if (package.suiteMembers != null && package.suiteMembers.Length > 0)
+            {
+                message = "Package " + package.id +
+                          " declares suiteMembers but its kind is not Suite.";
+                return false;
+            }
+
+            message = string.Empty;
+            return true;
+        }
+
+        private static bool ValidateCanonicalGroupDepth(
+            IEnumerable<PackageRegistryGroupEntry> groups,
+            out string message)
+        {
+            Dictionary<string, PackageRegistryGroupEntry> groupById =
+                (groups ?? Array.Empty<PackageRegistryGroupEntry>())
+                .Where(group => group != null && !string.IsNullOrWhiteSpace(group.id))
+                .ToDictionary(
+                    group => PackageGraphHierarchyBuilder.NormalizeGroupId(group.id),
+                    StringComparer.OrdinalIgnoreCase);
+
+            foreach (KeyValuePair<string, PackageRegistryGroupEntry> pair in groupById)
+            {
+                int depth = 1;
+                string parentId = PackageGraphHierarchyBuilder.NormalizeGroupId(
+                    pair.Value.parentGroupId);
+
+                while (!string.IsNullOrWhiteSpace(parentId) &&
+                       groupById.TryGetValue(parentId, out PackageRegistryGroupEntry parent))
+                {
+                    depth++;
+
+                    if (depth > 2)
+                    {
+                        message = "Group " + pair.Value.id +
+                                  " exceeds the maximum schemaVersion 2 depth of 2.";
+                        return false;
+                    }
+
+                    parentId = PackageGraphHierarchyBuilder.NormalizeGroupId(
+                        parent.parentGroupId);
+                }
+            }
+
+            message = string.Empty;
+            return true;
+        }
+
+        private static bool ContainsEvery(
+            IEnumerable<string> values,
+            IEnumerable<string> requiredValues)
+        {
+            HashSet<string> valueSet = new HashSet<string>(
+                values ?? Array.Empty<string>(),
+                StringComparer.OrdinalIgnoreCase);
+            return (requiredValues ?? Array.Empty<string>()).All(valueSet.Contains);
+        }
+
+        private static bool SetsEqual(
+            IEnumerable<string> first,
+            IEnumerable<string> second)
+        {
+            HashSet<string> firstSet = new HashSet<string>(
+                first ?? Array.Empty<string>(),
+                StringComparer.OrdinalIgnoreCase);
+            HashSet<string> secondSet = new HashSet<string>(
+                second ?? Array.Empty<string>(),
+                StringComparer.OrdinalIgnoreCase);
+            return firstSet.SetEquals(secondSet);
         }
     }
 }

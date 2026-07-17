@@ -24,7 +24,7 @@ namespace Deucarian.PackageInstaller.Editor
                 string.Empty,
                 "Cross-cutting shared infrastructure used by multiple Deucarian packages.",
                 10,
-                "editor",
+                "network",
                 "infrastructure"),
             new PackageGraphGroup(
                 StateDataGroupId,
@@ -32,7 +32,7 @@ namespace Deucarian.PackageInstaller.Editor
                 string.Empty,
                 "Generic state, data, repository, and selection primitives.",
                 20,
-                "core-state",
+                "database",
                 "state-data"),
             new PackageGraphGroup(
                 RuntimeServicesGroupId,
@@ -40,7 +40,7 @@ namespace Deucarian.PackageInstaller.Editor
                 string.Empty,
                 "Application-facing runtime API, session, and loading services.",
                 30,
-                "object-loading",
+                "server-cog",
                 "runtime-services"),
             new PackageGraphGroup(
                 ExperienceInteractionGroupId,
@@ -48,7 +48,7 @@ namespace Deucarian.PackageInstaller.Editor
                 string.Empty,
                 "UI, presentation, interaction, selection, and user/world experience systems.",
                 40,
-                "generic-ui-items",
+                "mouse-pointer-click",
                 "experience-interaction"),
             new PackageGraphGroup(
                 UiPresentationGroupId,
@@ -56,7 +56,7 @@ namespace Deucarian.PackageInstaller.Editor
                 ExperienceInteractionGroupId,
                 "User interface binding, flow, and presentation systems.",
                 41,
-                "generic-ui-items",
+                "panels-top-left",
                 "ui-presentation"),
             new PackageGraphGroup(
                 WorldInteractionGroupId,
@@ -64,7 +64,7 @@ namespace Deucarian.PackageInstaller.Editor
                 ExperienceInteractionGroupId,
                 "World-object interaction, selection, and input-facing systems.",
                 42,
-                "selection",
+                "scan",
                 "world-interaction"),
             new PackageGraphGroup(
                 ToolsQualityGroupId,
@@ -72,7 +72,7 @@ namespace Deucarian.PackageInstaller.Editor
                 string.Empty,
                 "Installer, diagnostics, and development quality tooling.",
                 50,
-                "package-installer",
+                "wrench",
                 "tools"),
             new PackageGraphGroup(
                 IntegrationsGroupId,
@@ -80,7 +80,7 @@ namespace Deucarian.PackageInstaller.Editor
                 string.Empty,
                 "Installable packages that connect two or more systems.",
                 60,
-                "api-helper",
+                "plug",
                 "integration"),
             new PackageGraphGroup(
                 SuitesGroupId,
@@ -88,7 +88,7 @@ namespace Deucarian.PackageInstaller.Editor
                 string.Empty,
                 "Curated installable bundle packages.",
                 70,
-                "selection",
+                "boxes",
                 "suite")
         };
 
@@ -124,8 +124,62 @@ namespace Deucarian.PackageInstaller.Editor
                     NormalizeGroupId(entry.parentGroupId),
                     entry.description,
                     entry.sortOrder,
-                    entry.iconKey,
+                    ResolveGroupIconKey(entry.id, entry.iconKey),
                     entry.styleKey)));
+        }
+
+        internal static string ResolveGroupIconKeyForTests(string groupId, string explicitIconKey)
+        {
+            return ResolveGroupIconKey(groupId, explicitIconKey);
+        }
+
+        private static string ResolveGroupIconKey(string groupId, string explicitIconKey)
+        {
+            if (!string.IsNullOrWhiteSpace(explicitIconKey))
+            {
+                return explicitIconKey.Trim();
+            }
+
+            switch (NormalizeGroupId(groupId))
+            {
+                case InfrastructureGroupId:
+                    return "network";
+                case StateDataGroupId:
+                    return "database";
+                case RuntimeServicesGroupId:
+                    return "server-cog";
+                case ExperienceInteractionGroupId:
+                    return "mouse-pointer-click";
+                case UiPresentationGroupId:
+                    return "panels-top-left";
+                case WorldInteractionGroupId:
+                case "world-xr-interaction":
+                    return "scan";
+                case ToolsQualityGroupId:
+                    return "wrench";
+                case IntegrationsGroupId:
+                    return "plug";
+                case SuitesGroupId:
+                    return "boxes";
+                case "gameplay":
+                    return "gamepad-2";
+                case "gameplay-foundations":
+                    return "blocks";
+                case "gameplay-progression-meta":
+                    return "trending-up";
+                case "gameplay-combat-weapons":
+                    return "swords";
+                case "gameplay-encounters-world":
+                    return "map-pinned";
+                case "gameplay-genre-frameworks":
+                    return "puzzle";
+                case "templates":
+                    return "layout-template";
+                case "templates-games":
+                    return "gamepad-2";
+                default:
+                    return "package";
+            }
         }
 
         public static string ResolvePackageGroupId(
@@ -163,6 +217,28 @@ namespace Deucarian.PackageInstaller.Editor
             return !string.IsNullOrWhiteSpace(explicitGroupId) && knownGroupIds.Contains(explicitGroupId)
                 ? explicitGroupId
                 : InfrastructureGroupId;
+        }
+
+        public static string GetGroupPath(
+            IEnumerable<PackageGraphGroup> groups,
+            string groupId)
+        {
+            Dictionary<string, PackageGraphGroup> groupById = CreateGroups(groups)
+                .ToDictionary(group => group.Id, StringComparer.OrdinalIgnoreCase);
+            List<string> path = new List<string>();
+            HashSet<string> visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            string currentGroupId = NormalizeGroupId(groupId);
+
+            while (!string.IsNullOrWhiteSpace(currentGroupId) &&
+                   visited.Add(currentGroupId) &&
+                   groupById.TryGetValue(currentGroupId, out PackageGraphGroup group))
+            {
+                path.Add(group.DisplayName);
+                currentGroupId = group.ParentGroupId;
+            }
+
+            path.Reverse();
+            return path.Count == 0 ? string.Empty : string.Join(" / ", path.ToArray());
         }
 
         public static string NormalizeGroupId(string value)

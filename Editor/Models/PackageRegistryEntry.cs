@@ -7,6 +7,7 @@ namespace Deucarian.PackageInstaller.Editor
     {
         public string id;
         public string displayName;
+        public string kind;
         public string category;
         public string type;
         public string description;
@@ -14,6 +15,7 @@ namespace Deucarian.PackageInstaller.Editor
         public string developmentUrl;
         public string ecosystemGroup;
         public string groupId;
+        public string iconKey;
         public int overviewOrder;
         public string[] dependencies;
         public string[] optionalCompanions;

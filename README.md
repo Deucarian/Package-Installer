@@ -6,7 +6,7 @@
 
 It is the Deucarian ecosystem front door for installing standalone packages, integration packages, suite packages, templates, and explicitly declared package samples from Package Registry metadata.
 
-Current package version: `1.1.69`.
+Current package version: `1.1.74`.
 
 ## When to use it
 
@@ -101,18 +101,22 @@ Remote registry validation also checks each package entry against the target pac
 
 The current bundled fallback registry includes these Ecosystem Graph groups:
 
-- Infrastructure: Editor, Logging
-- State & Data: Core State
-- Runtime Services: API, Session, Object Loading, Monetization
-- Experience & Interaction: UI Binding, UI, UI Flow, Theming, XR UI, Camera Navigation, Object Selection
-- Tools & Quality: Package Installer, Diagnostics, Game Content Authoring
-- Integrations: UI Binding + Core State Integration, Object Loading API Integration, Object Selection + Core State Integration, Session + API Integration, XR UI Theming Integration
-- Gameplay: Gameplay Foundation, Persistence, Progression, Combat, Encounters, World Spawning, World Navigation, Defense Games, Attacks, Projectiles, Weapon Systems, Auto Defense, Run Upgrades, Idle Progression
-- Suites: Selection Suite, Auto Defense Suite
-- Templates: Idle Auto Defense, Survivors, Movement FPS
+- Infrastructure: Common, Editor, Logging
+- State & Data: Core State, Persistence
+- Runtime Services: API, Session, Object Loading, Monetization, Session + API Integration, Object Loading + API Integration
+- Experience & Interaction / UI & Presentation: UI, UI Binding, UI Flow, Theming, UI Binding + Core State Integration
+- Experience & Interaction / World & XR Interaction: Camera Navigation, Object Selection, XR UI, Object Selection + Core State Integration, XR UI + Theming Integration, Selection Suite
+- Tools & Quality: Package Installer, Diagnostics, Game Content Authoring, Build Pipeline, Test Automation
+- Gameplay / Foundations: Gameplay Foundation
+- Gameplay / Progression & Meta: Progression, Run Upgrades, Idle Progression
+- Gameplay / Combat & Weapons: Combat, Attacks, Projectiles, Weapon Systems
+- Gameplay / Encounters & World: Encounters, World Spawning, World Navigation
+- Gameplay / Genre Frameworks: Defense Games, Auto Defense, Auto Defense Suite
+- Templates / Games: Idle Auto Defense, Survivors, Movement FPS
 
 Registered packages are first-class UPM packages with their own package IDs:
 
+- `com.deucarian.common`
 - `com.deucarian.core-state`
 - `com.deucarian.api`
 - `com.deucarian.logging`
@@ -128,6 +132,7 @@ Registered packages are first-class UPM packages with their own package IDs:
 - `com.deucarian.object-selection`
 - `com.deucarian.editor`
 - `com.deucarian.game-content-authoring`
+- `com.deucarian.build-pipeline`
 - `com.deucarian.ui-binding.core-state-integration`
 - `com.deucarian.object-loading.api-integration`
 - `com.deucarian.object-selection.core-state-integration`
@@ -170,24 +175,25 @@ To add or change packages, update the remote registry repository and keep the bu
 - Remote: `https://github.com/Deucarian/Package-Registry`
 - Bundled fallback: `PackageRegistry.json`
 
-The registry schema uses `schemaVersion` 1 and contains:
+The canonical registry uses `schemaVersion` 2. The installer also reads legacy schema 1 registries during the compatibility release:
 
-- `groups`: optional structural graph groups. Each group has `id`, `displayName`, optional `parentGroupId`, `description`, `sortOrder`, `iconKey`, and `styleKey`.
+- `groups`: required domain groups. Each group has `id`, `displayName`, optional `parentGroupId`, `description`, `sortOrder`, `iconKey`, and `styleKey`. Registry order drives navigation and graph layout.
 - `id`: the Unity package name, such as `com.deucarian.api`. This must exactly match the target package's `package.json` `name` value.
 - `displayName`: the name shown in the installer window.
-- `category`: legacy compatibility/package-role metadata used by older registries and List View fallback grouping. The Ecosystem Graph and package details use `groupId` hierarchy as the user-facing structural source of truth.
+- `kind`: the package artifact kind: `Library`, `Tool`, `Integration`, `Suite`, or `Template`.
+- `iconKey`: the required vendored Lucide icon ID used consistently in package lists, graph nodes, details, and package actions. IDs must be lowercase safe slugs and must exist in `com.deucarian.editor`'s icon catalog.
 - `description`: explanatory text shown in the detail pane.
 - `stableUrl`: the stable Git URL or UPM identifier passed to `UnityEditor.PackageManager.Client.Add`.
 - `developmentUrl`: optional development-channel Git URL or UPM identifier. If this is empty, the Development channel is disabled for that package.
-- `dependencies`: package IDs that should be installed before this package is installed, reinstalled, or updated. Integration packages are regular packages with the `Integration` package role and hard dependencies.
-- `optionalCompanions`: package IDs shown as optional integrations that should not be installed as required dependencies.
-- `groupId`: optional structural Ecosystem Graph group ID. Supported top-level IDs are `infrastructure`, `state-data`, `runtime-services`, `experience-interaction`, `tools-quality`, `integrations`, `gameplay`, `suites`, and `templates`. Registry-provided child groups such as `gameplay-foundations`, `gameplay-systems`, `gameplay-simulation`, `gameplay-frameworks`, `templates-games`, `templates-games-idle-auto-defense`, `templates-games-survivors`, and `templates-games-movement-fps` are supported through `parentGroupId`. If omitted, the graph falls back to `ecosystemGroup`, category, package type, and known package IDs.
-- `ecosystemGroup`: legacy optional overview-wheel sector override retained for older registries. Old values are normalized to the current group IDs without creating duplicate visible groups.
+- `dependencies`: package IDs installed before this package is installed, reinstalled, or updated.
+- `groupId`: the required functional domain group. Integrations and suites live beside their owners instead of occupying artifact-kind categories.
 - `overviewOrder`: optional positive integer used to order packages within their structural group orbit.
-- `integrationTargets`: optional package IDs used to place Integration nodes near the systems they connect.
-- `suiteMembers`: optional package IDs used to place Suite nodes near the packages they compose.
+- `integrationTargets`: required for Integration packages and backed by matching direct dependencies. Reverse integration context is derived from this field.
+- `suiteMembers`: required for Suite packages and exactly matched by the suite dependencies. Reverse suite membership is derived from this field.
+- `recommendedWith`: genuine non-required package recommendations.
+- `category`, `type`, and `ecosystemGroup`: one-release legacy projections ignored by schema-v2 classification and navigation.
 
-Set `stableUrl` and, when available, `developmentUrl` to the UPM identifier or Git URL. Integration packages should also list their dependency package IDs in `dependencies`.
+Set `stableUrl` and, when available, `developmentUrl` to the UPM identifier or Git URL. Schema-v2 registries are validated before they can replace a valid bundled or cached registry.
 
 Promoted packages in the bundled registry use stable Git `#main` URLs and development Git `#develop` URLs. For future pre-stable bootstrap packages whose GitHub repository does not yet have `main`, the bundled registry may intentionally set `stableUrl` equal to the verified `developmentUrl`.
 
@@ -259,6 +265,8 @@ Packages, groups, summaries, breadcrumbs, and back targets support keyboard focu
 
 Search preserves the graph's spatial map: root and category positions stay fixed, direct matches and their category path are emphasized, and unrelated results are muted. Installed and Not installed remain visibility filters, but filtered package slots stay reserved so the remaining graph does not reflow. Empty search/filter states provide a contextual recovery action without turning the graph into a new permanent control surface.
 
+Overview and category focus use neutral orbit rails with short attachment caps at each child instead of long spokes that can disappear behind animated cards. Package focus keeps structural membership buses continuous by routing around category captions, while dependency, integration, optional, and suite relationships retain their own stable visual treatment. Graph repaint schedules run only for finite camera and layout transitions; an open, idle graph does not maintain a background animation loop.
+
 ## Integration Packages
 
 Integration packages keep the core packages standalone while providing explicit composition packages for projects that want the combined behavior.
@@ -321,7 +329,7 @@ Keeping the installer editor-only ensures:
 
 ## Versioning
 
-Current package version: `1.1.69`.
+Current package version: `1.1.74`.
 
 Branch strategy:
 

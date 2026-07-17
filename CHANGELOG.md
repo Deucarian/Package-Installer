@@ -1,5 +1,43 @@
 # Changelog
 
+## 1.1.74 - 2026-07-18
+
+- Anchored focused category membership connectors to explicit ports on the visible category status ring and package-card edges.
+- Routed multi-package membership through padded orthogonal buses with centered card stems instead of overlapping card borders.
+- Routed downward category connections around external category captions so structural lines remain continuously visible.
+
+## 1.1.73 - 2026-07-17
+
+- Derived focused graph lanes from complete node and category bounds with consistent edge clearances instead of worst-case fixed center distances.
+- Included the full category caption footprint when spacing owning categories, related package rows, and category clusters.
+- Routed every structural category membership connection orthogonally, including single-package categories.
+- Added bundled-catalog coverage for every package focus and category focus across all 44 packages and 15 categories.
+
+## 1.1.72 - 2026-07-17
+
+- Removed decorative tangent caps from category orbit rails so package and nested-category cards no longer have disconnected protrusions.
+- Connected focused category membership routes from the complete category-card border to package cards, avoiding hidden caption crossings and inconsistent detours.
+- Resolved category hub icons through the same Lucide and legacy-registry compatibility path as package cards.
+
+## 1.1.71 - 2026-07-17
+
+- Completed Lucide icon coverage across Package Installer toolbars, package lists, details, actions, statuses, activity surfaces, recovery choices, and confirmations.
+- Added registry-to-package `iconKey` plumbing with exact semantic-ID preservation, legacy fallback behavior, and bundled-catalog validation against the shared Editor icon catalog.
+- Replaced native Unity confirmation popups with the responsive branded Editor dialog API and updated the Editor dependency to `1.0.4`.
+- Reworked category membership rendering into neutral orbit rails with short local attachment caps, routed focused membership buses continuously around captions, and removed the persistent semantic-edge repaint loop.
+
+## 1.1.70 - 2026-07-17
+
+- Added Package Registry schema v2 support with canonical Library, Tool, Integration, Suite, and Template kinds while retaining schema v1 compatibility.
+- Made registry `groupId` hierarchy and sort order authoritative for package navigation, and derived integration and suite graph relationships from their canonical targets and members.
+- Removed legacy category presentation and category-based package-kind and graph inference.
+- Aligned exact Editor and Logging dependencies with the coordinated portfolio patch release.
+- Updated bundled-registry and shared-Editor baseline coverage for the schema v2 portfolio contract.
+- Made graph empty-state popups size and wrap around arbitrary messages while keeping their recovery actions fully visible.
+- Prevented graph routes from showing through cards, hubs, symbols, and captions, and simplified structural membership routes around graph content.
+- Split shared membership routes wherever package statuses diverge so each branch retains its truthful status color.
+- Increased package-card action clearance and derived dense-layout spacing from card dimensions to prevent overlap as content grows.
+
 ## 1.1.69 - 2026-07-17
 
 - Automatically resume safe bulk package operations after an expected same-session Unity script reload, skipping completed or already-correct targets.

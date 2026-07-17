@@ -322,7 +322,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 "https://github.com/Deucarian/" + repositoryName + ".git#main",
                 "Cache test package.",
                 Array.Empty<string>(),
-                PackageType.Core,
+                PackageKind.Library,
                 "https://github.com/Deucarian/" + repositoryName + ".git#develop");
         }
     }

@@ -1,7 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using Deucarian.Editor;
 using NUnit.Framework;
 using UnityEditor.PackageManager;
 
@@ -69,12 +72,159 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.IsTrue(result.IsValid, result.ErrorMessage);
             Assert.AreEqual(PackageRegistrySource.Bundled, result.Source);
             Assert.AreEqual(2, result.Registry.packages.Length);
+
+            PackageDefinition[] definitions = PackageRegistryProvider
+                .CreatePackageDefinitions(result.Registry)
+                .Where(package => package.PackageId != PackageInstallerRuntimeIdentity.PackageId)
+                .ToArray();
+            Assert.AreEqual(PackageKind.Library, definitions[0].Kind);
+            Assert.AreEqual(PackageKind.Integration, definitions[1].Kind);
+        }
+
+        [Test]
+        public void CanonicalV2RegistryUsesKindGroupOrderAndCanonicalRelationships()
+        {
+            const string json =
+                "{ \"schemaVersion\": 2, \"groups\": [" +
+                "{ \"id\": \"tools\", \"displayName\": \"Tools & Quality\", \"sortOrder\": 10 }," +
+                "{ \"id\": \"runtime\", \"displayName\": \"Runtime Services\", \"sortOrder\": 20 }" +
+                "], \"packages\": [" +
+                "{ \"id\": \"com.deucarian.core\", \"displayName\": \"Core\", \"kind\": \"Library\", \"groupId\": \"runtime\", \"stableUrl\": \"https://example.com/core.git#main\", \"dependencies\": [], \"recommendedWith\": [\"com.deucarian.tool\"] }," +
+                "{ \"id\": \"com.deucarian.tool\", \"displayName\": \"Tool\", \"kind\": \"Tool\", \"groupId\": \"tools\", \"stableUrl\": \"https://example.com/tool.git#main\", \"dependencies\": [] }," +
+                "{ \"id\": \"com.deucarian.integration\", \"displayName\": \"Integration\", \"kind\": \"Integration\", \"groupId\": \"runtime\", \"stableUrl\": \"https://example.com/integration.git#main\", \"dependencies\": [\"com.deucarian.core\"], \"integrationTargets\": [\"com.deucarian.core\"] }," +
+                "{ \"id\": \"com.deucarian.suite\", \"displayName\": \"Suite\", \"kind\": \"Suite\", \"groupId\": \"runtime\", \"stableUrl\": \"https://example.com/suite.git#main\", \"dependencies\": [\"com.deucarian.core\", \"com.deucarian.integration\"], \"suiteMembers\": [\"com.deucarian.core\", \"com.deucarian.integration\"] }" +
+                "] }";
+
+            PackageRegistryLoadResult result = new PackageRegistryLoader()
+                .LoadFromJson(json, PackageRegistrySource.Bundled);
+            PackageDefinition[] packages = PackageRegistryProvider
+                .CreatePackageDefinitions(result.Registry)
+                .Where(package => package.PackageId != PackageInstallerRuntimeIdentity.PackageId)
+                .ToArray();
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(packages, PackageGraphHierarchyBuilder.CreateGroups(result.Registry.groups));
+
+            Assert.IsTrue(result.IsValid, result.ErrorMessage);
+            Assert.AreEqual(PackageKind.Library, packages.Single(package => package.PackageId == "com.deucarian.core").Kind);
+            Assert.AreEqual(PackageKind.Tool, packages.Single(package => package.PackageId == "com.deucarian.tool").Kind);
+            Assert.AreEqual(PackageKind.Integration, packages.Single(package => package.PackageId == "com.deucarian.integration").Kind);
+            Assert.AreEqual(PackageKind.Suite, packages.Single(package => package.PackageId == "com.deucarian.suite").Kind);
+            Assert.AreEqual("Runtime Services", packages.Single(package => package.PackageId == "com.deucarian.core").NavigationGroup);
+            CollectionAssert.AreEqual(
+                new[] { "Tools & Quality", "Runtime Services" },
+                PackageRegistryProvider.CreateOrderedNavigationGroups(
+                    packages,
+                    PackageGraphHierarchyBuilder.CreateGroups(result.Registry.groups)));
+            Assert.IsTrue(graph.Edges.Any(edge =>
+                edge.Kind == PackageGraphEdgeKind.IntegrationConnection &&
+                edge.FromPackageId == "com.deucarian.integration" &&
+                edge.ToPackageId == "com.deucarian.core"));
+            Assert.IsTrue(graph.Edges.Any(edge =>
+                edge.Kind == PackageGraphEdgeKind.SuiteMembership &&
+                edge.FromPackageId == "com.deucarian.suite" &&
+                edge.ToPackageId == "com.deucarian.integration"));
+            Assert.IsTrue(graph.Edges.Any(edge =>
+                edge.Kind == PackageGraphEdgeKind.Recommended &&
+                edge.FromPackageId == "com.deucarian.core" &&
+                edge.ToPackageId == "com.deucarian.tool"));
+            CollectionAssert.IsEmpty(packages.Single(package =>
+                package.PackageId == "com.deucarian.core").OptionalIntegrations);
+        }
+
+        [Test]
+        public void BridgedV2RegistryPrefersCanonicalKindOverLegacyClassification()
+        {
+            const string json =
+                "{ \"schemaVersion\": 2, \"groups\": [" +
+                "{ \"id\": \"templates\", \"displayName\": \"Templates / Games\", \"sortOrder\": 10 }" +
+                "], \"packages\": [" +
+                "{ \"id\": \"com.deucarian.template\", \"displayName\": \"Template\", \"kind\": \"Template\", \"groupId\": \"templates\", \"category\": \"Integration\", \"type\": \"Integration\", \"stableUrl\": \"https://example.com/template.git#main\", \"dependencies\": [] }" +
+                "] }";
+
+            PackageRegistryLoadResult result = new PackageRegistryLoader()
+                .LoadFromJson(json, PackageRegistrySource.Bundled);
+            PackageDefinition package = PackageRegistryProvider
+                .CreatePackageDefinitions(result.Registry)
+                .Single(definition => definition.PackageId == "com.deucarian.template");
+
+            Assert.IsTrue(result.IsValid, result.ErrorMessage);
+            Assert.AreEqual(PackageKind.Template, package.Kind);
+            Assert.IsTrue(package.IsTemplate);
+            Assert.IsFalse(package.IsIntegration);
+            Assert.AreEqual("Integration", package.Category);
+            Assert.AreEqual("Templates / Games", package.NavigationGroup);
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(
+                    new[] { package },
+                    PackageGraphHierarchyBuilder.CreateGroups(result.Registry.groups));
+            Assert.AreEqual(
+                PackageGraphNodeType.Template,
+                graph.Nodes.Single(node => node.PackageId == package.PackageId).NodeType);
+            Assert.AreEqual("Template", PackageGraphHierarchyDisplay.GetPackageKind(package));
+        }
+
+        [TestCase("", "Package com.deucarian.invalid has unknown kind")]
+        [TestCase("Unknown", "Package com.deucarian.invalid has unknown kind")]
+        [TestCase("0", "Package com.deucarian.invalid has unknown kind")]
+        public void CanonicalV2RegistryRejectsMissingOrUnknownKind(
+            string kind,
+            string expectedMessage)
+        {
+            string json =
+                "{ \"schemaVersion\": 2, \"groups\": [" +
+                "{ \"id\": \"runtime\", \"displayName\": \"Runtime\" }" +
+                "], \"packages\": [" +
+                "{ \"id\": \"com.deucarian.invalid\", \"displayName\": \"Invalid\", \"kind\": \"" + kind +
+                "\", \"groupId\": \"runtime\", \"stableUrl\": \"https://example.com/invalid.git#main\", \"dependencies\": [] }" +
+                "] }";
+
+            PackageRegistryLoadResult result = new PackageRegistryLoader()
+                .LoadFromJson(json, PackageRegistrySource.Bundled);
+
+            Assert.IsFalse(result.IsValid);
+            StringAssert.Contains(expectedMessage, result.ErrorMessage);
+        }
+
+        [Test]
+        public void CanonicalV2RegistryRequiresKnownGroupId()
+        {
+            const string json =
+                "{ \"schemaVersion\": 2, \"groups\": [" +
+                "{ \"id\": \"runtime\", \"displayName\": \"Runtime\" }" +
+                "], \"packages\": [" +
+                "{ \"id\": \"com.deucarian.invalid\", \"displayName\": \"Invalid\", \"kind\": \"Library\", \"groupId\": \"missing\", \"stableUrl\": \"https://example.com/invalid.git#main\", \"dependencies\": [] }" +
+                "] }";
+
+            PackageRegistryLoadResult result = new PackageRegistryLoader()
+                .LoadFromJson(json, PackageRegistrySource.Bundled);
+
+            Assert.IsFalse(result.IsValid);
+            StringAssert.Contains("references unknown groupId", result.ErrorMessage);
+        }
+
+        [Test]
+        public void CanonicalV2RegistryRejectsGroupDepthGreaterThanTwo()
+        {
+            const string json =
+                "{ \"schemaVersion\": 2, \"groups\": [" +
+                "{ \"id\": \"root\", \"displayName\": \"Root\" }," +
+                "{ \"id\": \"child\", \"displayName\": \"Child\", \"parentGroupId\": \"root\" }," +
+                "{ \"id\": \"grandchild\", \"displayName\": \"Grandchild\", \"parentGroupId\": \"child\" }" +
+                "], \"packages\": [" +
+                "{ \"id\": \"com.deucarian.invalid\", \"displayName\": \"Invalid\", \"kind\": \"Library\", \"groupId\": \"grandchild\", \"stableUrl\": \"https://example.com/invalid.git#main\", \"dependencies\": [] }" +
+                "] }";
+
+            PackageRegistryLoadResult result = new PackageRegistryLoader()
+                .LoadFromJson(json, PackageRegistrySource.Bundled);
+
+            Assert.IsFalse(result.IsValid);
+            StringAssert.Contains("maximum schemaVersion 2 depth of 2", result.ErrorMessage);
         }
 
         [Test]
         public void UnsupportedSchemaVersionIsRejected()
         {
-            string json = ValidRegistryJson.Replace("\"schemaVersion\": 1", "\"schemaVersion\": 2");
+            string json = ValidRegistryJson.Replace("\"schemaVersion\": 1", "\"schemaVersion\": 3");
 
             PackageRegistryLoadResult result = new PackageRegistryLoader()
                 .LoadFromJson(json, PackageRegistrySource.Bundled);
@@ -173,6 +323,27 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.IsEmpty(legacy.EcosystemGroup);
             Assert.AreEqual(0, legacy.OverviewOrder);
             Assert.IsFalse(legacy.HasOverviewOrder);
+        }
+
+        [Test]
+        public void PackageIconMetadataParsesAndMapsWithoutChangingSemanticIds()
+        {
+            const string explicitIconId = "server-cog";
+            string json =
+                "{ \"schemaVersion\": 1, \"packages\": [" +
+                "{ \"id\": \"com.deucarian.session\", \"displayName\": \"Session\", \"category\": \"Core\", \"stableUrl\": \"https://example.com/session.git#main\", \"iconKey\": \"  " + explicitIconId + "  \", \"dependencies\": [] }" +
+                "] }";
+
+            PackageRegistryLoadResult result = new PackageRegistryLoader()
+                .LoadFromJson(json, PackageRegistrySource.Bundled);
+            PackageRegistryEntry registryEntry = result.Registry.packages.Single();
+            PackageDefinition package = PackageRegistryProvider
+                .CreatePackageDefinitions(result.Registry)
+                .Single(definition => definition.PackageId == "com.deucarian.session");
+
+            Assert.IsTrue(result.IsValid, result.ErrorMessage);
+            Assert.AreEqual("  " + explicitIconId + "  ", registryEntry.iconKey);
+            Assert.AreEqual(explicitIconId, package.IconKey);
         }
 
         [Test]
@@ -475,12 +646,10 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 },
                 objectLoading.dependencies);
             CollectionAssert.AreEqual(
-                new[]
-                {
-                    "com.deucarian.diagnostics",
-                    "com.deucarian.object-loading.api-integration"
-                },
-                objectLoading.optionalCompanions);
+                new[] { "com.deucarian.diagnostics" },
+                objectLoading.recommendedWith);
+            Assert.IsNull(objectLoading.optionalCompanions);
+            Assert.IsNull(objectLoading.optionalIntegrations);
 
             PackageRegistryEntry integration = result.Registry.packages
                 .Single(package => package.id == "com.deucarian.object-loading.api-integration");
@@ -518,7 +687,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             PackageDefinition commonDefinition = PackageRegistryProvider
                 .CreatePackageDefinitions(result.Registry)
                 .Single(package => package.PackageId == "com.deucarian.common");
-            Assert.AreEqual(PackageType.Core, commonDefinition.PackageType);
+            Assert.AreEqual(PackageKind.Library, commonDefinition.Kind);
         }
 
         [Test]
@@ -637,6 +806,58 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void BundledRegistryIconMetadataUsesVendoredLucideIds()
+        {
+            PackageRegistryLoadResult result = new PackageRegistryLoader().LoadBundled();
+            Assert.IsTrue(result.IsValid, result.ErrorMessage);
+            Assert.IsNotNull(result.Registry);
+
+            var violations = new List<string>();
+            foreach (PackageRegistryGroupEntry group in result.Registry.groups ??
+                         Array.Empty<PackageRegistryGroupEntry>())
+            {
+                ValidateBundledIconKey("group " + (group?.id ?? "<null>"), group?.iconKey, violations);
+            }
+
+            foreach (PackageRegistryEntry package in result.Registry.packages ??
+                         Array.Empty<PackageRegistryEntry>())
+            {
+                ValidateBundledIconKey("package " + (package?.id ?? "<null>"), package?.iconKey, violations);
+            }
+
+            Assert.That(
+                violations,
+                Is.Empty,
+                "Every bundled registry group and package must use a safe, vendored Lucide icon ID:\n" +
+                string.Join("\n", violations));
+        }
+
+        private static void ValidateBundledIconKey(
+            string owner,
+            string iconKey,
+            ICollection<string> violations)
+        {
+            string normalized = iconKey?.Trim() ?? string.Empty;
+            if (normalized.Length == 0)
+            {
+                violations.Add(owner + " has no iconKey.");
+                return;
+            }
+
+            if (!string.Equals(iconKey, normalized, StringComparison.Ordinal) ||
+                !Regex.IsMatch(normalized, "^[a-z0-9]+(?:-[a-z0-9]+)*$"))
+            {
+                violations.Add(owner + " has unsafe iconKey '" + iconKey + "'.");
+                return;
+            }
+
+            if (!DeucarianEditorIcons.IsKnownIconId(normalized))
+            {
+                violations.Add(owner + " references unknown Lucide icon '" + normalized + "'.");
+            }
+        }
+
+        [Test]
         public void BundledRegistryIncludesPhase1ZGameplayGroupsAndPackages()
         {
             string registryJson = File.ReadAllText(GetBundledRegistryPath());
@@ -649,11 +870,12 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 {
                     "gameplay",
                     "gameplay-foundations",
-                    "gameplay-systems",
-                    "gameplay-simulation",
-                    "gameplay-frameworks",
-                    "tools-quality",
-                    "suites"
+                    "gameplay-progression-meta",
+                    "gameplay-combat-weapons",
+                    "gameplay-encounters-world",
+                    "gameplay-genre-frameworks",
+                    "state-data",
+                    "tools-quality"
                 },
                 result.Registry.groups.Select(group => group.id).ToArray());
             Assert.AreEqual(
@@ -670,12 +892,12 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
             PackageRegistryEntry persistence = result.Registry.packages
                 .Single(package => package.id == "com.deucarian.persistence");
-            Assert.AreEqual("gameplay-systems", persistence.groupId);
+            Assert.AreEqual("state-data", persistence.groupId);
             CollectionAssert.IsEmpty(persistence.dependencies);
 
             PackageRegistryEntry defenseGames = result.Registry.packages
                 .Single(package => package.id == "com.deucarian.defense-games");
-            Assert.AreEqual("gameplay-frameworks", defenseGames.groupId);
+            Assert.AreEqual("gameplay-genre-frameworks", defenseGames.groupId);
             CollectionAssert.AreEqual(
                 new[]
                 {
@@ -707,7 +929,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 .Single(package => package.id == "com.deucarian.auto-defense-suite");
             Assert.AreEqual("Suites", suite.category);
             Assert.AreEqual("Suite", suite.type);
-            Assert.AreEqual("suites", suite.groupId);
+            Assert.AreEqual("gameplay-genre-frameworks", suite.groupId);
             CollectionAssert.AreEqual(AutoDefenseSuiteMembers, suite.dependencies);
             CollectionAssert.AreEqual(AutoDefenseSuiteMembers, suite.suiteMembers);
             CollectionAssert.DoesNotContain(suite.dependencies, "com.deucarian.test-automation");
@@ -725,10 +947,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 new[]
                 {
                     "templates",
-                    "templates-games",
-                    "templates-games-idle-auto-defense",
-                    "templates-games-survivors",
-                    "templates-games-movement-fps"
+                    "templates-games"
                 },
                 result.Registry.groups.Select(group => group.id).ToArray());
             Assert.AreEqual(
@@ -737,29 +956,27 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual(
                 "templates",
                 result.Registry.groups.Single(group => group.id == "templates-games").parentGroupId);
-            Assert.AreEqual(
-                "templates-games",
-                result.Registry.groups.Single(group => group.id == "templates-games-idle-auto-defense").parentGroupId);
-            Assert.AreEqual(
-                "templates-games",
-                result.Registry.groups.Single(group => group.id == "templates-games-movement-fps").parentGroupId);
+            Assert.IsFalse(result.Registry.groups.Any(group =>
+                group.parentGroupId == "templates-games"));
 
             PackageRegistryEntry template = result.Registry.packages
                 .Single(package => package.id == TemplatePackageId);
             Assert.AreEqual("Templates", template.category);
             Assert.AreEqual("Template", template.type);
             Assert.AreEqual("Templates", template.ecosystemGroup);
-            Assert.AreEqual("templates-games-idle-auto-defense", template.groupId);
-            CollectionAssert.AreEqual(
-                new[]
+            Assert.AreEqual("templates-games", template.groupId);
+            string[] expectedTemplateDependencies = AutoDefenseSuiteMembers
+                .Concat(new[]
                 {
                     "com.deucarian.auto-defense-suite",
+                    "com.deucarian.common",
                     EditorPackageId,
                     GameContentAuthoringPackageId,
-                    GameplayFoundationPackageId,
                     MonetizationPackageId
-                },
-                template.dependencies);
+                })
+                .OrderBy(packageId => packageId, StringComparer.Ordinal)
+                .ToArray();
+            CollectionAssert.AreEqual(expectedTemplateDependencies, template.dependencies);
             StringAssert.Contains(
                 "Template-Game-Idle-Auto-Defense.git#main",
                 template.stableUrl);
@@ -776,13 +993,15 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.IsFalse(definition.IsIntegration);
             Assert.AreEqual("Templates", definition.Category);
             Assert.AreEqual("Template", definition.MetadataType);
+            Assert.AreEqual(PackageKind.Template, definition.Kind);
+            Assert.AreEqual("Templates / Games", definition.NavigationGroup);
 
             PackageRegistryEntry survivorsTemplate = result.Registry.packages
                 .Single(package => package.id == SurvivorsTemplatePackageId);
             Assert.AreEqual("Templates", survivorsTemplate.category);
             Assert.AreEqual("Template", survivorsTemplate.type);
             Assert.AreEqual("Templates", survivorsTemplate.ecosystemGroup);
-            Assert.AreEqual("templates-games-survivors", survivorsTemplate.groupId);
+            Assert.AreEqual("templates-games", survivorsTemplate.groupId);
             CollectionAssert.Contains(survivorsTemplate.dependencies, GameContentAuthoringPackageId);
             StringAssert.Contains(
                 "Template-Game-Survivors.git#main",
@@ -796,7 +1015,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual("Templates", movementFpsTemplate.category);
             Assert.AreEqual("Template", movementFpsTemplate.type);
             Assert.AreEqual("Templates", movementFpsTemplate.ecosystemGroup);
-            Assert.AreEqual("templates-games-movement-fps", movementFpsTemplate.groupId);
+            Assert.AreEqual("templates-games", movementFpsTemplate.groupId);
             CollectionAssert.Contains(movementFpsTemplate.dependencies, "com.deucarian.run-upgrades");
             StringAssert.Contains(
                 "Template-Game-Movement-FPS.git#main",

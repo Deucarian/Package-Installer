@@ -15,6 +15,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static PackageRegistryLoadResult _currentLoadResult;
         private static IReadOnlyList<PackageDefinition> _allPackages = EmptyPackages;
+        private static IReadOnlyList<string> _orderedNavigationGroups = Array.Empty<string>();
         private static IReadOnlyDictionary<string, PackageDefinition> _packageById =
             new Dictionary<string, PackageDefinition>(StringComparer.OrdinalIgnoreCase);
         private static IReadOnlyList<PackageGraphGroup> _ecosystemGroups =
@@ -45,7 +46,7 @@ namespace Deucarian.PackageInstaller.Editor
             All.Where(package => !package.IsIntegration).ToArray();
 
         public static IReadOnlyList<PackageDefinition> IntegrationPackages =>
-            GetPackagesByCategory("Integration");
+            All.Where(package => package.Kind == PackageKind.Integration).ToArray();
 
         public static IReadOnlyList<PackageGraphGroup> EcosystemGroups
         {
@@ -56,13 +57,14 @@ namespace Deucarian.PackageInstaller.Editor
             }
         }
 
-        public static IReadOnlyList<string> Categories =>
-            All.Select(package => package.Category)
-                .Where(category => !string.IsNullOrWhiteSpace(category))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(GetCategorySortIndex)
-                .ThenBy(category => category, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
+        public static IReadOnlyList<string> Categories
+        {
+            get
+            {
+                EnsureLoaded();
+                return _orderedNavigationGroups;
+            }
+        }
 
         public static PackageRegistryLoadResult CurrentLoadResult
         {
@@ -131,7 +133,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             return _allPackages
                 .Where(package => string.Equals(
-                    package.Category,
+                    package.NavigationGroup,
                     category,
                     StringComparison.OrdinalIgnoreCase))
                 .ToArray();
@@ -170,17 +172,25 @@ namespace Deucarian.PackageInstaller.Editor
                 return new[] { CreateInstallerPackageDefinition() };
             }
 
+            IReadOnlyList<PackageGraphGroup> groups =
+                PackageGraphHierarchyBuilder.CreateGroups(registry.groups);
             PackageDefinition[] packageDefinitions = registry.packages
                 .Where(entry => entry != null)
-                .Select(CreatePackageDefinition)
+                .Select(entry => CreatePackageDefinition(entry, groups))
                 .ToArray();
 
             return EnsureInstallerPackageDefinition(packageDefinitions);
         }
 
-        private static PackageDefinition CreatePackageDefinition(PackageRegistryEntry entry)
+        private static PackageDefinition CreatePackageDefinition(
+            PackageRegistryEntry entry,
+            IReadOnlyList<PackageGraphGroup> groups)
         {
             string category = entry.category != null ? entry.category.Trim() : string.Empty;
+            PackageKind kind = PackageKindParser.Parse(entry.kind, entry.type, category);
+            string navigationGroup = PackageGraphHierarchyBuilder.GetGroupPath(
+                groups,
+                entry.groupId);
 
             return new PackageDefinition(
                 entry.displayName,
@@ -188,7 +198,7 @@ namespace Deucarian.PackageInstaller.Editor
                 entry.stableUrl,
                 entry.description,
                 entry.dependencies,
-                ParsePackageType(category),
+                kind,
                 entry.developmentUrl,
                 optionalCompanions: entry.optionalCompanions,
                 category: category,
@@ -201,7 +211,9 @@ namespace Deucarian.PackageInstaller.Editor
                 groupId: entry.groupId,
                 overviewOrder: entry.overviewOrder,
                 searchAliases: entry.searchAliases,
-                searchTags: entry.searchTags);
+                searchTags: entry.searchTags,
+                navigationGroup: navigationGroup,
+                iconKey: entry.iconKey);
         }
 
         private static IReadOnlyList<PackageDefinition> EnsureInstallerPackageDefinition(
@@ -228,7 +240,7 @@ namespace Deucarian.PackageInstaller.Editor
                 "https://github.com/Deucarian/Package-Installer.git#main",
                 "Editor installer window for installing and composing Deucarian Unity UPM packages.",
                 Array.Empty<string>(),
-                PackageType.Core,
+                PackageKind.Tool,
                 "https://github.com/Deucarian/Package-Installer.git#develop",
                 category: "Tools",
                 metadataType: "Tool",
@@ -236,22 +248,9 @@ namespace Deucarian.PackageInstaller.Editor
                 groupId: PackageGraphHierarchyBuilder.ToolsQualityGroupId,
                 overviewOrder: 20,
                 searchAliases: new[] { "installer" },
-                searchTags: new[] { "package-management", "upm" });
-        }
-
-        private static PackageType ParsePackageType(string category)
-        {
-            if (string.Equals(category, "UI", StringComparison.OrdinalIgnoreCase))
-            {
-                return PackageType.UI;
-            }
-
-            if (string.Equals(category, "Integration", StringComparison.OrdinalIgnoreCase))
-            {
-                return PackageType.Integration;
-            }
-
-            return PackageType.Core;
+                searchTags: new[] { "package-management", "upm" },
+                navigationGroup: "Tools & Quality",
+                iconKey: "package-plus");
         }
 
         private static void StartRemoteRefresh(bool replaceExisting = false)
@@ -375,14 +374,18 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (result.IsValid && result.Registry != null)
             {
+                _ecosystemGroups = PackageGraphHierarchyBuilder.CreateGroups(result.Registry.groups);
                 _allPackages = CreatePackageDefinitions(result.Registry);
+                _orderedNavigationGroups = CreateOrderedNavigationGroups(
+                    _allPackages,
+                    _ecosystemGroups);
                 // Registry reloads are the invalidation point for package ID lookup and graph structure caches.
                 _packageById = CreatePackageById(_allPackages);
-                _ecosystemGroups = PackageGraphHierarchyBuilder.CreateGroups(result.Registry.groups);
             }
             else if (_allPackages == null)
             {
                 _allPackages = EmptyPackages;
+                _orderedNavigationGroups = Array.Empty<string>();
                 _packageById = CreatePackageById(_allPackages);
                 _ecosystemGroups = PackageGraphHierarchyBuilder.CreateGroups((IEnumerable<PackageGraphGroup>)null);
             }
@@ -445,6 +448,7 @@ namespace Deucarian.PackageInstaller.Editor
             _loader = loader;
             _currentLoadResult = null;
             _allPackages = EmptyPackages;
+            _orderedNavigationGroups = Array.Empty<string>();
             _packageById = new Dictionary<string, PackageDefinition>(StringComparer.OrdinalIgnoreCase);
             _ecosystemGroups = PackageGraphHierarchyBuilder.CreateGroups(
                 (IEnumerable<PackageGraphGroup>)null);
@@ -516,44 +520,32 @@ namespace Deucarian.PackageInstaller.Editor
             return packageById;
         }
 
-        private static int GetCategorySortIndex(string category)
+        internal static IReadOnlyList<string> CreateOrderedNavigationGroups(
+            IEnumerable<PackageDefinition> packages,
+            IEnumerable<PackageGraphGroup> groups)
         {
-            if (string.Equals(category, "Core", StringComparison.OrdinalIgnoreCase))
-            {
-                return 0;
-            }
+            PackageDefinition[] definitions = (packages ?? EmptyPackages)
+                .Where(package => package != null)
+                .ToArray();
+            IReadOnlyList<PackageGraphGroup> orderedGroups =
+                PackageGraphHierarchyBuilder.CreateGroups(groups);
+            string[] orderedPaths = orderedGroups
+                .Select(group => PackageGraphHierarchyBuilder.GetGroupPath(orderedGroups, group.Id))
+                .Where(path => definitions.Any(package => string.Equals(
+                    package.NavigationGroup,
+                    path,
+                    StringComparison.OrdinalIgnoreCase)))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
 
-            if (string.Equals(category, "UI", StringComparison.OrdinalIgnoreCase))
-            {
-                return 1;
-            }
-
-            if (string.Equals(category, "World", StringComparison.OrdinalIgnoreCase))
-            {
-                return 2;
-            }
-
-            if (string.Equals(category, "Tools", StringComparison.OrdinalIgnoreCase))
-            {
-                return 3;
-            }
-
-            if (string.Equals(category, "Integration", StringComparison.OrdinalIgnoreCase))
-            {
-                return 4;
-            }
-
-            if (string.Equals(category, "Suites", StringComparison.OrdinalIgnoreCase))
-            {
-                return 5;
-            }
-
-            if (string.Equals(category, "Templates", StringComparison.OrdinalIgnoreCase))
-            {
-                return 6;
-            }
-
-            return 7;
+            return orderedPaths
+                .Concat(definitions
+                    .Select(package => package.NavigationGroup)
+                    .Where(group => !string.IsNullOrWhiteSpace(group) &&
+                                    !orderedPaths.Contains(group, StringComparer.OrdinalIgnoreCase))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(group => group, StringComparer.OrdinalIgnoreCase))
+                .ToArray();
         }
     }
 }
