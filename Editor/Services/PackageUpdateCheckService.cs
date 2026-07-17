@@ -152,6 +152,8 @@ namespace Deucarian.PackageInstaller.Editor
         private readonly PackageDetectionService _packageDetectionService;
         private readonly PackageRegistryRemoteFetchDelegate _packageManifestFetcher;
         private readonly TimeSpan _packageManifestTimeout;
+        private readonly PackageUpdateCheckCache _updateCheckCache;
+        private readonly PackageInstallerStateRepository _stateRepository;
         private static readonly Dictionary<string, PackageUpdateStatus> Statuses =
             new Dictionary<string, PackageUpdateStatus>(StringComparer.OrdinalIgnoreCase);
         private static readonly Dictionary<string, TargetedUpdateCheckRequest> PendingTargetedChecks =
@@ -181,6 +183,11 @@ namespace Deucarian.PackageInstaller.Editor
         private static bool IsTargetedUpdateRegistered;
         private static string LastFailureMessageValue = string.Empty;
         private static string LastStatusMessageValue = string.Empty;
+        private static DateTime? LastCheckedUtcValue;
+        private static string ActiveManifestSignature = string.Empty;
+        private static PackageUpdateCheckCache ActiveUpdateCheckCache;
+        private static PackageInstallerStateRepository ActiveStateRepository;
+        private static bool DefaultCacheEnabled = true;
         private static event Action SharedStateChanged;
         internal static Func<PackageDefinition, PackageChannel, string, PackageVersionResult> GitPackageVersionResolverForTests;
         internal static Func<string, CancellationToken, int, GitProcessResult> GitProcessRunnerForTests;
@@ -189,7 +196,10 @@ namespace Deucarian.PackageInstaller.Editor
             : this(
                 packageDetectionService,
                 PackageRegistryRemoteFetch.FetchAsync,
-                TimeSpan.FromMilliseconds(PackageManifestTimeoutMilliseconds))
+                TimeSpan.FromMilliseconds(PackageManifestTimeoutMilliseconds),
+                new PackageUpdateCheckCache(),
+                new PackageInstallerStateRepository(),
+                DefaultCacheEnabled)
         {
         }
 
@@ -197,15 +207,53 @@ namespace Deucarian.PackageInstaller.Editor
             PackageDetectionService packageDetectionService,
             PackageRegistryRemoteFetchDelegate packageManifestFetcher,
             TimeSpan packageManifestTimeout)
+            : this(
+                packageDetectionService,
+                packageManifestFetcher,
+                packageManifestTimeout,
+                new PackageUpdateCheckCache(),
+                new PackageInstallerStateRepository(),
+                DefaultCacheEnabled)
+        {
+        }
+
+        internal PackageUpdateCheckService(
+            PackageDetectionService packageDetectionService,
+            PackageRegistryRemoteFetchDelegate packageManifestFetcher,
+            TimeSpan packageManifestTimeout,
+            PackageUpdateCheckCache updateCheckCache,
+            PackageInstallerStateRepository stateRepository)
+            : this(
+                packageDetectionService,
+                packageManifestFetcher,
+                packageManifestTimeout,
+                updateCheckCache,
+                stateRepository,
+                enableCache: true)
+        {
+        }
+
+        private PackageUpdateCheckService(
+            PackageDetectionService packageDetectionService,
+            PackageRegistryRemoteFetchDelegate packageManifestFetcher,
+            TimeSpan packageManifestTimeout,
+            PackageUpdateCheckCache updateCheckCache,
+            PackageInstallerStateRepository stateRepository,
+            bool enableCache)
         {
             _packageDetectionService = packageDetectionService ?? throw new ArgumentNullException(nameof(packageDetectionService));
             _packageManifestFetcher = packageManifestFetcher ?? PackageRegistryRemoteFetch.FetchAsync;
             _packageManifestTimeout = packageManifestTimeout > TimeSpan.Zero
                 ? packageManifestTimeout
                 : TimeSpan.FromMilliseconds(PackageManifestTimeoutMilliseconds);
+            _updateCheckCache = updateCheckCache ?? throw new ArgumentNullException(nameof(updateCheckCache));
+            _stateRepository = stateRepository ?? throw new ArgumentNullException(nameof(stateRepository));
             _packageLockPaths = GetPackageLockPaths();
             _sharedStateChangedHandler = NotifyStateChanged;
             SharedStateChanged += _sharedStateChangedHandler;
+            ActiveUpdateCheckCache = enableCache ? _updateCheckCache : null;
+            ActiveStateRepository = _stateRepository;
+            RestoreCachedState();
         }
 
         public event Action StateChanged;
@@ -220,11 +268,106 @@ namespace Deucarian.PackageInstaller.Editor
 
         public bool HasStatuses => Statuses.Count > 0;
 
-        public DateTime? LastCheckedUtc => PackageUpdateCheckPreferences.LastCheckedUtc;
+        public DateTime? LastCheckedUtc => LastCheckedUtcValue;
 
         public string LastFailureMessage => LastFailureMessageValue;
 
         public string LastStatusMessage => LastStatusMessageValue;
+
+        private static void RestoreCachedState()
+        {
+            if (ActiveUpdateCheckCache == null || ActiveStateRepository == null)
+            {
+                return;
+            }
+
+            string manifestSignature = ActiveStateRepository.GetManifestStateSignature();
+
+            if (!string.Equals(
+                    ActiveManifestSignature,
+                    manifestSignature,
+                    StringComparison.Ordinal))
+            {
+                Statuses.Clear();
+                LastCheckedUtcValue = null;
+                LastFailureMessageValue = string.Empty;
+                LastStatusMessageValue = string.Empty;
+                ActiveManifestSignature = manifestSignature;
+            }
+
+            if (IsAnyCheckRunning)
+            {
+                return;
+            }
+
+            if (!ActiveUpdateCheckCache.TryRead(
+                    manifestSignature,
+                    out PackageUpdateCheckCacheSnapshot snapshot,
+                    out string errorMessage))
+            {
+                if (!string.IsNullOrWhiteSpace(errorMessage))
+                {
+                    PackageInstallerLog.UpdateChecks.Warning(errorMessage);
+                }
+
+                return;
+            }
+
+            foreach (PackageUpdateStatus cachedStatus in snapshot.Statuses)
+            {
+                if (!Statuses.TryGetValue(
+                        cachedStatus.PackageId,
+                        out PackageUpdateStatus currentStatus) ||
+                    !PackageUpdateCheckCache.IsPersistable(currentStatus))
+                {
+                    Statuses[cachedStatus.PackageId] = cachedStatus;
+                }
+            }
+
+            if (!LastCheckedUtcValue.HasValue ||
+                (snapshot.LastCheckedUtc.HasValue &&
+                 snapshot.LastCheckedUtc.Value >= LastCheckedUtcValue.Value))
+            {
+                LastCheckedUtcValue = snapshot.LastCheckedUtc;
+                LastFailureMessageValue = snapshot.LastFailureMessage;
+                LastStatusMessageValue = snapshot.LastStatusMessage;
+            }
+        }
+
+        private static void PersistCachedState()
+        {
+            if (ActiveUpdateCheckCache == null)
+            {
+                return;
+            }
+
+            string manifestSignature = ActiveStateRepository != null
+                ? ActiveStateRepository.GetManifestStateSignature()
+                : ActiveManifestSignature;
+            ActiveManifestSignature = manifestSignature;
+
+            if (!ActiveUpdateCheckCache.TryWrite(
+                    manifestSignature,
+                    LastCheckedUtcValue,
+                    LastStatusMessageValue,
+                    LastFailureMessageValue,
+                    Statuses.Values,
+                    out string errorMessage) &&
+                !string.IsNullOrWhiteSpace(errorMessage))
+            {
+                PackageInstallerLog.UpdateChecks.Warning(errorMessage);
+            }
+        }
+
+        private static void DeleteCachedState()
+        {
+            if (ActiveUpdateCheckCache != null &&
+                !ActiveUpdateCheckCache.TryDelete(out string errorMessage) &&
+                !string.IsNullOrWhiteSpace(errorMessage))
+            {
+                PackageInstallerLog.UpdateChecks.Warning(errorMessage);
+            }
+        }
 
         public void CheckForUpdates(
             IEnumerable<PackageDefinition> packageDefinitions,
@@ -373,6 +516,7 @@ namespace Deucarian.PackageInstaller.Editor
                 RegisterPackageIntent(packageId, channel, selectedUrl);
                 CancelTargetedCheck(packageId);
                 Statuses[packageId] = PackageUpdateStatus.Unknown(packageDefinition, channel);
+                PersistCachedState();
                 NotifySharedStateChanged();
                 return;
             }
@@ -382,6 +526,7 @@ namespace Deucarian.PackageInstaller.Editor
                 RegisterPackageIntent(packageId, channel, selectedUrl);
                 CancelTargetedCheck(packageId);
                 Statuses[packageId] = PackageUpdateStatus.NotInstalled(packageDefinition, channel, selectedUrl);
+                PersistCachedState();
                 NotifySharedStateChanged();
                 return;
             }
@@ -528,17 +673,36 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (Statuses.Remove(packageId))
             {
+                PersistCachedState();
                 NotifySharedStateChanged();
             }
         }
 
         public void InvalidateAll()
         {
+            InvalidateAll(deletePersistedState: true);
+        }
+
+        public void PrepareForUpdateCheck()
+        {
+            InvalidateAll(deletePersistedState: false);
+        }
+
+        private void InvalidateAll(bool deletePersistedState)
+        {
             if (Statuses.Count == 0 &&
                 LatestCheckIntents.Count == 0 &&
                 !HasTargetedChecks &&
                 !IsChecking)
             {
+                if (deletePersistedState)
+                {
+                    LastCheckedUtcValue = null;
+                    LastFailureMessageValue = string.Empty;
+                    LastStatusMessageValue = string.Empty;
+                    DeleteCachedState();
+                }
+
                 return;
             }
 
@@ -577,6 +741,124 @@ namespace Deucarian.PackageInstaller.Editor
             UnregisterTargetedUpdateIfIdle();
             LastFailureMessageValue = string.Empty;
             LastStatusMessageValue = string.Empty;
+
+            if (deletePersistedState)
+            {
+                LastCheckedUtcValue = null;
+                DeleteCachedState();
+            }
+
+            NotifySharedStateChanged();
+        }
+
+        public bool InvalidateIfManifestStateChanged()
+        {
+            string manifestSignature = _stateRepository.GetManifestStateSignature();
+
+            if (string.Equals(
+                    ActiveManifestSignature,
+                    manifestSignature,
+                    StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            ActiveManifestSignature = manifestSignature;
+            InvalidateAll();
+            return true;
+        }
+
+        public void ReconcileCachedStatuses(
+            IEnumerable<PackageDefinition> packageDefinitions,
+            Func<PackageDefinition, PackageChannel> channelSelector)
+        {
+            ReconcileCachedStatuses(
+                packageDefinitions,
+                channelSelector,
+                requireSuccessfulDetection: true);
+        }
+
+        internal void ReconcileCachedStatusesForTests(
+            IEnumerable<PackageDefinition> packageDefinitions,
+            Func<PackageDefinition, PackageChannel> channelSelector)
+        {
+            ReconcileCachedStatuses(
+                packageDefinitions,
+                channelSelector,
+                requireSuccessfulDetection: false);
+        }
+
+        private void ReconcileCachedStatuses(
+            IEnumerable<PackageDefinition> packageDefinitions,
+            Func<PackageDefinition, PackageChannel> channelSelector,
+            bool requireSuccessfulDetection)
+        {
+            if (IsAnyCheckRunning ||
+                (requireSuccessfulDetection && !_packageDetectionService.HasSuccessfulRefresh))
+            {
+                return;
+            }
+
+            Dictionary<string, PackageDefinition> packagesById =
+                new Dictionary<string, PackageDefinition>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (PackageDefinition packageDefinition in
+                     packageDefinitions ?? Array.Empty<PackageDefinition>())
+            {
+                if (packageDefinition != null &&
+                    !string.IsNullOrWhiteSpace(packageDefinition.PackageId))
+                {
+                    packagesById[packageDefinition.PackageId] = packageDefinition;
+                }
+            }
+
+            bool changed = false;
+
+            foreach (string packageId in Statuses.Keys.ToArray())
+            {
+                PackageUpdateStatus status = Statuses[packageId];
+
+                if (!PackageUpdateCheckCache.IsPersistable(status))
+                {
+                    continue;
+                }
+
+                if (!packagesById.TryGetValue(packageId, out PackageDefinition packageDefinition))
+                {
+                    Statuses.Remove(packageId);
+                    changed = true;
+                    continue;
+                }
+
+                PackageChannel channel = channelSelector != null
+                    ? channelSelector(packageDefinition)
+                    : PackageChannel.Stable;
+                string selectedUrl = packageDefinition.GetUrl(channel);
+
+                if (status.Channel != channel ||
+                    !string.Equals(status.SelectedUrl, selectedUrl, StringComparison.Ordinal))
+                {
+                    Statuses.Remove(packageId);
+                    changed = true;
+                    continue;
+                }
+
+                if (!string.Equals(
+                        status.DisplayName,
+                        packageDefinition.DisplayName,
+                        StringComparison.Ordinal))
+                {
+                    Statuses[packageId] = status.WithPackageDefinition(packageDefinition);
+                    changed = true;
+                }
+            }
+
+            if (!changed)
+            {
+                return;
+            }
+
+            PersistCachedState();
             NotifySharedStateChanged();
         }
 
@@ -1693,6 +1975,7 @@ namespace Deucarian.PackageInstaller.Editor
                         LogStatus(status);
                     }
 
+                    PersistCachedState();
                     NotifySharedStateChanged();
                 }
             }
@@ -1736,6 +2019,11 @@ namespace Deucarian.PackageInstaller.Editor
 
         internal static bool HasTargetedChecksForTests => HasTargetedChecks;
 
+        internal static void SetDefaultCacheEnabledForTests(bool enabled)
+        {
+            DefaultCacheEnabled = enabled;
+        }
+
         internal static void ResetForTests()
         {
             CheckCancellation?.Cancel();
@@ -1761,6 +2049,10 @@ namespace Deucarian.PackageInstaller.Editor
             }
             LastFailureMessageValue = string.Empty;
             LastStatusMessageValue = string.Empty;
+            LastCheckedUtcValue = null;
+            ActiveManifestSignature = string.Empty;
+            ActiveUpdateCheckCache = null;
+            ActiveStateRepository = null;
             CheckGeneration++;
             ActiveCheckGeneration = CheckGeneration;
             PublishedCheckResults = 0;
@@ -1790,11 +2082,12 @@ namespace Deucarian.PackageInstaller.Editor
                 retryKind: string.IsNullOrWhiteSpace(LastFailureMessageValue)
                     ? PackageInstallerRetryKind.None
                     : PackageInstallerRetryKind.CheckUpdates);
-            PackageUpdateCheckPreferences.LastCheckedUtc = DateTime.UtcNow;
+            LastCheckedUtcValue = DateTime.UtcNow;
             CheckTask = null;
             ActiveCheckItems = Array.Empty<ScheduledUpdateCheck>();
             PublishedCheckResults = 0;
             IncrementallyPublishedIntentSequences.Clear();
+            PersistCachedState();
             NotifySharedStateChanged();
         }
 
