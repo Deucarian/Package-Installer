@@ -136,6 +136,7 @@ namespace Deucarian.PackageInstaller.Editor
                 }
 
                 _checkStarted = true;
+                _packageUpdateCheckService.PrepareForUpdateCheck();
                 _packageUpdateCheckService.CheckForUpdates(
                     PackageRegistryProvider.All,
                     ResolveSelectedChannel);
