@@ -4,7 +4,6 @@ using UnityEngine;
 
 namespace Deucarian.PackageInstaller.Editor
 {
-    [InitializeOnLoad]
     internal static class PackageOperationAutoResumeState
     {
         private const int CurrentSchemaVersion = 1;
