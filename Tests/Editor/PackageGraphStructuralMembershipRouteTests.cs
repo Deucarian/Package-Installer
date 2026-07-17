@@ -122,7 +122,6 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         {
             return CreateRoute(
                 CenteredRect(700f, 450f, 220f, 760f),
-                CenteredRect(700f, 450f, 80f, 80f),
                 new[]
                 {
                     PackageRect(AttentionFirstId, 100f, 100f),
@@ -136,7 +135,6 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         {
             return CreateRoute(
                 CenteredRect(450f, 700f, 760f, 220f),
-                CenteredRect(450f, 700f, 80f, 80f),
                 new[]
                 {
                     PackageRect(AttentionFirstId, 100f, 100f),
@@ -148,7 +146,6 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
         private static PackageGraphStructuralMembershipRoute CreateRoute(
             Rect groupRect,
-            Rect groupHubRect,
             IReadOnlyList<KeyValuePair<string, Rect>> packageRects)
         {
             MethodInfo method = typeof(PackageGraphMembershipLayer).GetMethod(
@@ -157,7 +154,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.IsNotNull(method, "Structural membership route factory was not found.");
             return (PackageGraphStructuralMembershipRoute)method.Invoke(
                 null,
-                new object[] { "tools-quality", groupRect, groupHubRect, packageRects });
+                new object[] { "tools-quality", groupRect, packageRects });
         }
 
         private static PackageGraphCategoryStatusKey ResolveSegmentStatus(

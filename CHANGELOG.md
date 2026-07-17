@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.72 - 2026-07-17
+
+- Removed decorative tangent caps from category orbit rails so package and nested-category cards no longer have disconnected protrusions.
+- Connected focused category membership routes from the complete category-card border to package cards, avoiding hidden caption crossings and inconsistent detours.
+- Resolved category hub icons through the same Lucide and legacy-registry compatibility path as package cards.
+
 ## 1.1.71 - 2026-07-17
 
 - Completed Lucide icon coverage across Package Installer toolbars, package lists, details, actions, statuses, activity surfaces, recovery choices, and confirmations.
