@@ -135,6 +135,11 @@ namespace Deucarian.PackageInstaller.Editor
             step.State == PackageInstallProgressItemState.Failed ||
             step.State == PackageInstallProgressItemState.Blocked);
 
+        public bool RequiresManualRecovery => Steps.Any(step =>
+            step.State == PackageInstallProgressItemState.Failed ||
+            step.State == PackageInstallProgressItemState.Blocked ||
+            step.State == PackageInstallProgressItemState.Canceled);
+
         public bool HasCompletedSteps => Steps.Any(step =>
             step.State == PackageInstallProgressItemState.Completed ||
             step.State == PackageInstallProgressItemState.AlreadyCorrect);

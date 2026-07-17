@@ -888,6 +888,7 @@ namespace Deucarian.PackageInstaller.Editor
         public void Dispose()
         {
             EditorApplication.update -= Update;
+            PackageOperationAutoResumeState.DetachOperation(_currentOperationId);
         }
 
         internal void UpdateForTests()
@@ -1028,6 +1029,11 @@ namespace Deucarian.PackageInstaller.Editor
             PackageDefinition completedPackage = _currentInstall != null ? _currentInstall.PackageDefinition : null;
 
             ReconcileSelfUpdateAfterInstallForTests(completedPackage, success);
+
+            if (!success)
+            {
+                PackageOperationAutoResumeState.DisqualifyOperation(_currentOperationId);
+            }
 
             if (completedPackage != null)
             {
@@ -1183,6 +1189,10 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             _totalSteps = _progressItems.Count;
+            PackageOperationAutoResumeState.TrackActiveOperation(
+                _currentOperationId,
+                _currentRegistryFingerprint,
+                plan != null && plan.IsBulk);
         }
 
         private void MarkProgressItem(
@@ -1594,6 +1604,7 @@ namespace Deucarian.PackageInstaller.Editor
         private static void ClearSavedOperationState(PackageOperationStateRepository repository)
         {
             repository?.Clear();
+            PackageOperationAutoResumeState.Clear();
             ClearLegacySavedOperationState();
         }
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.69 - 2026-07-17
+
+- Automatically resume safe bulk package operations after an expected same-session Unity script reload, skipping completed or already-correct targets.
+- Keep manual recovery for editor restarts, registry drift, invalid state, failures, blocked steps, and cancellations.
+
 ## 1.1.67 - 2026-07-16
 
 - Refreshed the bundled Package Registry catalog with Build Pipeline capability ownership and its direct Deucarian Editor and Logging dependencies.
