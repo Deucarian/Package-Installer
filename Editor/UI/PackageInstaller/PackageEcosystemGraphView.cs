@@ -216,6 +216,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             _emptyState = new VisualElement();
             _emptyState.AddToClassList("dpi-ecosystem-graph__empty-state");
+            _emptyState.RegisterCallback<GeometryChangedEvent>(HandleEmptyStateGeometryChanged);
             _emptyStateTitle = new Label();
             _emptyStateTitle.AddToClassList("dpi-ecosystem-graph__empty-title");
             _emptyState.Add(_emptyStateTitle);
@@ -1315,6 +1316,46 @@ namespace Deucarian.PackageInstaller.Editor
             _emptyStateActionButton.style.display = showAction ? DisplayStyle.Flex : DisplayStyle.None;
             _emptyStateActionButton.text = showAction ? actionText ?? string.Empty : string.Empty;
             _emptyStateActionButton.tooltip = showAction ? actionTooltip ?? string.Empty : string.Empty;
+        }
+
+        private static void HandleEmptyStateGeometryChanged(GeometryChangedEvent evt)
+        {
+            if (!(evt.currentTarget is VisualElement emptyState) ||
+                evt.newRect.width <= 0f ||
+                evt.newRect.height <= 0f)
+            {
+                return;
+            }
+
+            ApplyEmptyStateCenteredMargins(emptyState, evt.newRect.size);
+        }
+
+        internal static void ApplyEmptyStateCenteredMargins(
+            VisualElement emptyState,
+            Vector2 size)
+        {
+            if (emptyState == null || size.x <= 0f || size.y <= 0f)
+            {
+                return;
+            }
+
+            Vector2 centeredMargins = CalculateEmptyStateCenteredMargins(size);
+            if (!Mathf.Approximately(emptyState.resolvedStyle.marginLeft, centeredMargins.x))
+            {
+                emptyState.style.marginLeft = centeredMargins.x;
+            }
+
+            if (!Mathf.Approximately(emptyState.resolvedStyle.marginTop, centeredMargins.y))
+            {
+                emptyState.style.marginTop = centeredMargins.y;
+            }
+        }
+
+        internal static Vector2 CalculateEmptyStateCenteredMargins(Vector2 size)
+        {
+            return new Vector2(
+                -Mathf.Max(0f, size.x) * 0.5f,
+                -Mathf.Max(0f, size.y) * 0.5f);
         }
 
         private void HideEmptyState()
