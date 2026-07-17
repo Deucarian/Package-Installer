@@ -6745,8 +6745,104 @@ namespace Deucarian.PackageInstaller.Editor
             Rect packageRect,
             string packageId)
         {
-            Vector2 from = GetRectBorderPoint(groupRect, packageRect.center, 2f);
-            Vector2 to = GetRectBorderPoint(packageRect, from, 2f);
+            const float EndpointPadding = 2f;
+            float overlapMinX = Mathf.Max(groupRect.xMin, packageRect.xMin) + EndpointPadding;
+            float overlapMaxX = Mathf.Min(groupRect.xMax, packageRect.xMax) - EndpointPadding;
+            float overlapMinY = Mathf.Max(groupRect.yMin, packageRect.yMin) + EndpointPadding;
+            float overlapMaxY = Mathf.Min(groupRect.yMax, packageRect.yMax) - EndpointPadding;
+            bool hasHorizontalOverlap = overlapMinX <= overlapMaxX;
+            bool hasVerticalOverlap = overlapMinY <= overlapMaxY;
+
+            if (hasVerticalOverlap &&
+                (groupRect.xMax <= packageRect.xMin || packageRect.xMax <= groupRect.xMin))
+            {
+                float sharedY = Mathf.Clamp(
+                    (groupRect.center.y + packageRect.center.y) * 0.5f,
+                    overlapMinY,
+                    overlapMaxY);
+                bool packageOnRight = packageRect.center.x >= groupRect.center.x;
+                Vector2 from = new Vector2(
+                    packageOnRight ? groupRect.xMax - EndpointPadding : groupRect.xMin + EndpointPadding,
+                    sharedY);
+                Vector2 to = new Vector2(
+                    packageOnRight ? packageRect.xMin + EndpointPadding : packageRect.xMax - EndpointPadding,
+                    sharedY);
+                AddOrthogonalStructuralSegment(segments, from, to, packageId);
+                return;
+            }
+
+            if (hasHorizontalOverlap &&
+                (groupRect.yMax <= packageRect.yMin || packageRect.yMax <= groupRect.yMin))
+            {
+                float sharedX = Mathf.Clamp(
+                    (groupRect.center.x + packageRect.center.x) * 0.5f,
+                    overlapMinX,
+                    overlapMaxX);
+                bool packageBelow = packageRect.center.y >= groupRect.center.y;
+                Vector2 from = new Vector2(
+                    sharedX,
+                    packageBelow ? groupRect.yMax - EndpointPadding : groupRect.yMin + EndpointPadding);
+                Vector2 to = new Vector2(
+                    sharedX,
+                    packageBelow ? packageRect.yMin + EndpointPadding : packageRect.yMax - EndpointPadding);
+                AddOrthogonalStructuralSegment(segments, from, to, packageId);
+                return;
+            }
+
+            Vector2 delta = packageRect.center - groupRect.center;
+
+            if (Mathf.Abs(delta.x) >= Mathf.Abs(delta.y))
+            {
+                bool packageOnRight = delta.x >= 0f;
+                Vector2 from = new Vector2(
+                    packageOnRight ? groupRect.xMax - EndpointPadding : groupRect.xMin + EndpointPadding,
+                    Mathf.Clamp(packageRect.center.y, groupRect.yMin + EndpointPadding, groupRect.yMax - EndpointPadding));
+                Vector2 to = new Vector2(
+                    packageOnRight ? packageRect.xMin + EndpointPadding : packageRect.xMax - EndpointPadding,
+                    Mathf.Clamp(groupRect.center.y, packageRect.yMin + EndpointPadding, packageRect.yMax - EndpointPadding));
+                float elbowX = (from.x + to.x) * 0.5f;
+                AddOrthogonalStructuralSegment(segments, from, new Vector2(elbowX, from.y), packageId);
+                AddOrthogonalStructuralSegment(segments, new Vector2(elbowX, from.y), new Vector2(elbowX, to.y), packageId);
+                AddOrthogonalStructuralSegment(segments, new Vector2(elbowX, to.y), to, packageId);
+                return;
+            }
+
+            bool packageBelowGroup = delta.y >= 0f;
+            Vector2 verticalFrom = new Vector2(
+                Mathf.Clamp(packageRect.center.x, groupRect.xMin + EndpointPadding, groupRect.xMax - EndpointPadding),
+                packageBelowGroup ? groupRect.yMax - EndpointPadding : groupRect.yMin + EndpointPadding);
+            Vector2 verticalTo = new Vector2(
+                Mathf.Clamp(groupRect.center.x, packageRect.xMin + EndpointPadding, packageRect.xMax - EndpointPadding),
+                packageBelowGroup ? packageRect.yMin + EndpointPadding : packageRect.yMax - EndpointPadding);
+            float elbowY = (verticalFrom.y + verticalTo.y) * 0.5f;
+            AddOrthogonalStructuralSegment(
+                segments,
+                verticalFrom,
+                new Vector2(verticalFrom.x, elbowY),
+                packageId);
+            AddOrthogonalStructuralSegment(
+                segments,
+                new Vector2(verticalFrom.x, elbowY),
+                new Vector2(verticalTo.x, elbowY),
+                packageId);
+            AddOrthogonalStructuralSegment(
+                segments,
+                new Vector2(verticalTo.x, elbowY),
+                verticalTo,
+                packageId);
+        }
+
+        private static void AddOrthogonalStructuralSegment(
+            ICollection<PackageGraphStructuralMembershipSegment> segments,
+            Vector2 from,
+            Vector2 to,
+            string packageId)
+        {
+            if (segments == null || Vector2.Distance(from, to) <= 0.01f)
+            {
+                return;
+            }
+
             segments.Add(new PackageGraphStructuralMembershipSegment(from, to, packageId));
         }
 
@@ -9004,7 +9100,22 @@ namespace Deucarian.PackageInstaller.Editor
                 }
             }
 
-            return SimplifyRoutePoints(preferredPoints ?? new[] { from, to });
+            return CreateOrthogonalFallback(from, to, zone);
+        }
+
+        private static IReadOnlyList<Vector2> CreateOrthogonalFallback(
+            Vector2 from,
+            Vector2 to,
+            PackageGraphEdgeRouteZone zone)
+        {
+            bool horizontalFirst = zone == PackageGraphEdgeRouteZone.Providers ||
+                                   zone == PackageGraphEdgeRouteZone.Dependents ||
+                                   (zone == PackageGraphEdgeRouteZone.Direct &&
+                                    Mathf.Abs(to.x - from.x) >= Mathf.Abs(to.y - from.y));
+            Vector2 corner = horizontalFirst
+                ? new Vector2(to.x, from.y)
+                : new Vector2(from.x, to.y);
+            return SimplifyRoutePoints(new[] { from, corner, to });
         }
 
         private static IReadOnlyList<Vector2> FindBestValidRoute(
@@ -9270,6 +9381,11 @@ namespace Deucarian.PackageInstaller.Editor
 
             for (int index = 0; index < points.Count - 1; index++)
             {
+                if (!IsOrthogonalSegment(points[index], points[index + 1]))
+                {
+                    return false;
+                }
+
                 bool isFirstSegment = index == 0;
                 bool isLastSegment = index == points.Count - 2;
                 Rect segmentBounds = BuildSegmentBounds(points[index], points[index + 1]);
@@ -9296,6 +9412,12 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             return true;
+        }
+
+        private static bool IsOrthogonalSegment(Vector2 from, Vector2 to)
+        {
+            return Mathf.Abs(from.x - to.x) <= 0.1f ||
+                   Mathf.Abs(from.y - to.y) <= 0.1f;
         }
 
         private static bool ShouldIgnoreObstacleForSegment(

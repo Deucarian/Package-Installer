@@ -4788,6 +4788,15 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.That(providerContext.HubCenter.y, Is.EqualTo(logging.center.y).Within(0.1f));
             Assert.Greater(integrationContext.HubCenter.y, sessionIntegration.yMax);
             Assert.That(integrationContext.HubCenter.x, Is.EqualTo(sessionIntegration.center.x).Within(0.1f));
+            Assert.That(
+                session.yMin - owningContext.Rect.yMax,
+                Is.EqualTo(PackageGraphEgoLayoutMetrics.CategoryNodeEdgeGap).Within(0.1f));
+            Assert.That(
+                sessionIntegration.yMin - session.yMax,
+                Is.EqualTo(PackageGraphEgoLayoutMetrics.FocusNodeEdgeGap).Within(0.1f));
+            Assert.That(
+                integrationContext.Rect.yMin - sessionIntegration.yMax,
+                Is.EqualTo(PackageGraphEgoLayoutMetrics.CategoryNodeEdgeGap).Within(0.1f));
             Assert.IsFalse(layout.NodeRects.ContainsKey("com.deucarian.api"));
             Assert.IsFalse(layout.NodeRects.ContainsKey("com.deucarian.theming"));
             Assert.IsFalse(layout.HasUnrelatedSummary);
