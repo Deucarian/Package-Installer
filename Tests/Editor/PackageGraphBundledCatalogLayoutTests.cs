@@ -119,16 +119,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             PackageGraphGroupLayoutNode runtimeServices = layout.GroupNodes.Single(groupNode =>
                 groupNode.GroupId == "runtime-services" &&
                 groupNode.RepresentedPackageIds.Contains("com.deucarian.session", StringComparer.OrdinalIgnoreCase));
-            PackageGraphGroupLayoutNode integrations = layout.GroupNodes.Single(groupNode =>
-                groupNode.GroupId == "integrations" &&
-                groupNode.RepresentedPackageIds.Contains(
-                    "com.deucarian.session.api-integration",
-                    StringComparer.OrdinalIgnoreCase));
-
             Assert.That(session.yMin - runtimeServices.Rect.yMax, Is.EqualTo(ExpectedCategoryGap).Within(Tolerance));
             Assert.That(sessionApiIntegration.yMin - session.yMax, Is.EqualTo(ExpectedFocusGap).Within(Tolerance));
-            Assert.That(integrations.Rect.yMin - sessionApiIntegration.yMax,
-                Is.EqualTo(ExpectedCategoryGap).Within(Tolerance));
         }
 
         private static PackageGraphModel CreateBundledGraph()

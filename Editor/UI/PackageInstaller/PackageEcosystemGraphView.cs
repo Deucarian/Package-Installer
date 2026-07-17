@@ -9100,7 +9100,22 @@ namespace Deucarian.PackageInstaller.Editor
                 }
             }
 
-            return SimplifyRoutePoints(preferredPoints ?? new[] { from, to });
+            return CreateOrthogonalFallback(from, to, zone);
+        }
+
+        private static IReadOnlyList<Vector2> CreateOrthogonalFallback(
+            Vector2 from,
+            Vector2 to,
+            PackageGraphEdgeRouteZone zone)
+        {
+            bool horizontalFirst = zone == PackageGraphEdgeRouteZone.Providers ||
+                                   zone == PackageGraphEdgeRouteZone.Dependents ||
+                                   (zone == PackageGraphEdgeRouteZone.Direct &&
+                                    Mathf.Abs(to.x - from.x) >= Mathf.Abs(to.y - from.y));
+            Vector2 corner = horizontalFirst
+                ? new Vector2(to.x, from.y)
+                : new Vector2(from.x, to.y);
+            return SimplifyRoutePoints(new[] { from, corner, to });
         }
 
         private static IReadOnlyList<Vector2> FindBestValidRoute(
@@ -9366,6 +9381,11 @@ namespace Deucarian.PackageInstaller.Editor
 
             for (int index = 0; index < points.Count - 1; index++)
             {
+                if (!IsOrthogonalSegment(points[index], points[index + 1]))
+                {
+                    return false;
+                }
+
                 bool isFirstSegment = index == 0;
                 bool isLastSegment = index == points.Count - 2;
                 Rect segmentBounds = BuildSegmentBounds(points[index], points[index + 1]);
@@ -9392,6 +9412,12 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             return true;
+        }
+
+        private static bool IsOrthogonalSegment(Vector2 from, Vector2 to)
+        {
+            return Mathf.Abs(from.x - to.x) <= 0.1f ||
+                   Mathf.Abs(from.y - to.y) <= 0.1f;
         }
 
         private static bool ShouldIgnoreObstacleForSegment(
