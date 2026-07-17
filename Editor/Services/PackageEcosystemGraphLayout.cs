@@ -1462,9 +1462,16 @@ namespace Deucarian.PackageInstaller.Editor
             ICollection<PackageGraphGroupLayoutNode> groupNodes,
             ISet<string> placedGroupIds)
         {
-            float totalHeight = clusters.Sum(cluster => GetVerticalClusterHeight(cluster, metrics)) +
-                                Mathf.Max(0, clusters.Count - 1) * metrics.PackageSubclusterGap;
-            float cursorY = metrics.SelectedNodeCenter.y - totalHeight * 0.5f;
+            float anchorSpan = 0f;
+
+            for (int index = 0; index < clusters.Count - 1; index++)
+            {
+                anchorSpan += GetVerticalClusterDownExtent(clusters[index], metrics) +
+                              metrics.PackageSubclusterGap +
+                              GetVerticalClusterUpExtent(clusters[index + 1], metrics);
+            }
+
+            float clusterCenterY = metrics.SelectedNodeCenter.y - anchorSpan * 0.5f;
             float packageX = zone == PackageGraphEgoLayoutZone.Providers
                 ? metrics.ProviderPackageX
                 : metrics.DependentPackageX;
@@ -1472,11 +1479,9 @@ namespace Deucarian.PackageInstaller.Editor
                 ? metrics.ProviderCategoryX
                 : metrics.DependentCategoryX;
 
-            foreach (EgoCategoryCluster cluster in clusters)
+            for (int clusterIndex = 0; clusterIndex < clusters.Count; clusterIndex++)
             {
-                float clusterUpExtent = GetVerticalClusterUpExtent(cluster, metrics);
-                float clusterHeight = GetVerticalClusterHeight(cluster, metrics);
-                float clusterCenterY = cursorY + clusterUpExtent;
+                EgoCategoryCluster cluster = clusters[clusterIndex];
                 float packageStackHeight = GetVerticalPackageStackHeight(cluster, metrics);
                 float packageStartY = clusterCenterY - packageStackHeight * 0.5f;
 
@@ -1498,7 +1503,13 @@ namespace Deucarian.PackageInstaller.Editor
                     new Vector2(categoryX, clusterCenterY),
                     groupNodes,
                     placedGroupIds);
-                cursorY += clusterHeight + metrics.PackageSubclusterGap;
+
+                if (clusterIndex < clusters.Count - 1)
+                {
+                    clusterCenterY += GetVerticalClusterDownExtent(cluster, metrics) +
+                                      metrics.PackageSubclusterGap +
+                                      GetVerticalClusterUpExtent(clusters[clusterIndex + 1], metrics);
+                }
             }
         }
 
@@ -1591,14 +1602,6 @@ namespace Deucarian.PackageInstaller.Editor
                 summaryLabel: cluster.Packages.Count == 1
                     ? "1 related package"
                     : cluster.Packages.Count + " related packages"));
-        }
-
-        private static float GetVerticalClusterHeight(
-            EgoCategoryCluster cluster,
-            PackageGraphEgoLayoutMetrics metrics)
-        {
-            return GetVerticalClusterUpExtent(cluster, metrics) +
-                   GetVerticalClusterDownExtent(cluster, metrics);
         }
 
         private static float GetVerticalClusterUpExtent(
