@@ -612,7 +612,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 stableUrl,
                 "Reusable runtime loading pipeline.",
                 Array.Empty<string>(),
-                PackageType.Core,
+                PackageKind.Library,
                 developmentUrl,
                 category: "Core");
         }

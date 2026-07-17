@@ -36,9 +36,9 @@ namespace Deucarian.PackageInstaller.Editor
                 return hierarchyPath;
             }
 
-            return string.IsNullOrWhiteSpace(packageDefinition.Category)
+            return string.IsNullOrWhiteSpace(packageDefinition.NavigationGroup)
                 ? "-"
-                : packageDefinition.Category;
+                : packageDefinition.NavigationGroup;
         }
 
         public static string GetPackageRole(PackageDefinition packageDefinition)
@@ -53,22 +53,7 @@ namespace Deucarian.PackageInstaller.Editor
                 return "-";
             }
 
-            if (packageDefinition.IsIntegration)
-            {
-                return "Integration";
-            }
-
-            if (packageDefinition.IsSuite)
-            {
-                return "Suite";
-            }
-
-            if (string.Equals(packageDefinition.MetadataType, "Tool", StringComparison.OrdinalIgnoreCase))
-            {
-                return "Tool";
-            }
-
-            return "Library";
+            return packageDefinition.Kind.ToString();
         }
 
         private static string GetGroupPath(PackageGraphModel graph, string groupId)

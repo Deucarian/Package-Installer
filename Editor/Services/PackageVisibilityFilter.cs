@@ -234,7 +234,8 @@ namespace Deucarian.PackageInstaller.Editor
                 {
                     packageDefinition.DisplayName,
                     packageDefinition.PackageId,
-                    packageDefinition.Category
+                    packageDefinition.NavigationGroup,
+                    packageDefinition.Kind.ToString()
                 });
         }
     }

@@ -491,7 +491,12 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 "height", "28px",
                 "min-height", "28px",
                 "max-height", "28px",
+                "margin-left", "0",
                 "margin-right", "var(--deucarian-workbench-operation-control-gap)",
+                "padding-left", "0",
+                "padding-right", "0",
+                "padding-top", "0",
+                "padding-bottom", "0",
                 "border-top-left-radius", "5px",
                 "border-top-right-radius", "5px",
                 "border-bottom-right-radius", "5px",
@@ -556,6 +561,9 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 Assert.That(installerSource, Does.Contain(declaration));
             }
 
+            Assert.AreEqual(10, DeucarianEditorLayoutMetrics.SurfaceHorizontalPadding);
+            Assert.AreEqual(8, DeucarianEditorLayoutMetrics.SurfaceVerticalPadding);
+            Assert.AreEqual(8, DeucarianEditorLayoutMetrics.SurfaceSpacing);
             Assert.That(
                 editorStylesSource,
                 Does.Contain("DeucarianEditorLayoutMetrics.SurfaceHorizontalPadding"));

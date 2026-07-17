@@ -7,6 +7,7 @@ namespace Deucarian.PackageInstaller.Editor
     {
         public string id;
         public string displayName;
+        public string kind;
         public string category;
         public string type;
         public string description;

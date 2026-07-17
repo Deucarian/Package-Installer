@@ -913,7 +913,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
             Assert.AreEqual(PackageGraphNodeType.Core, graph.Nodes.Single(node => node.PackageId == core.PackageId).NodeType);
             Assert.AreEqual(PackageGraphNodeType.Tool, graph.Nodes.Single(node => node.PackageId == tool.PackageId).NodeType);
-            Assert.AreEqual(PackageGraphNodeType.Companion, graph.Nodes.Single(node => node.PackageId == optional.PackageId).NodeType);
+            Assert.AreEqual(PackageGraphNodeType.Core, graph.Nodes.Single(node => node.PackageId == optional.PackageId).NodeType);
             Assert.AreEqual(PackageGraphNodeType.Integration, graph.Nodes.Single(node => node.PackageId == integration.PackageId).NodeType);
             Assert.AreEqual(PackageGraphNodeType.Suite, graph.Nodes.Single(node => node.PackageId == suite.PackageId).NodeType);
 
@@ -5211,7 +5211,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 "https://example.com/" + packageId + ".git#main",
                 displayName + " package.",
                 dependencies ?? Array.Empty<string>(),
-                PackageType.Core,
+                PackageKindParser.Parse(null, metadataType, category),
                 "https://example.com/" + packageId + ".git#develop",
                 category: category,
                 metadataType: metadataType,
