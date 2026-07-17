@@ -889,16 +889,18 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual("Template", template.type);
             Assert.AreEqual("Templates", template.ecosystemGroup);
             Assert.AreEqual("templates-games", template.groupId);
-            CollectionAssert.AreEqual(
-                new[]
+            string[] expectedTemplateDependencies = AutoDefenseSuiteMembers
+                .Concat(new[]
                 {
                     "com.deucarian.auto-defense-suite",
+                    "com.deucarian.common",
                     EditorPackageId,
                     GameContentAuthoringPackageId,
-                    GameplayFoundationPackageId,
                     MonetizationPackageId
-                },
-                template.dependencies);
+                })
+                .OrderBy(packageId => packageId, StringComparer.Ordinal)
+                .ToArray();
+            CollectionAssert.AreEqual(expectedTemplateDependencies, template.dependencies);
             StringAssert.Contains(
                 "Template-Game-Idle-Auto-Defense.git#main",
                 template.stableUrl);

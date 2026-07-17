@@ -6,6 +6,7 @@
 - Made registry `groupId` hierarchy and sort order authoritative for package navigation, and derived integration and suite graph relationships from their canonical targets and members.
 - Removed legacy category presentation and category-based package-kind and graph inference.
 - Aligned exact Editor and Logging dependencies with the coordinated portfolio patch release.
+- Updated bundled-registry and shared-Editor baseline coverage for the schema v2 portfolio contract.
 
 ## 1.1.69 - 2026-07-17
 

@@ -285,7 +285,7 @@ VisualElement|-|deucarian-toolbar-row,deucarian-workbench-toolbar,dpi-view-toolb
                 "background-color", "rgba(12, 22, 31, 0.48)");
 
             AssertRuleValues(editorCss, ".dpi-view-toolbar__action",
-                "height", "24px",
+                "height", "28px",
                 "min-width", "86px",
                 "margin-left", "4px",
                 "border-top-left-radius", "5px",
@@ -413,15 +413,19 @@ VisualElement|-|deucarian-toolbar-row,deucarian-workbench-toolbar,dpi-view-toolb
             }
 
             AssertRuleValues(editorCss, ".dpi-operation-surface",
-                "--deucarian-workbench-operation-inline-padding", "12px",
-                "--deucarian-workbench-operation-block-padding", "6px",
+                "--deucarian-workbench-operation-inline-padding", "10px",
+                "--deucarian-workbench-operation-block-padding", "8px",
                 "--deucarian-workbench-operation-row-gap", "6px",
                 "--deucarian-workbench-operation-control-gap", "8px",
+                "--deucarian-workbench-operation-footer-inline-padding", "10px",
+                "--deucarian-workbench-operation-footer-block-padding", "0px",
                 "--deucarian-workbench-operation-footer-height", "34px",
-                "--dpi-operation-inline-padding", "12px",
-                "--dpi-operation-block-padding", "6px",
+                "--dpi-operation-inline-padding", "10px",
+                "--dpi-operation-block-padding", "8px",
                 "--dpi-operation-row-gap", "6px",
                 "--dpi-operation-control-gap", "8px",
+                "--dpi-operation-footer-inline-padding", "10px",
+                "--dpi-operation-footer-block-padding", "0px",
                 "--dpi-operation-footer-height", "34px");
             AssertRuleValues(editorCss, ".dpi-operation-drawer",
                 "flex-shrink", "0",
@@ -536,12 +540,22 @@ VisualElement|-|deucarian-toolbar-row,deucarian-workbench-toolbar,dpi-view-toolb
                 Assert.That(installerSource, Does.Contain(declaration));
             }
 
+            Assert.AreEqual(10, DeucarianEditorLayoutMetrics.SurfaceHorizontalPadding);
+            Assert.AreEqual(8, DeucarianEditorLayoutMetrics.SurfaceVerticalPadding);
+            Assert.AreEqual(8, DeucarianEditorLayoutMetrics.SurfaceSpacing);
             Assert.That(
                 editorStylesSource,
-                Does.Contain("sectionBox.padding = new RectOffset(10, 10, 8, 8);"));
+                Does.Match(
+                    @"sectionBox\.padding\s*=\s*new RectOffset\(\s*" +
+                    @"DeucarianEditorLayoutMetrics\.SurfaceHorizontalPadding,\s*" +
+                    @"DeucarianEditorLayoutMetrics\.SurfaceHorizontalPadding,\s*" +
+                    @"DeucarianEditorLayoutMetrics\.SurfaceVerticalPadding,\s*" +
+                    @"DeucarianEditorLayoutMetrics\.SurfaceVerticalPadding\s*\);"));
             Assert.That(
                 editorStylesSource,
-                Does.Contain("sectionBox.margin = new RectOffset(0, 0, 0, 8);"));
+                Does.Match(
+                    @"sectionBox\.margin\s*=\s*new RectOffset\(\s*0,\s*0,\s*0,\s*" +
+                    @"DeucarianEditorLayoutMetrics\.SurfaceSpacing\s*\);"));
 
             foreach (string declaration in new[]
                      {
