@@ -368,6 +368,35 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void Stylesheets_EmptyStateTextWrapsAndActionsGrowWithContent()
+        {
+            string installerCss = ReadPackageFile(
+                "com.deucarian.package-installer",
+                "Editor/UI/PackageInstaller/PackageInstallerGraph.uss");
+            string graphSource = ReadPackageFile(
+                "com.deucarian.package-installer",
+                "Editor/UI/PackageInstaller/PackageEcosystemGraphView.cs");
+
+            Assert.That(graphSource, Does.Contain(
+                "_emptyState.RegisterCallback<GeometryChangedEvent>(HandleEmptyStateGeometryChanged);"));
+
+            AssertRuleValues(installerCss, ".dpi-ecosystem-graph__empty-title",
+                "align-self", "stretch",
+                "flex-shrink", "0",
+                "white-space", "normal");
+            AssertRuleValues(installerCss, ".dpi-ecosystem-graph__empty-action",
+                "height", "auto",
+                "min-height", "24px",
+                "max-width", "100%",
+                "flex-shrink", "0",
+                "padding-left", "8px",
+                "padding-right", "8px",
+                "padding-top", "3px",
+                "padding-bottom", "3px",
+                "white-space", "normal");
+        }
+
+        [Test]
         public void Stylesheets_OperationDrawerAndFooterGeometryMatchBaseline()
         {
             string installerCss = ReadPackageFile(

@@ -7,6 +7,10 @@
 - Removed legacy category presentation and category-based package-kind and graph inference.
 - Aligned exact Editor and Logging dependencies with the coordinated portfolio patch release.
 - Updated bundled-registry and shared-Editor baseline coverage for the schema v2 portfolio contract.
+- Made graph empty-state popups size and wrap around arbitrary messages while keeping their recovery actions fully visible.
+- Prevented graph routes from showing through cards, hubs, symbols, and captions, and simplified structural membership routes around graph content.
+- Split shared membership routes wherever package statuses diverge so each branch retains its truthful status color.
+- Increased package-card action clearance and derived dense-layout spacing from card dimensions to prevent overlap as content grows.
 
 ## 1.1.69 - 2026-07-17
 

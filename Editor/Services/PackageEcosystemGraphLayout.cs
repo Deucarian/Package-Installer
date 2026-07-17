@@ -72,9 +72,9 @@ namespace Deucarian.PackageInstaller.Editor
                 case PackageGraphNodePresentationLevel.Micro:
                     return new PackageGraphNodeMetrics(116f, 44f);
                 case PackageGraphNodePresentationLevel.Compact:
-                    return new PackageGraphNodeMetrics(164f, 76f);
+                    return new PackageGraphNodeMetrics(164f, 90f);
                 default:
-                    return new PackageGraphNodeMetrics(220f, 132f);
+                    return new PackageGraphNodeMetrics(220f, 144f);
             }
         }
 
@@ -566,10 +566,17 @@ namespace Deucarian.PackageInstaller.Editor
             float horizontalLaneGap = Mathf.Max(
                 455f,
                 selectedMetrics.Width * 0.5f + relatedMetrics.Width * 0.5f + 212f);
-            float verticalLaneGap = Mathf.Max(
-                365f,
-                selectedMetrics.Height * 0.5f + relatedMetrics.Height * 0.5f + 195f);
             float cardGap = Mathf.Max(30f, relatedMetrics.Height * 0.22f);
+            float denseVerticalSpan =
+                PackageGraphLayout.DenseEgoRows * relatedMetrics.Height +
+                (PackageGraphLayout.DenseEgoRows - 1) * cardGap;
+            float verticalLaneGap = Mathf.Max(
+                Mathf.Max(
+                    365f,
+                    selectedMetrics.Height * 0.5f + relatedMetrics.Height * 0.5f + 195f),
+                denseVerticalSpan * 0.5f +
+                relatedMetrics.Height * 0.5f +
+                PackageGraphLayout.MinimumDenseZoneClearance);
             float subclusterGap = Mathf.Max(110f, relatedMetrics.Height * 0.74f);
             float categoryRailGap = Mathf.Max(230f, relatedMetrics.Width * 1.02f);
             float owningGap = selectedMetrics.Height * 0.5f + 108f;
@@ -616,7 +623,8 @@ namespace Deucarian.PackageInstaller.Editor
         private const float FocusOrbitRadius = 335f;
         private const float FocusGridGapX = 48f;
         private const float CategoryCaptionClearance = 24f;
-        private const int DenseEgoRows = 6;
+        internal const int DenseEgoRows = 6;
+        internal const float MinimumDenseZoneClearance = 24f;
         private const int DenseEgoColumns = 8;
         private const int DenseEgoVisibleLimit = DenseEgoRows * DenseEgoColumns;
         private const float DenseContextGroupGap = 12f;

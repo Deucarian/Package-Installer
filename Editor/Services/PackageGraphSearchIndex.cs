@@ -40,6 +40,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         private readonly HashSet<string> _directCategoryMatchIds;
         private readonly HashSet<string> _directPackageMatchIds;
+        private readonly HashSet<string> _owningCategoryIds;
         private readonly HashSet<string> _contextCategoryIds;
         private readonly HashSet<string> _contextPackageIds;
 
@@ -48,6 +49,7 @@ namespace Deucarian.PackageInstaller.Editor
             IEnumerable<PackageGraphSearchResult> results,
             IEnumerable<string> directCategoryMatchIds,
             IEnumerable<string> directPackageMatchIds,
+            IEnumerable<string> owningCategoryIds,
             IEnumerable<string> contextCategoryIds,
             IEnumerable<string> contextPackageIds)
         {
@@ -55,6 +57,7 @@ namespace Deucarian.PackageInstaller.Editor
             Results = results == null ? EmptyResults : results.ToArray();
             _directCategoryMatchIds = ToSet(directCategoryMatchIds);
             _directPackageMatchIds = ToSet(directPackageMatchIds);
+            _owningCategoryIds = ToSet(owningCategoryIds);
             _contextCategoryIds = ToSet(contextCategoryIds);
             _contextPackageIds = ToSet(contextPackageIds);
         }
@@ -63,6 +66,7 @@ namespace Deucarian.PackageInstaller.Editor
             new PackageGraphSearchState(
                 string.Empty,
                 EmptyResults,
+                Array.Empty<string>(),
                 Array.Empty<string>(),
                 Array.Empty<string>(),
                 Array.Empty<string>(),
@@ -78,6 +82,8 @@ namespace Deucarian.PackageInstaller.Editor
 
         public int DirectPackageMatchCount => _directPackageMatchIds.Count;
 
+        public int OwningCategoryCount => _owningCategoryIds.Count;
+
         public int DirectMatchCount => _directCategoryMatchIds.Count + _directPackageMatchIds.Count;
 
         public int ContextPackageCount => _contextPackageIds.Count;
@@ -87,6 +93,8 @@ namespace Deucarian.PackageInstaller.Editor
         public IReadOnlyCollection<string> DirectCategoryMatchIds => _directCategoryMatchIds;
 
         public IReadOnlyCollection<string> DirectPackageMatchIds => _directPackageMatchIds;
+
+        public IReadOnlyCollection<string> OwningCategoryIds => _owningCategoryIds;
 
         public IReadOnlyCollection<string> ContextCategoryIds => _contextCategoryIds;
 
@@ -100,6 +108,11 @@ namespace Deucarian.PackageInstaller.Editor
         public bool IsDirectPackageMatch(string packageId)
         {
             return !string.IsNullOrWhiteSpace(packageId) && _directPackageMatchIds.Contains(packageId);
+        }
+
+        public bool IsOwningCategory(string groupId)
+        {
+            return !string.IsNullOrWhiteSpace(groupId) && _owningCategoryIds.Contains(groupId);
         }
 
         public bool IsCategoryContext(string groupId)
@@ -138,6 +151,7 @@ namespace Deucarian.PackageInstaller.Editor
             List<PackageGraphSearchResult> results = new List<PackageGraphSearchResult>();
             HashSet<string> directCategoryIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             HashSet<string> directPackageIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            HashSet<string> owningCategoryIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             HashSet<string> contextCategoryIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             HashSet<string> contextPackageIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -171,6 +185,7 @@ namespace Deucarian.PackageInstaller.Editor
 
                 directPackageIds.Add(node.PackageId);
                 contextPackageIds.Add(node.PackageId);
+                AddAncestorGroups(graph, node.GroupId, owningCategoryIds);
                 AddAncestorGroups(graph, node.GroupId, contextCategoryIds);
 
                 results.Add(new PackageGraphSearchResult(
@@ -191,6 +206,7 @@ namespace Deucarian.PackageInstaller.Editor
                 orderedResults,
                 directCategoryIds,
                 directPackageIds,
+                owningCategoryIds,
                 contextCategoryIds,
                 contextPackageIds);
         }

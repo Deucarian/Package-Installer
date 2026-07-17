@@ -1861,6 +1861,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             PackageGraphSearchState searchState = PackageGraphSearchIndex.Create(graph, filterState);
 
             Assert.IsTrue(searchState.IsDirectPackageMatch("com.deucarian.theming"));
+            Assert.IsTrue(searchState.IsOwningCategory("experience-interaction"));
+            Assert.IsTrue(searchState.IsOwningCategory("ui-presentation"));
             Assert.IsTrue(searchState.IsCategoryContext("experience-interaction"));
             Assert.IsTrue(searchState.IsCategoryContext("ui-presentation"));
             Assert.IsTrue(searchState.IsPackageContext("com.deucarian.theming"));
@@ -1869,6 +1871,9 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             CollectionAssert.AreEquivalent(
                 new[] { "experience-interaction", "ui-presentation" },
                 searchState.ContextCategoryIds.ToArray());
+            CollectionAssert.AreEquivalent(
+                new[] { "experience-interaction", "ui-presentation" },
+                searchState.OwningCategoryIds.ToArray());
         }
 
         [Test]
@@ -1936,6 +1941,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
             Assert.IsTrue(loggingSearch.IsDirectPackageMatch("com.deucarian.logging"));
             Assert.IsTrue(loggingSearch.IsPackageContext("com.deucarian.logging"));
+            Assert.IsTrue(loggingSearch.IsOwningCategory("infrastructure"));
             Assert.IsFalse(loggingSearch.IsDirectPackageMatch("com.deucarian.session"));
             Assert.IsFalse(loggingSearch.IsPackageContext("com.deucarian.session"));
             Assert.IsFalse(loggingSearch.IsPackageContext("com.deucarian.api"));
@@ -2133,7 +2139,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 if (string.Equals(query, "Logging", StringComparison.Ordinal))
                 {
                     VisualElement infrastructure = FindGraphGroup(searchView, "infrastructure");
-                    Assert.IsTrue(infrastructure.ClassListContains("dpi-graph-search--context"));
+                    Assert.IsTrue(infrastructure.ClassListContains("dpi-graph-search--owner"));
+                    Assert.IsFalse(infrastructure.ClassListContains("dpi-graph-search--context"));
                     Assert.AreEqual(
                         "1 match",
                         FindByClass(infrastructure, "dpi-graph-group__subtitle").OfType<Label>().Single().text);
@@ -2146,6 +2153,12 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                             .OfType<Label>()
                             .Single()
                             .text);
+                    IReadOnlyList<CategoryStatusRingVisualState> statusRings =
+                        canvas.StatusRingVisualStatesForTests;
+                    Assert.IsFalse(
+                        statusRings.Single(ring => ring.RingId == "group:infrastructure:status").Muted);
+                    Assert.IsTrue(
+                        statusRings.Single(ring => ring.RingId == "group:tools-quality:status").Muted);
                 }
                 else if (string.Equals(query, "Infrastructure", StringComparison.Ordinal))
                 {
@@ -2858,9 +2871,9 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.That(micro.Width, Is.InRange(92f, 124f));
             Assert.That(micro.Height, Is.InRange(34f, 48f));
             Assert.That(compact.Width, Is.InRange(145f, 170f));
-            Assert.That(compact.Height, Is.InRange(64f, 82f));
+            Assert.That(compact.Height, Is.InRange(64f, 92f));
             Assert.That(full.Width, Is.InRange(190f, 220f));
-            Assert.That(full.Height, Is.InRange(96f, 136f));
+            Assert.That(full.Height, Is.InRange(96f, 146f));
         }
 
         [Test]
@@ -4018,6 +4031,63 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void GraphConnections_UseTheSourcePackageStatusPalette()
+        {
+            PackageDefinition installed = CreatePackage(
+                "Installed Provider",
+                "com.example.installed-provider",
+                "Core");
+            PackageDefinition available = CreatePackage(
+                "Available Provider",
+                "com.example.available-provider",
+                "Core");
+            PackageDefinition update = CreatePackage(
+                "Update Provider",
+                "com.example.update-provider",
+                "Core");
+            PackageDefinition consumer = CreatePackage(
+                "Consumer",
+                "com.example.consumer",
+                "Core",
+                dependencies: new[] { installed.PackageId, available.PackageId, update.PackageId });
+            PackageGraphModel graph = new PackageGraphBuilder(
+                    packageId => packageId == installed.PackageId ||
+                                 packageId == update.PackageId,
+                    _ => PackageChannel.Stable,
+                    package => package.PackageId == update.PackageId
+                        ? PackageUpdateStatus.UpdateAvailable(
+                            package,
+                            PackageChannel.Stable,
+                            package.GetUrl(PackageChannel.Stable),
+                            "1111111",
+                            "2222222")
+                        : PackageUpdateStatus.UpToDate(
+                            package,
+                            PackageChannel.Stable,
+                            package.GetUrl(PackageChannel.Stable),
+                            "1111111",
+                            "1111111"))
+                .Build(new[] { installed, available, update, consumer });
+
+            Color installedColor = ResolveDependencyColor(graph, installed.PackageId, consumer.PackageId);
+            Color availableColor = ResolveDependencyColor(graph, available.PackageId, consumer.PackageId);
+            Color updateColor = ResolveDependencyColor(graph, update.PackageId, consumer.PackageId);
+
+            PackageGraphEdge unavailableDependency = graph.Edges.Single(candidate =>
+                candidate.Kind == PackageGraphEdgeKind.HardDependency &&
+                candidate.FromPackageId == available.PackageId &&
+                candidate.ToPackageId == consumer.PackageId);
+            Assert.AreEqual(PackageGraphEdgeState.Possible, unavailableDependency.State);
+
+            AssertRgbEqual(new Color(0.34f, 0.82f, 0.74f), installedColor);
+            AssertRgbEqual(new Color(0.50f, 0.46f, 0.82f), availableColor);
+            AssertRgbEqual(new Color(0.92f, 0.68f, 0.28f), updateColor);
+            Assert.AreEqual(0.84f, installedColor.a, 0.001f);
+            Assert.AreEqual(0.84f, availableColor.a, 0.001f);
+            Assert.AreEqual(0.84f, updateColor.a, 0.001f);
+        }
+
+        [Test]
         public void GraphEdgeRoutes_UseDirectBorderRouteForSingleTarget()
         {
             PackageGraphModel graph = new PackageGraphBuilder(_ => false)
@@ -4586,9 +4656,18 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual(2, integrationRoute.PackageIds.Count);
             Assert.GreaterOrEqual(integrationRoute.Segments.Count, 4);
             Assert.IsTrue(integrationRoute.Segments.All(segment => segment.Length > 0.01f));
+            CollectionAssert.AreEquivalent(
+                integrationRoute.PackageIds.ToArray(),
+                integrationRoute.Segments
+                    .Where(segment => !string.IsNullOrWhiteSpace(segment.PackageId))
+                    .Select(segment => segment.PackageId)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToArray());
             Assert.IsFalse(owningRoute.UsesBus);
             Assert.AreEqual(1, owningRoute.PackageIds.Count);
             Assert.AreEqual("com.deucarian.api", owningRoute.PackageIds.Single());
+            Assert.IsTrue(owningRoute.Segments.All(segment =>
+                segment.PackageId == "com.deucarian.api"));
         }
 
         [Test]
@@ -5428,6 +5507,25 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
             Assert.IsTrue(focus.IsEdgeVisible(edge), edge.Key);
             Assert.IsTrue(focus.IsEdgeEmphasized(edge), edge.Key);
+        }
+
+        private static Color ResolveDependencyColor(
+            PackageGraphModel graph,
+            string fromPackageId,
+            string toPackageId)
+        {
+            PackageGraphEdge edge = graph.Edges.Single(candidate =>
+                candidate.Kind == PackageGraphEdgeKind.HardDependency &&
+                candidate.FromPackageId == fromPackageId &&
+                candidate.ToPackageId == toPackageId);
+            return PackageGraphEdgeLayer.ResolveEdgeStatusColorForTests(graph, edge);
+        }
+
+        private static void AssertRgbEqual(Color expected, Color actual)
+        {
+            Assert.AreEqual(expected.r, actual.r, 0.001f, "red");
+            Assert.AreEqual(expected.g, actual.g, 0.001f, "green");
+            Assert.AreEqual(expected.b, actual.b, 0.001f, "blue");
         }
 
         private static void AssertCategoryAndKind(
