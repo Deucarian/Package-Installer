@@ -707,16 +707,26 @@
 }
 
 .dpi-ecosystem-graph__empty-title {
+    align-self: stretch;
+    flex-shrink: 0;
     color: var(--deucarian-text);
     font-size: 12px;
     -unity-font-style: bold;
     -unity-text-align: middle-center;
+    white-space: normal;
 }
 
 .dpi-ecosystem-graph__empty-action {
-    height: 24px;
+    height: auto;
+    min-height: 24px;
     min-width: 108px;
+    max-width: 100%;
+    flex-shrink: 0;
     margin-top: 10px;
+    padding-left: 8px;
+    padding-right: 8px;
+    padding-top: 3px;
+    padding-bottom: 3px;
     border-top-left-radius: 5px;
     border-top-right-radius: 5px;
     border-bottom-right-radius: 5px;
@@ -731,6 +741,8 @@
     border-bottom-color: rgba(59, 166, 154, 0.42);
     background-color: rgba(27, 48, 58, 0.76);
     color: var(--deucarian-text);
+    -unity-text-align: middle-center;
+    white-space: normal;
 }
 
 .dpi-ecosystem-graph__empty-action:hover {
@@ -762,6 +774,7 @@
 .dpi-ecosystem-graph__guide-layer,
 .dpi-ecosystem-graph__membership-layer,
 .dpi-ecosystem-graph__edge-layer,
+.dpi-ecosystem-graph__occlusion-layer,
 .dpi-ecosystem-graph__node-layer {
     position: absolute;
     left: 0;
@@ -931,15 +944,15 @@
 }
 
 .dpi-graph-node__status-rail--installed {
-    background-color: rgba(59, 166, 154, 0.82);
+    background-color: rgba(87, 209, 189, 0.88);
 }
 
 .dpi-graph-node__status-rail--available {
-    background-color: rgba(130, 119, 204, 0.76);
+    background-color: rgba(128, 117, 209, 0.82);
 }
 
 .dpi-graph-node__status-rail--update {
-    background-color: rgba(224, 178, 72, 0.96);
+    background-color: rgba(235, 173, 71, 0.92);
 }
 
 .dpi-graph-node__status-rail--warning {
@@ -951,7 +964,7 @@
 }
 
 .dpi-graph-node__status-rail--checking {
-    background-color: rgba(82, 171, 205, 0.72);
+    background-color: rgba(128, 153, 168, 0.72);
 }
 
 .dpi-graph-node:hover {
@@ -1024,24 +1037,37 @@
     background-color: rgba(27, 59, 66, 0.90);
 }
 
+.dpi-graph-node.dpi-graph-search--owner {
+    border-left-width: 3px;
+    border-right-width: 3px;
+    border-top-width: 3px;
+    border-bottom-width: 3px;
+    border-left-color: rgba(92, 213, 203, 1.00);
+    border-right-color: rgba(99, 184, 222, 0.88);
+    border-top-color: rgba(99, 184, 222, 0.88);
+    border-bottom-color: rgba(99, 184, 222, 0.88);
+    background-color: rgba(28, 64, 72, 0.96);
+    opacity: 1.00;
+}
+
 .dpi-graph-node.dpi-graph-search--context {
     border-left-color: rgba(82, 171, 205, 0.48);
     border-right-color: rgba(82, 171, 205, 0.32);
     border-top-color: rgba(82, 171, 205, 0.32);
     border-bottom-color: rgba(82, 171, 205, 0.32);
-    opacity: 0.78;
+    opacity: 0.68;
 }
 
 .dpi-graph-node.dpi-graph-search--dimmed {
-    opacity: 0.46;
+    opacity: 0.24;
 }
 
 .dpi-graph-node.dpi-graph-search--dimmed.dpi-graph-node--hover-context {
-    border-left-color: rgba(59, 209, 191, 0.64);
-    border-right-color: rgba(59, 209, 191, 0.42);
-    border-top-color: rgba(59, 209, 191, 0.42);
-    border-bottom-color: rgba(59, 209, 191, 0.42);
-    opacity: 0.72;
+    border-left-color: rgba(59, 209, 191, 0.28);
+    border-right-color: rgba(59, 209, 191, 0.18);
+    border-top-color: rgba(59, 209, 191, 0.18);
+    border-bottom-color: rgba(59, 209, 191, 0.18);
+    opacity: 0.34;
 }
 
 .dpi-graph-node--dimmed {
@@ -1190,11 +1216,34 @@
 
 .dpi-graph-node--presentation-compact .dpi-graph-node__action {
     min-width: 58px;
+    min-height: 16px;
     height: 16px;
     max-height: 16px;
     padding-left: 6px;
     padding-right: 6px;
+    padding-top: 0;
+    padding-bottom: 0;
     font-size: 8px;
+}
+
+.dpi-graph-occlusion {
+    position: absolute;
+    background-color: rgba(8, 16, 25, 1.00);
+}
+
+.dpi-graph-occlusion--package {
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    border-bottom-right-radius: 8px;
+    border-bottom-left-radius: 8px;
+}
+
+.dpi-graph-occlusion--hub,
+.dpi-graph-occlusion--group-symbol {
+    border-top-left-radius: 999px;
+    border-top-right-radius: 999px;
+    border-bottom-right-radius: 999px;
+    border-bottom-left-radius: 999px;
 }
 
 .dpi-graph-node--presentation-full {
@@ -1459,6 +1508,22 @@
     background-color: rgba(24, 58, 64, 0.92);
 }
 
+.dpi-graph-group.dpi-graph-search--owner .dpi-graph-group__symbol {
+    border-left-width: 3px;
+    border-right-width: 3px;
+    border-top-width: 3px;
+    border-bottom-width: 3px;
+    border-left-color: rgba(92, 213, 203, 1.00);
+    border-right-color: rgba(99, 184, 222, 0.92);
+    border-top-color: rgba(99, 184, 222, 0.92);
+    border-bottom-color: rgba(99, 184, 222, 0.92);
+    background-color: rgba(28, 64, 72, 0.98);
+}
+
+.dpi-graph-group.dpi-graph-search--owner {
+    opacity: 1.00;
+}
+
 .dpi-graph-group.dpi-graph-search--context .dpi-graph-group__symbol {
     border-left-color: rgba(82, 171, 205, 0.52);
     border-right-color: rgba(82, 171, 205, 0.36);
@@ -1467,15 +1532,15 @@
 }
 
 .dpi-graph-group.dpi-graph-search--context {
-    opacity: 0.78;
+    opacity: 0.64;
 }
 
 .dpi-graph-group.dpi-graph-search--dimmed {
-    opacity: 0.44;
+    opacity: 0.22;
 }
 
 .dpi-graph-group.dpi-graph-search--dimmed.dpi-graph-group--hover-context {
-    opacity: 0.72;
+    opacity: 0.30;
 }
 
 .dpi-graph-group--integration .dpi-graph-group__symbol {
@@ -1496,7 +1561,8 @@
 
 .dpi-graph-group--focused.dpi-graph-group--attention .dpi-graph-group__symbol,
 .dpi-graph-group--hover-context.dpi-graph-group--attention .dpi-graph-group__symbol,
-.dpi-graph-group.dpi-graph-search--match.dpi-graph-group--attention .dpi-graph-group__symbol {
+.dpi-graph-group.dpi-graph-search--match.dpi-graph-group--attention .dpi-graph-group__symbol,
+.dpi-graph-group.dpi-graph-search--owner.dpi-graph-group--attention .dpi-graph-group__symbol {
     border-left-color: rgba(255, 226, 184, 0.96);
 }
 
@@ -1861,10 +1927,15 @@
 
 .dpi-graph-node__action {
     min-width: 76px;
+    min-height: 23px;
     height: 23px;
     max-height: 23px;
     padding-left: 8px;
     padding-right: 8px;
+    padding-top: 0;
+    padding-bottom: 0;
+    flex-shrink: 0;
+    -unity-text-align: middle-center;
     border-top-left-radius: 5px;
     border-top-right-radius: 5px;
     border-bottom-right-radius: 5px;

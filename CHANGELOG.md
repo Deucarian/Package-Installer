@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.70 - 2026-07-17
+
+- Made graph empty-state popups size and wrap around arbitrary messages while keeping their recovery actions fully visible.
+- Prevented graph routes from showing through cards, hubs, symbols, and captions, and simplified structural membership routes around graph content.
+- Split shared membership routes wherever package statuses diverge so each branch retains its truthful status color.
+- Increased package-card action clearance and derived dense-layout spacing from card dimensions to prevent overlap as content grows.
+
 ## 1.1.69 - 2026-07-17
 
 - Automatically resume safe bulk package operations after an expected same-session Unity script reload, skipping completed or already-correct targets.
