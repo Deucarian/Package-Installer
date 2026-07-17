@@ -351,6 +351,10 @@ namespace Deucarian.PackageInstaller.Editor
         private SelectionKind _selectionKind = SelectionKind.Package;
         private string _selectedPackageId = string.Empty;
         private PackageGraphNavigationState _graphNavigationState = PackageGraphNavigationState.Overview();
+        private PackageInstallerWindowReloadSnapshot _pendingReloadSnapshot;
+        private bool _reloadStatePendingValidation;
+        private bool _hasPendingReloadCamera;
+        private PackageGraphCameraState _pendingReloadCamera;
         private string _detailsPreviewedGraphGroupId = string.Empty;
         private PackageGraphModel _cachedPackageGraph;
         private PackageGraphModel _lastPackageGraph;
@@ -674,6 +678,15 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void OnEnable()
         {
+            AssemblyReloadEvents.beforeAssemblyReload -= HandleBeforeAssemblyReload;
+            AssemblyReloadEvents.beforeAssemblyReload += HandleBeforeAssemblyReload;
+            bool restoredAfterReload = PackageInstallerWindowReloadState.TryConsume(
+                out PackageInstallerWindowReloadSnapshot reloadSnapshot);
+            if (restoredAfterReload)
+            {
+                RestoreReloadSnapshot(reloadSnapshot);
+            }
+
             _confirmationState = new PackageInstallerConfirmationState();
             _activeConfirmationWindow = null;
             titleContent = DeucarianEditorIcons.GetIconContent(
@@ -707,7 +720,10 @@ namespace Deucarian.PackageInstaller.Editor
                     ? _packageUpdateCheckService.GetStatus(packageDefinition, GetSelectedChannel(packageDefinition))
                     : null);
             PackageRegistryProvider.RefreshRemote();
-            EnsureValidSelection();
+            if (!restoredAfterReload)
+            {
+                EnsureValidSelection();
+            }
             _operationDetailsExpanded = EditorPrefs.GetBool(GetOperationDrawerPreferenceKey(), false);
 
             PackageRegistryProvider.RegistryChanged += HandleRegistryChanged;
@@ -729,7 +745,8 @@ namespace Deucarian.PackageInstaller.Editor
             PackageInstallerActivityService.Changed += Repaint;
             PackageInstallerActivityService.Changed += UpdateOperationFooter;
 
-            bool checkUpdatesAfterDetectionRefresh = ShouldCheckForUpdatesOnGraphOpen();
+            bool checkUpdatesAfterDetectionRefresh =
+                !restoredAfterReload && ShouldCheckForUpdatesOnGraphOpen();
             _promptSavedOperationAfterDetectionRefresh = _packageInstallService.HasSavedOperation;
 
             if (checkUpdatesAfterDetectionRefresh)
@@ -747,6 +764,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void OnDisable()
         {
+            AssemblyReloadEvents.beforeAssemblyReload -= HandleBeforeAssemblyReload;
             DismissPendingConfirmation(refreshUi: false);
 
             if (_packageDependencyInstaller != null)
@@ -795,6 +813,7 @@ namespace Deucarian.PackageInstaller.Editor
             PackageInstallerActivityService.Changed -= UpdateOperationFooter;
             HideGlobalChannelOverridePopup();
             _stateRepository = null;
+            PackageInstallerWindowReloadState.ClearForNormalDisable();
         }
 
         private void CreateGUI()
@@ -871,7 +890,18 @@ namespace Deucarian.PackageInstaller.Editor
             content.Add(_operationFooterContainer);
 
             SetViewMode(_viewMode);
+            if (_hasPendingReloadCamera)
+            {
+                _graphView.PrepareCameraRestoreAfterReload();
+            }
+
             ApplyResponsiveLayout(position.width);
+            if (_hasPendingReloadCamera)
+            {
+                _graphView.RestoreCameraAfterReload(_pendingReloadCamera);
+                _hasPendingReloadCamera = false;
+            }
+
             UpdateOperationFooter();
             RefreshGraphView("window initialized");
         }
@@ -2362,6 +2392,7 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 PackageGraphModel graph = GetOrBuildPackageGraphModel();
                 PackageGraphOpenProfiler.Current?.SetGraphCounts(graph);
+                ValidatePendingReloadState(graph);
 
                 HashSet<string> visiblePackageIds;
                 PackageGraphSearchState searchState;
@@ -6777,6 +6808,11 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void EnsureValidSelection()
         {
+            if (_reloadStatePendingValidation)
+            {
+                return;
+            }
+
             if (GetSelectedDefinition() != null)
             {
                 return;
@@ -6801,6 +6837,100 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             _selectedPackageId = defaultSelection != null ? defaultSelection.PackageId : string.Empty;
+        }
+
+        private void HandleBeforeAssemblyReload()
+        {
+            PackageGraphCameraState camera = _graphView != null
+                ? _graphView.GetCameraStateForReload()
+                : new PackageGraphCameraState(Vector2.zero, 1f);
+            PackageInstallerWindowReloadState.SaveForAssemblyReload(
+                new PackageInstallerWindowReloadSnapshot
+                {
+                    searchText = _visibilityFilterState.SearchText,
+                    showInstalled = _visibilityFilterState.ShowInstalled,
+                    showNotInstalled = _visibilityFilterState.ShowNotInstalled,
+                    selectedPackageId = _selectedPackageId,
+                    navigationTargetKind = (int)_graphNavigationState.TargetKind,
+                    focusedPackageId = _graphNavigationState.FocusedPackageId,
+                    focusedGroupId = _graphNavigationState.FocusedGroupId,
+                    viewMode = (int)_viewMode,
+                    sidebarScrollX = _sidebarScrollPosition.x,
+                    sidebarScrollY = _sidebarScrollPosition.y,
+                    detailsScrollX = _detailsScrollPosition.x,
+                    detailsScrollY = _detailsScrollPosition.y,
+                    operationScrollX = _operationDetailsScrollPosition.x,
+                    operationScrollY = _operationDetailsScrollPosition.y,
+                    hasGraphCamera = _graphView != null,
+                    graphPanX = camera.Pan.x,
+                    graphPanY = camera.Pan.y,
+                    graphZoom = camera.Zoom
+                });
+        }
+
+        private void RestoreReloadSnapshot(PackageInstallerWindowReloadSnapshot snapshot)
+        {
+            _pendingReloadSnapshot = snapshot;
+            _reloadStatePendingValidation = true;
+            _visibilityFilterState.Set(
+                snapshot.searchText,
+                snapshot.showInstalled,
+                snapshot.showNotInstalled);
+            _selectedPackageId = snapshot.selectedPackageId;
+            _graphNavigationState = RestoreNavigation(snapshot);
+            _viewMode = Enum.IsDefined(typeof(InstallerViewMode), snapshot.viewMode)
+                ? ResolveInstallerViewMode((InstallerViewMode)snapshot.viewMode)
+                : DefaultInstallerViewMode;
+            _sidebarScrollPosition = new Vector2(snapshot.sidebarScrollX, snapshot.sidebarScrollY);
+            _detailsScrollPosition = new Vector2(snapshot.detailsScrollX, snapshot.detailsScrollY);
+            _operationDetailsScrollPosition = new Vector2(
+                snapshot.operationScrollX,
+                snapshot.operationScrollY);
+            _hasPendingReloadCamera = snapshot.hasGraphCamera;
+            if (_hasPendingReloadCamera)
+            {
+                _pendingReloadCamera = new PackageGraphCameraState(
+                    new Vector2(snapshot.graphPanX, snapshot.graphPanY),
+                    snapshot.graphZoom);
+            }
+        }
+
+        private void ValidatePendingReloadState(PackageGraphModel graph)
+        {
+            if (!_reloadStatePendingValidation)
+            {
+                return;
+            }
+
+            PackageInstallerWindowReloadResolution resolution =
+                PackageInstallerWindowReloadState.Resolve(_pendingReloadSnapshot, graph);
+            _selectedPackageId = resolution.SelectedPackageId;
+            _selectionKind = resolution.SelectedPackageIsIntegration
+                ? SelectionKind.Integration
+                : SelectionKind.Package;
+            _graphNavigationState = resolution.Navigation;
+            _pendingReloadSnapshot = null;
+            _reloadStatePendingValidation = false;
+        }
+
+        private static PackageGraphNavigationState RestoreNavigation(
+            PackageInstallerWindowReloadSnapshot snapshot)
+        {
+            PackageGraphNavigationTargetKind targetKind =
+                Enum.IsDefined(typeof(PackageGraphNavigationTargetKind), snapshot.navigationTargetKind)
+                    ? (PackageGraphNavigationTargetKind)snapshot.navigationTargetKind
+                    : PackageGraphNavigationTargetKind.Overview;
+            switch (targetKind)
+            {
+                case PackageGraphNavigationTargetKind.Package:
+                    return PackageGraphNavigationState.Package(
+                        snapshot.focusedPackageId,
+                        snapshot.focusedGroupId);
+                case PackageGraphNavigationTargetKind.Group:
+                    return PackageGraphNavigationState.Group(snapshot.focusedGroupId);
+                default:
+                    return PackageGraphNavigationState.Overview();
+            }
         }
 
         private bool IsSelected(PackageDefinition packageDefinition, SelectionKind selectionKind)
