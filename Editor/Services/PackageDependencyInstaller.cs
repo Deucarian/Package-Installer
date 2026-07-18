@@ -1066,7 +1066,12 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (isDependency)
             {
-                return !isInstalledAtTargetOrNewer;
+                // Update and reinstall operations must refresh the entire dependency
+                // closure before the requested root. A Git dependency can still point
+                // at the same movable channel (for example #main) while its resolved
+                // commit is stale, so channel equality alone is not proof that the
+                // dependency satisfies the root package's current API contract.
+                return includeInstalledRequestedPackages || !isInstalledAtTargetOrNewer;
             }
 
             return includeInstalledRequestedPackages || !isInstalledAtTargetOrNewer;
