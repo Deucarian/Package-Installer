@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.76 - 2026-07-18
+
+- Refreshed the complete installed dependency closure before update and reinstall roots so movable Git channels cannot leave an older dependency API compiled against a newer consumer package.
+- Added stable/development dependency-contract resolution to Unity CI so package promotions fail when a declared dependency version is not yet available on the target channel.
+
 ## 1.1.75 - 2026-07-18
 
 - Preserve Package Installer search, visibility filters, package or group focus, graph camera, and scroll positions across expected Unity script reloads.
