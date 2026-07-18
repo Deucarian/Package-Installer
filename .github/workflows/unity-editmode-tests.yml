@@ -42,6 +42,7 @@ jobs:
       UNITY_EDITOR: /opt/unity/2021.3.45f1/Editor/Unity
       TEMP_NAME: package-installer-${{ github.run_id }}-${{ github.run_attempt }}
       PACKAGE_REVISION: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || github.sha }}
+      DEPENDENCY_REF: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.base.ref || github.ref_name }}
 
     steps:
       - name: Prepare disposable paths
@@ -87,6 +88,105 @@ jobs:
           test "$(id -un)" = "deucarian-runner"
           test -x "$UNITY_EDITOR"
 
+      - name: Resolve and validate dependency channel
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          case "$DEPENDENCY_REF" in
+            main|develop) ;;
+            *)
+              echo "Unsupported dependency channel: $DEPENDENCY_REF" >&2
+              exit 1
+              ;;
+          esac
+
+          resolve_revision() {
+            local repository="$1"
+            local revision
+            revision="$(git ls-remote \
+              "https://github.com/Deucarian/${repository}.git" \
+              "refs/heads/$DEPENDENCY_REF" | awk '{print $1}')"
+            if [[ ! "$revision" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "Could not resolve Deucarian/${repository}#$DEPENDENCY_REF." >&2
+              exit 1
+            fi
+            printf '%s' "$revision"
+          }
+
+          editor_revision="$(resolve_revision Editor)"
+          logging_revision="$(resolve_revision Logging)"
+          contracts="$TEMP_ROOT/dependency-contracts"
+          mkdir -p "$contracts"
+
+          curl \
+            --fail \
+            --show-error \
+            --silent \
+            --location \
+            --proto '=https' \
+            --tlsv1.2 \
+            --retry 4 \
+            --retry-all-errors \
+            --output "$contracts/editor-package.json" \
+            "https://raw.githubusercontent.com/Deucarian/Editor/$editor_revision/package.json"
+          curl \
+            --fail \
+            --show-error \
+            --silent \
+            --location \
+            --proto '=https' \
+            --tlsv1.2 \
+            --retry 4 \
+            --retry-all-errors \
+            --output "$contracts/logging-package.json" \
+            "https://raw.githubusercontent.com/Deucarian/Logging/$logging_revision/package.json"
+
+          python3 - <<'PY'
+          import json
+          import re
+          from pathlib import Path
+
+          def semantic_version(value, label):
+              match = re.fullmatch(r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)", value or "")
+              if not match:
+                  raise SystemExit(f"{label} is not a supported release version: {value!r}.")
+              return tuple(int(part) for part in match.groups())
+
+          consumer = json.loads(Path("package.json").read_text())
+          dependencies = consumer.get("dependencies", {})
+          contracts = Path(__import__("os").environ["TEMP_ROOT"]) / "dependency-contracts"
+          resolved = {
+              "com.deucarian.editor": json.loads(
+                  (contracts / "editor-package.json").read_text()
+              ).get("version"),
+              "com.deucarian.logging": json.loads(
+                  (contracts / "logging-package.json").read_text()
+              ).get("version"),
+          }
+
+          for package_id, resolved_version in resolved.items():
+              required_version = dependencies.get(package_id)
+              if required_version is None:
+                  raise SystemExit(f"Package Installer does not declare required dependency {package_id}.")
+              if semantic_version(resolved_version, package_id) < semantic_version(
+                  required_version, f"{package_id} requirement"
+              ):
+                  raise SystemExit(
+                      f"{package_id} on the selected channel exposes {resolved_version}, "
+                      f"but Package Installer requires at least {required_version}."
+                  )
+              print(
+                  f"{package_id} dependency contract satisfied: "
+                  f"{resolved_version} >= {required_version}."
+              )
+          PY
+
+          {
+            echo "EDITOR_REVISION=$editor_revision"
+            echo "LOGGING_REVISION=$logging_revision"
+          } >> "$GITHUB_ENV"
+
       - name: Create disposable Unity project
         shell: bash
         run: |
@@ -102,8 +202,8 @@ jobs:
           cat > "$PROJECT_PATH/Packages/manifest.json" <<JSON
           {
             "dependencies": {
-              "com.deucarian.editor": "https://github.com/Deucarian/Editor.git#9d6b60b67d998fcb38ebe8a969ab819648232864",
-              "com.deucarian.logging": "https://github.com/Deucarian/Logging.git#683d88858942d2d3c551135cbf1384b4f71cdd75",
+              "com.deucarian.editor": "https://github.com/Deucarian/Editor.git#${EDITOR_REVISION}",
+              "com.deucarian.logging": "https://github.com/Deucarian/Logging.git#${LOGGING_REVISION}",
               "com.deucarian.package-installer": "https://github.com/Deucarian/Package-Installer.git#${PACKAGE_REVISION}",
               "com.unity.test-framework": "1.1.33"
             },
@@ -200,8 +300,14 @@ jobs:
           manifest = json.loads((project_path / "Packages" / "manifest.json").read_text())
           lock = json.loads((project_path / "Packages" / "packages-lock.json").read_text())
           expected = {
-              "com.deucarian.editor": "https://github.com/Deucarian/Editor.git#9d6b60b67d998fcb38ebe8a969ab819648232864",
-              "com.deucarian.logging": "https://github.com/Deucarian/Logging.git#683d88858942d2d3c551135cbf1384b4f71cdd75",
+              "com.deucarian.editor": (
+                  "https://github.com/Deucarian/Editor.git#"
+                  + os.environ["EDITOR_REVISION"]
+              ),
+              "com.deucarian.logging": (
+                  "https://github.com/Deucarian/Logging.git#"
+                  + os.environ["LOGGING_REVISION"]
+              ),
               "com.deucarian.package-installer": (
                   "https://github.com/Deucarian/Package-Installer.git#"
                   + os.environ["PACKAGE_REVISION"]

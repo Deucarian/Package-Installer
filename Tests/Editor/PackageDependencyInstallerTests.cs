@@ -196,6 +196,31 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void UpdatePlanRefreshesInstalledDependencyBeforeRequestedRoot()
+        {
+            using (PlanFixture fixture = PlanFixture.CreateDefault())
+            {
+                fixture.DetectionService.ReplaceInstalledPackageNamesForTests(
+                    new[] { fixture.Editor.PackageId, fixture.Logging.PackageId });
+
+                PackageDependencyInstallPlan plan = fixture.Installer.CreateInstallPlan(
+                    new[] { fixture.Logging },
+                    _ => PackageChannel.Stable,
+                    includeInstalledRequestedPackages: true);
+
+                Assert.IsTrue(plan.IsValid, plan.ErrorMessage);
+                CollectionAssert.AreEqual(
+                    new[] { fixture.Editor.PackageId, fixture.Logging.PackageId },
+                    plan.Packages.Select(package => package.PackageId).ToArray());
+                CollectionAssert.AreEqual(
+                    new[] { fixture.Editor.PackageId },
+                    plan.Steps.Single(step =>
+                        step.PackageDefinition.PackageId == fixture.Logging.PackageId)
+                        .PrerequisitePackageIds);
+            }
+        }
+
+        [Test]
         public void DuplicateDependencyIsQueuedOnce()
         {
             using (PlanFixture fixture = PlanFixture.CreateDefault())
