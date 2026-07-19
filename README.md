@@ -6,7 +6,7 @@
 
 It is the Deucarian ecosystem front door for installing standalone packages, integration packages, suite packages, templates, and explicitly declared package samples from Package Registry metadata.
 
-Current package version: `1.1.76`.
+Current package version: `1.1.77`.
 
 ## When to use it
 
@@ -265,7 +265,7 @@ Packages, groups, summaries, breadcrumbs, and back targets support keyboard focu
 
 Search preserves the graph's spatial map: root and category positions stay fixed, direct matches and their category path are emphasized, and unrelated results are muted. Installed and Not installed remain visibility filters, but filtered package slots stay reserved so the remaining graph does not reflow. Empty search/filter states provide a contextual recovery action without turning the graph into a new permanent control surface.
 
-Overview and category focus use neutral orbit rails with short attachment caps at each child instead of long spokes that can disappear behind animated cards. Package focus keeps structural membership buses continuous by routing around category captions, while dependency, integration, optional, and suite relationships retain their own stable visual treatment. Graph repaint schedules run only for finite camera and layout transitions; an open, idle graph does not maintain a background animation loop.
+Overview and category focus use neutral orbit rails with short attachment caps at each child instead of long spokes that can disappear behind animated cards. Package focus keeps structural membership buses continuous by routing around category captions, while dependency, integration, optional, and suite relationships retain their own stable visual treatment. Canvas, node, group, edge, interaction, and status colors are resolved through `DeucarianEditorGraphTheme`; this package owns graph meaning and behavior, while `com.deucarian.editor` owns its light/dark visual language. Graph repaint schedules run only for finite camera and layout transitions; an open, idle graph does not maintain a background animation loop.
 
 ## Integration Packages
 
@@ -329,7 +329,7 @@ Keeping the installer editor-only ensures:
 
 ## Versioning
 
-Current package version: `1.1.76`.
+Current package version: `1.1.77`.
 
 Branch strategy:
 
