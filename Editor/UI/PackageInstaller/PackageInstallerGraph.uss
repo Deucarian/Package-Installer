@@ -2056,3 +2056,647 @@
     border-top-color: rgba(255, 213, 112, 0.94);
     border-bottom-color: rgba(255, 213, 112, 0.94);
 }
+
+/* Tideline light skin ----------------------------------------------------- */
+
+.deucarian-editor.deucarian-theme--light .dpi-global-channel-popup,
+.deucarian-editor.deucarian-theme--light .dpi-graph-details,
+.deucarian-editor.deucarian-theme--light .dpi-ecosystem-graph__empty-state {
+    background-color: rgba(255, 255, 255, 0.96);
+    border-left-color: var(--deucarian-border);
+    border-right-color: var(--deucarian-border);
+    border-top-color: var(--deucarian-border);
+    border-bottom-color: var(--deucarian-border);
+}
+
+.deucarian-editor.deucarian-theme--light .dpi-ecosystem-graph {
+    background-color: rgba(255, 255, 255, 0.66);
+    border-left-color: var(--deucarian-border);
+    border-right-color: var(--deucarian-border);
+    border-top-color: var(--deucarian-border);
+    border-bottom-color: var(--deucarian-border);
+}
+
+.deucarian-editor.deucarian-theme--light .dpi-ecosystem-graph__header {
+    background-color: rgba(255, 255, 255, 0.78);
+    border-left-color: var(--deucarian-border);
+    border-right-color: var(--deucarian-border);
+    border-top-color: var(--deucarian-border);
+    border-bottom-color: var(--deucarian-border);
+}
+
+.deucarian-editor.deucarian-theme--light .dpi-ecosystem-graph__viewport {
+    background-color: rgba(242, 239, 231, 0.40);
+    border-left-color: var(--deucarian-border);
+    border-right-color: var(--deucarian-border);
+    border-top-color: var(--deucarian-border);
+    border-bottom-color: var(--deucarian-border);
+}
+
+.deucarian-editor.deucarian-theme--light .dpi-ecosystem-graph__legend {
+    background-color: rgba(242, 239, 231, 0.32);
+}
+
+.deucarian-editor.deucarian-theme--light .dpi-ecosystem-graph__breadcrumb,
+.deucarian-editor.deucarian-theme--light .dpi-ecosystem-graph__filter-toggle,
+.deucarian-editor.deucarian-theme--light .dpi-ecosystem-graph__filter-clear,
+.deucarian-editor.deucarian-theme--light .dpi-ecosystem-graph__toolbar-button,
+.deucarian-editor.deucarian-theme--light .dpi-global-channel-popup__apply,
+.deucarian-editor.deucarian-theme--light .dpi-ecosystem-graph__empty-action,
+.deucarian-editor.deucarian-theme--light .dpi-graph-node__action {
+    background-color: var(--deucarian-control);
+    border-left-color: var(--deucarian-border);
+    border-right-color: var(--deucarian-border);
+    border-top-color: var(--deucarian-border);
+    border-bottom-color: var(--deucarian-border);
+    color: var(--deucarian-text);
+}
+
+.deucarian-editor.deucarian-theme--light .dpi-ecosystem-graph__breadcrumb:hover,
+.deucarian-editor.deucarian-theme--light .dpi-ecosystem-graph__filter-toggle:hover,
+.deucarian-editor.deucarian-theme--light .dpi-ecosystem-graph__filter-clear:hover,
+.deucarian-editor.deucarian-theme--light .dpi-ecosystem-graph__toolbar-button:hover,
+.deucarian-editor.deucarian-theme--light .dpi-global-channel-popup__apply:hover,
+.deucarian-editor.deucarian-theme--light .dpi-ecosystem-graph__empty-action:hover,
+.deucarian-editor.deucarian-theme--light .dpi-graph-node__action:hover {
+    background-color: var(--deucarian-control-hover);
+    border-left-color: var(--deucarian-border-active);
+    border-right-color: var(--deucarian-border-active);
+    border-top-color: var(--deucarian-border-active);
+    border-bottom-color: var(--deucarian-border-active);
+    color: var(--deucarian-text);
+}
+
+.deucarian-editor.deucarian-theme--light .dpi-ecosystem-graph__breadcrumb:active,
+.deucarian-editor.deucarian-theme--light .dpi-ecosystem-graph__filter-toggle:active,
+.deucarian-editor.deucarian-theme--light .dpi-ecosystem-graph__filter-clear:active,
+.deucarian-editor.deucarian-theme--light .dpi-ecosystem-graph__toolbar-button:active,
+.deucarian-editor.deucarian-theme--light .dpi-ecosystem-graph__empty-action:active,
+.deucarian-editor.deucarian-theme--light .dpi-ecosystem-graph__filter-toggle--active,
+.deucarian-editor.deucarian-theme--light .dpi-graph-node__action:active {
+    background-color: var(--deucarian-control-active);
+    color: var(--deucarian-text);
+}
+
+.deucarian-editor.deucarian-theme--light .dpi-ecosystem-graph__breadcrumb-current,
+.deucarian-editor.deucarian-theme--light .dpi-ecosystem-graph__filter-label,
+.deucarian-editor.deucarian-theme--light .dpi-graph-hub__title,
+.deucarian-editor.deucarian-theme--light .dpi-graph-sector-label,
+.deucarian-editor.deucarian-theme--light .dpi-graph-group__title,
+.deucarian-editor.deucarian-theme--light .dpi-graph-node__title {
+    color: var(--deucarian-text);
+}
+
+.deucarian-editor.deucarian-theme--light .dpi-ecosystem-graph__filter-count,
+.deucarian-editor.deucarian-theme--light .dpi-graph-hub__subtitle,
+.deucarian-editor.deucarian-theme--light .dpi-graph-group__subtitle,
+.deucarian-editor.deucarian-theme--light .dpi-graph-group__stats,
+.deucarian-editor.deucarian-theme--light .dpi-graph-node__package-id,
+.deucarian-editor.deucarian-theme--light .dpi-graph-node__category-path,
+.deucarian-editor.deucarian-theme--light .dpi-graph-node__channel,
+.deucarian-editor.deucarian-theme--light .dpi-graph-unrelated-summary,
+.deucarian-editor.deucarian-theme--light .dpi-graph-overflow-summary {
+    color: var(--deucarian-muted);
+}
+
+.deucarian-editor.deucarian-theme--light .dpi-graph-sector-label {
+    background-color: rgba(255, 255, 255, 0.68);
+}
+
+.deucarian-editor.deucarian-theme--light .dpi-graph-hub,
+.deucarian-editor.deucarian-theme--light .dpi-graph-node,
+.deucarian-editor.deucarian-theme--light .dpi-graph-group__symbol,
+.deucarian-editor.deucarian-theme--light .dpi-graph-unrelated-summary,
+.deucarian-editor.deucarian-theme--light .dpi-graph-overflow-summary {
+    background-color: rgba(255, 255, 255, 0.88);
+    border-left-color: var(--deucarian-border);
+    border-right-color: var(--deucarian-border);
+    border-top-color: var(--deucarian-border);
+    border-bottom-color: var(--deucarian-border);
+}
+
+.deucarian-editor.deucarian-theme--light .dpi-graph-node:hover,
+.deucarian-editor.deucarian-theme--light .dpi-graph-group:hover .dpi-graph-group__symbol,
+.deucarian-editor.deucarian-theme--light .dpi-graph-unrelated-summary:hover {
+    background-color: rgba(235, 247, 245, 0.96);
+    border-left-color: var(--deucarian-border-active);
+    border-right-color: var(--deucarian-border-active);
+    border-top-color: var(--deucarian-border-active);
+    border-bottom-color: var(--deucarian-border-active);
+}
+
+.deucarian-editor.deucarian-theme--light .dpi-graph-node:focus,
+.deucarian-editor.deucarian-theme--light .dpi-graph-node--selected,
+.deucarian-editor.deucarian-theme--light .dpi-graph-node.dpi-graph-search--match,
+.deucarian-editor.deucarian-theme--light .dpi-graph-node.dpi-graph-search--owner,
+.deucarian-editor.deucarian-theme--light .dpi-graph-group:focus .dpi-graph-group__symbol,
+.deucarian-editor.deucarian-theme--light .dpi-graph-group--focused .dpi-graph-group__symbol,
+.deucarian-editor.deucarian-theme--light .dpi-graph-group.dpi-graph-search--match .dpi-graph-group__symbol,
+.deucarian-editor.deucarian-theme--light .dpi-graph-group.dpi-graph-search--owner .dpi-graph-group__symbol {
+    background-color: rgba(218, 239, 236, 0.98);
+    border-left-color: var(--deucarian-border-active);
+    border-right-color: var(--deucarian-border-active);
+    border-top-color: var(--deucarian-border-active);
+    border-bottom-color: var(--deucarian-border-active);
+}
+
+.deucarian-editor.deucarian-theme--light .dpi-graph-node--related,
+.deucarian-editor.deucarian-theme--light .dpi-graph-node--previewed,
+.deucarian-editor.deucarian-theme--light .dpi-graph-node--hover-context,
+.deucarian-editor.deucarian-theme--light .dpi-graph-group--hover-context .dpi-graph-group__symbol,
+.deucarian-editor.deucarian-theme--light .dpi-graph-group.dpi-graph-search--context .dpi-graph-group__symbol {
+    background-color: rgba(233, 244, 242, 0.92);
+}
+
+.deucarian-editor.deucarian-theme--light .dpi-graph-node__glass-highlight,
+.deucarian-editor.deucarian-theme--light .dpi-graph-group__glass-highlight {
+    background-color: rgba(255, 255, 255, 0.58);
+}
+
+/* Shared Deucarian semantic graph skin ---------------------------------- */
+
+.deucarian-editor .dpi-global-channel-popup,
+.deucarian-editor .dpi-graph-details,
+.deucarian-editor .dpi-ecosystem-graph__empty-state {
+    background-color: var(--deucarian-graph-surface-raised);
+    border-left-color: var(--deucarian-graph-border);
+    border-right-color: var(--deucarian-graph-border);
+    border-top-color: var(--deucarian-graph-border);
+    border-bottom-color: var(--deucarian-graph-border);
+}
+
+.deucarian-editor .dpi-ecosystem-graph {
+    background-color: var(--deucarian-graph-surface);
+    border-left-color: var(--deucarian-graph-border);
+    border-right-color: var(--deucarian-graph-border);
+    border-top-color: var(--deucarian-graph-border);
+    border-bottom-color: var(--deucarian-graph-border);
+}
+
+.deucarian-editor .dpi-ecosystem-graph__header {
+    background-color: var(--deucarian-graph-surface-raised);
+    border-left-color: var(--deucarian-graph-border);
+    border-right-color: var(--deucarian-graph-border);
+    border-top-color: var(--deucarian-graph-border);
+    border-bottom-color: var(--deucarian-graph-border);
+}
+
+.deucarian-editor .dpi-ecosystem-graph__viewport {
+    background-color: var(--deucarian-graph-canvas);
+    border-left-color: var(--deucarian-graph-border);
+    border-right-color: var(--deucarian-graph-border);
+    border-top-color: var(--deucarian-graph-border);
+    border-bottom-color: var(--deucarian-graph-border);
+}
+
+.deucarian-editor .dpi-ecosystem-graph__canvas {
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.deucarian-editor .dpi-ecosystem-graph__legend,
+.deucarian-editor .dpi-graph-sector-label {
+    background-color: var(--deucarian-graph-canvas-inset);
+}
+
+.deucarian-editor .dpi-ecosystem-graph__breadcrumb,
+.deucarian-editor .dpi-ecosystem-graph__filter-toggle,
+.deucarian-editor .dpi-ecosystem-graph__filter-clear,
+.deucarian-editor .dpi-ecosystem-graph__toolbar-button,
+.deucarian-editor .dpi-global-channel-popup__apply,
+.deucarian-editor .dpi-ecosystem-graph__empty-action,
+.deucarian-editor .dpi-graph-node__action {
+    background-color: var(--deucarian-control);
+    border-left-color: var(--deucarian-graph-border);
+    border-right-color: var(--deucarian-graph-border);
+    border-top-color: var(--deucarian-graph-border);
+    border-bottom-color: var(--deucarian-graph-border);
+    color: var(--deucarian-text);
+}
+
+.deucarian-editor .dpi-ecosystem-graph__breadcrumb:hover,
+.deucarian-editor .dpi-ecosystem-graph__filter-toggle:hover,
+.deucarian-editor .dpi-ecosystem-graph__filter-clear:hover,
+.deucarian-editor .dpi-ecosystem-graph__toolbar-button:hover,
+.deucarian-editor .dpi-global-channel-popup__apply:hover,
+.deucarian-editor .dpi-ecosystem-graph__empty-action:hover,
+.deucarian-editor .dpi-graph-node__action:hover {
+    background-color: var(--deucarian-control-hover);
+    border-left-color: var(--deucarian-graph-border-hover);
+    border-right-color: var(--deucarian-graph-border-hover);
+    border-top-color: var(--deucarian-graph-border-hover);
+    border-bottom-color: var(--deucarian-graph-border-hover);
+}
+
+.deucarian-editor .dpi-ecosystem-graph__breadcrumb:active,
+.deucarian-editor .dpi-ecosystem-graph__filter-toggle:active,
+.deucarian-editor .dpi-ecosystem-graph__filter-clear:active,
+.deucarian-editor .dpi-ecosystem-graph__toolbar-button:active,
+.deucarian-editor .dpi-ecosystem-graph__empty-action:active,
+.deucarian-editor .dpi-ecosystem-graph__filter-toggle--active,
+.deucarian-editor .dpi-graph-node__action:active {
+    background-color: var(--deucarian-control-active);
+    border-left-color: var(--deucarian-graph-border-selected);
+    border-right-color: var(--deucarian-graph-border-selected);
+    border-top-color: var(--deucarian-graph-border-selected);
+    border-bottom-color: var(--deucarian-graph-border-selected);
+}
+
+.deucarian-editor .dpi-graph-hub,
+.deucarian-editor .dpi-graph-node,
+.deucarian-editor .dpi-graph-group__symbol,
+.deucarian-editor .dpi-graph-unrelated-summary,
+.deucarian-editor .dpi-graph-overflow-summary {
+    background-color: var(--deucarian-graph-surface);
+    border-left-color: var(--deucarian-graph-border);
+    border-right-color: var(--deucarian-graph-border);
+    border-top-color: var(--deucarian-graph-border);
+    border-bottom-color: var(--deucarian-graph-border);
+}
+
+.deucarian-editor .dpi-graph-node:hover,
+.deucarian-editor .dpi-graph-group:hover .dpi-graph-group__symbol,
+.deucarian-editor .dpi-graph-unrelated-summary:hover,
+.deucarian-editor .dpi-graph-hub--focus {
+    background-color: var(--deucarian-graph-surface-hover);
+    border-left-color: var(--deucarian-graph-border-hover);
+    border-right-color: var(--deucarian-graph-border-hover);
+    border-top-color: var(--deucarian-graph-border-hover);
+    border-bottom-color: var(--deucarian-graph-border-hover);
+}
+
+.deucarian-editor .dpi-graph-node:focus,
+.deucarian-editor .dpi-graph-node--selected,
+.deucarian-editor .dpi-graph-node.dpi-graph-search--match,
+.deucarian-editor .dpi-graph-node.dpi-graph-search--owner,
+.deucarian-editor .dpi-graph-group:focus .dpi-graph-group__symbol,
+.deucarian-editor .dpi-graph-group--focused .dpi-graph-group__symbol,
+.deucarian-editor .dpi-graph-group.dpi-graph-search--match .dpi-graph-group__symbol,
+.deucarian-editor .dpi-graph-group.dpi-graph-search--owner .dpi-graph-group__symbol {
+    background-color: var(--deucarian-graph-surface-selected);
+    border-left-color: var(--deucarian-graph-border-selected);
+    border-right-color: var(--deucarian-graph-border-selected);
+    border-top-color: var(--deucarian-graph-border-selected);
+    border-bottom-color: var(--deucarian-graph-border-selected);
+}
+
+.deucarian-editor .dpi-graph-node--related,
+.deucarian-editor .dpi-graph-node--previewed,
+.deucarian-editor .dpi-graph-node--hover-context,
+.deucarian-editor .dpi-graph-group--hover-context .dpi-graph-group__symbol,
+.deucarian-editor .dpi-graph-group.dpi-graph-search--context .dpi-graph-group__symbol {
+    background-color: var(--deucarian-graph-surface-related);
+    border-left-color: var(--deucarian-graph-border-hover);
+    border-right-color: var(--deucarian-graph-border-hover);
+    border-top-color: var(--deucarian-graph-border-hover);
+    border-bottom-color: var(--deucarian-graph-border-hover);
+}
+
+.deucarian-editor .dpi-graph-sector-label--infrastructure {
+    color: var(--deucarian-mineral);
+}
+
+.deucarian-editor .dpi-graph-sector-label--runtime {
+    color: var(--deucarian-grove);
+}
+
+.deucarian-editor .dpi-graph-sector-label--experience,
+.deucarian-editor .dpi-graph-sector-label--integration {
+    color: var(--deucarian-tideline);
+}
+
+.deucarian-editor .dpi-graph-sector-label--tools {
+    color: var(--deucarian-cobalt);
+}
+
+.deucarian-editor .dpi-graph-sector-label--suite {
+    color: var(--deucarian-oxblood);
+}
+
+.deucarian-editor .dpi-graph-group--integration .dpi-graph-group__symbol,
+.deucarian-editor .dpi-graph-node--integration {
+    border-left-color: var(--deucarian-tideline);
+}
+
+.deucarian-editor .dpi-graph-group--suite .dpi-graph-group__symbol,
+.deucarian-editor .dpi-graph-node--suite {
+    border-left-color: var(--deucarian-oxblood);
+}
+
+.deucarian-editor .dpi-graph-node--companion {
+    border-left-color: var(--deucarian-mineral);
+}
+
+.deucarian-editor .dpi-graph-legend__line--installed,
+.deucarian-editor .dpi-graph-group__stat--installed,
+.deucarian-editor .dpi-graph-node__badge--installed {
+    color: var(--deucarian-graph-installed);
+    border-bottom-color: var(--deucarian-graph-installed);
+}
+
+.deucarian-editor .dpi-graph-legend__line--available,
+.deucarian-editor .dpi-graph-group__stat--available,
+.deucarian-editor .dpi-graph-node__badge--available {
+    color: var(--deucarian-graph-available);
+    border-bottom-color: var(--deucarian-graph-available);
+}
+
+.deucarian-editor .dpi-graph-legend__line--warning,
+.deucarian-editor .dpi-graph-group__stat--attention,
+.deucarian-editor .dpi-graph-node__badge--update {
+    color: var(--deucarian-graph-update);
+    border-bottom-color: var(--deucarian-graph-update);
+}
+
+.deucarian-editor .dpi-graph-legend__line--checking,
+.deucarian-editor .dpi-graph-node__badge--checking {
+    color: var(--deucarian-graph-checking);
+    border-bottom-color: var(--deucarian-graph-checking);
+}
+
+.deucarian-editor .dpi-graph-group__stat--unknown {
+    color: var(--deucarian-graph-unknown);
+}
+
+.deucarian-editor .dpi-graph-node__status-rail--installed,
+.deucarian-editor .dpi-graph-node--installed {
+    border-bottom-color: var(--deucarian-graph-installed);
+}
+
+.deucarian-editor .dpi-graph-node__status-rail--available {
+    border-bottom-color: var(--deucarian-graph-available);
+}
+
+.deucarian-editor .dpi-graph-node__status-rail--update,
+.deucarian-editor .dpi-graph-node--status-update,
+.deucarian-editor .dpi-graph-node--status-update:hover,
+.deucarian-editor .dpi-graph-node--status-update.dpi-graph-node--selected {
+    border-bottom-color: var(--deucarian-graph-update);
+}
+
+.deucarian-editor .dpi-graph-node__status-rail--warning,
+.deucarian-editor .dpi-graph-node--status-warning,
+.deucarian-editor .dpi-graph-node__badge--warning {
+    border-bottom-color: var(--deucarian-graph-warning);
+    color: var(--deucarian-graph-warning);
+}
+
+.deucarian-editor .dpi-graph-node__status-rail--missing,
+.deucarian-editor .dpi-graph-node--missing,
+.deucarian-editor .dpi-graph-node--status-missing,
+.deucarian-editor .dpi-graph-node__badge--missing {
+    border-left-color: var(--deucarian-graph-missing);
+    border-right-color: var(--deucarian-graph-missing);
+    border-top-color: var(--deucarian-graph-missing);
+    border-bottom-color: var(--deucarian-graph-missing);
+    color: var(--deucarian-graph-missing);
+}
+
+.deucarian-editor .dpi-graph-node__status-rail--checking {
+    border-bottom-color: var(--deucarian-graph-checking);
+}
+
+.deucarian-editor .dpi-graph-node__status-icon--installed {
+    color: var(--deucarian-graph-installed);
+    border-left-color: var(--deucarian-graph-installed);
+    border-right-color: var(--deucarian-graph-installed);
+    border-top-color: var(--deucarian-graph-installed);
+    border-bottom-color: var(--deucarian-graph-installed);
+}
+
+.deucarian-editor .dpi-graph-node__status-icon--available {
+    color: var(--deucarian-graph-available);
+    border-left-color: var(--deucarian-graph-available);
+    border-right-color: var(--deucarian-graph-available);
+    border-top-color: var(--deucarian-graph-available);
+    border-bottom-color: var(--deucarian-graph-available);
+}
+
+.deucarian-editor .dpi-graph-node__status-icon--update {
+    color: var(--deucarian-graph-update);
+    border-left-color: var(--deucarian-graph-update);
+    border-right-color: var(--deucarian-graph-update);
+    border-top-color: var(--deucarian-graph-update);
+    border-bottom-color: var(--deucarian-graph-update);
+}
+
+.deucarian-editor .dpi-graph-node__status-icon--warning {
+    color: var(--deucarian-graph-warning);
+    border-left-color: var(--deucarian-graph-warning);
+    border-right-color: var(--deucarian-graph-warning);
+    border-top-color: var(--deucarian-graph-warning);
+    border-bottom-color: var(--deucarian-graph-warning);
+}
+
+.deucarian-editor .dpi-graph-node__status-icon--missing {
+    color: var(--deucarian-graph-missing);
+    border-left-color: var(--deucarian-graph-missing);
+    border-right-color: var(--deucarian-graph-missing);
+    border-top-color: var(--deucarian-graph-missing);
+    border-bottom-color: var(--deucarian-graph-missing);
+}
+
+.deucarian-editor .dpi-graph-node__status-icon--checking {
+    color: var(--deucarian-graph-checking);
+    border-left-color: var(--deucarian-graph-checking);
+    border-right-color: var(--deucarian-graph-checking);
+    border-top-color: var(--deucarian-graph-checking);
+    border-bottom-color: var(--deucarian-graph-checking);
+}
+
+.deucarian-editor.deucarian-theme--light .dpi-global-channel-popup,
+.deucarian-editor.deucarian-theme--light .dpi-graph-details,
+.deucarian-editor.deucarian-theme--light .dpi-ecosystem-graph__empty-state,
+.deucarian-editor.deucarian-theme--light .dpi-ecosystem-graph,
+.deucarian-editor.deucarian-theme--light .dpi-ecosystem-graph__header,
+.deucarian-editor.deucarian-theme--light .dpi-graph-hub,
+.deucarian-editor.deucarian-theme--light .dpi-graph-node,
+.deucarian-editor.deucarian-theme--light .dpi-graph-group__symbol,
+.deucarian-editor.deucarian-theme--light .dpi-graph-unrelated-summary,
+.deucarian-editor.deucarian-theme--light .dpi-graph-overflow-summary {
+    background-color: var(--deucarian-graph-surface);
+}
+
+.deucarian-editor.deucarian-theme--light .dpi-ecosystem-graph__viewport {
+    background-color: var(--deucarian-graph-canvas);
+}
+
+.deucarian-editor.deucarian-theme--light .dpi-graph-node:hover,
+.deucarian-editor.deucarian-theme--light .dpi-graph-group:hover .dpi-graph-group__symbol,
+.deucarian-editor.deucarian-theme--light .dpi-graph-unrelated-summary:hover {
+    background-color: var(--deucarian-graph-surface-hover);
+}
+
+.deucarian-editor.deucarian-theme--light .dpi-graph-node:focus,
+.deucarian-editor.deucarian-theme--light .dpi-graph-node--selected,
+.deucarian-editor.deucarian-theme--light .dpi-graph-node.dpi-graph-search--match,
+.deucarian-editor.deucarian-theme--light .dpi-graph-node.dpi-graph-search--owner,
+.deucarian-editor.deucarian-theme--light .dpi-graph-group:focus .dpi-graph-group__symbol,
+.deucarian-editor.deucarian-theme--light .dpi-graph-group--focused .dpi-graph-group__symbol,
+.deucarian-editor.deucarian-theme--light .dpi-graph-group.dpi-graph-search--match .dpi-graph-group__symbol,
+.deucarian-editor.deucarian-theme--light .dpi-graph-group.dpi-graph-search--owner .dpi-graph-group__symbol {
+    background-color: var(--deucarian-graph-surface-selected);
+}
+
+.deucarian-editor.deucarian-theme--light .dpi-graph-node--related,
+.deucarian-editor.deucarian-theme--light .dpi-graph-node--previewed,
+.deucarian-editor.deucarian-theme--light .dpi-graph-node--hover-context,
+.deucarian-editor.deucarian-theme--light .dpi-graph-group--hover-context .dpi-graph-group__symbol,
+.deucarian-editor.deucarian-theme--light .dpi-graph-group.dpi-graph-search--context .dpi-graph-group__symbol {
+    background-color: var(--deucarian-graph-surface-related);
+}
+
+.deucarian-editor .dpi-graph-node__glass-highlight,
+.deucarian-editor .dpi-graph-group__glass-highlight {
+    background-color: var(--deucarian-graph-highlight);
+}
+
+.deucarian-editor .dpi-ecosystem-graph__filter-label,
+.deucarian-editor .dpi-ecosystem-graph__breadcrumb-current,
+.deucarian-editor .dpi-graph-hub__title,
+.deucarian-editor .dpi-graph-group__title,
+.deucarian-editor .dpi-graph-node__title {
+    color: var(--deucarian-text);
+}
+
+.deucarian-editor .dpi-ecosystem-graph__filter-count,
+.deucarian-editor .dpi-graph-hub__subtitle,
+.deucarian-editor .dpi-graph-group__subtitle,
+.deucarian-editor .dpi-graph-node__package-id,
+.deucarian-editor .dpi-graph-node__category-path,
+.deucarian-editor .dpi-graph-node__channel,
+.deucarian-editor .dpi-graph-unrelated-summary,
+.deucarian-editor .dpi-graph-overflow-summary {
+    color: var(--deucarian-muted);
+}
+
+.deucarian-editor .dpi-ecosystem-graph__filter-icon--installed {
+    color: var(--deucarian-graph-installed);
+    border-left-color: var(--deucarian-graph-installed);
+    border-right-color: var(--deucarian-graph-installed);
+    border-top-color: var(--deucarian-graph-installed);
+    border-bottom-color: var(--deucarian-graph-installed);
+    background-color: var(--deucarian-graph-surface-related);
+}
+
+.deucarian-editor .dpi-ecosystem-graph__filter-icon--not-installed {
+    color: var(--deucarian-graph-available);
+    border-left-color: var(--deucarian-graph-available);
+    border-right-color: var(--deucarian-graph-available);
+    border-top-color: var(--deucarian-graph-available);
+    border-bottom-color: var(--deucarian-graph-available);
+    background-color: var(--deucarian-graph-surface-related);
+}
+
+.deucarian-editor .dpi-graph-legend__line,
+.deucarian-editor .dpi-graph-legend__line--solid,
+.deucarian-editor .dpi-graph-legend__line--optional,
+.deucarian-editor .dpi-graph-legend__line--membership {
+    border-bottom-color: var(--deucarian-graph-edge);
+}
+
+.deucarian-editor .dpi-graph-legend__line--integration,
+.deucarian-editor .dpi-graph-legend__line--root {
+    border-bottom-color: var(--deucarian-tideline);
+}
+
+.deucarian-editor .dpi-graph-legend__line--suite {
+    border-bottom-color: var(--deucarian-oxblood);
+}
+
+.deucarian-editor .dpi-graph-legend__line--group {
+    border-bottom-color: var(--deucarian-grove);
+}
+
+.deucarian-editor .dpi-graph-legend__line--package {
+    border-bottom-color: var(--deucarian-mineral);
+}
+
+.deucarian-editor .dpi-graph-node--stack {
+    background-color: var(--deucarian-graph-canvas-inset);
+    border-left-color: var(--deucarian-graph-border);
+    border-right-color: var(--deucarian-graph-border);
+    border-top-color: var(--deucarian-graph-border);
+    border-bottom-color: var(--deucarian-graph-border);
+}
+
+.deucarian-editor .dpi-graph-group--attention .dpi-graph-group__symbol,
+.deucarian-editor .dpi-graph-group--attention:hover .dpi-graph-group__symbol,
+.deucarian-editor .dpi-graph-group--focused.dpi-graph-group--attention .dpi-graph-group__symbol,
+.deucarian-editor .dpi-graph-group--hover-context.dpi-graph-group--attention .dpi-graph-group__symbol,
+.deucarian-editor .dpi-graph-group.dpi-graph-search--match.dpi-graph-group--attention .dpi-graph-group__symbol,
+.deucarian-editor .dpi-graph-group.dpi-graph-search--owner.dpi-graph-group--attention .dpi-graph-group__symbol {
+    border-left-color: var(--deucarian-graph-update);
+}
+
+.deucarian-editor .dpi-graph-node--installed,
+.deucarian-editor .dpi-graph-node--status-update,
+.deucarian-editor .dpi-graph-node--status-warning,
+.deucarian-editor .dpi-graph-node--status-missing {
+    background-color: var(--deucarian-graph-surface);
+}
+
+.deucarian-editor .dpi-graph-node--status-update:hover {
+    background-color: var(--deucarian-graph-surface-hover);
+}
+
+.deucarian-editor .dpi-graph-node--status-update.dpi-graph-node--selected {
+    background-color: var(--deucarian-graph-surface-selected);
+}
+
+.deucarian-editor .dpi-graph-node__status-rail {
+    background-color: var(--deucarian-graph-unknown);
+}
+
+.deucarian-editor .dpi-graph-node__status-rail--installed {
+    background-color: var(--deucarian-graph-installed);
+}
+
+.deucarian-editor .dpi-graph-node__status-rail--available {
+    background-color: var(--deucarian-graph-available);
+}
+
+.deucarian-editor .dpi-graph-node__status-rail--update {
+    background-color: var(--deucarian-graph-update);
+}
+
+.deucarian-editor .dpi-graph-node__status-rail--warning {
+    background-color: var(--deucarian-graph-warning);
+}
+
+.deucarian-editor .dpi-graph-node__status-rail--missing {
+    background-color: var(--deucarian-graph-missing);
+}
+
+.deucarian-editor .dpi-graph-node__status-rail--checking {
+    background-color: var(--deucarian-graph-checking);
+}
+
+.deucarian-editor .dpi-graph-node__status-icon--installed,
+.deucarian-editor .dpi-graph-node__status-icon--available,
+.deucarian-editor .dpi-graph-node__status-icon--update,
+.deucarian-editor .dpi-graph-node__status-icon--warning,
+.deucarian-editor .dpi-graph-node__status-icon--missing,
+.deucarian-editor .dpi-graph-node__status-icon--checking {
+    background-color: var(--deucarian-graph-surface-related);
+}
+
+.deucarian-editor .dpi-graph-node--status-update .dpi-graph-node__action {
+    background-color: var(--deucarian-control);
+    border-left-color: var(--deucarian-graph-update);
+    border-right-color: var(--deucarian-graph-update);
+    border-top-color: var(--deucarian-graph-update);
+    border-bottom-color: var(--deucarian-graph-update);
+    color: var(--deucarian-text);
+}
+
+.deucarian-editor .dpi-graph-node--status-update .dpi-graph-node__action:hover {
+    background-color: var(--deucarian-control-hover);
+}
+
+.deucarian-editor .dpi-graph-node--status-update .dpi-graph-node__action:active {
+    background-color: var(--deucarian-control-active);
+    border-left-color: var(--deucarian-graph-update);
+    border-right-color: var(--deucarian-graph-update);
+    border-top-color: var(--deucarian-graph-update);
+    border-bottom-color: var(--deucarian-graph-update);
+}

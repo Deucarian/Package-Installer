@@ -32,6 +32,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.That(source, Does.Contain("DeucarianEditorWorkbenchGUI.DrawCompactIconAction("));
             Assert.That(source, Does.Contain("DeucarianEditorWorkbenchGUI.DrawStatusIconRow("));
             Assert.That(source, Does.Contain("DeucarianEditorDialog.Show("));
+            Assert.That(source, Does.Contain("DeucarianEditorPackageHeader.CreateBrand("));
+            Assert.That(source, Does.Contain("DeucarianEditorChrome.DrawBrandHeader("));
             Assert.That(source, Does.Not.Contain("EditorUtility.DisplayDialog"));
             Assert.That(source, Does.Not.Contain("GUILayout.Button("));
             Assert.That(source, Does.Not.Contain("GUI.Button("));
@@ -346,6 +348,43 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void GraphVisuals_ConsumeEditorOwnedSemanticThemeRoles()
+        {
+            string installerCss = ReadPackageFile(
+                "com.deucarian.package-installer",
+                "Editor/UI/PackageInstaller/PackageInstallerGraph.uss");
+            string editorCss = ReadPackageFile(
+                "com.deucarian.editor",
+                "Editor/Assets/Styles/DeucarianEditor.uss");
+            string graphSource = ReadPackageFile(
+                "com.deucarian.package-installer",
+                "Editor/UI/PackageInstaller/PackageEcosystemGraphView.cs");
+
+            foreach (string role in new[]
+                     {
+                         "--deucarian-graph-canvas",
+                         "--deucarian-graph-surface",
+                         "--deucarian-graph-border-selected",
+                         "--deucarian-graph-installed",
+                         "--deucarian-graph-available",
+                         "--deucarian-graph-update",
+                         "--deucarian-graph-warning",
+                         "--deucarian-graph-missing",
+                         "--deucarian-graph-checking"
+                     })
+            {
+                Assert.That(editorCss, Does.Contain(role), role + " must be owned by Deucarian Editor.");
+                Assert.That(installerCss, Does.Contain("var(" + role + ")"), role + " must be consumed by the graph skin.");
+            }
+
+            Assert.That(graphSource, Does.Contain("DeucarianEditorGraphTheme.Installed"));
+            Assert.That(graphSource, Does.Contain("DeucarianEditorGraphTheme.Available"));
+            Assert.That(graphSource, Does.Contain("DeucarianEditorGraphTheme.Update"));
+            Assert.That(graphSource, Does.Contain("DeucarianEditorGraphTheme.EdgeUnderlay"));
+            Assert.That(graphSource, Does.Contain("DeucarianEditorPalette.Tideline"));
+        }
+
+        [Test]
         public void Stylesheets_VisibleSurfacesUseCanonicalPaddingExactlyOnce()
         {
             string installerCss = ReadPackageFile(
@@ -484,7 +523,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 "border-right-width", "1px",
                 "border-top-width", "1px",
                 "border-bottom-width", "1px",
-                "background-color", "rgba(10, 20, 30, 0.96)");
+                "background-color", "var(--deucarian-panel-header)");
             AssertRuleValues(editorCss, ".deucarian-workbench-operation-footer",
                 "height", "var(--deucarian-workbench-operation-footer-height)",
                 "min-height", "var(--deucarian-workbench-operation-footer-height)",
@@ -703,15 +742,30 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual(
                 DeucarianEditorVisualShell.SubtleBorder,
                 DeucarianEditorWorkbenchGUI.SeparatorColor);
-            AssertColor(DeucarianEditorVisualShell.DeepBackground, 0.012f, 0.020f, 0.035f, 1f);
-            AssertColor(DeucarianEditorVisualShell.MainPanel, 23f / 255f, 32f / 255f, 39f / 255f, 0.72f);
-            AssertColor(DeucarianEditorVisualShell.NestedSurface, 32f / 255f, 47f / 255f, 56f / 255f, 0.62f);
-            AssertColor(DeucarianEditorVisualShell.HeaderPanel, 35f / 255f, 52f / 255f, 61f / 255f, 0.68f);
-            AssertColor(DeucarianEditorVisualShell.Border, 90f / 255f, 111f / 255f, 160f / 255f, 0.35f);
-            AssertColor(DeucarianEditorVisualShell.InteractiveBorder, 59f / 255f, 166f / 255f, 154f / 255f, 0.55f);
-            AssertColor(DeucarianEditorVisualShell.SubtleBorder, 90f / 255f, 111f / 255f, 160f / 255f, 0.24f);
-            AssertColor(DeucarianEditorVisualShell.Text, 0.88f, 0.93f, 0.96f, 1f);
-            AssertColor(DeucarianEditorVisualShell.MutedText, 0.58f, 0.68f, 0.75f, 1f);
+            if (DeucarianEditorTheme.IsDark)
+            {
+                AssertColor(DeucarianEditorVisualShell.DeepBackground, 27f / 255f, 26f / 255f, 24f / 255f, 1f);
+                AssertColor(DeucarianEditorVisualShell.MainPanel, 37f / 255f, 36f / 255f, 33f / 255f, 0.88f);
+                AssertColor(DeucarianEditorVisualShell.NestedSurface, 48f / 255f, 46f / 255f, 42f / 255f, 0.82f);
+                AssertColor(DeucarianEditorVisualShell.HeaderPanel, 42f / 255f, 41f / 255f, 38f / 255f, 0.92f);
+                AssertColor(DeucarianEditorVisualShell.Border, 98f / 255f, 186f / 255f, 182f / 255f, 0.24f);
+                AssertColor(DeucarianEditorVisualShell.InteractiveBorder, 98f / 255f, 186f / 255f, 182f / 255f, 0.62f);
+                AssertColor(DeucarianEditorVisualShell.SubtleBorder, 242f / 255f, 239f / 255f, 231f / 255f, 0.12f);
+                AssertColor(DeucarianEditorVisualShell.Text, 242f / 255f, 239f / 255f, 231f / 255f, 1f);
+                AssertColor(DeucarianEditorVisualShell.MutedText, 170f / 255f, 166f / 255f, 158f / 255f, 1f);
+            }
+            else
+            {
+                AssertColor(DeucarianEditorVisualShell.DeepBackground, 248f / 255f, 246f / 255f, 241f / 255f, 1f);
+                AssertColor(DeucarianEditorVisualShell.MainPanel, 1f, 1f, 1f, 0.90f);
+                AssertColor(DeucarianEditorVisualShell.NestedSurface, 242f / 255f, 239f / 255f, 231f / 255f, 0.88f);
+                AssertColor(DeucarianEditorVisualShell.HeaderPanel, 1f, 1f, 1f, 0.94f);
+                AssertColor(DeucarianEditorVisualShell.Border, 27f / 255f, 26f / 255f, 24f / 255f, 0.14f);
+                AssertColor(DeucarianEditorVisualShell.InteractiveBorder, 15f / 255f, 98f / 255f, 106f / 255f, 0.58f);
+                AssertColor(DeucarianEditorVisualShell.SubtleBorder, 27f / 255f, 26f / 255f, 24f / 255f, 0.09f);
+                AssertColor(DeucarianEditorVisualShell.Text, 27f / 255f, 26f / 255f, 24f / 255f, 1f);
+                AssertColor(DeucarianEditorVisualShell.MutedText, 121f / 255f, 118f / 255f, 111f / 255f, 1f);
+            }
         }
 
         private static void AssertFixedWallpaperLayer(VisualElement element, string expectedClass)
