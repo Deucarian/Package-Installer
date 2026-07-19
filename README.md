@@ -6,7 +6,7 @@
 
 It is the Deucarian ecosystem front door for installing standalone packages, integration packages, suite packages, templates, and explicitly declared package samples from Package Registry metadata.
 
-Current package version: `1.1.77`.
+Current package version: `1.1.78`.
 
 ## When to use it
 
@@ -302,7 +302,7 @@ This package is editor-only and exposes no runtime API for game code.
 The user-facing entry point is the Unity menu item:
 
 ```text
-Tools/Deucarian/Package Installer
+Tools/Deucarian/Tools and Quality/Package Installer
 ```
 
 The implementation is split into internal editor classes:
@@ -329,7 +329,7 @@ Keeping the installer editor-only ensures:
 
 ## Versioning
 
-Current package version: `1.1.77`.
+Current package version: `1.1.78`.
 
 Branch strategy:
 

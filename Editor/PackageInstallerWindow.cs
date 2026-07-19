@@ -224,7 +224,7 @@ namespace Deucarian.PackageInstaller.Editor
         private const string OperationDrawerPreferencePrefix = "Deucarian.PackageInstaller.OperationDrawer.";
         private const string GraphStyleSheetPath =
             "Packages/com.deucarian.package-installer/Editor/UI/PackageInstaller/PackageInstallerGraph.uss";
-        private const string InstallerMenuPath = "Tools/Deucarian/Package Installer";
+        private const string InstallerMenuPath = "Tools/Deucarian/Tools and Quality/Package Installer";
         private const float GlobalChannelOverridePopupWidth = 286f;
         private const float GlobalChannelOverridePopupMargin = 8f;
         private static readonly string[] GlobalChannelOptionLabels = { "Development", "Stable" };
