@@ -4287,9 +4287,9 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 candidate.ToPackageId == consumer.PackageId);
             Assert.AreEqual(PackageGraphEdgeState.Possible, unavailableDependency.State);
 
-            AssertRgbEqual(new Color(0.34f, 0.82f, 0.74f), installedColor);
-            AssertRgbEqual(new Color(0.50f, 0.46f, 0.82f), availableColor);
-            AssertRgbEqual(new Color(0.92f, 0.68f, 0.28f), updateColor);
+            AssertRgbEqual(DeucarianEditorGraphTheme.Installed, installedColor);
+            AssertRgbEqual(DeucarianEditorGraphTheme.Available, availableColor);
+            AssertRgbEqual(DeucarianEditorGraphTheme.Update, updateColor);
             Assert.AreEqual(0.84f, installedColor.a, 0.001f);
             Assert.AreEqual(0.84f, availableColor.a, 0.001f);
             Assert.AreEqual(0.84f, updateColor.a, 0.001f);

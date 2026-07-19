@@ -837,6 +837,9 @@ namespace Deucarian.PackageInstaller.Editor
 
             rootVisualElement.RegisterCallback<KeyDownEvent>(HandleRootKeyDown);
             content.RegisterCallback<GeometryChangedEvent>(evt => ApplyResponsiveLayout(evt.newRect.width));
+            content.Add(DeucarianEditorPackageHeader.CreateBrand(
+                "Deucarian Package Installer",
+                "Install, update, and compose the Deucarian package ecosystem."));
             BuildViewToolbar(content);
 
             _listViewContainerHost = new VisualElement();
@@ -2775,8 +2778,7 @@ namespace Deucarian.PackageInstaller.Editor
         {
             bool compact = position.width < 1100f;
 
-            DeucarianEditorChrome.DrawPackageHeader(
-                "package-installer",
+            DeucarianEditorChrome.DrawBrandHeader(
                 "Deucarian Package Installer",
                 "Install, update, remove, and compose Deucarian packages through first-class integration packages.");
 
