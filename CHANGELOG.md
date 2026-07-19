@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.78 - 2026-07-19
+
+- Moved the Package Installer entry under the registry-aligned `Tools/Deucarian/Tools & Quality` category.
+
 ## 1.1.77 - 2026-07-19
 
 - Adopted the full-color Tideline brand header and the shared DINish typography roles from Deucarian Editor 1.0.5.

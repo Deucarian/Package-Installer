@@ -26,9 +26,9 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         [Test]
         public void Window_RegistersProductionPackageInstallerMenuPath()
         {
-            Assert.AreEqual("Tools/Deucarian/Package Installer", PackageInstallerWindow.MenuPathForTests);
+            Assert.AreEqual("Tools/Deucarian/Tools & Quality/Package Installer", PackageInstallerWindow.MenuPathForTests);
             CollectionAssert.AreEqual(
-                new[] { "Tools/Deucarian/Package Installer" },
+                new[] { "Tools/Deucarian/Tools & Quality/Package Installer" },
                 PackageInstallerWindow.UserFacingMenuPathsForTests.ToArray());
             Assert.IsFalse(PackageInstallerWindow.UserFacingMenuPathsForTests.Any(
                 path => path.StartsWith("Deucarian/", StringComparison.OrdinalIgnoreCase)));
