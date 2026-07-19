@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.77 - 2026-07-19
+
+- Adopted the full-color Tideline brand header and the shared DINish typography roles from Deucarian Editor 1.0.5.
+- Added semantic light-skin treatments for the Package Installer workbench and ecosystem graph while retaining the existing graph states and interaction hierarchy.
+- Migrated graph canvases, nodes, groups, status rails, legends, spotlights, edges, underlays, and interaction states to Editor-owned semantic graph and five-territory palette roles.
+
 ## 1.1.76 - 2026-07-18
 
 - Refreshed the complete installed dependency closure before update and reinstall roots so movable Git channels cannot leave an older dependency API compiled against a newer consumer package.

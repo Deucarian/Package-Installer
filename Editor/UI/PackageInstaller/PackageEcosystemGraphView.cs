@@ -1755,25 +1755,25 @@ namespace Deucarian.PackageInstaller.Editor
         {
             if (string.Equals(markerClass, "dpi-graph-legend__line--installed", StringComparison.Ordinal))
             {
-                return new Color(0.49f, 0.84f, 0.77f, 0.95f);
+                return DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorGraphTheme.Installed, 0.95f);
             }
 
             if (string.Equals(markerClass, "dpi-graph-legend__line--available", StringComparison.Ordinal))
             {
-                return new Color(0.75f, 0.72f, 0.95f, 0.94f);
+                return DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorGraphTheme.Available, 0.94f);
             }
 
             if (string.Equals(markerClass, "dpi-graph-legend__line--warning", StringComparison.Ordinal))
             {
-                return new Color(1f, 0.86f, 0.66f, 0.98f);
+                return DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorGraphTheme.Update, 0.98f);
             }
 
             if (string.Equals(markerClass, "dpi-graph-legend__line--integration", StringComparison.Ordinal))
             {
-                return new Color(0.36f, 0.86f, 0.79f, 0.96f);
+                return DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorPalette.Tideline, 0.96f);
             }
 
-            return new Color(0.79f, 0.88f, 0.91f, 0.86f);
+            return DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorGraphTheme.Unknown, 0.86f);
         }
 
         private static Button CreateToolbarButton(string iconId, string label, Action action)
@@ -2124,21 +2124,21 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 case PackageGraphSpotlightKind.Root:
                     return _rootTexture ?? (_rootTexture = CreateSpotlightTexture(
-                        new Color(0.10f, 0.45f, 0.82f, 0.30f),
-                        new Color(0.02f, 0.08f, 0.12f, 0f)));
+                        DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorPalette.Cobalt, 0.24f),
+                        DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorGraphTheme.Canvas, 0f)));
                 case PackageGraphSpotlightKind.Category:
                     return _categoryTexture ?? (_categoryTexture = CreateSpotlightTexture(
-                        new Color(0.12f, 0.68f, 0.62f, 0.34f),
-                        new Color(0.02f, 0.07f, 0.10f, 0f)));
+                        DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorPalette.Grove, 0.24f),
+                        DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorGraphTheme.Canvas, 0f)));
                 case PackageGraphSpotlightKind.Attention:
                     return _attentionTexture ?? (_attentionTexture = CreateSpotlightTexture(
-                        new Color(0.86f, 0.56f, 0.15f, 0.30f),
-                        new Color(0.08f, 0.05f, 0.02f, 0f)));
+                        DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorGraphTheme.Update, 0.26f),
+                        DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorGraphTheme.Canvas, 0f)));
                 case PackageGraphSpotlightKind.Package:
                 default:
                     return _packageTexture ?? (_packageTexture = CreateSpotlightTexture(
-                        new Color(0.12f, 0.78f, 0.72f, 0.36f),
-                        new Color(0.01f, 0.07f, 0.10f, 0f)));
+                        DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorPalette.Tideline, 0.28f),
+                        DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorGraphTheme.Canvas, 0f)));
             }
         }
 
@@ -3246,11 +3246,11 @@ namespace Deucarian.PackageInstaller.Editor
     {
         internal const float StatusRingSeparatorDegrees = 1.4f;
 
-        private static readonly Color InstalledColor = new Color(0.34f, 0.82f, 0.74f, 0.88f);
-        private static readonly Color NotInstalledColor = new Color(0.50f, 0.46f, 0.82f, 0.82f);
-        private static readonly Color AttentionColor = new Color(0.92f, 0.68f, 0.28f, 0.92f);
-        private static readonly Color UnknownColor = new Color(0.50f, 0.60f, 0.66f, 0.72f);
-        private static readonly Color EmptyNeutralColor = new Color(0.34f, 0.44f, 0.52f, 0.36f);
+        private static Color InstalledColor => DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorGraphTheme.Installed, 0.88f);
+        private static Color NotInstalledColor => DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorGraphTheme.Available, 0.82f);
+        private static Color AttentionColor => DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorGraphTheme.Update, 0.92f);
+        private static Color UnknownColor => DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorGraphTheme.Unknown, 0.72f);
+        private static Color EmptyNeutralColor => DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorGraphTheme.Edge, 0.36f);
 
         public static IReadOnlyList<CategoryStatusSlice> CreateSlices(
             PackageGraphCategoryStatusSummary summary)
@@ -7072,7 +7072,8 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 PackageGraphCategoryStatusKey statusKey = ResolveSegmentStatus(segment, aggregateStatus);
                 Color color = PackageGraphCategoryStatusVisuals.GetColor(statusKey);
-                Color neutral = new Color(0.42f, 0.70f, 0.78f, 1f);
+                Color neutral = DeucarianEditorGraphTheme.EdgeEmphasis;
+                neutral.a = 1f;
                 color = Color.Lerp(neutral, color, emphasized ? 0.20f : 0.08f);
                 color.a = muted ? 0.045f : emphasized ? 0.82f : 0.48f;
                 painter.strokeColor = color;
@@ -7227,8 +7228,12 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            painter.fillColor = new Color(0.20f, 0.54f, 0.62f, orbit.FillOpacity);
-            painter.strokeColor = new Color(0.42f, 0.70f, 0.78f, orbit.StrokeOpacity);
+            painter.fillColor = DeucarianEditorGraphTheme.WithAlpha(
+                DeucarianEditorGraphTheme.OrbitFill,
+                orbit.FillOpacity);
+            painter.strokeColor = DeucarianEditorGraphTheme.WithAlpha(
+                DeucarianEditorGraphTheme.OrbitStroke,
+                orbit.StrokeOpacity);
             painter.lineWidth = orbit.Emphasized ? 1.25f : 0.85f;
             DrawCircle(painter, orbit.Center, orbit.Radius);
         }
@@ -7277,7 +7282,7 @@ namespace Deucarian.PackageInstaller.Editor
             Color color)
         {
             float strokeRadius = Mathf.Max(0.01f, radius - thickness * 0.5f);
-            painter.fillColor = new Color(0f, 0f, 0f, 0f);
+            painter.fillColor = Color.clear;
             painter.strokeColor = color;
             painter.lineWidth = Mathf.Max(0.01f, thickness);
             DrawCircleStroke(painter, center, strokeRadius);
@@ -8587,7 +8592,9 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            Color underlay = new Color(0.03f, 0.09f, 0.13f, emphasized ? 0.36f : 0.18f);
+            Color underlay = DeucarianEditorGraphTheme.WithAlpha(
+                DeucarianEditorGraphTheme.EdgeUnderlay,
+                emphasized ? 0.36f : 0.18f);
             painter.strokeColor = underlay;
             painter.lineWidth = Mathf.Max(2.4f, flowWidth + 1.4f);
             DrawPolylineStroke(painter, route.Points);
@@ -10056,7 +10063,9 @@ namespace Deucarian.PackageInstaller.Editor
                     ? 0.16f
                     : 0.12f;
             float extraWidth = emphasized ? 2.15f : 1.45f;
-            painter.strokeColor = new Color(0.01f, 0.03f, 0.05f, alpha);
+            painter.strokeColor = DeucarianEditorGraphTheme.WithAlpha(
+                DeucarianEditorGraphTheme.EdgeUnderlay,
+                alpha);
             painter.lineWidth = Mathf.Max(1.2f, semanticWidth + extraWidth);
             DrawPolylineStroke(painter, points);
         }
@@ -10074,7 +10083,9 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             float offset = emphasized ? 1.8f : 1.35f;
-            Color underlay = new Color(0.04f, 0.12f, 0.14f, Mathf.Min(0.34f, color.a * 0.50f));
+            Color underlay = DeucarianEditorGraphTheme.WithAlpha(
+                DeucarianEditorGraphTheme.EdgeUnderlay,
+                Mathf.Min(0.34f, color.a * 0.50f));
 
             painter.strokeColor = underlay;
             painter.lineWidth = Mathf.Max(1.2f, width + 0.85f);
@@ -10500,8 +10511,12 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static void DrawWarningMarker(PackageGraphPainter painter, Vector2 center)
         {
-            painter.fillColor = new Color(0.94f, 0.64f, 0.27f, 0.90f);
-            painter.strokeColor = new Color(0.16f, 0.12f, 0.06f, 0.86f);
+            painter.fillColor = DeucarianEditorGraphTheme.WithAlpha(
+                DeucarianEditorGraphTheme.WarningMarkerFill,
+                0.90f);
+            painter.strokeColor = DeucarianEditorGraphTheme.WithAlpha(
+                DeucarianEditorGraphTheme.WarningMarkerStroke,
+                0.86f);
             painter.lineWidth = 1.2f;
 
             painter.BeginPath();
@@ -10774,14 +10789,14 @@ namespace Deucarian.PackageInstaller.Editor
             switch (className)
             {
                 case "installed":
-                    return new Color(0.49f, 0.84f, 0.77f, 0.90f);
+                    return DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorGraphTheme.Installed, 0.90f);
                 case "attention":
                 case "update":
-                    return new Color(1f, 0.93f, 0.72f, 0.95f);
+                    return DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorGraphTheme.Update, 0.95f);
                 case "unknown":
-                    return new Color(0.60f, 0.69f, 0.74f, 0.84f);
+                    return DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorGraphTheme.Unknown, 0.84f);
                 default:
-                    return new Color(0.75f, 0.72f, 0.95f, 0.90f);
+                    return DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorGraphTheme.Available, 0.90f);
             }
         }
 
@@ -11213,17 +11228,17 @@ namespace Deucarian.PackageInstaller.Editor
             switch (status)
             {
                 case PackageGraphNodeStatus.Missing:
-                    return new Color(1f, 0.72f, 0.68f, 0.98f);
+                    return DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorGraphTheme.Missing, 0.98f);
                 case PackageGraphNodeStatus.NotInstalled:
-                    return new Color(0.68f, 0.74f, 0.82f, 0.94f);
+                    return DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorGraphTheme.Available, 0.94f);
                 case PackageGraphNodeStatus.UpdateAvailable:
-                    return new Color(1f, 0.90f, 0.58f, 0.98f);
+                    return DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorGraphTheme.Update, 0.98f);
                 case PackageGraphNodeStatus.Checking:
-                    return new Color(0.73f, 0.89f, 0.96f, 0.98f);
+                    return DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorGraphTheme.Checking, 0.98f);
                 case PackageGraphNodeStatus.Warning:
-                    return new Color(1f, 0.78f, 0.60f, 0.98f);
+                    return DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorGraphTheme.Warning, 0.98f);
                 default:
-                    return new Color(0.83f, 0.97f, 0.93f, 0.98f);
+                    return DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorGraphTheme.Installed, 0.98f);
             }
         }
 
