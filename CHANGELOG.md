@@ -2,7 +2,7 @@
 
 ## 1.1.78 - 2026-07-19
 
-- Moved the Package Installer entry under the registry-aligned `Tools/Deucarian/Tools & Quality` category.
+- Moved the Package Installer entry under the registry-aligned `Tools/Deucarian/Tools and Quality` category.
 
 ## 1.1.77 - 2026-07-19
 

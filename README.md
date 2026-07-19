@@ -302,7 +302,7 @@ This package is editor-only and exposes no runtime API for game code.
 The user-facing entry point is the Unity menu item:
 
 ```text
-Tools/Deucarian/Tools & Quality/Package Installer
+Tools/Deucarian/Tools and Quality/Package Installer
 ```
 
 The implementation is split into internal editor classes:
