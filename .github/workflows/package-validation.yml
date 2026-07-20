@@ -10,12 +10,14 @@ on:
 jobs:
   validate:
     name: Shared package validation
-    uses: Deucarian/Package-Registry/.github/workflows/deucarian-package-validation.yml@develop
+    uses: Deucarian/Package-Registry/.github/workflows/deucarian-package-validation.yml@2f10d0dcc049b63474c6e96ed929127d93560b33 # Package Registry develop
     with:
       package-config: deucarian-package.json
+      registry-ref: 2f10d0dcc049b63474c6e96ed929127d93560b33 # Package Registry develop
 
   validate-catalog-projection:
     name: Validate installer catalog projection
-    uses: Deucarian/Package-Registry/.github/workflows/deucarian-catalog-projection-check.yml@develop
+    uses: Deucarian/Package-Registry/.github/workflows/deucarian-catalog-projection-check.yml@2f10d0dcc049b63474c6e96ed929127d93560b33 # Package Registry develop
     with:
       catalog: installer
+      registry-ref: 2f10d0dcc049b63474c6e96ed929127d93560b33 # Package Registry develop
