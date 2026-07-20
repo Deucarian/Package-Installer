@@ -131,29 +131,39 @@ namespace Deucarian.PackageInstaller.Editor
         }
     }
 
-    internal readonly struct PackageGraphGroupNavigationRow
+    internal readonly struct PackageGraphNavigationRow
     {
-        public PackageGraphGroupNavigationRow(
+        public PackageGraphNavigationRow(
+            PackageGraphNavigationTargetKind targetKind,
             string id,
             string displayName,
             string summary,
             PackageGraphCategoryStatusSummary statusSummary,
             string iconKey,
             string tooltip,
-            bool isOverview,
+            int depth,
+            bool hasChildren,
+            bool isExpanded,
+            bool isInActivePath,
             bool isSelected,
             bool hasAttention)
         {
+            TargetKind = targetKind;
             Id = id ?? string.Empty;
             DisplayName = displayName ?? string.Empty;
             Summary = summary ?? string.Empty;
             StatusSummary = statusSummary;
             IconKey = string.IsNullOrWhiteSpace(iconKey) ? "package" : iconKey.Trim();
             Tooltip = tooltip ?? string.Empty;
-            IsOverview = isOverview;
+            Depth = Math.Max(0, depth);
+            HasChildren = hasChildren;
+            IsExpanded = isExpanded && hasChildren;
+            IsInActivePath = isInActivePath;
             IsSelected = isSelected;
             HasAttention = hasAttention || statusSummary.AttentionCount > 0;
         }
+
+        public PackageGraphNavigationTargetKind TargetKind { get; }
 
         public string Id { get; }
 
@@ -167,11 +177,23 @@ namespace Deucarian.PackageInstaller.Editor
 
         public string Tooltip { get; }
 
-        public bool IsOverview { get; }
+        public int Depth { get; }
+
+        public bool HasChildren { get; }
+
+        public bool IsExpanded { get; }
+
+        public bool IsInActivePath { get; }
 
         public bool IsSelected { get; }
 
         public bool HasAttention { get; }
+
+        public bool IsOverview => TargetKind == PackageGraphNavigationTargetKind.Overview;
+
+        public bool IsGroup => TargetKind == PackageGraphNavigationTargetKind.Group;
+
+        public bool IsPackage => TargetKind == PackageGraphNavigationTargetKind.Package;
     }
 
     internal sealed class PackageInstallerWindow : EditorWindow
@@ -355,7 +377,9 @@ namespace Deucarian.PackageInstaller.Editor
         private bool _reloadStatePendingValidation;
         private bool _hasPendingReloadCamera;
         private PackageGraphCameraState _pendingReloadCamera;
-        private string _detailsPreviewedGraphGroupId = string.Empty;
+        private PackageGraphNavigationTargetKind _detailsPreviewedGraphTargetKind =
+            PackageGraphNavigationTargetKind.Overview;
+        private string _detailsPreviewedGraphTargetId = string.Empty;
         private PackageGraphModel _cachedPackageGraph;
         private PackageGraphModel _lastPackageGraph;
         private bool _graphModelCacheDirty = true;
@@ -480,7 +504,7 @@ namespace Deucarian.PackageInstaller.Editor
                     unknownCount));
         }
 
-        internal static IReadOnlyList<PackageGraphGroupNavigationRow> CreateEcosystemOverviewGroupNavigationRowsForTests(
+        internal static IReadOnlyList<PackageGraphNavigationRow> CreateEcosystemOverviewGroupNavigationRowsForTests(
             PackageGraphModel graph,
             PackageGraphNavigationState navigationState)
         {
@@ -3740,50 +3764,65 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void DrawEcosystemOverviewGroupsPanel()
         {
-            PackageGraphGroupNavigationRow[] groupRows = CreateEcosystemOverviewGroupNavigationRows(
+            PackageGraphNavigationRow[] navigationRows = CreateEcosystemOverviewGroupNavigationRows(
                     _lastPackageGraph,
                     _graphNavigationState)
                 .ToArray();
 
             DrawPanel("Groups", () =>
             {
-                if (groupRows.Length == 0)
+                if (navigationRows.Length == 0)
                 {
                     EditorGUILayout.LabelField("No ecosystem navigation is available.", _mutedMiniLabelStyle);
-                    SynchronizeDetailsGroupHover(string.Empty);
+                    SynchronizeDetailsNavigationHover(null);
                     return;
                 }
 
-                string hoveredGroupId = string.Empty;
+                PackageGraphNavigationRow? hoveredRow = null;
 
-                foreach (PackageGraphGroupNavigationRow row in groupRows)
+                foreach (PackageGraphNavigationRow row in navigationRows)
                 {
-                    if (DrawEcosystemOverviewGroupRow(row) && !row.IsOverview)
+                    if (DrawEcosystemOverviewNavigationRow(row))
                     {
-                        hoveredGroupId = row.Id;
+                        hoveredRow = row;
                     }
                 }
 
-                SynchronizeDetailsGroupHover(hoveredGroupId);
+                SynchronizeDetailsNavigationHover(hoveredRow);
             }, GUILayout.ExpandWidth(true));
         }
 
-        private bool DrawEcosystemOverviewGroupRow(PackageGraphGroupNavigationRow row)
+        private bool DrawEcosystemOverviewNavigationRow(PackageGraphNavigationRow row)
         {
+            const float indentWidth = 14f;
+            const float disclosureWidth = 13f;
+            const float iconSize = 20f;
+            const float leftPadding = 9f;
+            const float rightPadding = 10f;
             Rect rowRect = GUILayoutUtility.GetRect(1f, 34f, GUILayout.ExpandWidth(true));
             int controlId = GUIUtility.GetControlID(FocusType.Keyboard, rowRect);
             bool hover = rowRect.Contains(Event.current.mousePosition);
-            bool graphHover = !row.IsOverview && IsGraphGroupHoverContext(row.Id);
+            bool graphHover = IsGraphNavigationRowHoverContext(row);
             bool selected = row.IsSelected;
             bool keyboardFocused = GUIUtility.keyboardControl == controlId;
 
             if (Event.current.type == EventType.Repaint)
             {
                 bool highlighted = selected || hover || graphHover || keyboardFocused;
+                Color activePathBackground = Color.Lerp(
+                    _sampleRowBackgroundColor,
+                    _rowSelectedColor,
+                    0.22f);
                 DeucarianEditorVisualShell.DrawInsetSurface(
                     rowRect,
-                    selected ? _rowSelectedColor : highlighted ? _rowHoverColor : _sampleRowBackgroundColor,
-                    highlighted ? _interactiveBorderColor : _separatorColor,
+                    selected
+                        ? _rowSelectedColor
+                        : highlighted
+                            ? _rowHoverColor
+                            : row.IsInActivePath
+                                ? activePathBackground
+                                : _sampleRowBackgroundColor,
+                    highlighted || row.IsInActivePath ? _interactiveBorderColor : _separatorColor,
                     4f);
 
                 if (selected || row.HasAttention)
@@ -3797,7 +3836,7 @@ namespace Deucarian.PackageInstaller.Editor
             if (Event.current.type == EventType.MouseDown && hover && Event.current.button == 0)
             {
                 GUIUtility.keyboardControl = controlId;
-                ActivateEcosystemOverviewGroupRow(row);
+                ActivateEcosystemOverviewNavigationRow(row);
                 Event.current.Use();
             }
             else if (IsGraphNavigationRowKeyboardActivation(
@@ -3805,44 +3844,92 @@ namespace Deucarian.PackageInstaller.Editor
                          Event.current.type,
                          Event.current.keyCode))
             {
-                ActivateEcosystemOverviewGroupRow(row);
+                ActivateEcosystemOverviewNavigationRow(row);
                 Event.current.Use();
             }
 
             EditorGUIUtility.AddCursorRect(rowRect, MouseCursor.Link);
 
-            Rect iconRect = new Rect(rowRect.x + 9f, rowRect.y + 7f, 20f, 20f);
+            float indent = row.IsOverview ? 0f : row.Depth * indentWidth;
+            float disclosureOffset = row.IsOverview ? 0f : disclosureWidth;
+            Rect disclosureRect = new Rect(
+                rowRect.x + leftPadding + indent,
+                rowRect.y + 8f,
+                disclosureWidth,
+                18f);
+            if (!row.IsOverview && row.HasChildren)
+            {
+                DrawSingleLineLabel(
+                    disclosureRect,
+                    new GUIContent(row.IsExpanded ? "v" : ">", row.Tooltip),
+                    row.IsInActivePath ? _miniLabelStyle : _mutedMiniLabelStyle);
+            }
+
+            Rect iconRect = new Rect(
+                rowRect.x + leftPadding + indent + disclosureOffset,
+                rowRect.y + 7f,
+                iconSize,
+                iconSize);
             DrawGraphNavigationIcon(iconRect, row.IconKey);
 
             GUIContent nameContent = new GUIContent(row.DisplayName, row.Tooltip);
-            string summaryText = _responsiveMode == PackageInstallerResponsiveMode.Compact
+            string summaryText = !row.IsPackage && _responsiveMode != PackageInstallerResponsiveMode.Wide
                 ? FormatCompactEcosystemOverviewGroupStatusSummary(row.StatusSummary)
                 : row.Summary;
             GUIContent summaryContent = new GUIContent(summaryText, row.Summary);
-            Rect contentRect = new Rect(rowRect.x + 38f, rowRect.y + 8f, rowRect.width - 48f, 18f);
-            float gap = 10f;
+            float contentX = iconRect.xMax + 9f;
+            Rect contentRect = new Rect(
+                contentX,
+                rowRect.y + 8f,
+                Mathf.Max(0f, rowRect.xMax - rightPadding - contentX),
+                18f);
+            float gap = 8f;
+            float desiredSummaryWidth = _mutedMiniLabelStyle.CalcSize(summaryContent).x + 2f;
+            float maximumSummaryWidth = Mathf.Max(0f, contentRect.width - 40f - gap);
             float summaryWidth = Mathf.Min(
-                _mutedMiniLabelStyle.CalcSize(summaryContent).x + 2f,
-                Mathf.Max(84f, contentRect.width * 0.45f));
-            float availableNameWidth = Mathf.Max(40f, contentRect.width - summaryWidth - gap);
-            float nameWidth = Mathf.Min(_miniLabelStyle.CalcSize(nameContent).x + 2f, availableNameWidth);
-            Rect nameRect = new Rect(contentRect.x, contentRect.y, nameWidth, contentRect.height);
-            Rect summaryRect = new Rect(nameRect.xMax + gap, contentRect.y, summaryWidth, contentRect.height);
+                desiredSummaryWidth,
+                Mathf.Min(Mathf.Max(58f, contentRect.width * 0.44f), maximumSummaryWidth));
+            Rect summaryRect = new Rect(
+                contentRect.xMax - summaryWidth,
+                contentRect.y,
+                summaryWidth,
+                contentRect.height);
+            Rect nameRect = new Rect(
+                contentRect.x,
+                contentRect.y,
+                Mathf.Max(0f, summaryRect.x - gap - contentRect.x),
+                contentRect.height);
 
             DrawSingleLineLabel(nameRect, nameContent, _miniLabelStyle);
             DrawSingleLineLabel(summaryRect, summaryContent, _mutedMiniLabelStyle);
             return hover;
         }
 
-        private void ActivateEcosystemOverviewGroupRow(PackageGraphGroupNavigationRow row)
+        private void ActivateEcosystemOverviewNavigationRow(PackageGraphNavigationRow row)
         {
-            if (row.IsOverview)
+            switch (row.TargetKind)
             {
-                NavigateGraphToRoot();
-                return;
-            }
+                case PackageGraphNavigationTargetKind.Overview:
+                    NavigateGraphToRoot();
+                    return;
+                case PackageGraphNavigationTargetKind.Group:
+                    if (_lastPackageGraph != null &&
+                        _lastPackageGraph.TryGetGroup(row.Id, out PackageGraphGroup group))
+                    {
+                        HandleGraphGroupFocused(group);
+                    }
 
-            NavigateGraphToGroup(row.Id);
+                    return;
+                case PackageGraphNavigationTargetKind.Package:
+                    if (_lastPackageGraph != null &&
+                        _lastPackageGraph.TryGetNode(row.Id, out PackageGraphNode node) &&
+                        node.PackageDefinition != null)
+                    {
+                        HandleGraphPackageSelected(node.PackageDefinition);
+                    }
+
+                    return;
+            }
         }
 
         private static bool IsGraphNavigationRowKeyboardActivation(
@@ -3946,24 +4033,28 @@ namespace Deucarian.PackageInstaller.Editor
             return parts.Count == 0 ? "0" : string.Join("   ", parts.ToArray());
         }
 
-        private static IReadOnlyList<PackageGraphGroupNavigationRow> CreateEcosystemOverviewGroupNavigationRows(
+        private static IReadOnlyList<PackageGraphNavigationRow> CreateEcosystemOverviewGroupNavigationRows(
             PackageGraphModel graph,
             PackageGraphNavigationState navigationState)
         {
-            List<PackageGraphGroupNavigationRow> rows = new List<PackageGraphGroupNavigationRow>();
+            List<PackageGraphNavigationRow> rows = new List<PackageGraphNavigationRow>();
             PackageGraphNode[] graphNodes = graph == null
                 ? Array.Empty<PackageGraphNode>()
                 : graph.Nodes.Where(node => node != null).ToArray();
             PackageGraphCategoryStatusSummary overviewStatusSummary =
                 PackageGraphCategoryStatusSummary.Create(graphNodes);
-            rows.Add(new PackageGraphGroupNavigationRow(
+            rows.Add(new PackageGraphNavigationRow(
+                PackageGraphNavigationTargetKind.Overview,
                 "overview",
                 "Deucarian Overview",
                 FormatEcosystemOverviewGroupStatusSummary(overviewStatusSummary),
                 overviewStatusSummary,
                 "package-installer",
                 "Navigate to Deucarian Overview",
-                isOverview: true,
+                depth: 0,
+                hasChildren: graph != null && graph.GetRootGroups().Count > 0,
+                isExpanded: !navigationState.IsOverview,
+                isInActivePath: navigationState.IsOverview,
                 isSelected: navigationState.IsOverview,
                 hasAttention: overviewStatusSummary.AttentionCount > 0));
 
@@ -3972,35 +4063,154 @@ namespace Deucarian.PackageInstaller.Editor
                 return rows;
             }
 
-            string activeTopLevelGroupId = ResolveTopLevelGroupId(
-                graph,
-                string.IsNullOrWhiteSpace(navigationState.FocusedGroupId)
-                    ? GetGraphPackageGroupId(graph, navigationState.FocusedPackageId)
-                    : navigationState.FocusedGroupId);
+            string activeGroupId = !string.IsNullOrWhiteSpace(navigationState.FocusedPackageId)
+                ? GetGraphPackageGroupId(graph, navigationState.FocusedPackageId)
+                : navigationState.FocusedGroupId;
+            HashSet<string> activeGroupPath = CreateActiveGraphGroupPath(graph, activeGroupId);
 
-            foreach (PackageGraphGroup group in graph.Groups
-                         .Where(group => group != null && string.IsNullOrWhiteSpace(group.ParentGroupId))
-                         .OrderBy(group => group.SortOrder)
-                         .ThenBy(group => group.DisplayName, StringComparer.OrdinalIgnoreCase))
+            foreach (PackageGraphGroup group in graph.GetRootGroups())
             {
-                PackageGraphNode[] descendants = graph.GetDescendantPackages(group.Id)
-                    .Where(node => node != null)
-                    .ToArray();
-                PackageGraphCategoryStatusSummary groupStatusSummary =
-                    PackageGraphCategoryStatusSummary.Create(descendants);
-                rows.Add(new PackageGraphGroupNavigationRow(
-                    group.Id,
-                    group.DisplayName,
-                    FormatEcosystemOverviewGroupStatusSummary(groupStatusSummary),
-                    groupStatusSummary,
-                    group.IconKey,
-                    group.Description,
-                    isOverview: false,
-                    isSelected: string.Equals(group.Id, activeTopLevelGroupId, StringComparison.OrdinalIgnoreCase),
-                    hasAttention: groupStatusSummary.AttentionCount > 0));
+                AddEcosystemGroupNavigationRows(
+                    rows,
+                    graph,
+                    group,
+                    0,
+                    activeGroupPath,
+                    navigationState);
             }
 
             return rows;
+        }
+
+        private static HashSet<string> CreateActiveGraphGroupPath(
+            PackageGraphModel graph,
+            string activeGroupId)
+        {
+            HashSet<string> activeGroupPath = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            string currentGroupId = activeGroupId ?? string.Empty;
+
+            while (!string.IsNullOrWhiteSpace(currentGroupId) &&
+                   activeGroupPath.Add(currentGroupId) &&
+                   graph != null &&
+                   graph.TryGetGroup(currentGroupId, out PackageGraphGroup group))
+            {
+                currentGroupId = group.ParentGroupId;
+            }
+
+            return activeGroupPath;
+        }
+
+        private static void AddEcosystemGroupNavigationRows(
+            ICollection<PackageGraphNavigationRow> rows,
+            PackageGraphModel graph,
+            PackageGraphGroup group,
+            int depth,
+            ISet<string> activeGroupPath,
+            PackageGraphNavigationState navigationState)
+        {
+            if (rows == null || graph == null || group == null)
+            {
+                return;
+            }
+
+            PackageGraphGroup[] childGroups = graph.GetChildGroups(group.Id)
+                .Where(childGroup => childGroup != null)
+                .ToArray();
+            PackageGraphNode[] directPackages = graph.GetDirectPackages(group.Id)
+                .Where(node => node != null && node.IsRegistered && node.PackageDefinition != null)
+                .OrderBy(node => node.DisplayName, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(node => node.PackageId, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+            PackageGraphCategoryStatusSummary groupStatusSummary =
+                PackageGraphCategoryStatusSummary.Create(graph.GetDescendantPackages(group.Id));
+            bool isInActivePath = activeGroupPath != null && activeGroupPath.Contains(group.Id);
+            bool hasChildren = childGroups.Length > 0 || directPackages.Length > 0;
+            bool isSelected = navigationState.TargetKind == PackageGraphNavigationTargetKind.Group &&
+                              string.Equals(
+                                  navigationState.FocusedGroupId,
+                                  group.Id,
+                                  StringComparison.OrdinalIgnoreCase);
+            rows.Add(new PackageGraphNavigationRow(
+                PackageGraphNavigationTargetKind.Group,
+                group.Id,
+                group.DisplayName,
+                FormatEcosystemOverviewGroupStatusSummary(groupStatusSummary),
+                groupStatusSummary,
+                group.IconKey,
+                group.Description,
+                depth,
+                hasChildren,
+                isInActivePath,
+                isInActivePath,
+                isSelected,
+                groupStatusSummary.AttentionCount > 0));
+
+            if (!isInActivePath || !hasChildren)
+            {
+                return;
+            }
+
+            foreach (PackageGraphGroup childGroup in childGroups)
+            {
+                AddEcosystemGroupNavigationRows(
+                    rows,
+                    graph,
+                    childGroup,
+                    depth + 1,
+                    activeGroupPath,
+                    navigationState);
+            }
+
+            foreach (PackageGraphNode packageNode in directPackages)
+            {
+                PackageGraphCategoryStatusSummary packageStatusSummary =
+                    PackageGraphCategoryStatusSummary.Create(new[] { packageNode });
+                bool packageSelected = navigationState.TargetKind == PackageGraphNavigationTargetKind.Package &&
+                                       string.Equals(
+                                           navigationState.FocusedPackageId,
+                                           packageNode.PackageId,
+                                           StringComparison.OrdinalIgnoreCase);
+                rows.Add(new PackageGraphNavigationRow(
+                    PackageGraphNavigationTargetKind.Package,
+                    packageNode.PackageId,
+                    packageNode.DisplayName,
+                    FormatPackageGraphNavigationStatus(packageNode),
+                    packageStatusSummary,
+                    packageNode.IconKey,
+                    packageNode.Description,
+                    depth + 1,
+                    hasChildren: false,
+                    isExpanded: false,
+                    isInActivePath: packageSelected,
+                    isSelected: packageSelected,
+                    hasAttention: packageStatusSummary.AttentionCount > 0));
+            }
+        }
+
+        private static string FormatPackageGraphNavigationStatus(PackageGraphNode node)
+        {
+            if (node == null)
+            {
+                return "Unknown";
+            }
+
+            switch (node.Status)
+            {
+                case PackageGraphNodeStatus.Missing:
+                    return "Missing dependency";
+                case PackageGraphNodeStatus.NotInstalled:
+                    return "Not installed";
+                case PackageGraphNodeStatus.UpdateAvailable:
+                    return "Update available";
+                case PackageGraphNodeStatus.Checking:
+                    return "Checking";
+                case PackageGraphNodeStatus.Warning:
+                    return string.IsNullOrWhiteSpace(node.UpdateStatusLabel)
+                        ? "Attention"
+                        : node.UpdateStatusLabel;
+                default:
+                    return "Installed";
+            }
         }
 
         private static string GetGraphPackageGroupId(PackageGraphModel graph, string packageId)
@@ -4061,48 +4271,76 @@ namespace Deucarian.PackageInstaller.Editor
             }
         }
 
-        private void SynchronizeDetailsGroupHover(string hoveredGroupId)
+        private void SynchronizeDetailsNavigationHover(PackageGraphNavigationRow? hoveredRow)
         {
             if (_graphView == null || !ShouldSynchronizeDetailsHover(Event.current.type))
             {
                 return;
             }
 
-            string nextGroupId = hoveredGroupId ?? string.Empty;
+            PackageGraphNavigationTargetKind nextTargetKind = hoveredRow.HasValue
+                ? hoveredRow.Value.TargetKind
+                : PackageGraphNavigationTargetKind.Overview;
+            string nextTargetId = hoveredRow.HasValue && !hoveredRow.Value.IsOverview
+                ? hoveredRow.Value.Id
+                : string.Empty;
 
-            if (string.Equals(
-                    _detailsPreviewedGraphGroupId,
-                    nextGroupId,
+            if (_detailsPreviewedGraphTargetKind == nextTargetKind &&
+                string.Equals(
+                    _detailsPreviewedGraphTargetId,
+                    nextTargetId,
                     StringComparison.OrdinalIgnoreCase))
             {
                 return;
             }
 
             ClearDetailsGraphHover();
-            _detailsPreviewedGraphGroupId = nextGroupId;
+            _detailsPreviewedGraphTargetKind = nextTargetKind;
+            _detailsPreviewedGraphTargetId = nextTargetId;
 
-            if (!string.IsNullOrWhiteSpace(_detailsPreviewedGraphGroupId))
+            if (string.IsNullOrWhiteSpace(_detailsPreviewedGraphTargetId))
             {
-                _graphView.SetExternalGroupHover(_detailsPreviewedGraphGroupId);
+                return;
+            }
+
+            if (_detailsPreviewedGraphTargetKind == PackageGraphNavigationTargetKind.Group)
+            {
+                _graphView.SetExternalGroupHover(_detailsPreviewedGraphTargetId);
+            }
+            else if (_detailsPreviewedGraphTargetKind == PackageGraphNavigationTargetKind.Package)
+            {
+                _graphView.SetExternalPackageHover(_detailsPreviewedGraphTargetId);
             }
         }
 
         private void ClearDetailsGraphHover()
         {
-            if (_graphView == null || string.IsNullOrWhiteSpace(_detailsPreviewedGraphGroupId))
+            if (_graphView == null || string.IsNullOrWhiteSpace(_detailsPreviewedGraphTargetId))
             {
-                _detailsPreviewedGraphGroupId = string.Empty;
+                _detailsPreviewedGraphTargetKind = PackageGraphNavigationTargetKind.Overview;
+                _detailsPreviewedGraphTargetId = string.Empty;
                 return;
             }
 
-            string previousGroupId = _detailsPreviewedGraphGroupId;
-            _detailsPreviewedGraphGroupId = string.Empty;
-            _graphView.ClearExternalGroupHover(previousGroupId);
+            PackageGraphNavigationTargetKind previousTargetKind = _detailsPreviewedGraphTargetKind;
+            string previousTargetId = _detailsPreviewedGraphTargetId;
+            _detailsPreviewedGraphTargetKind = PackageGraphNavigationTargetKind.Overview;
+            _detailsPreviewedGraphTargetId = string.Empty;
+
+            if (previousTargetKind == PackageGraphNavigationTargetKind.Group)
+            {
+                _graphView.ClearExternalGroupHover(previousTargetId);
+            }
+            else if (previousTargetKind == PackageGraphNavigationTargetKind.Package)
+            {
+                _graphView.ClearExternalPackageHover(previousTargetId);
+            }
         }
 
         private void ClearGraphHoverState()
         {
-            _detailsPreviewedGraphGroupId = string.Empty;
+            _detailsPreviewedGraphTargetKind = PackageGraphNavigationTargetKind.Overview;
+            _detailsPreviewedGraphTargetId = string.Empty;
             _graphView?.ClearHoverState();
         }
 
@@ -4158,11 +4396,6 @@ namespace Deucarian.PackageInstaller.Editor
         private void DrawGraphGroupDetails(PackageGraphGroup group)
         {
             PackageGraphNode[] descendants = GetGraphGroupDescendantPackages(group.Id).ToArray();
-            PackageGraphGroup[] childGroups = GetGraphChildGroups(group.Id).ToArray();
-            PackageGraphNode[] directPackages = descendants
-                .Where(node => string.Equals(node.GroupId, group.Id, StringComparison.OrdinalIgnoreCase))
-                .OrderBy(node => node.DisplayName, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
             PackageDefinition[] missingPackages = descendants
                 .Where(node => node != null && !node.IsInstalled && node.PackageDefinition != null)
                 .Select(node => node.PackageDefinition)
@@ -4195,25 +4428,6 @@ namespace Deucarian.PackageInstaller.Editor
                 DrawKeyValueRow("Installed", installedCount.ToString());
                 DrawKeyValueRow("Missing", missingCount.ToString());
                 DrawKeyValueRow("Updates", updateCount.ToString());
-            }, GUILayout.ExpandWidth(true));
-
-            DrawPanel("Direct Children", () =>
-            {
-                if (childGroups.Length == 0 && directPackages.Length == 0)
-                {
-                    EditorGUILayout.LabelField("No visible direct children.", _mutedMiniLabelStyle);
-                    return;
-                }
-
-                foreach (PackageGraphGroup childGroup in childGroups)
-                {
-                    EditorGUILayout.LabelField(childGroup.DisplayName + " group", _miniLabelStyle);
-                }
-
-                foreach (PackageGraphNode packageNode in directPackages)
-                {
-                    EditorGUILayout.LabelField(packageNode.DisplayName, _miniLabelStyle);
-                }
             }, GUILayout.ExpandWidth(true));
 
             if (missingPackages.Length > 0 || packagesWithUpdates.Length > 0)
@@ -7012,11 +7226,19 @@ namespace Deucarian.PackageInstaller.Editor
                 : string.Empty;
         }
 
-        private bool IsGraphGroupHoverContext(string groupId)
+        private bool IsGraphNavigationRowHoverContext(PackageGraphNavigationRow row)
         {
-            if (_graphView == null || string.IsNullOrWhiteSpace(groupId))
+            if (_graphView == null || row.IsOverview || string.IsNullOrWhiteSpace(row.Id))
             {
                 return false;
+            }
+
+            if (row.IsPackage)
+            {
+                return string.Equals(
+                    row.Id,
+                    _graphView.ActiveHoverPackageId,
+                    StringComparison.OrdinalIgnoreCase);
             }
 
             string activeHoverGroupId = _graphView.ActiveHoverGroupId;
@@ -7026,21 +7248,21 @@ namespace Deucarian.PackageInstaller.Editor
                 return false;
             }
 
+            if (row.Depth > 0)
+            {
+                return string.Equals(
+                    row.Id,
+                    activeHoverGroupId,
+                    StringComparison.OrdinalIgnoreCase);
+            }
+
             string hoverTopLevelGroupId = ResolveTopLevelGroupId(_lastPackageGraph, activeHoverGroupId);
-            string rowTopLevelGroupId = ResolveTopLevelGroupId(_lastPackageGraph, groupId);
 
             return !string.IsNullOrWhiteSpace(hoverTopLevelGroupId) &&
                    string.Equals(
                        hoverTopLevelGroupId,
-                       rowTopLevelGroupId,
+                       row.Id,
                        StringComparison.OrdinalIgnoreCase);
-        }
-
-        private IEnumerable<PackageGraphGroup> GetGraphChildGroups(string groupId)
-        {
-            return _lastPackageGraph == null
-                ? Enumerable.Empty<PackageGraphGroup>()
-                : _lastPackageGraph.GetChildGroups(groupId);
         }
 
         private IEnumerable<PackageGraphNode> GetGraphGroupDescendantPackages(string groupId)

@@ -1068,6 +1068,8 @@ namespace Deucarian.PackageInstaller.Editor
 
         internal string ActiveHoverGroupId => _canvas.ActiveHoverGroupId;
 
+        internal string ActiveHoverPackageId => _canvas.ActiveHoverPackageId;
+
         internal string ActiveTopLevelHoverGroupId => ResolveTopLevelGroupId(_currentGraph, _canvas.ActiveHoverGroupId);
 
         internal void SetExternalGroupHover(string groupId)
@@ -1078,6 +1080,16 @@ namespace Deucarian.PackageInstaller.Editor
         internal void ClearExternalGroupHover(string groupId)
         {
             _canvas.ClearExternalHoverGroup(groupId);
+        }
+
+        internal void SetExternalPackageHover(string packageId)
+        {
+            _canvas.SetExternalHoverPackage(packageId);
+        }
+
+        internal void ClearExternalPackageHover(string packageId)
+        {
+            _canvas.ClearExternalHoverPackage(packageId);
         }
 
         internal void ClearHoverState()
@@ -3592,6 +3604,8 @@ namespace Deucarian.PackageInstaller.Editor
 
         public string ActiveHoverGroupId => GetActiveHoverGroupId();
 
+        public string ActiveHoverPackageId => _hoveredPackageId;
+
         public string DirectHoverGroupId => _hoveredGroupId;
 
         public bool HasRenderedNodeStatus(Func<PackageGraphNodeStatus, bool> predicate)
@@ -3826,11 +3840,33 @@ namespace Deucarian.PackageInstaller.Editor
             RefreshHoverVisualState();
         }
 
-        internal void SetPreviewPackageForTests(string packageId)
+        public void SetExternalHoverPackage(string packageId)
         {
-            _hoveredPackageId = packageId ?? string.Empty;
+            SetExternalHoverPackage(packageId, respectInteractionLock: true);
+        }
+
+        private void SetExternalHoverPackage(string packageId, bool respectInteractionLock)
+        {
+            if (respectInteractionLock && _interactionsLocked)
+            {
+                return;
+            }
+
+            string nextPackageId = packageId ?? string.Empty;
+
+            if (string.Equals(_hoveredPackageId, nextPackageId, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            _hoveredPackageId = nextPackageId;
             NotifyActiveHoverGroupChanged();
             RefreshHoverVisualState();
+        }
+
+        internal void SetPreviewPackageForTests(string packageId)
+        {
+            SetExternalHoverPackage(packageId, respectInteractionLock: false);
         }
 
         internal void ClearPreviewPackageForTests(string packageId)
@@ -3854,6 +3890,19 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             _hoveredGroupId = string.Empty;
+            NotifyActiveHoverGroupChanged();
+            RefreshHoverVisualState();
+        }
+
+        public void ClearExternalHoverPackage(string packageId)
+        {
+            if (_interactionsLocked ||
+                !string.Equals(_hoveredPackageId, packageId, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            _hoveredPackageId = string.Empty;
             NotifyActiveHoverGroupChanged();
             RefreshHoverVisualState();
         }

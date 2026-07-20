@@ -1270,15 +1270,22 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual(PackageGraphNodeStatus.Missing, missingNode.Status);
             Assert.AreEqual(PackageGraphEdgeState.Warning, warningEdge.State);
 
-            IReadOnlyList<PackageGraphGroupNavigationRow> rows =
+            IReadOnlyList<PackageGraphNavigationRow> rows =
                 PackageInstallerWindow.CreateEcosystemOverviewGroupNavigationRowsForTests(
                     graph,
                     PackageGraphNavigationState.Overview());
-            PackageGraphGroupNavigationRow infrastructureRow =
+            PackageGraphNavigationRow infrastructureRow =
                 rows.Single(row => row.Id == "infrastructure");
             Assert.IsTrue(infrastructureRow.HasAttention);
             Assert.AreEqual(1, infrastructureRow.StatusSummary.AttentionCount);
             StringAssert.Contains("1 attention", infrastructureRow.Summary);
+
+            IReadOnlyList<PackageGraphNavigationRow> focusedRows =
+                PackageInstallerWindow.CreateEcosystemOverviewGroupNavigationRowsForTests(
+                    graph,
+                    PackageGraphNavigationState.Group("infrastructure"));
+            Assert.IsTrue(focusedRows.Any(row => row.Id == package.PackageId && row.IsPackage));
+            Assert.IsFalse(focusedRows.Any(row => row.Id == missingNode.PackageId));
         }
 
         [Test]
@@ -1421,7 +1428,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 FindGraphGroup(view, "runtime-services"),
                 "dpi-graph-group__stat--attention"));
 
-            IReadOnlyList<PackageGraphGroupNavigationRow> rows =
+            IReadOnlyList<PackageGraphNavigationRow> rows =
                 PackageInstallerWindow.CreateEcosystemOverviewGroupNavigationRowsForTests(
                     graph,
                     PackageGraphNavigationState.Overview());
@@ -3717,11 +3724,11 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
-        public void Window_GroupNavigationRowsIncludeOverviewAndUseSharedSelectionState()
+        public void Window_GroupNavigationRowsMirrorTheActiveGraphPath()
         {
             PackageGraphModel graph = new PackageGraphBuilder(_ => false)
                 .Build(CreateDefaultGraphPackages());
-            IReadOnlyList<PackageGraphGroupNavigationRow> overviewRows =
+            IReadOnlyList<PackageGraphNavigationRow> overviewRows =
                 PackageInstallerWindow.CreateEcosystemOverviewGroupNavigationRowsForTests(
                     graph,
                     PackageGraphNavigationState.Overview());
@@ -3735,26 +3742,151 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual(graph.Nodes.Count, overviewRows[0].StatusSummary.NotInstalledCount);
             Assert.IsTrue(overviewRows[0].IsOverview);
             Assert.IsTrue(overviewRows[0].IsSelected);
+            Assert.IsFalse(overviewRows[0].IsExpanded);
             Assert.IsFalse(overviewRows[0].Summary.Contains("packages"));
+            Assert.IsFalse(overviewRows.Any(row => row.IsPackage));
+            Assert.IsTrue(overviewRows.Skip(1).All(row => row.IsGroup && row.Depth == 0));
 
-            IReadOnlyList<PackageGraphGroupNavigationRow> groupRows =
+            IReadOnlyList<PackageGraphNavigationRow> groupRows =
                 PackageInstallerWindow.CreateEcosystemOverviewGroupNavigationRowsForTests(
                     graph,
                     PackageGraphNavigationState.Group("infrastructure"));
+            PackageGraphNavigationRow infrastructure =
+                groupRows.Single(row => row.Id == "infrastructure");
             Assert.IsFalse(groupRows.Single(row => row.Id == "overview").IsSelected);
-            Assert.IsTrue(groupRows.Single(row => row.Id == "infrastructure").IsSelected);
+            Assert.IsTrue(infrastructure.IsSelected);
+            Assert.IsTrue(infrastructure.IsExpanded);
+            Assert.IsTrue(infrastructure.IsInActivePath);
+            Assert.IsTrue(infrastructure.HasChildren);
+            Assert.AreEqual(0, infrastructure.Depth);
+            CollectionAssert.AreEquivalent(
+                new[] { "com.deucarian.editor", "com.deucarian.logging" },
+                groupRows
+                    .Where(row => row.IsPackage && row.Depth == 1)
+                    .Select(row => row.Id)
+                    .ToArray());
+            Assert.IsFalse(groupRows.Any(row => row.Id == "com.deucarian.session"));
+            Assert.AreEqual(1, groupRows.Count(row => row.IsSelected));
 
-            IReadOnlyList<PackageGraphGroupNavigationRow> nestedRows =
+            IReadOnlyList<PackageGraphNavigationRow> nestedRows =
                 PackageInstallerWindow.CreateEcosystemOverviewGroupNavigationRowsForTests(
                     graph,
                     PackageGraphNavigationState.Group("ui-presentation"));
-            Assert.IsTrue(nestedRows.Single(row => row.Id == "experience-interaction").IsSelected);
+            PackageGraphNavigationRow experience =
+                nestedRows.Single(row => row.Id == "experience-interaction");
+            PackageGraphNavigationRow uiPresentation =
+                nestedRows.Single(row => row.Id == "ui-presentation");
+            PackageGraphNavigationRow worldInteraction =
+                nestedRows.Single(row => row.Id == "world-interaction");
+            Assert.IsFalse(experience.IsSelected);
+            Assert.IsTrue(experience.IsExpanded);
+            Assert.IsTrue(experience.IsInActivePath);
+            Assert.IsTrue(uiPresentation.IsSelected);
+            Assert.IsTrue(uiPresentation.IsExpanded);
+            Assert.IsTrue(uiPresentation.IsInActivePath);
+            Assert.AreEqual(1, uiPresentation.Depth);
+            Assert.IsFalse(worldInteraction.IsSelected);
+            Assert.IsFalse(worldInteraction.IsExpanded);
+            Assert.IsFalse(worldInteraction.IsInActivePath);
+            Assert.AreEqual(1, worldInteraction.Depth);
+            CollectionAssert.AreEquivalent(
+                new[] { "com.deucarian.ui-binding", "com.deucarian.theming" },
+                nestedRows
+                    .Where(row => row.IsPackage && row.Depth == 2)
+                    .Select(row => row.Id)
+                    .ToArray());
+            Assert.IsFalse(nestedRows.Any(row => row.Id == "com.deucarian.object-selection"));
+            Assert.AreEqual(1, nestedRows.Count(row => row.IsSelected));
 
-            IReadOnlyList<PackageGraphGroupNavigationRow> packageRows =
+            IReadOnlyList<PackageGraphNavigationRow> packageRows =
                 PackageInstallerWindow.CreateEcosystemOverviewGroupNavigationRowsForTests(
                     graph,
                     PackageInstallerWindow.CreatePackageNavigationStateForTests(graph, "com.deucarian.session"));
-            Assert.IsTrue(packageRows.Single(row => row.Id == "runtime-services").IsSelected);
+            PackageGraphNavigationRow runtimeServices =
+                packageRows.Single(row => row.Id == "runtime-services");
+            PackageGraphNavigationRow session =
+                packageRows.Single(row => row.Id == "com.deucarian.session");
+            Assert.IsFalse(runtimeServices.IsSelected);
+            Assert.IsTrue(runtimeServices.IsExpanded);
+            Assert.IsTrue(runtimeServices.IsInActivePath);
+            Assert.IsTrue(session.IsPackage);
+            Assert.IsTrue(session.IsSelected);
+            Assert.AreEqual(1, session.Depth);
+            Assert.AreEqual("Not installed", session.Summary);
+            Assert.AreEqual(1, packageRows.Count(row => row.IsSelected));
+        }
+
+        [Test]
+        public void Window_GroupNavigationRowsKeepEmptySelectedGroupClosed()
+        {
+            PackageGraphGroup emptyGroup = new PackageGraphGroup(
+                "empty",
+                "Empty",
+                string.Empty,
+                "No packages yet.",
+                10,
+                "package",
+                "empty");
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(Array.Empty<PackageDefinition>(), new[] { emptyGroup });
+
+            IReadOnlyList<PackageGraphNavigationRow> rows =
+                PackageInstallerWindow.CreateEcosystemOverviewGroupNavigationRowsForTests(
+                    graph,
+                    PackageGraphNavigationState.Group(emptyGroup.Id));
+            PackageGraphNavigationRow row = rows.Single(candidate => candidate.Id == emptyGroup.Id);
+
+            Assert.IsTrue(row.IsSelected);
+            Assert.IsTrue(row.IsInActivePath);
+            Assert.IsFalse(row.HasChildren);
+            Assert.IsFalse(row.IsExpanded);
+            Assert.IsFalse(rows.Any(candidate => candidate.IsPackage));
+        }
+
+        [Test]
+        public void Window_GroupNavigationRowsOpenEveryAncestorForDeepPackageFocus()
+        {
+            PackageGraphGroup root = new PackageGraphGroup(
+                "templates",
+                "Templates",
+                string.Empty,
+                string.Empty,
+                10);
+            PackageGraphGroup child = new PackageGraphGroup(
+                "templates-games",
+                "Games",
+                root.Id,
+                string.Empty,
+                20);
+            PackageGraphGroup grandchild = new PackageGraphGroup(
+                "templates-games-example",
+                "Example",
+                child.Id,
+                string.Empty,
+                30);
+            PackageDefinition package = CreatePackage(
+                "Example Template",
+                "com.example.template",
+                "Templates",
+                groupId: grandchild.Id);
+            PackageGraphModel graph = new PackageGraphBuilder(_ => false)
+                .Build(new[] { package }, new[] { root, child, grandchild });
+
+            IReadOnlyList<PackageGraphNavigationRow> rows =
+                PackageInstallerWindow.CreateEcosystemOverviewGroupNavigationRowsForTests(
+                    graph,
+                    PackageInstallerWindow.CreatePackageNavigationStateForTests(graph, package.PackageId));
+
+            Assert.IsTrue(rows.Single(row => row.Id == root.Id).IsExpanded);
+            Assert.AreEqual(0, rows.Single(row => row.Id == root.Id).Depth);
+            Assert.IsTrue(rows.Single(row => row.Id == child.Id).IsExpanded);
+            Assert.AreEqual(1, rows.Single(row => row.Id == child.Id).Depth);
+            Assert.IsTrue(rows.Single(row => row.Id == grandchild.Id).IsExpanded);
+            Assert.AreEqual(2, rows.Single(row => row.Id == grandchild.Id).Depth);
+            PackageGraphNavigationRow packageRow = rows.Single(row => row.Id == package.PackageId);
+            Assert.IsTrue(packageRow.IsSelected);
+            Assert.AreEqual(3, packageRow.Depth);
+            Assert.AreEqual(1, rows.Count(row => row.IsSelected));
         }
 
         [Test]
@@ -3795,13 +3927,17 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             PackageGraphView nestedPackageFocused = new PackageGraphView(_ => { }, (_, __) => { });
 
             nestedPackageFocused.SetGraph(graph, "com.deucarian.ui-binding", actionsEnabled: true);
-            nestedPackageFocused.PreviewPackageHoverForTests("com.deucarian.ui-binding");
+            nestedPackageFocused.SetExternalPackageHover("com.deucarian.ui-binding");
 
+            Assert.AreEqual("com.deucarian.ui-binding", nestedPackageFocused.ActiveHoverPackageId);
             Assert.AreEqual("ui-presentation", nestedPackageFocused.ActiveHoverGroupId);
             Assert.AreEqual("experience-interaction", nestedPackageFocused.ActiveTopLevelHoverGroupId);
             Assert.IsTrue(
                 FindGraphNode(nestedPackageFocused, "com.deucarian.ui-binding")
                     .ClassListContains("dpi-graph-node--hover-context"));
+
+            nestedPackageFocused.ClearExternalPackageHover("com.deucarian.ui-binding");
+            Assert.IsTrue(string.IsNullOrWhiteSpace(nestedPackageFocused.ActiveHoverPackageId));
         }
 
         [Test]
@@ -3845,6 +3981,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             view.PreviewPackageHoverForTests("com.deucarian.logging");
             view.ClearHoverState();
 
+            Assert.IsTrue(string.IsNullOrWhiteSpace(view.ActiveHoverPackageId));
             Assert.IsTrue(string.IsNullOrWhiteSpace(view.ActiveHoverGroupId));
             Assert.IsTrue(string.IsNullOrWhiteSpace(view.ActiveTopLevelHoverGroupId));
             Assert.IsEmpty(FindByClass(view, "dpi-graph-node--hover-context"));
@@ -4046,11 +4183,11 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual("Required by installed package", dependencyNode.UpdateStatusLabel);
             Assert.AreEqual(PackageGraphNodeAction.Install, dependencyNode.PrimaryAction);
 
-            IReadOnlyList<PackageGraphGroupNavigationRow> rows =
+            IReadOnlyList<PackageGraphNavigationRow> rows =
                 PackageInstallerWindow.CreateEcosystemOverviewGroupNavigationRowsForTests(
                     graph,
                     PackageGraphNavigationState.Overview());
-            PackageGraphGroupNavigationRow infrastructureRow =
+            PackageGraphNavigationRow infrastructureRow =
                 rows.Single(row => row.Id == "infrastructure");
             Assert.IsTrue(infrastructureRow.HasAttention);
             Assert.AreEqual(1, infrastructureRow.StatusSummary.AttentionCount);
