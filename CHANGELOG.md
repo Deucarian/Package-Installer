@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.79 - 2026-07-20
+
+- Expanded the right-side Groups panel into a synchronized category and package tree that mirrors the graph's active path.
+- Removed the duplicate Direct Children details card while preserving group summaries and install/update actions.
+
 ## 1.1.78 - 2026-07-19
 
 - Moved the Package Installer entry under the registry-aligned `Tools/Deucarian/Tools and Quality` category.
