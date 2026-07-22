@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.80 - 2026-07-22
+
+- Refreshed the generated registry fallback with canonical public catalog metadata for lifecycle status, Git install presentation, Unity compatibility, documentation, and license links.
+
 ## 1.1.79 - 2026-07-20
 
 - Expanded the right-side Groups panel into a synchronized category and package tree that mirrors the graph's active path.
