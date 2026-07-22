@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-07-17",
+  "updatedAt": "2026-07-22",
   "groups": [
     {
       "id": "infrastructure",
@@ -152,7 +152,14 @@
       "stableUrl": "https://github.com/Deucarian/Common.git#main",
       "developmentUrl": "https://github.com/Deucarian/Common.git#develop",
       "dependencies": [],
-      "groupId": "infrastructure"
+      "groupId": "infrastructure",
+      "public": {
+        "status": "active",
+        "installMethod": "upm-git",
+        "unity": "2021.3",
+        "documentationUrl": "https://github.com/Deucarian/Common/blob/main/README.md",
+        "licenseUrl": "https://github.com/Deucarian/Common/blob/main/LICENSE.md"
+      }
     },
     {
       "id": "com.deucarian.editor",
@@ -167,7 +174,14 @@
       "stableUrl": "https://github.com/Deucarian/Editor.git#main",
       "developmentUrl": "https://github.com/Deucarian/Editor.git#develop",
       "dependencies": [],
-      "groupId": "infrastructure"
+      "groupId": "infrastructure",
+      "public": {
+        "status": "active",
+        "installMethod": "upm-git",
+        "unity": "2021.3",
+        "documentationUrl": "https://github.com/Deucarian/Editor/blob/main/README.md",
+        "licenseUrl": "https://github.com/Deucarian/Editor/blob/main/LICENSE.md"
+      }
     },
     {
       "id": "com.deucarian.game-content-authoring",
@@ -186,7 +200,14 @@
         "com.deucarian.editor",
         "com.deucarian.gameplay-foundation"
       ],
-      "groupId": "tools-quality"
+      "groupId": "tools-quality",
+      "public": {
+        "status": "active",
+        "installMethod": "upm-git",
+        "unity": "6000.3",
+        "documentationUrl": "https://github.com/Deucarian/Game-Content-Authoring/blob/main/README.md",
+        "licenseUrl": "https://github.com/Deucarian/Game-Content-Authoring/blob/main/LICENSE.md"
+      }
     },
     {
       "id": "com.deucarian.core-state",
@@ -201,7 +222,14 @@
       "stableUrl": "https://github.com/Deucarian/Core-State.git#main",
       "developmentUrl": "https://github.com/Deucarian/Core-State.git#develop",
       "dependencies": [],
-      "groupId": "state-data"
+      "groupId": "state-data",
+      "public": {
+        "status": "active",
+        "installMethod": "upm-git",
+        "unity": "2021.3",
+        "documentationUrl": "https://github.com/Deucarian/Core-State/blob/main/README.md",
+        "licenseUrl": "https://github.com/Deucarian/Core-State/blob/main/LICENSE.md"
+      }
     },
     {
       "id": "com.deucarian.api",
@@ -218,7 +246,14 @@
       "dependencies": [
         "com.deucarian.logging"
       ],
-      "groupId": "runtime-services"
+      "groupId": "runtime-services",
+      "public": {
+        "status": "active",
+        "installMethod": "upm-git",
+        "unity": "2021.3",
+        "documentationUrl": "https://github.com/Deucarian/API/blob/main/README.md",
+        "licenseUrl": "https://github.com/Deucarian/API/blob/main/LICENSE.md"
+      }
     },
     {
       "id": "com.deucarian.logging",
@@ -235,7 +270,14 @@
       "dependencies": [
         "com.deucarian.editor"
       ],
-      "groupId": "infrastructure"
+      "groupId": "infrastructure",
+      "public": {
+        "status": "active",
+        "installMethod": "upm-git",
+        "unity": "2021.3",
+        "documentationUrl": "https://github.com/Deucarian/Logging/blob/main/README.md",
+        "licenseUrl": "https://github.com/Deucarian/Logging/blob/main/LICENSE.md"
+      }
     },
     {
       "id": "com.deucarian.object-loading",
@@ -256,7 +298,14 @@
       "recommendedWith": [
         "com.deucarian.diagnostics"
       ],
-      "groupId": "runtime-services"
+      "groupId": "runtime-services",
+      "public": {
+        "status": "active",
+        "installMethod": "upm-git",
+        "unity": "2021.3",
+        "documentationUrl": "https://github.com/Deucarian/Object-Loading/blob/main/README.md",
+        "licenseUrl": "https://github.com/Deucarian/Object-Loading/blob/main/LICENSE.md"
+      }
     },
     {
       "id": "com.deucarian.session",
@@ -273,7 +322,14 @@
       "dependencies": [
         "com.deucarian.logging"
       ],
-      "groupId": "runtime-services"
+      "groupId": "runtime-services",
+      "public": {
+        "status": "active",
+        "installMethod": "upm-git",
+        "unity": "2021.3",
+        "documentationUrl": "https://github.com/Deucarian/Session/blob/main/README.md",
+        "licenseUrl": "https://github.com/Deucarian/Session/blob/main/LICENSE.md"
+      }
     },
     {
       "id": "com.deucarian.monetization",
@@ -288,7 +344,14 @@
       "stableUrl": "https://github.com/Deucarian/Monetization.git#main",
       "developmentUrl": "https://github.com/Deucarian/Monetization.git#develop",
       "dependencies": [],
-      "groupId": "runtime-services"
+      "groupId": "runtime-services",
+      "public": {
+        "status": "active",
+        "installMethod": "upm-git",
+        "unity": "6000.3",
+        "documentationUrl": "https://github.com/Deucarian/Monetization/blob/main/README.md",
+        "licenseUrl": "https://github.com/Deucarian/Monetization/blob/main/LICENSE.md"
+      }
     },
     {
       "id": "com.deucarian.ui-binding",
@@ -305,7 +368,14 @@
       "dependencies": [
         "com.deucarian.common"
       ],
-      "groupId": "ui-presentation"
+      "groupId": "ui-presentation",
+      "public": {
+        "status": "active",
+        "installMethod": "upm-git",
+        "unity": "2021.3",
+        "documentationUrl": "https://github.com/Deucarian/UI-Binding/blob/main/README.md",
+        "licenseUrl": "https://github.com/Deucarian/UI-Binding/blob/main/LICENSE.md"
+      }
     },
     {
       "id": "com.deucarian.ui",
@@ -323,7 +393,14 @@
         "com.deucarian.common",
         "com.deucarian.theming"
       ],
-      "groupId": "ui-presentation"
+      "groupId": "ui-presentation",
+      "public": {
+        "status": "active",
+        "installMethod": "upm-git",
+        "unity": "2022.3",
+        "documentationUrl": "https://github.com/Deucarian/UI/blob/main/README.md",
+        "licenseUrl": "https://github.com/Deucarian/UI/blob/main/LICENSE.md"
+      }
     },
     {
       "id": "com.deucarian.ui-flow",
@@ -341,7 +418,14 @@
         "com.deucarian.common",
         "com.deucarian.logging"
       ],
-      "groupId": "ui-presentation"
+      "groupId": "ui-presentation",
+      "public": {
+        "status": "active",
+        "installMethod": "upm-git",
+        "unity": "2021.3",
+        "documentationUrl": "https://github.com/Deucarian/UI-FLow/blob/main/README.md",
+        "licenseUrl": "https://github.com/Deucarian/UI-FLow/blob/main/LICENSE.md"
+      }
     },
     {
       "id": "com.deucarian.theming",
@@ -359,7 +443,14 @@
         "com.deucarian.editor",
         "com.deucarian.logging"
       ],
-      "groupId": "ui-presentation"
+      "groupId": "ui-presentation",
+      "public": {
+        "status": "active",
+        "installMethod": "upm-git",
+        "unity": "2022.3",
+        "documentationUrl": "https://github.com/Deucarian/Theming/blob/main/README.md",
+        "licenseUrl": "https://github.com/Deucarian/Theming/blob/main/LICENSE.md"
+      }
     },
     {
       "id": "com.deucarian.xr-ui",
@@ -376,7 +467,14 @@
       "dependencies": [
         "com.deucarian.common"
       ],
-      "groupId": "world-xr-interaction"
+      "groupId": "world-xr-interaction",
+      "public": {
+        "status": "active",
+        "installMethod": "upm-git",
+        "unity": "2022.3",
+        "documentationUrl": "https://github.com/Deucarian/XR-UI/blob/main/README.md",
+        "licenseUrl": "https://github.com/Deucarian/XR-UI/blob/main/LICENSE.md"
+      }
     },
     {
       "id": "com.deucarian.camera-navigation",
@@ -393,7 +491,14 @@
       "dependencies": [
         "com.deucarian.common"
       ],
-      "groupId": "world-xr-interaction"
+      "groupId": "world-xr-interaction",
+      "public": {
+        "status": "active",
+        "installMethod": "upm-git",
+        "unity": "2022.3",
+        "documentationUrl": "https://github.com/Deucarian/Camera-Navigation/blob/main/README.md",
+        "licenseUrl": "https://github.com/Deucarian/Camera-Navigation/blob/main/LICENSE.md"
+      }
     },
     {
       "id": "com.deucarian.object-selection",
@@ -410,7 +515,14 @@
       "dependencies": [
         "com.deucarian.logging"
       ],
-      "groupId": "world-xr-interaction"
+      "groupId": "world-xr-interaction",
+      "public": {
+        "status": "active",
+        "installMethod": "upm-git",
+        "unity": "2021.3",
+        "documentationUrl": "https://github.com/Deucarian/Object-Selection/blob/main/README.md",
+        "licenseUrl": "https://github.com/Deucarian/Object-Selection/blob/main/LICENSE.md"
+      }
     },
     {
       "id": "com.deucarian.package-installer",
@@ -428,7 +540,14 @@
         "com.deucarian.editor",
         "com.deucarian.logging"
       ],
-      "groupId": "tools-quality"
+      "groupId": "tools-quality",
+      "public": {
+        "status": "active",
+        "installMethod": "upm-git",
+        "unity": "2021.3",
+        "documentationUrl": "https://github.com/Deucarian/Package-Installer/blob/main/README.md",
+        "licenseUrl": "https://github.com/Deucarian/Package-Installer/blob/main/LICENSE.md"
+      }
     },
     {
       "id": "com.deucarian.build-pipeline",
@@ -446,7 +565,14 @@
         "com.deucarian.editor",
         "com.deucarian.logging"
       ],
-      "groupId": "tools-quality"
+      "groupId": "tools-quality",
+      "public": {
+        "status": "active",
+        "installMethod": "upm-git",
+        "unity": "6000.0",
+        "documentationUrl": "https://github.com/Deucarian/Build-Pipeline/blob/main/README.md",
+        "licenseUrl": "https://github.com/Deucarian/Build-Pipeline/blob/main/LICENSE.md"
+      }
     },
     {
       "id": "com.deucarian.diagnostics",
@@ -464,7 +590,14 @@
         "com.deucarian.editor",
         "com.deucarian.logging"
       ],
-      "groupId": "tools-quality"
+      "groupId": "tools-quality",
+      "public": {
+        "status": "active",
+        "installMethod": "upm-git",
+        "unity": "2021.3",
+        "documentationUrl": "https://github.com/Deucarian/Diagnostics/blob/main/README.md",
+        "licenseUrl": "https://github.com/Deucarian/Diagnostics/blob/main/LICENSE.md"
+      }
     },
     {
       "id": "com.deucarian.session.api-integration",
@@ -486,7 +619,14 @@
         "com.deucarian.api"
       ],
       "groupId": "runtime-services",
-      "ecosystemGroup": "Integrations"
+      "ecosystemGroup": "Integrations",
+      "public": {
+        "status": "active",
+        "installMethod": "upm-git",
+        "unity": "2021.3",
+        "documentationUrl": "https://github.com/Deucarian/Session-API-Integration/blob/main/README.md",
+        "licenseUrl": "https://github.com/Deucarian/Session-API-Integration/blob/main/LICENSE.md"
+      }
     },
     {
       "id": "com.deucarian.object-loading.api-integration",
@@ -508,7 +648,14 @@
         "com.deucarian.api"
       ],
       "groupId": "runtime-services",
-      "ecosystemGroup": "Integrations"
+      "ecosystemGroup": "Integrations",
+      "public": {
+        "status": "active",
+        "installMethod": "upm-git",
+        "unity": "2021.3",
+        "documentationUrl": "https://github.com/Deucarian/ObjectLoading-API-Integration/blob/main/README.md",
+        "licenseUrl": "https://github.com/Deucarian/ObjectLoading-API-Integration/blob/main/LICENSE.md"
+      }
     },
     {
       "id": "com.deucarian.ui-binding.core-state-integration",
@@ -530,7 +677,14 @@
         "com.deucarian.core-state"
       ],
       "groupId": "ui-presentation",
-      "ecosystemGroup": "Integrations"
+      "ecosystemGroup": "Integrations",
+      "public": {
+        "status": "active",
+        "installMethod": "upm-git",
+        "unity": "2021.3",
+        "documentationUrl": "https://github.com/Deucarian/UIBinding-CoreState-Integration/blob/main/README.md",
+        "licenseUrl": "https://github.com/Deucarian/UIBinding-CoreState-Integration/blob/main/LICENSE.md"
+      }
     },
     {
       "id": "com.deucarian.xr-ui.theming-integration",
@@ -552,7 +706,14 @@
         "com.deucarian.theming"
       ],
       "groupId": "world-xr-interaction",
-      "ecosystemGroup": "Integrations"
+      "ecosystemGroup": "Integrations",
+      "public": {
+        "status": "active",
+        "installMethod": "upm-git",
+        "unity": "2022.3",
+        "documentationUrl": "https://github.com/Deucarian/XR-UI-Theming-Integration/blob/main/README.md",
+        "licenseUrl": "https://github.com/Deucarian/XR-UI-Theming-Integration/blob/main/LICENSE.md"
+      }
     },
     {
       "id": "com.deucarian.object-selection.core-state-integration",
@@ -575,7 +736,14 @@
         "com.deucarian.core-state"
       ],
       "groupId": "world-xr-interaction",
-      "ecosystemGroup": "Integrations"
+      "ecosystemGroup": "Integrations",
+      "public": {
+        "status": "active",
+        "installMethod": "upm-git",
+        "unity": "2021.3",
+        "documentationUrl": "https://github.com/Deucarian/ObjectSelection-CoreState-Integration/blob/main/README.md",
+        "licenseUrl": "https://github.com/Deucarian/ObjectSelection-CoreState-Integration/blob/main/LICENSE.md"
+      }
     },
     {
       "id": "com.deucarian.selection-suite",
@@ -603,7 +771,14 @@
         "com.deucarian.object-selection.core-state-integration"
       ],
       "groupId": "world-xr-interaction",
-      "ecosystemGroup": "Suites"
+      "ecosystemGroup": "Suites",
+      "public": {
+        "status": "active",
+        "installMethod": "upm-git",
+        "unity": "2021.3",
+        "documentationUrl": "https://github.com/Deucarian/Selection-Suite/blob/main/README.md",
+        "licenseUrl": "https://github.com/Deucarian/Selection-Suite/blob/main/LICENSE.md"
+      }
     },
     {
       "id": "com.deucarian.gameplay-foundation",
@@ -618,7 +793,14 @@
       "iconKey": "gamepad-2",
       "stableUrl": "https://github.com/Deucarian/Gameplay-Foundation.git#main",
       "developmentUrl": "https://github.com/Deucarian/Gameplay-Foundation.git#develop",
-      "dependencies": []
+      "dependencies": [],
+      "public": {
+        "status": "active",
+        "installMethod": "upm-git",
+        "unity": "2021.3",
+        "documentationUrl": "https://github.com/Deucarian/Gameplay-Foundation/blob/main/README.md",
+        "licenseUrl": "https://github.com/Deucarian/Gameplay-Foundation/blob/main/LICENSE.md"
+      }
     },
     {
       "id": "com.deucarian.persistence",
@@ -633,7 +815,14 @@
       "iconKey": "save",
       "stableUrl": "https://github.com/Deucarian/Persistence.git#main",
       "developmentUrl": "https://github.com/Deucarian/Persistence.git#develop",
-      "dependencies": []
+      "dependencies": [],
+      "public": {
+        "status": "active",
+        "installMethod": "upm-git",
+        "unity": "2021.3",
+        "documentationUrl": "https://github.com/Deucarian/Persistence/blob/main/README.md",
+        "licenseUrl": "https://github.com/Deucarian/Persistence/blob/main/LICENSE.md"
+      }
     },
     {
       "id": "com.deucarian.progression",
@@ -650,7 +839,14 @@
       "developmentUrl": "https://github.com/Deucarian/Progression.git#develop",
       "dependencies": [
         "com.deucarian.gameplay-foundation"
-      ]
+      ],
+      "public": {
+        "status": "active",
+        "installMethod": "upm-git",
+        "unity": "6000.3",
+        "documentationUrl": "https://github.com/Deucarian/Progression/blob/main/README.md",
+        "licenseUrl": "https://github.com/Deucarian/Progression/blob/main/LICENSE.md"
+      }
     },
     {
       "id": "com.deucarian.run-upgrades",
@@ -671,7 +867,14 @@
         "com.deucarian.weapon-systems",
         "com.deucarian.editor",
         "com.deucarian.game-content-authoring"
-      ]
+      ],
+      "public": {
+        "status": "active",
+        "installMethod": "upm-git",
+        "unity": "6000.3",
+        "documentationUrl": "https://github.com/Deucarian/Run-Upgrades/blob/main/README.md",
+        "licenseUrl": "https://github.com/Deucarian/Run-Upgrades/blob/main/LICENSE.md"
+      }
     },
     {
       "id": "com.deucarian.idle-progression",
@@ -689,7 +892,14 @@
       "dependencies": [
         "com.deucarian.gameplay-foundation",
         "com.deucarian.progression"
-      ]
+      ],
+      "public": {
+        "status": "active",
+        "installMethod": "upm-git",
+        "unity": "6000.3",
+        "documentationUrl": "https://github.com/Deucarian/Idle-Progression/blob/main/README.md",
+        "licenseUrl": "https://github.com/Deucarian/Idle-Progression/blob/main/LICENSE.md"
+      }
     },
     {
       "id": "com.deucarian.combat",
@@ -706,7 +916,14 @@
       "developmentUrl": "https://github.com/Deucarian/Combat.git#develop",
       "dependencies": [
         "com.deucarian.gameplay-foundation"
-      ]
+      ],
+      "public": {
+        "status": "active",
+        "installMethod": "upm-git",
+        "unity": "6000.3",
+        "documentationUrl": "https://github.com/Deucarian/Combat/blob/main/README.md",
+        "licenseUrl": "https://github.com/Deucarian/Combat/blob/main/LICENSE.md"
+      }
     },
     {
       "id": "com.deucarian.encounters",
@@ -723,7 +940,14 @@
       "developmentUrl": "https://github.com/Deucarian/Encounters.git#develop",
       "dependencies": [
         "com.deucarian.gameplay-foundation"
-      ]
+      ],
+      "public": {
+        "status": "active",
+        "installMethod": "upm-git",
+        "unity": "6000.3",
+        "documentationUrl": "https://github.com/Deucarian/Encounters/blob/main/README.md",
+        "licenseUrl": "https://github.com/Deucarian/Encounters/blob/main/LICENSE.md"
+      }
     },
     {
       "id": "com.deucarian.world-spawning",
@@ -741,7 +965,14 @@
       "dependencies": [
         "com.deucarian.common",
         "com.deucarian.gameplay-foundation"
-      ]
+      ],
+      "public": {
+        "status": "active",
+        "installMethod": "upm-git",
+        "unity": "6000.3",
+        "documentationUrl": "https://github.com/Deucarian/World-Spawning/blob/main/README.md",
+        "licenseUrl": "https://github.com/Deucarian/World-Spawning/blob/main/LICENSE.md"
+      }
     },
     {
       "id": "com.deucarian.world-navigation",
@@ -759,7 +990,14 @@
       "dependencies": [
         "com.deucarian.gameplay-foundation",
         "com.deucarian.world-spawning"
-      ]
+      ],
+      "public": {
+        "status": "active",
+        "installMethod": "upm-git",
+        "unity": "6000.3",
+        "documentationUrl": "https://github.com/Deucarian/World-Navigation/blob/main/README.md",
+        "licenseUrl": "https://github.com/Deucarian/World-Navigation/blob/main/LICENSE.md"
+      }
     },
     {
       "id": "com.deucarian.attacks",
@@ -779,7 +1017,14 @@
         "com.deucarian.combat",
         "com.deucarian.editor",
         "com.deucarian.game-content-authoring"
-      ]
+      ],
+      "public": {
+        "status": "active",
+        "installMethod": "upm-git",
+        "unity": "6000.3",
+        "documentationUrl": "https://github.com/Deucarian/Attacks/blob/main/README.md",
+        "licenseUrl": "https://github.com/Deucarian/Attacks/blob/main/LICENSE.md"
+      }
     },
     {
       "id": "com.deucarian.projectiles",
@@ -800,7 +1045,14 @@
         "com.deucarian.attacks",
         "com.deucarian.world-navigation",
         "com.deucarian.world-spawning"
-      ]
+      ],
+      "public": {
+        "status": "active",
+        "installMethod": "upm-git",
+        "unity": "6000.3",
+        "documentationUrl": "https://github.com/Deucarian/Projectiles/blob/main/README.md",
+        "licenseUrl": "https://github.com/Deucarian/Projectiles/blob/main/LICENSE.md"
+      }
     },
     {
       "id": "com.deucarian.weapon-systems",
@@ -821,7 +1073,14 @@
         "com.deucarian.editor",
         "com.deucarian.projectiles",
         "com.deucarian.game-content-authoring"
-      ]
+      ],
+      "public": {
+        "status": "active",
+        "installMethod": "upm-git",
+        "unity": "6000.3",
+        "documentationUrl": "https://github.com/Deucarian/Weapon-Systems/blob/main/README.md",
+        "licenseUrl": "https://github.com/Deucarian/Weapon-Systems/blob/main/LICENSE.md"
+      }
     },
     {
       "id": "com.deucarian.defense-games",
@@ -842,7 +1101,14 @@
         "com.deucarian.combat",
         "com.deucarian.world-spawning",
         "com.deucarian.world-navigation"
-      ]
+      ],
+      "public": {
+        "status": "active",
+        "installMethod": "upm-git",
+        "unity": "6000.3",
+        "documentationUrl": "https://github.com/Deucarian/Defense-Games/blob/main/README.md",
+        "licenseUrl": "https://github.com/Deucarian/Defense-Games/blob/main/LICENSE.md"
+      }
     },
     {
       "id": "com.deucarian.auto-defense",
@@ -867,7 +1133,14 @@
         "com.deucarian.attacks",
         "com.deucarian.projectiles",
         "com.deucarian.weapon-systems"
-      ]
+      ],
+      "public": {
+        "status": "active",
+        "installMethod": "upm-git",
+        "unity": "6000.3",
+        "documentationUrl": "https://github.com/Deucarian/Auto-Defense/blob/main/README.md",
+        "licenseUrl": "https://github.com/Deucarian/Auto-Defense/blob/main/LICENSE.md"
+      }
     },
     {
       "id": "com.deucarian.test-automation",
@@ -882,7 +1155,14 @@
       "iconKey": "flask-conical",
       "stableUrl": "https://github.com/Deucarian/Test-Automation.git#main",
       "developmentUrl": "https://github.com/Deucarian/Test-Automation.git#develop",
-      "dependencies": []
+      "dependencies": [],
+      "public": {
+        "status": "active",
+        "installMethod": "upm-git",
+        "unity": "6000.3",
+        "documentationUrl": "https://github.com/Deucarian/Test-Automation/blob/main/README.md",
+        "licenseUrl": "https://github.com/Deucarian/Test-Automation/blob/main/LICENSE.md"
+      }
     },
     {
       "id": "com.deucarian.auto-defense-suite",
@@ -928,7 +1208,14 @@
         "com.deucarian.auto-defense",
         "com.deucarian.run-upgrades",
         "com.deucarian.idle-progression"
-      ]
+      ],
+      "public": {
+        "status": "active",
+        "installMethod": "upm-git",
+        "unity": "6000.3",
+        "documentationUrl": "https://github.com/Deucarian/Auto-Defense-Suite/blob/main/README.md",
+        "licenseUrl": "https://github.com/Deucarian/Auto-Defense-Suite/blob/main/LICENSE.md"
+      }
     },
     {
       "id": "com.deucarian.template.game.idle-auto-defense",
@@ -973,7 +1260,14 @@
         "game",
         "idle",
         "auto-defense"
-      ]
+      ],
+      "public": {
+        "status": "active",
+        "installMethod": "upm-git",
+        "unity": "6000.3",
+        "documentationUrl": "https://github.com/Deucarian/Template-Game-Idle-Auto-Defense/blob/main/README.md",
+        "licenseUrl": "https://github.com/Deucarian/Template-Game-Idle-Auto-Defense/blob/main/LICENSE.md"
+      }
     },
     {
       "id": "com.deucarian.template.game.survivors",
@@ -1013,7 +1307,14 @@
         "survivors",
         "horde",
         "roguelite"
-      ]
+      ],
+      "public": {
+        "status": "active",
+        "installMethod": "upm-git",
+        "unity": "6000.3",
+        "documentationUrl": "https://github.com/Deucarian/Template-Game-Survivors/blob/main/README.md",
+        "licenseUrl": "https://github.com/Deucarian/Template-Game-Survivors/blob/main/LICENSE.md"
+      }
     },
     {
       "id": "com.deucarian.template.game.movement-fps",
@@ -1048,7 +1349,14 @@
         "wallrun",
         "arena",
         "horde"
-      ]
+      ],
+      "public": {
+        "status": "active",
+        "installMethod": "upm-git",
+        "unity": "6000.3",
+        "documentationUrl": "https://github.com/Deucarian/Template-Game-Movement-FPS/blob/main/README.md",
+        "licenseUrl": "https://github.com/Deucarian/Template-Game-Movement-FPS/blob/main/LICENSE.md"
+      }
     }
   ]
 }
