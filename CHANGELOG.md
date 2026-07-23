@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.81 - 2026-07-23
+
+- Added the Camera Navigation Input System Integration package to the bundled
+  catalog with dependency-first Camera Navigation installation.
+
 ## 1.1.80 - 2026-07-23
 
 - Referenced the canonical Deucarian architecture standard from package guidance.
