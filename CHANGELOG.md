@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.80 - 2026-07-23
+
+- Referenced the canonical Deucarian architecture standard from package guidance.
+- Refreshed the projected registry with architecture metadata and Pointer Capture.
+
 ## 1.1.79 - 2026-07-20
 
 - Expanded the right-side Groups panel into a synchronized category and package tree that mirrors the graph's active path.

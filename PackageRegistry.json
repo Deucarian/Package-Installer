@@ -1,6 +1,10 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-07-17",
+  "updatedAt": "2026-07-22",
+  "architectureStandard": {
+    "path": "ARCHITECTURE.md",
+    "url": "https://github.com/Deucarian/Package-Registry/blob/main/ARCHITECTURE.md"
+  },
   "groups": [
     {
       "id": "infrastructure",
@@ -392,6 +396,23 @@
       "developmentUrl": "https://github.com/Deucarian/Camera-Navigation.git#develop",
       "dependencies": [
         "com.deucarian.common"
+      ],
+      "groupId": "world-xr-interaction"
+    },
+    {
+      "id": "com.deucarian.pointer-capture",
+      "displayName": "Deucarian Pointer Capture",
+      "category": "Interaction",
+      "type": "Core",
+      "kind": "Library",
+      "ecosystemGroup": "Experience & Interaction",
+      "overviewOrder": 26,
+      "description": "Cross-platform pointer-lock lifecycle, capture policy, diagnostics, and WebGL integration for Unity applications.",
+      "iconKey": "mouse-pointer-click",
+      "stableUrl": "https://github.com/Deucarian/Pointer-Capture.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Pointer-Capture.git#develop",
+      "dependencies": [
+        "com.deucarian.editor"
       ],
       "groupId": "world-xr-interaction"
     },
