@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-07-22",
+  "updatedAt": "2026-07-23",
   "architectureStandard": {
     "path": "ARCHITECTURE.md",
     "url": "https://github.com/Deucarian/Package-Registry/blob/main/ARCHITECTURE.md"
@@ -571,6 +571,26 @@
       "integrationTargets": [
         "com.deucarian.xr-ui",
         "com.deucarian.theming"
+      ],
+      "groupId": "world-xr-interaction",
+      "ecosystemGroup": "Integrations"
+    },
+    {
+      "id": "com.deucarian.camera-navigation.input-system-integration",
+      "displayName": "Deucarian Camera Navigation Input System Integration",
+      "category": "Integration",
+      "type": "Integration",
+      "kind": "Integration",
+      "overviewOrder": 37,
+      "description": "Ready-to-use Unity Input System adapters and rig for Deucarian Orbit and Fly camera navigation.",
+      "iconKey": "plug-zap",
+      "stableUrl": "https://github.com/Deucarian/CameraNavigation-InputSystem-Integration.git#main",
+      "developmentUrl": "https://github.com/Deucarian/CameraNavigation-InputSystem-Integration.git#develop",
+      "dependencies": [
+        "com.deucarian.camera-navigation"
+      ],
+      "integrationTargets": [
+        "com.deucarian.camera-navigation"
       ],
       "groupId": "world-xr-interaction",
       "ecosystemGroup": "Integrations"
