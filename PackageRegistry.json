@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-07-23",
+  "updatedAt": "2026-07-24",
   "architectureStandard": {
     "path": "ARCHITECTURE.md",
     "url": "https://github.com/Deucarian/Package-Registry/blob/main/ARCHITECTURE.md"
@@ -259,6 +259,23 @@
       ],
       "recommendedWith": [
         "com.deucarian.diagnostics"
+      ],
+      "groupId": "runtime-services"
+    },
+    {
+      "id": "com.deucarian.media",
+      "displayName": "Deucarian Media",
+      "category": "Core",
+      "type": "Core",
+      "kind": "Library",
+      "ecosystemGroup": "Runtime Services",
+      "overviewOrder": 35,
+      "description": "Typed media loading, explicit resource leases, latest-request coordination, and Unity audio/video playback adapters.",
+      "iconKey": "play",
+      "stableUrl": "https://github.com/Deucarian/Media.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Media.git#develop",
+      "dependencies": [
+        "com.deucarian.common"
       ],
       "groupId": "runtime-services"
     },
@@ -527,6 +544,28 @@
       ],
       "integrationTargets": [
         "com.deucarian.object-loading",
+        "com.deucarian.api"
+      ],
+      "groupId": "runtime-services",
+      "ecosystemGroup": "Integrations"
+    },
+    {
+      "id": "com.deucarian.media.api-integration",
+      "displayName": "Deucarian Media API Integration",
+      "category": "Integration",
+      "type": "Integration",
+      "kind": "Integration",
+      "overviewOrder": 25,
+      "description": "Optional integration package that adapts Deucarian API requests and results to typed Media texture, text, and byte loaders.",
+      "iconKey": "plug-zap",
+      "stableUrl": "https://github.com/Deucarian/Media-API-Integration.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Media-API-Integration.git#develop",
+      "dependencies": [
+        "com.deucarian.api",
+        "com.deucarian.media"
+      ],
+      "integrationTargets": [
+        "com.deucarian.media",
         "com.deucarian.api"
       ],
       "groupId": "runtime-services",
