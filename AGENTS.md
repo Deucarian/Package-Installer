@@ -3,7 +3,7 @@
 Package ID: `com.deucarian.package-installer`
 Repository: `Deucarian/Package-Installer`
 
-Follow the canonical Deucarian governance docs in [Package Registry](https://github.com/Deucarian/Package-Registry/blob/develop/ARCHITECTURE.md), especially capability ownership and dependency rules.
+Follow the canonical Deucarian governance docs in [Package Registry](https://github.com/Deucarian/Package-Registry/blob/main/ARCHITECTURE.md), especially capability ownership and dependency rules.
 
 ## Ownership
 
