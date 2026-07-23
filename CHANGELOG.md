@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.82 - 2026-07-23
+
+- Refreshed the bundled catalog so Camera Navigation installs its required
+  shared Deucarian Editor shell dependency before the package.
+
 ## 1.1.81 - 2026-07-23
 
 - Added the Camera Navigation Input System Integration package to the bundled
