@@ -242,6 +242,48 @@
       "groupId": "infrastructure"
     },
     {
+      "id": "com.deucarian.command-routing",
+      "displayName": "Deucarian Command Routing",
+      "category": "Core",
+      "type": "Core",
+      "kind": "Library",
+      "ecosystemGroup": "Infrastructure",
+      "overviewOrder": 25,
+      "description": "Transport-independent command handlers, middleware, JSON protocol, redaction, history, logging, diagnostics, and editor tooling.",
+      "iconKey": "workflow",
+      "stableUrl": "https://github.com/Deucarian/Command-Routing.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Command-Routing.git#develop",
+      "dependencies": [
+        "com.deucarian.diagnostics",
+        "com.deucarian.editor",
+        "com.deucarian.logging"
+      ],
+      "groupId": "infrastructure"
+    },
+    {
+      "id": "com.deucarian.command-routing.udp-integration",
+      "displayName": "Deucarian Command Routing UDP Integration",
+      "category": "Integration",
+      "type": "Integration",
+      "kind": "Integration",
+      "ecosystemGroup": "Integrations",
+      "overviewOrder": 27,
+      "description": "UDP transport, Unity-context delivery, legacy command compatibility, and Python interoperability for Deucarian Command Routing.",
+      "iconKey": "plug-zap",
+      "stableUrl": "https://github.com/Deucarian/Command-Routing-UDP-Integration.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Command-Routing-UDP-Integration.git#develop",
+      "dependencies": [
+        "com.deucarian.command-routing",
+        "com.deucarian.diagnostics",
+        "com.deucarian.editor",
+        "com.deucarian.logging"
+      ],
+      "integrationTargets": [
+        "com.deucarian.command-routing"
+      ],
+      "groupId": "infrastructure"
+    },
+    {
       "id": "com.deucarian.object-loading",
       "displayName": "Deucarian Object Loading",
       "category": "Core",
