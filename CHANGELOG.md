@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.83 - 2026-07-24
+
+- Added Command Routing and its UDP transport integration to the bundled
+  Deucarian package catalog.
+
 ## 1.1.82 - 2026-07-23
 
 - Refreshed the bundled catalog so Camera Navigation installs its required
