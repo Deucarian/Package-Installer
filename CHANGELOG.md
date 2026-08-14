@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.84 - 2026-08-14
+
+- Refreshed the bundled catalog for review of the reusable Web Viewer package
+  ecosystem and its dependency-first installation graph.
+
 ## 1.1.83 - 2026-07-24
 
 - Added Command Routing and its UDP transport integration to the bundled
