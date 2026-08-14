@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-07-24",
+  "updatedAt": "2026-08-14",
   "architectureStandard": {
     "path": "ARCHITECTURE.md",
     "url": "https://github.com/Deucarian/Package-Registry/blob/main/ARCHITECTURE.md"
@@ -140,6 +140,15 @@
       "description": "Playable starter game templates.",
       "iconKey": "gamepad-2",
       "styleKey": "template"
+    },
+    {
+      "id": "templates-viewers",
+      "displayName": "Viewers",
+      "parentGroupId": "templates",
+      "sortOrder": 72,
+      "description": "Ready-to-run 3D web viewer templates.",
+      "iconKey": "panel-top",
+      "styleKey": "template"
     }
   ],
   "packages": [
@@ -272,6 +281,29 @@
       "iconKey": "plug-zap",
       "stableUrl": "https://github.com/Deucarian/Command-Routing-UDP-Integration.git#main",
       "developmentUrl": "https://github.com/Deucarian/Command-Routing-UDP-Integration.git#develop",
+      "dependencies": [
+        "com.deucarian.command-routing",
+        "com.deucarian.diagnostics",
+        "com.deucarian.editor",
+        "com.deucarian.logging"
+      ],
+      "integrationTargets": [
+        "com.deucarian.command-routing"
+      ],
+      "groupId": "infrastructure"
+    },
+    {
+      "id": "com.deucarian.command-routing.webgl-integration",
+      "displayName": "Deucarian Command Routing WebGL Integration",
+      "category": "Integration",
+      "type": "Integration",
+      "kind": "Integration",
+      "ecosystemGroup": "Integrations",
+      "overviewOrder": 28,
+      "description": "Secure direct-page and iframe browser transport, ready handshake, responses, events, and lifecycle adapters for Deucarian Command Routing.",
+      "iconKey": "panel-top",
+      "stableUrl": "https://github.com/Deucarian/Command-Routing-WebGL-Integration.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Command-Routing-WebGL-Integration.git#develop",
       "dependencies": [
         "com.deucarian.command-routing",
         "com.deucarian.diagnostics",
@@ -456,6 +488,49 @@
       "dependencies": [
         "com.deucarian.common",
         "com.deucarian.editor"
+      ],
+      "groupId": "world-xr-interaction"
+    },
+    {
+      "id": "com.deucarian.activity-visualization",
+      "displayName": "Deucarian Activity Visualization",
+      "category": "World",
+      "type": "Core",
+      "kind": "Library",
+      "ecosystemGroup": "Experience & Interaction",
+      "overviewOrder": 24,
+      "description": "Backend-neutral, deterministic flat Activity membership planning with authoritative revision and visibility state.",
+      "iconKey": "scan-eye",
+      "stableUrl": "https://github.com/Deucarian/Activity-Visualization.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Activity-Visualization.git#develop",
+      "dependencies": [
+        "com.deucarian.diagnostics",
+        "com.deucarian.logging"
+      ],
+      "groupId": "world-xr-interaction"
+    },
+    {
+      "id": "com.deucarian.viewer-navigation",
+      "displayName": "Deucarian Viewer Navigation",
+      "category": "World",
+      "type": "Core",
+      "kind": "Library",
+      "ecosystemGroup": "Experience & Interaction",
+      "overviewOrder": 27,
+      "description": "Canonical Report Viewer-proven navigation preset, toolbar, Orbit/Fly state, Top Down, Return to Origin, six-face view cube, reference bounds, and input coordination.",
+      "iconKey": "box",
+      "stableUrl": "https://github.com/Deucarian/Viewer-Navigation.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Viewer-Navigation.git#develop",
+      "dependencies": [
+        "com.deucarian.camera-navigation",
+        "com.deucarian.camera-navigation.input-system-integration",
+        "com.deucarian.common",
+        "com.deucarian.diagnostics",
+        "com.deucarian.editor",
+        "com.deucarian.logging",
+        "com.deucarian.pointer-capture",
+        "com.deucarian.theming",
+        "com.deucarian.ui"
       ],
       "groupId": "world-xr-interaction"
     },
@@ -727,6 +802,60 @@
       ],
       "groupId": "world-xr-interaction",
       "ecosystemGroup": "Suites"
+    },
+    {
+      "id": "com.deucarian.web-viewer-suite",
+      "displayName": "Deucarian Web Viewer Suite",
+      "category": "Suites",
+      "type": "Suite",
+      "kind": "Suite",
+      "overviewOrder": 20,
+      "description": "Implementation-free curated bundle of the reusable Deucarian WebGL viewer stack and its Report Viewer-proven navigation preset, with a compiled reference-composition sample.",
+      "iconKey": "panels-top-left",
+      "stableUrl": "https://github.com/Deucarian/Web-Viewer-Suite.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Web-Viewer-Suite.git#develop",
+      "dependencies": [
+        "com.deucarian.api",
+        "com.deucarian.build-pipeline",
+        "com.deucarian.camera-navigation",
+        "com.deucarian.camera-navigation.input-system-integration",
+        "com.deucarian.command-routing",
+        "com.deucarian.command-routing.webgl-integration",
+        "com.deucarian.diagnostics",
+        "com.deucarian.object-loading",
+        "com.deucarian.object-loading.api-integration",
+        "com.deucarian.pointer-capture",
+        "com.deucarian.theming",
+        "com.deucarian.ui",
+        "com.deucarian.viewer-navigation"
+      ],
+      "suiteMembers": [
+        "com.deucarian.api",
+        "com.deucarian.build-pipeline",
+        "com.deucarian.camera-navigation",
+        "com.deucarian.camera-navigation.input-system-integration",
+        "com.deucarian.command-routing",
+        "com.deucarian.command-routing.webgl-integration",
+        "com.deucarian.diagnostics",
+        "com.deucarian.object-loading",
+        "com.deucarian.object-loading.api-integration",
+        "com.deucarian.pointer-capture",
+        "com.deucarian.theming",
+        "com.deucarian.ui",
+        "com.deucarian.viewer-navigation"
+      ],
+      "groupId": "world-xr-interaction",
+      "ecosystemGroup": "Suites",
+      "searchAliases": [
+        "web viewer suite",
+        "webgl viewer stack"
+      ],
+      "searchTags": [
+        "suite",
+        "viewer",
+        "webgl",
+        "navigation"
+      ]
     },
     {
       "id": "com.deucarian.gameplay-foundation",
@@ -1171,6 +1300,47 @@
         "wallrun",
         "arena",
         "horde"
+      ]
+    },
+    {
+      "id": "com.deucarian.template.viewer.web",
+      "displayName": "Deucarian Web Viewer Template",
+      "category": "Templates",
+      "type": "Template",
+      "kind": "Template",
+      "ecosystemGroup": "Templates",
+      "groupId": "templates-viewers",
+      "overviewOrder": 10,
+      "description": "Ready-to-run generic WebGL viewer with Report Viewer-proven navigation defaults, secure browser commands, model loading, diagnostics, a local host harness, and project-owned build profiles.",
+      "iconKey": "panel-top",
+      "stableUrl": "https://github.com/Deucarian/Template-Viewer-Web.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Template-Viewer-Web.git#develop",
+      "dependencies": [
+        "com.deucarian.api",
+        "com.deucarian.build-pipeline",
+        "com.deucarian.camera-navigation",
+        "com.deucarian.command-routing",
+        "com.deucarian.command-routing.webgl-integration",
+        "com.deucarian.diagnostics",
+        "com.deucarian.logging",
+        "com.deucarian.object-loading",
+        "com.deucarian.object-loading.api-integration",
+        "com.deucarian.theming",
+        "com.deucarian.ui",
+        "com.deucarian.viewer-navigation",
+        "com.deucarian.web-viewer-suite"
+      ],
+      "searchAliases": [
+        "web viewer template",
+        "webgl viewer template",
+        "3d viewer template"
+      ],
+      "searchTags": [
+        "template",
+        "viewer",
+        "webgl",
+        "browser",
+        "3d"
       ]
     }
   ]
