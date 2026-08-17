@@ -26,7 +26,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             PackageOperationAutoResumeState.TrackActiveOperation(
                 OperationId,
                 RegistryFingerprint,
-                isBulk: true);
+                canAutoResumeAfterReload: true);
 
             Assert.IsFalse(PackageOperationAutoResumeState.HasMatchingReloadMarker(
                 OperationId,
@@ -51,7 +51,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             PackageOperationAutoResumeState.TrackActiveOperation(
                 OperationId,
                 RegistryFingerprint,
-                isBulk: false);
+                canAutoResumeAfterReload: false);
             PackageOperationAutoResumeState.SimulateBeforeAssemblyReloadForTests();
             Assert.IsFalse(PackageOperationAutoResumeState.HasMatchingReloadMarker(
                 OperationId,
@@ -61,7 +61,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             PackageOperationAutoResumeState.TrackActiveOperation(
                 OperationId,
                 RegistryFingerprint,
-                isBulk: true);
+                canAutoResumeAfterReload: true);
             PackageOperationAutoResumeState.DetachOperation(OperationId);
             PackageOperationAutoResumeState.SimulateBeforeAssemblyReloadForTests();
 
@@ -76,7 +76,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             PackageOperationAutoResumeState.TrackActiveOperation(
                 OperationId,
                 RegistryFingerprint,
-                isBulk: true);
+                canAutoResumeAfterReload: true);
             PackageOperationAutoResumeState.SimulateBeforeAssemblyReloadForTests();
             PackageOperationAutoResumeState.DetachOperation(OperationId);
             PackageOperationAutoResumeState.SimulateNewDomainForTests();
@@ -170,7 +170,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             PackageOperationAutoResumeState.TrackActiveOperation(
                 OperationId,
                 RegistryFingerprint,
-                isBulk: true);
+                canAutoResumeAfterReload: true);
             PackageOperationAutoResumeState.SimulateBeforeAssemblyReloadForTests();
             PackageOperationAutoResumeState.SimulateNewDomainForTests();
 

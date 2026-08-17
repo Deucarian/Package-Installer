@@ -1192,7 +1192,7 @@ namespace Deucarian.PackageInstaller.Editor
             PackageOperationAutoResumeState.TrackActiveOperation(
                 _currentOperationId,
                 _currentRegistryFingerprint,
-                plan != null && plan.IsBulk);
+                plan != null && (plan.IsMultiStep || plan.IsBulk));
         }
 
         private void MarkProgressItem(
