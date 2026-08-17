@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.85 - 2026-08-17
+
+- Automatically resume accepted single-root, multi-step dependency installs
+  after Unity script reloads instead of showing recovery after every dependency.
+- Added repeated-reload coverage for installing one template with dependencies.
+
 ## 1.1.84 - 2026-08-14
 
 - Refreshed the bundled catalog for review of the reusable Web Viewer package
