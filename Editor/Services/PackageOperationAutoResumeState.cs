@@ -27,9 +27,9 @@ namespace Deucarian.PackageInstaller.Editor
         internal static void TrackActiveOperation(
             string operationId,
             string registryFingerprint,
-            bool isBulk)
+            bool canAutoResumeAfterReload)
         {
-            if (!isBulk ||
+            if (!canAutoResumeAfterReload ||
                 string.IsNullOrWhiteSpace(operationId) ||
                 string.IsNullOrWhiteSpace(registryFingerprint))
             {
