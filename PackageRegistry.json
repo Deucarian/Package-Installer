@@ -229,7 +229,6 @@
       "stableUrl": "https://github.com/Deucarian/API.git#main",
       "developmentUrl": "https://github.com/Deucarian/API.git#develop",
       "dependencies": [
-        "com.deucarian.editor",
         "com.deucarian.logging"
       ],
       "groupId": "runtime-services"
