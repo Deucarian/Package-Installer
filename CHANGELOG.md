@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.86 - 2026-08-18
+
+- Added Viewer Authentication and the authenticated Web Viewer dependency
+  closure to the bundled package catalog.
+
 ## 1.1.85 - 2026-08-17
 
 - Automatically resume accepted single-root, multi-step dependency installs
