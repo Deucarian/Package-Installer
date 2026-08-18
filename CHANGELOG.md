@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.87 - 2026-08-18
+
+- Corrected the bundled dependency graph so the Web Viewer Template installs
+  the shared Session package before the template.
+
 ## 1.1.86 - 2026-08-18
 
 - Added Viewer Authentication and the authenticated Web Viewer dependency
