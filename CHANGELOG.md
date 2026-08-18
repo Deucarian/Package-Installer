@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.88 - 2026-08-18
+
+- Refreshed the bundled dependency graph for API's shared Editor tooling and
+  the Web Viewer Template's Session API integration.
+
 ## 1.1.87 - 2026-08-18
 
 - Corrected the bundled dependency graph so the Web Viewer Template installs

@@ -229,6 +229,7 @@
       "stableUrl": "https://github.com/Deucarian/API.git#main",
       "developmentUrl": "https://github.com/Deucarian/API.git#develop",
       "dependencies": [
+        "com.deucarian.editor",
         "com.deucarian.logging"
       ],
       "groupId": "runtime-services"
@@ -1399,6 +1400,7 @@
         "com.deucarian.object-loading",
         "com.deucarian.object-loading.api-integration",
         "com.deucarian.session",
+        "com.deucarian.session.api-integration",
         "com.deucarian.theming",
         "com.deucarian.ui",
         "com.deucarian.viewer-navigation",
