@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.90 - 2026-08-19
+
+- Refreshed the generated package catalog so Simultria API installs its
+  required shared Editor dependency before exposing environment profile tools.
+
 ## 1.1.89 - 2026-08-19
 
 - Added registry-defined template composition presets with a minimal setup

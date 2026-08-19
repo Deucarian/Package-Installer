@@ -494,6 +494,7 @@
       "developmentUrl": "https://github.com/Deucarian/Simultria-API.git#develop",
       "dependencies": [
         "com.deucarian.api",
+        "com.deucarian.editor",
         "com.deucarian.session",
         "com.deucarian.session.api-integration",
         "com.deucarian.viewer-authentication"
