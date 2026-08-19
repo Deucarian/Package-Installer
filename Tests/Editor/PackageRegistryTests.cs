@@ -20,6 +20,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         private const string TemplatePackageId = "com.deucarian.template.game.idle-auto-defense";
         private const string SurvivorsTemplatePackageId = "com.deucarian.template.game.survivors";
         private const string MovementFpsTemplatePackageId = "com.deucarian.template.game.movement-fps";
+        private const string WebViewerTemplatePackageId = "com.deucarian.template.viewer.web";
         private const string EditorPackageId = "com.deucarian.editor";
         private const string GameContentAuthoringPackageId = "com.deucarian.game-content-authoring";
         private const string GameplayFoundationPackageId = "com.deucarian.gameplay-foundation";
@@ -1078,6 +1079,35 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             StringAssert.Contains(
                 "Template-Game-Movement-FPS.git#develop",
                 movementFpsTemplate.developmentUrl);
+        }
+
+        [Test]
+        public void BundledWebViewerTemplateOffersMeaningfulConnectionPresets()
+        {
+            string registryJson = File.ReadAllText(GetBundledRegistryPath());
+            PackageRegistryLoadResult result = new PackageRegistryLoader()
+                .LoadFromJson(registryJson, PackageRegistrySource.Bundled);
+            PackageDefinition template = PackageRegistryProvider
+                .CreatePackageDefinitions(result.Registry)
+                .Single(package => package.PackageId == WebViewerTemplatePackageId);
+
+            Assert.IsTrue(result.IsValid, result.ErrorMessage);
+            CollectionAssert.AreEquivalent(
+                new[]
+                {
+                    "com.deucarian.simultria-api",
+                    "com.deucarian.simultria-viewer-connection"
+                },
+                template.OptionalCompanions);
+            CollectionAssert.AreEqual(
+                new[] { "core", "authenticated", "simultria" },
+                template.CompositionPresets.Select(preset => preset.Id).ToArray());
+            CollectionAssert.AreEqual(
+                new[] { "com.deucarian.simultria-api" },
+                template.CompositionPresets[1].PackageIds);
+            CollectionAssert.AreEqual(
+                new[] { "com.deucarian.simultria-viewer-connection" },
+                template.CompositionPresets[2].PackageIds);
         }
 
         [Test]
