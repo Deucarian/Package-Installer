@@ -163,7 +163,8 @@ namespace Deucarian.PackageInstaller.Editor
                     !ValidateRelationshipIds(package, package.optionalIntegrations, "optionalIntegrations", packageIds, usesCanonicalSchema, out message) ||
                     !ValidateRelationshipIds(package, package.integrationTargets, "integrationTargets", packageIds, usesCanonicalSchema, out message) ||
                     !ValidateRelationshipIds(package, package.suiteMembers, "suiteMembers", packageIds, usesCanonicalSchema, out message) ||
-                    !ValidateRelationshipIds(package, package.recommendedWith, "recommendedWith", packageIds, usesCanonicalSchema, out message))
+                    !ValidateRelationshipIds(package, package.recommendedWith, "recommendedWith", packageIds, usesCanonicalSchema, out message) ||
+                    !ValidateCompositionPresets(package, registry.packages, packageIds, out message))
                 {
                     return false;
                 }
@@ -176,6 +177,125 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (!ValidateDependencyGraph(registry.packages, out message))
             {
+                return false;
+            }
+
+            message = string.Empty;
+            return true;
+        }
+
+        private static bool ValidateCompositionPresets(
+            PackageRegistryEntry package,
+            IEnumerable<PackageRegistryEntry> allPackages,
+            ISet<string> knownPackageIds,
+            out string message)
+        {
+            PackageCompositionPresetEntry[] presets =
+                package.compositionPresets ?? Array.Empty<PackageCompositionPresetEntry>();
+            if (presets.Length == 0)
+            {
+                message = string.Empty;
+                return true;
+            }
+
+            PackageKindParser.TryParseCanonical(package.kind, out PackageKind kind);
+            if (kind != PackageKind.Template)
+            {
+                message = "Package " + package.id +
+                          " declares compositionPresets but is not a Template.";
+                return false;
+            }
+
+            HashSet<string> optionalCompanionIds = new HashSet<string>(
+                package.optionalCompanions ?? Array.Empty<string>(),
+                StringComparer.OrdinalIgnoreCase);
+            foreach (PackageRegistryEntry candidate in allPackages ?? Array.Empty<PackageRegistryEntry>())
+            {
+                if (candidate == null || string.IsNullOrWhiteSpace(candidate.id))
+                {
+                    continue;
+                }
+
+                if ((candidate.recommendedWith ?? Array.Empty<string>()).Any(targetId =>
+                        string.Equals(
+                            targetId?.Trim(),
+                            package.id?.Trim(),
+                            StringComparison.OrdinalIgnoreCase)))
+                {
+                    optionalCompanionIds.Add(candidate.id.Trim());
+                }
+            }
+            HashSet<string> presetIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            int recommendedCount = 0;
+
+            foreach (PackageCompositionPresetEntry preset in presets)
+            {
+                if (preset == null || string.IsNullOrWhiteSpace(preset.id))
+                {
+                    message = "Package " + package.id +
+                              " contains a composition preset without an id.";
+                    return false;
+                }
+
+                if (string.IsNullOrWhiteSpace(preset.displayName))
+                {
+                    message = "Composition preset " + preset.id + " on package " +
+                              package.id + " requires displayName.";
+                    return false;
+                }
+
+                if (!presetIds.Add(preset.id.Trim()))
+                {
+                    message = "Package " + package.id +
+                              " contains duplicate composition preset id " + preset.id + ".";
+                    return false;
+                }
+
+                if (preset.recommended)
+                {
+                    recommendedCount++;
+                }
+
+                HashSet<string> seenPackageIds =
+                    new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                foreach (string packageIdValue in preset.packageIds ?? Array.Empty<string>())
+                {
+                    if (string.IsNullOrWhiteSpace(packageIdValue))
+                    {
+                        message = "Composition preset " + preset.id + " on package " +
+                                  package.id + " contains an empty package id.";
+                        return false;
+                    }
+
+                    string packageId = packageIdValue.Trim();
+                    if (!seenPackageIds.Add(packageId))
+                    {
+                        message = "Composition preset " + preset.id + " on package " +
+                                  package.id + " contains duplicate package id " + packageId + ".";
+                        return false;
+                    }
+
+                    if (!knownPackageIds.Contains(packageId))
+                    {
+                        message = "Composition preset " + preset.id + " on package " +
+                                  package.id + " references unknown package id " + packageId + ".";
+                        return false;
+                    }
+
+                    if (!optionalCompanionIds.Contains(packageId))
+                    {
+                        message = "Composition preset " + preset.id + " on package " +
+                                  package.id + " may only select optional companions derived from recommendedWith; " +
+                                  packageId + " is not one.";
+                        return false;
+                    }
+                }
+            }
+
+            if (recommendedCount > 1)
+            {
+                message = "Package " + package.id +
+                          " may declare at most one recommended composition preset.";
                 return false;
             }
 
