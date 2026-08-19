@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-08-18",
+  "updatedAt": "2026-08-19",
   "architectureStandard": {
     "path": "ARCHITECTURE.md",
     "url": "https://github.com/Deucarian/Package-Registry/blob/main/ARCHITECTURE.md"
@@ -467,7 +467,7 @@
       "kind": "Library",
       "ecosystemGroup": "Runtime Services",
       "overviewOrder": 24,
-      "description": "Reusable viewer session composition, live API authentication, secure auth commands, sanitized status, and shared development authentication tooling.",
+      "description": "Reusable viewer session composition, live API authentication, secure auth commands, sanitized status, shared development tooling, and an optional runtime connection-provider seam.",
       "iconKey": "key-round",
       "stableUrl": "https://github.com/Deucarian/Viewer-Authentication.git#main",
       "developmentUrl": "https://github.com/Deucarian/Viewer-Authentication.git#develop",
@@ -477,6 +477,66 @@
         "com.deucarian.editor",
         "com.deucarian.session",
         "com.deucarian.session.api-integration"
+      ],
+      "groupId": "runtime-services"
+    },
+    {
+      "id": "com.deucarian.simultria-api",
+      "displayName": "Deucarian Simultria API",
+      "category": "Integration",
+      "type": "Integration",
+      "kind": "Integration",
+      "ecosystemGroup": "Integrations",
+      "overviewOrder": 26,
+      "description": "Optional Simultria environments, endpoint catalog, typed API lookups, viewer authentication adapter, and deterministic viewer-model resolution.",
+      "iconKey": "plug-zap",
+      "stableUrl": "https://github.com/Deucarian/Simultria-API.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Simultria-API.git#develop",
+      "dependencies": [
+        "com.deucarian.api",
+        "com.deucarian.session",
+        "com.deucarian.session.api-integration",
+        "com.deucarian.viewer-authentication"
+      ],
+      "integrationTargets": [
+        "com.deucarian.api",
+        "com.deucarian.session",
+        "com.deucarian.session.api-integration",
+        "com.deucarian.viewer-authentication"
+      ],
+      "recommendedWith": [
+        "com.deucarian.template.viewer.web"
+      ],
+      "groupId": "runtime-services"
+    },
+    {
+      "id": "com.deucarian.simultria-viewer-connection",
+      "displayName": "Deucarian Simultria Viewer Connection",
+      "category": "Integration",
+      "type": "Integration",
+      "kind": "Integration",
+      "ecosystemGroup": "Integrations",
+      "overviewOrder": 27,
+      "description": "Optional credential-free Simultria viewer profiles, environment status, stable editor/runtime authentication handoff, trusted API-client composition, and command-routed auto-load tooling.",
+      "iconKey": "cable",
+      "stableUrl": "https://github.com/Deucarian/Simultria-Viewer-Connection.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Simultria-Viewer-Connection.git#develop",
+      "dependencies": [
+        "com.deucarian.api",
+        "com.deucarian.command-routing",
+        "com.deucarian.editor",
+        "com.deucarian.logging",
+        "com.deucarian.simultria-api",
+        "com.deucarian.viewer-authentication"
+      ],
+      "integrationTargets": [
+        "com.deucarian.api",
+        "com.deucarian.command-routing",
+        "com.deucarian.simultria-api",
+        "com.deucarian.viewer-authentication"
+      ],
+      "recommendedWith": [
+        "com.deucarian.template.viewer.web"
       ],
       "groupId": "runtime-services"
     },
@@ -713,7 +773,7 @@
       "type": "Integration",
       "kind": "Integration",
       "overviewOrder": 20,
-      "description": "Optional integration package that provides optimized API-backed UnityWebRequestAssetBundle transport for Object Loading.",
+      "description": "Optional integration package that provides optimized API-backed UnityWebRequestAssetBundle transport and exact-origin authenticated download policy for Object Loading.",
       "iconKey": "plug-zap",
       "stableUrl": "https://github.com/Deucarian/ObjectLoading-API-Integration.git#main",
       "developmentUrl": "https://github.com/Deucarian/ObjectLoading-API-Integration.git#develop",
@@ -1408,6 +1468,31 @@
         "com.deucarian.viewer-shell",
         "com.deucarian.viewer-authentication",
         "com.deucarian.web-viewer-suite"
+      ],
+      "compositionPresets": [
+        {
+          "id": "core",
+          "displayName": "Core Viewer",
+          "description": "Vendor-neutral viewer template with the shared Report Viewer reference shell, navigation, rendering, and input behavior.",
+          "packageIds": [],
+          "recommended": true
+        },
+        {
+          "id": "authenticated",
+          "displayName": "Authenticated Viewer",
+          "description": "Core viewer plus the concrete Simultria API environment and authentication provider; development auto-load remains optional.",
+          "packageIds": [
+            "com.deucarian.simultria-api"
+          ]
+        },
+        {
+          "id": "simultria",
+          "displayName": "Simultria Viewer",
+          "description": "Core viewer plus the complete Simultria API, stable authentication session, trusted model-loading client, environment, and command-routed development auto-load connection.",
+          "packageIds": [
+            "com.deucarian.simultria-viewer-connection"
+          ]
+        }
       ],
       "searchAliases": [
         "web viewer template",
