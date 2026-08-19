@@ -176,7 +176,10 @@ namespace Deucarian.PackageInstaller.Editor
                 PackageGraphHierarchyBuilder.CreateGroups(registry.groups);
             PackageDefinition[] packageDefinitions = registry.packages
                 .Where(entry => entry != null)
-                .Select(entry => CreatePackageDefinition(entry, groups))
+                .Select(entry => CreatePackageDefinition(
+                    entry,
+                    groups,
+                    ResolveOptionalCompanionIds(entry, registry.packages)))
                 .ToArray();
 
             return EnsureInstallerPackageDefinition(packageDefinitions);
@@ -184,7 +187,8 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static PackageDefinition CreatePackageDefinition(
             PackageRegistryEntry entry,
-            IReadOnlyList<PackageGraphGroup> groups)
+            IReadOnlyList<PackageGraphGroup> groups,
+            IEnumerable<string> optionalCompanionIds)
         {
             string category = entry.category != null ? entry.category.Trim() : string.Empty;
             PackageKind kind = PackageKindParser.Parse(entry.kind, entry.type, category);
@@ -200,7 +204,7 @@ namespace Deucarian.PackageInstaller.Editor
                 entry.dependencies,
                 kind,
                 entry.developmentUrl,
-                optionalCompanions: entry.optionalCompanions,
+                optionalCompanions: optionalCompanionIds,
                 category: category,
                 metadataType: entry.type,
                 optionalIntegrations: entry.optionalIntegrations,
@@ -213,7 +217,44 @@ namespace Deucarian.PackageInstaller.Editor
                 searchAliases: entry.searchAliases,
                 searchTags: entry.searchTags,
                 navigationGroup: navigationGroup,
-                iconKey: entry.iconKey);
+                iconKey: entry.iconKey,
+                compositionPresets: CreateCompositionPresets(entry.compositionPresets));
+        }
+
+        private static IEnumerable<string> ResolveOptionalCompanionIds(
+            PackageRegistryEntry target,
+            IEnumerable<PackageRegistryEntry> entries)
+        {
+            IEnumerable<string> declared = target.optionalCompanions ?? Array.Empty<string>();
+            IEnumerable<string> derived = (entries ?? Array.Empty<PackageRegistryEntry>())
+                .Where(candidate => candidate != null &&
+                                    (candidate.recommendedWith ?? Array.Empty<string>())
+                                    .Any(targetId => string.Equals(
+                                        targetId?.Trim(),
+                                        target.id?.Trim(),
+                                        StringComparison.OrdinalIgnoreCase)))
+                .Select(candidate => candidate.id);
+
+            return declared
+                .Concat(derived)
+                .Where(packageId => !string.IsNullOrWhiteSpace(packageId))
+                .Select(packageId => packageId.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(packageId => packageId, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+
+        private static IEnumerable<PackageCompositionPresetDefinition> CreateCompositionPresets(
+            IEnumerable<PackageCompositionPresetEntry> entries)
+        {
+            return (entries ?? Array.Empty<PackageCompositionPresetEntry>())
+                .Where(entry => entry != null)
+                .Select(entry => new PackageCompositionPresetDefinition(
+                    entry.id,
+                    entry.displayName,
+                    entry.description,
+                    entry.packageIds,
+                    entry.recommended));
         }
 
         private static IReadOnlyList<PackageDefinition> EnsureInstallerPackageDefinition(

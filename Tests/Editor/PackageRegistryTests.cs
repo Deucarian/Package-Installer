@@ -163,6 +163,61 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual("Template", PackageGraphHierarchyDisplay.GetPackageKind(package));
         }
 
+        [Test]
+        public void TemplateCompositionPresetsParseIntoTypedDefinitions()
+        {
+            const string json =
+                "{ \"schemaVersion\": 2, \"groups\": [" +
+                "{ \"id\": \"templates\", \"displayName\": \"Templates\" }," +
+                "{ \"id\": \"runtime\", \"displayName\": \"Runtime\" }" +
+                "], \"packages\": [" +
+                "{ \"id\": \"com.example.auth\", \"displayName\": \"Authentication\", \"kind\": \"Library\", \"groupId\": \"runtime\", \"stableUrl\": \"https://example.com/auth.git#main\", \"dependencies\": [], \"recommendedWith\": [\"com.example.template\"] }," +
+                "{ \"id\": \"com.example.connection\", \"displayName\": \"Backend Connection\", \"kind\": \"Library\", \"groupId\": \"runtime\", \"stableUrl\": \"https://example.com/connection.git#main\", \"dependencies\": [\"com.example.auth\"], \"recommendedWith\": [\"com.example.template\"] }," +
+                "{ \"id\": \"com.example.template\", \"displayName\": \"Viewer Template\", \"kind\": \"Template\", \"groupId\": \"templates\", \"stableUrl\": \"https://example.com/template.git#main\", \"dependencies\": [], \"compositionPresets\": [" +
+                "{ \"id\": \"core\", \"displayName\": \"Core\", \"description\": \"Vendor-neutral viewer.\", \"packageIds\": [], \"recommended\": true }," +
+                "{ \"id\": \"authenticated\", \"displayName\": \"Authenticated\", \"packageIds\": [\"com.example.auth\"] }," +
+                "{ \"id\": \"backend\", \"displayName\": \"Backend\", \"packageIds\": [\"com.example.connection\"] }" +
+                "] }" +
+                "] }";
+
+            PackageRegistryLoadResult result = new PackageRegistryLoader()
+                .LoadFromJson(json, PackageRegistrySource.Bundled);
+            PackageDefinition template = PackageRegistryProvider
+                .CreatePackageDefinitions(result.Registry)
+                .Single(package => package.PackageId == "com.example.template");
+
+            Assert.IsTrue(result.IsValid, result.ErrorMessage);
+            Assert.AreEqual(3, template.CompositionPresets.Count);
+            Assert.IsTrue(template.CompositionPresets[0].Recommended);
+            CollectionAssert.AreEquivalent(
+                new[] { "com.example.auth", "com.example.connection" },
+                template.OptionalCompanions);
+            CollectionAssert.AreEqual(
+                new[] { "com.example.connection" },
+                template.CompositionPresets[2].PackageIds);
+        }
+
+        [Test]
+        public void TemplateCompositionPresetRejectsPackageOutsideOptionalCompanions()
+        {
+            const string json =
+                "{ \"schemaVersion\": 2, \"groups\": [" +
+                "{ \"id\": \"templates\", \"displayName\": \"Templates\" }," +
+                "{ \"id\": \"runtime\", \"displayName\": \"Runtime\" }" +
+                "], \"packages\": [" +
+                "{ \"id\": \"com.example.auth\", \"displayName\": \"Authentication\", \"kind\": \"Library\", \"groupId\": \"runtime\", \"stableUrl\": \"https://example.com/auth.git#main\", \"dependencies\": [] }," +
+                "{ \"id\": \"com.example.template\", \"displayName\": \"Viewer Template\", \"kind\": \"Template\", \"groupId\": \"templates\", \"stableUrl\": \"https://example.com/template.git#main\", \"dependencies\": [], \"compositionPresets\": [" +
+                "{ \"id\": \"invalid\", \"displayName\": \"Invalid\", \"packageIds\": [\"com.example.auth\"] }" +
+                "] }" +
+                "] }";
+
+            PackageRegistryLoadResult result = new PackageRegistryLoader()
+                .LoadFromJson(json, PackageRegistrySource.Bundled);
+
+            Assert.IsFalse(result.IsValid);
+            StringAssert.Contains("may only select optional companions derived from recommendedWith", result.ErrorMessage);
+        }
+
         [TestCase("", "Package com.deucarian.invalid has unknown kind")]
         [TestCase("Unknown", "Package com.deucarian.invalid has unknown kind")]
         [TestCase("0", "Package com.deucarian.invalid has unknown kind")]

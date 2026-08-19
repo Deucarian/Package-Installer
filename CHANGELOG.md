@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.89 - 2026-08-19
+
+- Added registry-defined template composition presets with a minimal setup
+  selector for core, authenticated, and backend-connected viewer installs.
+- Optional connections selected by a preset now install through the existing
+  dependency-first planner, including automatically required companions.
+
 ## 1.1.88 - 2026-08-18
 
 - Refreshed the bundled dependency graph for API's shared Editor tooling and
