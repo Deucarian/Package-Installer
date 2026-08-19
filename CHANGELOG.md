@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.91 - 2026-08-20
+
+- Refreshed the generated package catalog so Simultria Viewer Connection
+  installs its direct shared Session dependency before the integration.
+
 ## 1.1.90 - 2026-08-19
 
 - Refreshed the generated package catalog so Simultria API installs its
