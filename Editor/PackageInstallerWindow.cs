@@ -7249,11 +7249,6 @@ namespace Deucarian.PackageInstaller.Editor
                 return ResolveConfiguredChannel(packageDefinition, latestExplicitSelection.Channel);
             }
 
-            if (hasInstalledChannel && installedChannel == PackageChannel.Custom)
-            {
-                return PackageChannel.Custom;
-            }
-
             return PackageChannel.Stable;
         }
 
