@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.92 - 2026-08-21
+
+- Migrate local, embedded, exact-SHA, feature, and development package sources
+  to the selected stable canonical Git `#main` URL instead of retaining a
+  noncanonical source or treating it as uncheckable.
+- Preserve clear remote-main diagnostics without falling back to local disk.
+
 ## 1.1.91 - 2026-08-20
 
 - Refreshed the generated package catalog so Simultria Viewer Connection
