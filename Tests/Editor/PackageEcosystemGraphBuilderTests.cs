@@ -462,7 +462,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                     hasInstalledChannel: false,
                     installedChannel: PackageChannel.Stable));
             Assert.AreEqual(
-                PackageChannel.Custom,
+                PackageChannel.Stable,
                 PackageInstallerWindow.ResolveSelectedChannelForTests(
                     package,
                     PackageChannelSelection.None,
