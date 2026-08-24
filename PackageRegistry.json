@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-08-19",
+  "updatedAt": "2026-08-24",
   "architectureStandard": {
     "path": "ARCHITECTURE.md",
     "url": "https://github.com/Deucarian/Package-Registry/blob/main/ARCHITECTURE.md"
@@ -718,7 +718,7 @@
       "kind": "Tool",
       "ecosystemGroup": "Tools & Quality",
       "overviewOrder": 50,
-      "description": "Editor-only Build Pipeline Manager, provider workflows, profile policies, drift validation, artifact manifests, and CI build entry points.",
+      "description": "Editor-only Build Pipeline Manager, provider workflows, profile policies, package-owned WebGL template synchronization and selection, drift validation, artifact manifests, and CI build entry points.",
       "iconKey": "hammer",
       "stableUrl": "https://github.com/Deucarian/Build-Pipeline.git#main",
       "developmentUrl": "https://github.com/Deucarian/Build-Pipeline.git#develop",
@@ -727,6 +727,33 @@
         "com.deucarian.logging"
       ],
       "groupId": "tools-quality"
+    },
+    {
+      "id": "com.deucarian.webgl-template",
+      "displayName": "Deucarian WebGL Template",
+      "category": "Tools",
+      "type": "Tool",
+      "kind": "Tool",
+      "ecosystemGroup": "Tools & Quality",
+      "overviewOrder": 60,
+      "description": "Reusable Unity WebGL browser template with responsive canvas hosting, loading, ready and failure presentation, fullscreen controls, runtime theme synchronization, and lifecycle/progress bridges.",
+      "iconKey": "panel-top",
+      "stableUrl": "https://github.com/Deucarian/WebGL-Template.git#main",
+      "developmentUrl": "https://github.com/Deucarian/WebGL-Template.git#develop",
+      "dependencies": [
+        "com.deucarian.build-pipeline"
+      ],
+      "groupId": "tools-quality",
+      "searchAliases": [
+        "webgl browser template",
+        "unity webgl shell"
+      ],
+      "searchTags": [
+        "webgl",
+        "browser",
+        "template",
+        "loading"
+      ]
     },
     {
       "id": "com.deucarian.diagnostics",
@@ -956,7 +983,8 @@
         "com.deucarian.viewer-navigation",
         "com.deucarian.viewer-rendering",
         "com.deucarian.viewer-shell",
-        "com.deucarian.viewer-authentication"
+        "com.deucarian.viewer-authentication",
+        "com.deucarian.webgl-template"
       ],
       "suiteMembers": [
         "com.deucarian.api",
@@ -976,7 +1004,8 @@
         "com.deucarian.viewer-navigation",
         "com.deucarian.viewer-rendering",
         "com.deucarian.viewer-shell",
-        "com.deucarian.viewer-authentication"
+        "com.deucarian.viewer-authentication",
+        "com.deucarian.webgl-template"
       ],
       "groupId": "world-xr-interaction",
       "ecosystemGroup": "Suites",
@@ -1469,7 +1498,8 @@
         "com.deucarian.viewer-rendering",
         "com.deucarian.viewer-shell",
         "com.deucarian.viewer-authentication",
-        "com.deucarian.web-viewer-suite"
+        "com.deucarian.web-viewer-suite",
+        "com.deucarian.webgl-template"
       ],
       "compositionPresets": [
         {
