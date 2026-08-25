@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-08-24",
+  "updatedAt": "2026-08-25",
   "architectureStandard": {
     "path": "ARCHITECTURE.md",
     "url": "https://github.com/Deucarian/Package-Registry/blob/main/ARCHITECTURE.md"
@@ -655,6 +655,61 @@
         "com.deucarian.diagnostics",
         "com.deucarian.logging",
         "com.deucarian.theming"
+      ],
+      "groupId": "world-xr-interaction"
+    },
+    {
+      "id": "com.deucarian.simultria.rendering",
+      "displayName": "Deucarian Simultria Rendering",
+      "category": "World",
+      "type": "Core",
+      "kind": "Library",
+      "ecosystemGroup": "Experience & Interaction",
+      "overviewOrder": 30,
+      "description": "Canonical Simultria model shaders, neutral material rebinding, and WebGL shader-inclusion validation for AssetBundle-loaded models.",
+      "iconKey": "palette",
+      "stableUrl": "https://github.com/Deucarian/Simultria-Rendering.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Simultria-Rendering.git#develop",
+      "sourceVisibility": "private",
+      "dependencies": [],
+      "recommendedWith": [
+        "com.deucarian.template.viewer.web"
+      ],
+      "groupId": "world-xr-interaction"
+    },
+    {
+      "id": "com.deucarian.activity-visualization.simultria",
+      "displayName": "Deucarian Simultria Activity Visualization",
+      "category": "Integration",
+      "type": "Integration",
+      "kind": "Integration",
+      "ecosystemGroup": "Integrations",
+      "overviewOrder": 31,
+      "description": "Integrates Simultria Activity metadata and Processor model relationships with live Activity visibility, viewer commands, and generated command-test scenarios.",
+      "iconKey": "scan-eye",
+      "stableUrl": "https://github.com/Deucarian/Simultria-Activity-Visualization.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Simultria-Activity-Visualization.git#develop",
+      "sourceVisibility": "private",
+      "dependencies": [
+        "com.deucarian.activity-visualization",
+        "com.deucarian.api",
+        "com.deucarian.command-routing",
+        "com.deucarian.diagnostics",
+        "com.deucarian.session",
+        "com.deucarian.simultria-api",
+        "com.deucarian.simultria.rendering",
+        "com.deucarian.template.viewer.web",
+        "com.deucarian.viewer-authentication"
+      ],
+      "integrationTargets": [
+        "com.deucarian.activity-visualization",
+        "com.deucarian.command-routing",
+        "com.deucarian.simultria-api",
+        "com.deucarian.simultria.rendering",
+        "com.deucarian.viewer-authentication"
+      ],
+      "recommendedWith": [
+        "com.deucarian.template.viewer.web"
       ],
       "groupId": "world-xr-interaction"
     },
@@ -1520,8 +1575,18 @@
         {
           "id": "simultria",
           "displayName": "Simultria Viewer",
-          "description": "Core viewer plus the complete Simultria API, stable authentication session, trusted model-loading client, environment, and command-routed development auto-load connection.",
+          "description": "Core viewer plus the complete Simultria API, canonical model rendering, stable authentication session, trusted model-loading client, environment, and command-routed development auto-load connection.",
           "packageIds": [
+            "com.deucarian.simultria-viewer-connection",
+            "com.deucarian.simultria.rendering"
+          ]
+        },
+        {
+          "id": "simultria-activity",
+          "displayName": "Simultria Activity Viewer",
+          "description": "Simultria viewer composition with live Activity metadata, Processor model relationships, Activity visibility commands, and generated command-test scenarios.",
+          "packageIds": [
+            "com.deucarian.activity-visualization.simultria",
             "com.deucarian.simultria-viewer-connection"
           ]
         }

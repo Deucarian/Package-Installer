@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.93 - 2026-08-25
+
+- Added the shared Simultria rendering and Activity integration packages to
+  the generated catalog, including Simultria and Activity Viewer composition
+  presets.
+
 ## 1.1.92 - 2026-08-21
 
 - Migrate local, embedded, exact-SHA, feature, and development package sources

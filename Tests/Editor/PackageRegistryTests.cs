@@ -1095,19 +1095,32 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             CollectionAssert.AreEquivalent(
                 new[]
                 {
+                    "com.deucarian.activity-visualization.simultria",
                     "com.deucarian.simultria-api",
-                    "com.deucarian.simultria-viewer-connection"
+                    "com.deucarian.simultria-viewer-connection",
+                    "com.deucarian.simultria.rendering"
                 },
                 template.OptionalCompanions);
             CollectionAssert.AreEqual(
-                new[] { "core", "authenticated", "simultria" },
+                new[] { "core", "authenticated", "simultria", "simultria-activity" },
                 template.CompositionPresets.Select(preset => preset.Id).ToArray());
             CollectionAssert.AreEqual(
                 new[] { "com.deucarian.simultria-api" },
                 template.CompositionPresets[1].PackageIds);
             CollectionAssert.AreEqual(
-                new[] { "com.deucarian.simultria-viewer-connection" },
+                new[]
+                {
+                    "com.deucarian.simultria-viewer-connection",
+                    "com.deucarian.simultria.rendering"
+                },
                 template.CompositionPresets[2].PackageIds);
+            CollectionAssert.AreEqual(
+                new[]
+                {
+                    "com.deucarian.activity-visualization.simultria",
+                    "com.deucarian.simultria-viewer-connection"
+                },
+                template.CompositionPresets[3].PackageIds);
         }
 
         [Test]
