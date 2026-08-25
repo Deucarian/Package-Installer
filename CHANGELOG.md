@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.1.94 - 2026-08-25
+
+- Audited all package and category focus layouts against the expanded Simultria
+  catalog and kept integration lanes at the minimum safe clearance from their
+  nearest related content.
+- Refreshed generated catalog icons to use IDs vendored by the shared Editor
+  package.
+- Made dense-overflow clipboard validation deterministic without relying on
+  the operating system clipboard during headless test runs.
+
 ## 1.1.93 - 2026-08-25
 
 - Added the shared Simultria rendering and Activity integration packages to

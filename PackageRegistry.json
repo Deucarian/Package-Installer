@@ -147,7 +147,7 @@
       "parentGroupId": "templates",
       "sortOrder": 72,
       "description": "Ready-to-run 3D web viewer templates.",
-      "iconKey": "panel-top",
+      "iconKey": "panels-top-left",
       "styleKey": "template"
     }
   ],
@@ -302,7 +302,7 @@
       "ecosystemGroup": "Integrations",
       "overviewOrder": 28,
       "description": "Secure direct-page and iframe browser transport, ready handshake, responses, events, and lifecycle adapters for Deucarian Command Routing.",
-      "iconKey": "panel-top",
+      "iconKey": "panels-top-left",
       "stableUrl": "https://github.com/Deucarian/Command-Routing-WebGL-Integration.git#main",
       "developmentUrl": "https://github.com/Deucarian/Command-Routing-WebGL-Integration.git#develop",
       "dependencies": [
@@ -448,7 +448,7 @@
       "ecosystemGroup": "Experience & Interaction",
       "overviewOrder": 20,
       "description": "Reusable reference viewer status, diagnostics, display-settings chrome, responsive layout, menu coordination, theming, and input-boundary composition.",
-      "iconKey": "panel-top",
+      "iconKey": "panels-top-left",
       "stableUrl": "https://github.com/Deucarian/Viewer-Shell.git#main",
       "developmentUrl": "https://github.com/Deucarian/Viewer-Shell.git#develop",
       "dependencies": [
@@ -519,7 +519,7 @@
       "ecosystemGroup": "Integrations",
       "overviewOrder": 27,
       "description": "Optional credential-free Simultria viewer profiles, environment status, stable editor/runtime authentication handoff, trusted API-client composition, and command-routed auto-load tooling.",
-      "iconKey": "cable",
+      "iconKey": "plug",
       "stableUrl": "https://github.com/Deucarian/Simultria-Viewer-Connection.git#main",
       "developmentUrl": "https://github.com/Deucarian/Simultria-Viewer-Connection.git#develop",
       "dependencies": [
@@ -604,7 +604,7 @@
       "ecosystemGroup": "Experience & Interaction",
       "overviewOrder": 24,
       "description": "Backend-neutral, deterministic flat Activity membership planning with authoritative revision and visibility state.",
-      "iconKey": "scan-eye",
+      "iconKey": "scan",
       "stableUrl": "https://github.com/Deucarian/Activity-Visualization.git#main",
       "developmentUrl": "https://github.com/Deucarian/Activity-Visualization.git#develop",
       "dependencies": [
@@ -622,7 +622,7 @@
       "ecosystemGroup": "Experience & Interaction",
       "overviewOrder": 27,
       "description": "Canonical Report Viewer-proven navigation preset, toolbar, Orbit/Fly state, Top Down, Return to Origin, six-face view cube, reference bounds, and input coordination.",
-      "iconKey": "box",
+      "iconKey": "boxes",
       "stableUrl": "https://github.com/Deucarian/Viewer-Navigation.git#main",
       "developmentUrl": "https://github.com/Deucarian/Viewer-Navigation.git#develop",
       "dependencies": [
@@ -686,7 +686,7 @@
       "ecosystemGroup": "Integrations",
       "overviewOrder": 31,
       "description": "Integrates Simultria Activity metadata and Processor model relationships with live Activity visibility, viewer commands, and generated command-test scenarios.",
-      "iconKey": "scan-eye",
+      "iconKey": "scan",
       "stableUrl": "https://github.com/Deucarian/Simultria-Activity-Visualization.git#main",
       "developmentUrl": "https://github.com/Deucarian/Simultria-Activity-Visualization.git#develop",
       "sourceVisibility": "private",
@@ -792,7 +792,7 @@
       "ecosystemGroup": "Tools & Quality",
       "overviewOrder": 60,
       "description": "Reusable Unity WebGL browser template with responsive canvas hosting, loading, ready and failure presentation, fullscreen controls, runtime theme synchronization, and lifecycle/progress bridges.",
-      "iconKey": "panel-top",
+      "iconKey": "panels-top-left",
       "stableUrl": "https://github.com/Deucarian/WebGL-Template.git#main",
       "developmentUrl": "https://github.com/Deucarian/WebGL-Template.git#develop",
       "dependencies": [
@@ -1532,7 +1532,7 @@
       "groupId": "templates-viewers",
       "overviewOrder": 10,
       "description": "Ready-to-run generic WebGL viewer with Report Viewer-proven navigation defaults, secure browser commands, model loading, diagnostics, a local host harness, and project-owned build profiles.",
-      "iconKey": "panel-top",
+      "iconKey": "panels-top-left",
       "stableUrl": "https://github.com/Deucarian/Template-Viewer-Web.git#main",
       "developmentUrl": "https://github.com/Deucarian/Template-Viewer-Web.git#develop",
       "dependencies": [
