@@ -5369,7 +5369,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
-        public void GraphView_DenseOverflowSummaryIsKeyboardActionableAndCopiesHiddenIds()
+        public void GraphView_DenseOverflowSummaryIsKeyboardActionableAndProvidesHiddenIdsToClipboard()
         {
             const int providerCount = 49;
             string centralPackageId = "com.example.dense-root";
@@ -5395,31 +5395,23 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Label focusContext = FindByClass(view, "dpi-ecosystem-graph__hidden-related")
                 .OfType<Label>()
                 .Single();
-            string previousClipboard = EditorGUIUtility.systemCopyBuffer;
+            string copiedDiagnostic = string.Empty;
 
-            try
-            {
-                EditorGUIUtility.systemCopyBuffer = string.Empty;
-                Assert.AreEqual("Focus includes direct relations (1 summarized)", focusContext.text);
-                StringAssert.Contains(
-                    "1 dense direct relationship is summarized behind the +N overflow summary",
-                    focusContext.tooltip);
-                StringAssert.DoesNotContain("every direct relationship visible", focusContext.tooltip);
-                Assert.AreEqual(DisplayStyle.Flex, focusContext.style.display.value);
-                Assert.IsTrue(summary.focusable);
-                Assert.AreEqual(0, summary.tabIndex);
-                Assert.AreEqual(PickingMode.Position, summary.pickingMode);
-                Assert.IsTrue(summary.HasKeyboardActivationForTests);
+            Assert.AreEqual("Focus includes direct relations (1 summarized)", focusContext.text);
+            StringAssert.Contains(
+                "1 dense direct relationship is summarized behind the +N overflow summary",
+                focusContext.tooltip);
+            StringAssert.DoesNotContain("every direct relationship visible", focusContext.tooltip);
+            Assert.AreEqual(DisplayStyle.Flex, focusContext.style.display.value);
+            Assert.IsTrue(summary.focusable);
+            Assert.AreEqual(0, summary.tabIndex);
+            Assert.AreEqual(PickingMode.Position, summary.pickingMode);
+            Assert.IsTrue(summary.HasKeyboardActivationForTests);
 
-                summary.ActivateForTests();
+            summary.ActivateForTests(diagnostic => copiedDiagnostic = diagnostic);
 
-                StringAssert.Contains("Additional prerequisites: 1", EditorGUIUtility.systemCopyBuffer);
-                StringAssert.Contains("com.example.dense-provider-", EditorGUIUtility.systemCopyBuffer);
-            }
-            finally
-            {
-                EditorGUIUtility.systemCopyBuffer = previousClipboard;
-            }
+            StringAssert.Contains("Additional prerequisites: 1", copiedDiagnostic);
+            StringAssert.Contains("com.example.dense-provider-", copiedDiagnostic);
         }
 
         [Test]
