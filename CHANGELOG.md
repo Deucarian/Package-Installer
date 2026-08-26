@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.95 - 2026-08-26
+
+- Registered the platform-neutral Viewer Template and projected the Web Viewer
+  as its target-specific adapter with the reduced direct dependency set.
+
 ## 1.1.94 - 2026-08-25
 
 - Audited all package and category focus layouts against the expanded Simultria
