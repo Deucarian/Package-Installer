@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-07-24",
+  "updatedAt": "2026-08-26",
   "architectureStandard": {
     "path": "ARCHITECTURE.md",
     "url": "https://github.com/Deucarian/Package-Registry/blob/main/ARCHITECTURE.md"
@@ -140,6 +140,15 @@
       "description": "Playable starter game templates.",
       "iconKey": "gamepad-2",
       "styleKey": "template"
+    },
+    {
+      "id": "templates-viewers",
+      "displayName": "Viewers",
+      "parentGroupId": "templates",
+      "sortOrder": 72,
+      "description": "Ready-to-run 3D web viewer templates.",
+      "iconKey": "panels-top-left",
+      "styleKey": "template"
     }
   ],
   "packages": [
@@ -220,6 +229,7 @@
       "stableUrl": "https://github.com/Deucarian/API.git#main",
       "developmentUrl": "https://github.com/Deucarian/API.git#develop",
       "dependencies": [
+        "com.deucarian.editor",
         "com.deucarian.logging"
       ],
       "groupId": "runtime-services"
@@ -272,6 +282,29 @@
       "iconKey": "plug-zap",
       "stableUrl": "https://github.com/Deucarian/Command-Routing-UDP-Integration.git#main",
       "developmentUrl": "https://github.com/Deucarian/Command-Routing-UDP-Integration.git#develop",
+      "dependencies": [
+        "com.deucarian.command-routing",
+        "com.deucarian.diagnostics",
+        "com.deucarian.editor",
+        "com.deucarian.logging"
+      ],
+      "integrationTargets": [
+        "com.deucarian.command-routing"
+      ],
+      "groupId": "infrastructure"
+    },
+    {
+      "id": "com.deucarian.command-routing.webgl-integration",
+      "displayName": "Deucarian Command Routing WebGL Integration",
+      "category": "Integration",
+      "type": "Integration",
+      "kind": "Integration",
+      "ecosystemGroup": "Integrations",
+      "overviewOrder": 28,
+      "description": "Secure direct-page and iframe browser transport, ready handshake, responses, events, and lifecycle adapters for Deucarian Command Routing.",
+      "iconKey": "panels-top-left",
+      "stableUrl": "https://github.com/Deucarian/Command-Routing-WebGL-Integration.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Command-Routing-WebGL-Integration.git#develop",
       "dependencies": [
         "com.deucarian.command-routing",
         "com.deucarian.diagnostics",
@@ -407,6 +440,109 @@
       "groupId": "ui-presentation"
     },
     {
+      "id": "com.deucarian.viewer-shell",
+      "displayName": "Deucarian Viewer Shell",
+      "category": "UI",
+      "type": "Core",
+      "kind": "Library",
+      "ecosystemGroup": "Experience & Interaction",
+      "overviewOrder": 20,
+      "description": "Reusable reference viewer status, diagnostics, display-settings chrome, responsive layout, menu coordination, theming, and input-boundary composition.",
+      "iconKey": "panels-top-left",
+      "stableUrl": "https://github.com/Deucarian/Viewer-Shell.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Viewer-Shell.git#develop",
+      "dependencies": [
+        "com.deucarian.common",
+        "com.deucarian.theming",
+        "com.deucarian.ui",
+        "com.deucarian.viewer-rendering"
+      ],
+      "groupId": "ui-presentation"
+    },
+    {
+      "id": "com.deucarian.authentication",
+      "displayName": "Deucarian Authentication",
+      "category": "Core",
+      "type": "Core",
+      "kind": "Library",
+      "ecosystemGroup": "Runtime Services",
+      "overviewOrder": 24,
+      "description": "Reusable authentication session lifecycle, explicit-target API authentication, secure local persistence, sanitized status, and an optional viewer integration assembly.",
+      "iconKey": "key-round",
+      "stableUrl": "https://github.com/Deucarian/Viewer-Authentication.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Viewer-Authentication.git#develop",
+      "dependencies": [
+        "com.deucarian.api",
+        "com.deucarian.command-routing",
+        "com.deucarian.editor",
+        "com.deucarian.session",
+        "com.deucarian.session.api-integration"
+      ],
+      "groupId": "runtime-services"
+    },
+    {
+      "id": "com.deucarian.simultria-api",
+      "displayName": "Deucarian Simultria API",
+      "category": "Integration",
+      "type": "Integration",
+      "kind": "Integration",
+      "ecosystemGroup": "Integrations",
+      "overviewOrder": 26,
+      "description": "Simultria API definition, typed lookups, authentication adapter, and reusable no-fallback Unity build routing.",
+      "iconKey": "plug-zap",
+      "stableUrl": "https://github.com/Deucarian/Simultria-API.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Simultria-API.git#develop",
+      "dependencies": [
+        "com.deucarian.api",
+        "com.deucarian.editor",
+        "com.deucarian.session",
+        "com.deucarian.session.api-integration",
+        "com.deucarian.authentication"
+      ],
+      "integrationTargets": [
+        "com.deucarian.api",
+        "com.deucarian.session",
+        "com.deucarian.session.api-integration",
+        "com.deucarian.authentication"
+      ],
+      "recommendedWith": [
+        "com.deucarian.template.viewer.web"
+      ],
+      "groupId": "runtime-services"
+    },
+    {
+      "id": "com.deucarian.simultria-viewer-integration",
+      "displayName": "Deucarian Simultria Viewer Integration",
+      "category": "Integration",
+      "type": "Integration",
+      "kind": "Integration",
+      "ecosystemGroup": "Integrations",
+      "overviewOrder": 27,
+      "description": "Optional Simultria viewer development context, explicit API settings, environment status, stable editor/runtime authentication handoff, and command-routed auto-load tooling.",
+      "iconKey": "plug",
+      "stableUrl": "https://github.com/Deucarian/Simultria-Viewer-Connection.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Simultria-Viewer-Connection.git#develop",
+      "dependencies": [
+        "com.deucarian.api",
+        "com.deucarian.command-routing",
+        "com.deucarian.editor",
+        "com.deucarian.logging",
+        "com.deucarian.session",
+        "com.deucarian.simultria-api",
+        "com.deucarian.authentication"
+      ],
+      "integrationTargets": [
+        "com.deucarian.api",
+        "com.deucarian.command-routing",
+        "com.deucarian.simultria-api",
+        "com.deucarian.authentication"
+      ],
+      "recommendedWith": [
+        "com.deucarian.template.viewer.web"
+      ],
+      "groupId": "runtime-services"
+    },
+    {
       "id": "com.deucarian.theming",
       "displayName": "Deucarian Theming",
       "category": "UI",
@@ -456,6 +592,126 @@
       "dependencies": [
         "com.deucarian.common",
         "com.deucarian.editor"
+      ],
+      "groupId": "world-xr-interaction"
+    },
+    {
+      "id": "com.deucarian.activity-visualization",
+      "displayName": "Deucarian Activity Visualization",
+      "category": "World",
+      "type": "Core",
+      "kind": "Library",
+      "ecosystemGroup": "Experience & Interaction",
+      "overviewOrder": 24,
+      "description": "Backend-neutral, deterministic flat Activity membership planning with authoritative revision and visibility state.",
+      "iconKey": "scan",
+      "stableUrl": "https://github.com/Deucarian/Activity-Visualization.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Activity-Visualization.git#develop",
+      "dependencies": [
+        "com.deucarian.diagnostics",
+        "com.deucarian.logging"
+      ],
+      "groupId": "world-xr-interaction"
+    },
+    {
+      "id": "com.deucarian.viewer-navigation",
+      "displayName": "Deucarian Viewer Navigation Experience",
+      "category": "World",
+      "type": "Core",
+      "kind": "Library",
+      "ecosystemGroup": "Experience & Interaction",
+      "overviewOrder": 27,
+      "description": "Reusable viewer navigation experience composing canonical Orbit/Fly and top-down state, toolbar, origin, reference bounds, view cube, and input coordination over generic Camera Navigation.",
+      "iconKey": "boxes",
+      "stableUrl": "https://github.com/Deucarian/Viewer-Navigation.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Viewer-Navigation.git#develop",
+      "dependencies": [
+        "com.deucarian.camera-navigation",
+        "com.deucarian.camera-navigation.input-system-integration",
+        "com.deucarian.common",
+        "com.deucarian.diagnostics",
+        "com.deucarian.editor",
+        "com.deucarian.logging",
+        "com.deucarian.pointer-capture",
+        "com.deucarian.theming",
+        "com.deucarian.ui"
+      ],
+      "groupId": "world-xr-interaction"
+    },
+    {
+      "id": "com.deucarian.viewer-rendering",
+      "displayName": "Deucarian Viewer Rendering",
+      "category": "World",
+      "type": "Core",
+      "kind": "Library",
+      "ecosystemGroup": "Experience & Interaction",
+      "overviewOrder": 29,
+      "description": "Reusable reference viewer camera, lighting, URP quality, post-processing, reflection, themed environment, and display-settings composition.",
+      "iconKey": "sparkles",
+      "stableUrl": "https://github.com/Deucarian/Viewer-Rendering.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Viewer-Rendering.git#develop",
+      "dependencies": [
+        "com.deucarian.common",
+        "com.deucarian.diagnostics",
+        "com.deucarian.logging",
+        "com.deucarian.theming"
+      ],
+      "groupId": "world-xr-interaction"
+    },
+    {
+      "id": "com.deucarian.simultria.rendering",
+      "displayName": "Deucarian Simultria Rendering",
+      "category": "World",
+      "type": "Core",
+      "kind": "Library",
+      "ecosystemGroup": "Experience & Interaction",
+      "overviewOrder": 30,
+      "description": "Canonical Simultria model shaders, neutral material rebinding, and WebGL shader-inclusion validation for AssetBundle-loaded models.",
+      "iconKey": "palette",
+      "stableUrl": "https://github.com/Deucarian/Simultria-Rendering.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Simultria-Rendering.git#develop",
+      "sourceVisibility": "private",
+      "dependencies": [],
+      "recommendedWith": [
+        "com.deucarian.template.viewer.web"
+      ],
+      "groupId": "world-xr-interaction"
+    },
+    {
+      "id": "com.deucarian.activity-visualization.simultria",
+      "displayName": "Deucarian Simultria Activity Visualization",
+      "category": "Integration",
+      "type": "Integration",
+      "kind": "Integration",
+      "ecosystemGroup": "Integrations",
+      "overviewOrder": 31,
+      "description": "Integrates Simultria Activity metadata and Processor model relationships with live Activity visibility, viewer commands, and generated command-test scenarios.",
+      "iconKey": "scan",
+      "stableUrl": "https://github.com/Deucarian/Simultria-Activity-Visualization.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Simultria-Activity-Visualization.git#develop",
+      "sourceVisibility": "private",
+      "dependencies": [
+        "com.deucarian.activity-visualization",
+        "com.deucarian.api",
+        "com.deucarian.command-routing",
+        "com.deucarian.diagnostics",
+        "com.deucarian.session",
+        "com.deucarian.simultria-api",
+        "com.deucarian.simultria.rendering",
+        "com.deucarian.simultria-viewer-integration",
+        "com.deucarian.template.viewer.web",
+        "com.deucarian.authentication"
+      ],
+      "integrationTargets": [
+        "com.deucarian.activity-visualization",
+        "com.deucarian.command-routing",
+        "com.deucarian.simultria-api",
+        "com.deucarian.simultria.rendering",
+        "com.deucarian.simultria-viewer-integration",
+        "com.deucarian.authentication"
+      ],
+      "recommendedWith": [
+        "com.deucarian.template.viewer.web"
       ],
       "groupId": "world-xr-interaction"
     },
@@ -519,7 +775,7 @@
       "kind": "Tool",
       "ecosystemGroup": "Tools & Quality",
       "overviewOrder": 50,
-      "description": "Editor-only Build Pipeline Manager, provider workflows, profile policies, drift validation, artifact manifests, and CI build entry points.",
+      "description": "Editor-only Build Pipeline Manager, provider workflows, profile policies, package-owned WebGL template synchronization and selection, drift validation, artifact manifests, and CI build entry points.",
       "iconKey": "hammer",
       "stableUrl": "https://github.com/Deucarian/Build-Pipeline.git#main",
       "developmentUrl": "https://github.com/Deucarian/Build-Pipeline.git#develop",
@@ -528,6 +784,33 @@
         "com.deucarian.logging"
       ],
       "groupId": "tools-quality"
+    },
+    {
+      "id": "com.deucarian.webgl-template",
+      "displayName": "Deucarian WebGL Template",
+      "category": "Tools",
+      "type": "Tool",
+      "kind": "Tool",
+      "ecosystemGroup": "Tools & Quality",
+      "overviewOrder": 60,
+      "description": "Reusable Unity WebGL browser template with responsive canvas hosting, loading, ready and failure presentation, fullscreen controls, runtime theme synchronization, and lifecycle/progress bridges.",
+      "iconKey": "panels-top-left",
+      "stableUrl": "https://github.com/Deucarian/WebGL-Template.git#main",
+      "developmentUrl": "https://github.com/Deucarian/WebGL-Template.git#develop",
+      "dependencies": [
+        "com.deucarian.build-pipeline"
+      ],
+      "groupId": "tools-quality",
+      "searchAliases": [
+        "webgl browser template",
+        "unity webgl shell"
+      ],
+      "searchTags": [
+        "webgl",
+        "browser",
+        "template",
+        "loading"
+      ]
     },
     {
       "id": "com.deucarian.diagnostics",
@@ -576,7 +859,7 @@
       "type": "Integration",
       "kind": "Integration",
       "overviewOrder": 20,
-      "description": "Optional integration package that provides optimized API-backed UnityWebRequestAssetBundle transport for Object Loading.",
+      "description": "Optional integration package that provides optimized API-backed UnityWebRequestAssetBundle transport and exact-origin authenticated download policy for Object Loading.",
       "iconKey": "plug-zap",
       "stableUrl": "https://github.com/Deucarian/ObjectLoading-API-Integration.git#main",
       "developmentUrl": "https://github.com/Deucarian/ObjectLoading-API-Integration.git#develop",
@@ -727,6 +1010,74 @@
       ],
       "groupId": "world-xr-interaction",
       "ecosystemGroup": "Suites"
+    },
+    {
+      "id": "com.deucarian.web-viewer-suite",
+      "displayName": "Deucarian Web Viewer Suite",
+      "category": "Suites",
+      "type": "Suite",
+      "kind": "Suite",
+      "overviewOrder": 20,
+      "description": "Implementation-free bundle of the reusable Deucarian WebGL viewer stack, including the shared reference rendering, shell, and navigation composition.",
+      "iconKey": "panels-top-left",
+      "stableUrl": "https://github.com/Deucarian/Web-Viewer-Suite.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Web-Viewer-Suite.git#develop",
+      "dependencies": [
+        "com.deucarian.api",
+        "com.deucarian.build-pipeline",
+        "com.deucarian.camera-navigation",
+        "com.deucarian.camera-navigation.input-system-integration",
+        "com.deucarian.command-routing",
+        "com.deucarian.command-routing.webgl-integration",
+        "com.deucarian.diagnostics",
+        "com.deucarian.object-loading",
+        "com.deucarian.object-loading.api-integration",
+        "com.deucarian.pointer-capture",
+        "com.deucarian.session",
+        "com.deucarian.session.api-integration",
+        "com.deucarian.theming",
+        "com.deucarian.ui",
+        "com.deucarian.viewer-navigation",
+        "com.deucarian.viewer-rendering",
+        "com.deucarian.viewer-shell",
+        "com.deucarian.authentication",
+        "com.deucarian.webgl-template"
+      ],
+      "suiteMembers": [
+        "com.deucarian.api",
+        "com.deucarian.build-pipeline",
+        "com.deucarian.camera-navigation",
+        "com.deucarian.camera-navigation.input-system-integration",
+        "com.deucarian.command-routing",
+        "com.deucarian.command-routing.webgl-integration",
+        "com.deucarian.diagnostics",
+        "com.deucarian.object-loading",
+        "com.deucarian.object-loading.api-integration",
+        "com.deucarian.pointer-capture",
+        "com.deucarian.session",
+        "com.deucarian.session.api-integration",
+        "com.deucarian.theming",
+        "com.deucarian.ui",
+        "com.deucarian.viewer-navigation",
+        "com.deucarian.viewer-rendering",
+        "com.deucarian.viewer-shell",
+        "com.deucarian.authentication",
+        "com.deucarian.webgl-template"
+      ],
+      "groupId": "world-xr-interaction",
+      "ecosystemGroup": "Suites",
+      "searchAliases": [
+        "web viewer suite",
+        "webgl viewer stack"
+      ],
+      "searchTags": [
+        "suite",
+        "viewer",
+        "webgl",
+        "navigation",
+        "rendering",
+        "shell"
+      ]
     },
     {
       "id": "com.deucarian.gameplay-foundation",
@@ -1171,6 +1522,88 @@
         "wallrun",
         "arena",
         "horde"
+      ]
+    },
+    {
+      "id": "com.deucarian.template.viewer.web",
+      "displayName": "Deucarian Web Viewer Template",
+      "category": "Templates",
+      "type": "Template",
+      "kind": "Template",
+      "ecosystemGroup": "Templates",
+      "groupId": "templates-viewers",
+      "overviewOrder": 10,
+      "description": "Ready-to-run generic WebGL viewer with Report Viewer-proven navigation defaults, secure browser commands, model loading, diagnostics, a local host harness, and project-owned build profiles.",
+      "iconKey": "panels-top-left",
+      "stableUrl": "https://github.com/Deucarian/Template-Viewer-Web.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Template-Viewer-Web.git#develop",
+      "dependencies": [
+        "com.deucarian.api",
+        "com.deucarian.build-pipeline",
+        "com.deucarian.camera-navigation",
+        "com.deucarian.command-routing",
+        "com.deucarian.command-routing.webgl-integration",
+        "com.deucarian.diagnostics",
+        "com.deucarian.logging",
+        "com.deucarian.object-loading",
+        "com.deucarian.object-loading.api-integration",
+        "com.deucarian.session",
+        "com.deucarian.session.api-integration",
+        "com.deucarian.theming",
+        "com.deucarian.ui",
+        "com.deucarian.viewer-navigation",
+        "com.deucarian.viewer-rendering",
+        "com.deucarian.viewer-shell",
+        "com.deucarian.authentication",
+        "com.deucarian.web-viewer-suite",
+        "com.deucarian.webgl-template"
+      ],
+      "compositionPresets": [
+        {
+          "id": "core",
+          "displayName": "Core Viewer",
+          "description": "Vendor-neutral viewer template with the shared Report Viewer reference shell, navigation, rendering, and input behavior.",
+          "packageIds": [],
+          "recommended": true
+        },
+        {
+          "id": "authenticated",
+          "displayName": "Authenticated Viewer",
+          "description": "Core viewer plus the concrete Simultria API environment and authentication provider; development auto-load remains optional.",
+          "packageIds": [
+            "com.deucarian.simultria-api"
+          ]
+        },
+        {
+          "id": "simultria",
+          "displayName": "Simultria Viewer",
+          "description": "Core viewer plus the complete Simultria API, canonical model rendering, stable authentication session, trusted model-loading client, environment, and command-routed development auto-load connection.",
+          "packageIds": [
+            "com.deucarian.simultria-viewer-integration",
+            "com.deucarian.simultria.rendering"
+          ]
+        },
+        {
+          "id": "simultria-activity",
+          "displayName": "Simultria Activity Viewer",
+          "description": "Simultria viewer composition with live Activity metadata, Processor model relationships, Activity visibility commands, and generated command-test scenarios.",
+          "packageIds": [
+            "com.deucarian.activity-visualization.simultria",
+            "com.deucarian.simultria-viewer-integration"
+          ]
+        }
+      ],
+      "searchAliases": [
+        "web viewer template",
+        "webgl viewer template",
+        "3d viewer template"
+      ],
+      "searchTags": [
+        "template",
+        "viewer",
+        "webgl",
+        "browser",
+        "3d"
       ]
     }
   ]
