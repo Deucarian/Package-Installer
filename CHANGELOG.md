@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.84 - 2026-08-27
+
+- Regenerated the bundled registry after Authentication's Command Routing
+  adapter became an optional, version-defined integration.
+
 ## 1.1.83 - 2026-07-24
 
 - Added Command Routing and its UDP transport integration to the bundled
