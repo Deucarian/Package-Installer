@@ -1101,21 +1101,9 @@ namespace Deucarian.PackageInstaller.Editor
                         item.ResolvedPath)
                     : item.SourceType;
 
-                if (sourceType == PackageInstallSourceType.Registry)
+                if (RequiresCanonicalStableMigration(item, sourceType))
                 {
                     return CheckSourceMigrationItem(item, cancellationToken, context);
-                }
-
-                if (sourceType == PackageInstallSourceType.Local ||
-                    sourceType == PackageInstallSourceType.Embedded)
-                {
-                    return PackageUpdateStatus.CannotDetermine(
-                        item.PackageDefinition,
-                        item.Channel,
-                        item.SelectedUrl,
-                        item.InstalledVersion,
-                        "Update checks are not available for " + sourceType.ToString().ToLowerInvariant() + " packages.")
-                        .WithPackageVersions(item.InstalledVersion, string.Empty);
                 }
 
                 if (string.IsNullOrWhiteSpace(item.SelectedUrl))
@@ -1266,10 +1254,13 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             bool isSelf = PackageInstallerRuntimeIdentity.IsSelf(item.PackageDefinition.PackageId);
+            string sourceDescription = GetSourceMigrationDescription(item);
             string message = isSelf
-                ? "Package Installer is installed from a registry. Open Bootstrap to migrate it safely to the selected Git channel."
+                ? "Package Installer is installed from " + sourceDescription +
+                  ". Open Bootstrap to migrate it safely to the selected Git channel."
                 : item.PackageDefinition.DisplayName +
-                  " is installed from a registry. Migrate it to the selected catalog Git URL.";
+                  " is installed from " + sourceDescription +
+                  ". Migrate it to the selected catalog Git URL.";
 
             if (!string.IsNullOrWhiteSpace(diagnostic))
             {
@@ -1284,6 +1275,58 @@ namespace Deucarian.PackageInstaller.Editor
                 installedVersion,
                 latestVersion,
                 message);
+        }
+
+        private static bool RequiresCanonicalStableMigration(
+            UpdateCheckItem item,
+            PackageInstallSourceType sourceType)
+        {
+            if (item == null)
+            {
+                return false;
+            }
+
+            if (sourceType == PackageInstallSourceType.Registry)
+            {
+                return true;
+            }
+
+            if (item.Channel != PackageChannel.Stable)
+            {
+                return false;
+            }
+
+            if (sourceType == PackageInstallSourceType.Local ||
+                sourceType == PackageInstallSourceType.Embedded)
+            {
+                return true;
+            }
+
+            return item.HasInstalledChannel &&
+                   item.InstalledChannel != PackageChannel.Stable;
+        }
+
+        private static string GetSourceMigrationDescription(UpdateCheckItem item)
+        {
+            if (item == null)
+            {
+                return "a noncanonical source";
+            }
+
+            switch (item.SourceType)
+            {
+                case PackageInstallSourceType.Registry:
+                    return "a registry source";
+                case PackageInstallSourceType.Local:
+                    return "a local source";
+                case PackageInstallSourceType.Embedded:
+                    return "an embedded source";
+                default:
+                    return item.HasInstalledChannel &&
+                           item.InstalledChannel == PackageChannel.Development
+                        ? "the development Git channel"
+                        : "a noncanonical Git source";
+            }
         }
 
         private static string AppendDiagnostic(string first, string second)

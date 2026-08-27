@@ -25,5 +25,6 @@ namespace Deucarian.PackageInstaller.Editor
         public string[] recommendedWith;
         public string[] searchAliases;
         public string[] searchTags;
+        public PackageCompositionPresetEntry[] compositionPresets;
     }
 }

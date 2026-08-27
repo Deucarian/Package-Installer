@@ -29,7 +29,8 @@ namespace Deucarian.PackageInstaller.Editor
             IEnumerable<string> searchAliases = null,
             IEnumerable<string> searchTags = null,
             string navigationGroup = null,
-            string iconKey = null)
+            string iconKey = null,
+            IEnumerable<PackageCompositionPresetDefinition> compositionPresets = null)
         {
             if (string.IsNullOrWhiteSpace(displayName))
             {
@@ -76,6 +77,9 @@ namespace Deucarian.PackageInstaller.Editor
             IconKey = string.IsNullOrWhiteSpace(iconKey)
                 ? string.Empty
                 : iconKey.Trim();
+            CompositionPresets = (compositionPresets ?? Array.Empty<PackageCompositionPresetDefinition>())
+                .Where(value => value != null)
+                .ToArray();
         }
 
         public string DisplayName { get; }
@@ -127,6 +131,8 @@ namespace Deucarian.PackageInstaller.Editor
         public IReadOnlyList<string> SearchTags { get; }
 
         public string IconKey { get; }
+
+        public IReadOnlyList<PackageCompositionPresetDefinition> CompositionPresets { get; }
 
         public bool IsIntegration => Kind == PackageKind.Integration;
 

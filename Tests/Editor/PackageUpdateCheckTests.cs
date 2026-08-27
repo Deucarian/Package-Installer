@@ -384,6 +384,76 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void ExactShaInstalledPackageMigratesToCanonicalStableMain()
+        {
+            AssertCanonicalStableMigration(
+                "https://github.com/Deucarian/Object-Loading.git#0123456789abcdef0123456789abcdef01234567",
+                PackageInstallSourceType.Git,
+                PackageChannel.Custom,
+                "noncanonical Git source");
+        }
+
+        [Test]
+        public void FeatureBranchInstalledPackageMigratesToCanonicalStableMain()
+        {
+            AssertCanonicalStableMigration(
+                "https://github.com/Deucarian/Object-Loading.git#feature/experimental-routing",
+                PackageInstallSourceType.Git,
+                PackageChannel.Custom,
+                "noncanonical Git source");
+        }
+
+        [Test]
+        public void DevelopmentBranchInstalledPackageMigratesToCanonicalStableMain()
+        {
+            AssertCanonicalStableMigration(
+                "https://github.com/Deucarian/Object-Loading.git#develop",
+                PackageInstallSourceType.Git,
+                PackageChannel.Development,
+                "development Git channel");
+        }
+
+        [Test]
+        public void LocalInstalledPackageMigratesToCanonicalStableMain()
+        {
+            AssertCanonicalStableMigration(
+                "file:C:/Repositories/Object-Loading",
+                PackageInstallSourceType.Local,
+                PackageChannel.Custom,
+                "local source");
+        }
+
+        [Test]
+        public void MissingCanonicalMainIsReportedWithoutLocalFallback()
+        {
+            PackageDefinition packageDefinition = CreatePackage();
+            PackageUpdateCheckService.GitProcessRunnerForTests =
+                (_, __, ___) => PackageUpdateCheckService.GitProcessResult.Fail(
+                    "Remote main is missing.");
+            PackageUpdateCheckService.GitPackageVersionResolverForTests =
+                (_, __, ___) => PackageUpdateCheckService.PackageVersionResult.Fail(
+                    "Remote main is missing.");
+
+            PackageUpdateStatus status = PackageUpdateCheckService.CheckItemForTests(
+                packageDefinition,
+                PackageChannel.Stable,
+                packageDefinition.StableUrl,
+                string.Empty,
+                "C:/Repositories/Object-Loading",
+                "file:C:/Repositories/Object-Loading",
+                PackageInstallSourceType.Local,
+                "1.2.3",
+                hasInstalledChannel: true,
+                installedChannel: PackageChannel.Custom,
+                packageLockPaths: Array.Empty<string>());
+
+            Assert.AreEqual(PackageUpdateStatusKind.SourceMigrationAvailable, status.Kind);
+            Assert.AreEqual(packageDefinition.StableUrl, status.SelectedUrl);
+            StringAssert.Contains("Remote main is missing", status.Message);
+            Assert.IsFalse(status.SelectedUrl.StartsWith("file:", StringComparison.OrdinalIgnoreCase));
+        }
+
+        [Test]
         public void SelfGitPackageWithResolvedTargetAndOlderRunningAssemblyReturnsReloadPending()
         {
             const string revision = "0123456789abcdef0123456789abcdef01234567";
@@ -1713,6 +1783,51 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 PackageKind.Library,
                 "https://github.com/Deucarian/Object-Loading.git#develop",
                 category: "Core");
+        }
+
+        private static void AssertCanonicalStableMigration(
+            string installedReference,
+            PackageInstallSourceType sourceType,
+            PackageChannel installedChannel,
+            string expectedSourceDescription)
+        {
+            const string mainRevision = "fedcba9876543210fedcba9876543210fedcba98";
+            PackageDefinition packageDefinition = CreatePackage();
+            PackageUpdateCheckService.GitProcessRunnerForTests =
+                (arguments, _, __) =>
+                {
+                    StringAssert.Contains("main", arguments);
+                    return PackageUpdateCheckService.GitProcessResult.Ok(
+                        mainRevision + "\trefs/heads/main\n");
+                };
+            PackageUpdateCheckService.GitPackageVersionResolverForTests =
+                (_, channel, revision) =>
+                {
+                    Assert.AreEqual(PackageChannel.Stable, channel);
+                    Assert.AreEqual(mainRevision, revision);
+                    return PackageUpdateCheckService.PackageVersionResult.Ok("1.2.4");
+                };
+
+            PackageUpdateStatus status = PackageUpdateCheckService.CheckItemForTests(
+                packageDefinition,
+                PackageChannel.Stable,
+                packageDefinition.StableUrl,
+                string.Empty,
+                sourceType == PackageInstallSourceType.Local
+                    ? "C:/Repositories/Object-Loading"
+                    : string.Empty,
+                installedReference,
+                sourceType,
+                "1.2.3",
+                hasInstalledChannel: true,
+                installedChannel: installedChannel,
+                packageLockPaths: Array.Empty<string>());
+
+            Assert.AreEqual(PackageUpdateStatusKind.SourceMigrationAvailable, status.Kind);
+            Assert.AreEqual(packageDefinition.StableUrl, status.SelectedUrl);
+            Assert.AreEqual(mainRevision, status.LatestRevision);
+            StringAssert.Contains(expectedSourceDescription, status.Message);
+            StringAssert.Contains("Migrate it to the selected catalog Git URL", status.Message);
         }
 
         private static PackageDefinition CreateInstallerPackage()

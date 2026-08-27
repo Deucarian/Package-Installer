@@ -146,7 +146,7 @@
       "displayName": "Viewers",
       "parentGroupId": "templates",
       "sortOrder": 72,
-      "description": "Ready-to-run 3D web viewer templates.",
+      "description": "Shared 3D viewer foundations and platform-specific adapters.",
       "iconKey": "panels-top-left",
       "styleKey": "template"
     }
@@ -505,6 +505,7 @@
         "com.deucarian.authentication"
       ],
       "recommendedWith": [
+        "com.deucarian.template.viewer",
         "com.deucarian.template.viewer.web"
       ],
       "groupId": "runtime-services"
@@ -537,6 +538,7 @@
         "com.deucarian.authentication"
       ],
       "recommendedWith": [
+        "com.deucarian.template.viewer",
         "com.deucarian.template.viewer.web"
       ],
       "groupId": "runtime-services"
@@ -672,6 +674,7 @@
       "sourceVisibility": "private",
       "dependencies": [],
       "recommendedWith": [
+        "com.deucarian.template.viewer",
         "com.deucarian.template.viewer.web"
       ],
       "groupId": "world-xr-interaction"
@@ -698,7 +701,7 @@
         "com.deucarian.simultria-api",
         "com.deucarian.simultria.rendering",
         "com.deucarian.simultria-viewer-integration",
-        "com.deucarian.template.viewer.web",
+        "com.deucarian.template.viewer",
         "com.deucarian.authentication"
       ],
       "integrationTargets": [
@@ -710,6 +713,7 @@
         "com.deucarian.authentication"
       ],
       "recommendedWith": [
+        "com.deucarian.template.viewer",
         "com.deucarian.template.viewer.web"
       ],
       "groupId": "world-xr-interaction"
@@ -1524,24 +1528,22 @@
       ]
     },
     {
-      "id": "com.deucarian.template.viewer.web",
-      "displayName": "Deucarian Web Viewer Template",
+      "id": "com.deucarian.template.viewer",
+      "displayName": "Deucarian Viewer Template",
       "category": "Templates",
       "type": "Template",
       "kind": "Template",
       "ecosystemGroup": "Templates",
       "groupId": "templates-viewers",
-      "overviewOrder": 10,
-      "description": "Ready-to-run generic WebGL viewer with Report Viewer-proven navigation defaults, secure browser commands, model loading, diagnostics, a local host harness, and project-owned build profiles.",
+      "overviewOrder": 5,
+      "description": "Platform-neutral viewer application core with model loading, rendering and navigation composition, selection, authentication, commands, diagnostics, and explicit adapter seams for Web, desktop, and XR builds.",
       "iconKey": "panels-top-left",
-      "stableUrl": "https://github.com/Deucarian/Template-Viewer-Web.git#main",
-      "developmentUrl": "https://github.com/Deucarian/Template-Viewer-Web.git#develop",
+      "stableUrl": "https://github.com/Deucarian/Template-Viewer.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Template-Viewer.git#develop",
       "dependencies": [
         "com.deucarian.api",
-        "com.deucarian.build-pipeline",
         "com.deucarian.camera-navigation",
         "com.deucarian.command-routing",
-        "com.deucarian.command-routing.webgl-integration",
         "com.deucarian.diagnostics",
         "com.deucarian.logging",
         "com.deucarian.object-loading",
@@ -1550,18 +1552,52 @@
         "com.deucarian.session.api-integration",
         "com.deucarian.theming",
         "com.deucarian.ui",
+        "com.deucarian.authentication",
         "com.deucarian.viewer-navigation",
         "com.deucarian.viewer-rendering",
-        "com.deucarian.viewer-shell",
+        "com.deucarian.viewer-shell"
+      ],
+      "searchAliases": [
+        "viewer template",
+        "3d viewer core",
+        "cross platform viewer"
+      ],
+      "searchTags": [
+        "template",
+        "viewer",
+        "desktop",
+        "xr",
+        "platform",
+        "3d"
+      ]
+    },
+    {
+      "id": "com.deucarian.template.viewer.web",
+      "displayName": "Deucarian Web Viewer Adapter",
+      "category": "Templates",
+      "type": "Template",
+      "kind": "Template",
+      "ecosystemGroup": "Templates",
+      "groupId": "templates-viewers",
+      "overviewOrder": 10,
+      "description": "WebGL adapter for the platform-neutral Viewer Template, with secure browser commands, deployment-configured iframe routing, page lifecycle projection, a local host harness, and project-owned build profiles.",
+      "iconKey": "panels-top-left",
+      "stableUrl": "https://github.com/Deucarian/Template-Viewer-Web.git#main",
+      "developmentUrl": "https://github.com/Deucarian/Template-Viewer-Web.git#develop",
+      "dependencies": [
+        "com.deucarian.build-pipeline",
+        "com.deucarian.command-routing",
+        "com.deucarian.command-routing.webgl-integration",
+        "com.deucarian.diagnostics",
+        "com.deucarian.template.viewer",
         "com.deucarian.authentication",
-        "com.deucarian.web-viewer-suite",
         "com.deucarian.webgl-template"
       ],
       "compositionPresets": [
         {
           "id": "core",
-          "displayName": "Core Viewer",
-          "description": "Vendor-neutral viewer template with the shared Report Viewer reference shell, navigation, rendering, and input behavior.",
+          "displayName": "Web Viewer",
+          "description": "Platform-neutral viewer core with the WebGL adapter, shared reference shell, navigation, rendering, and input behavior.",
           "packageIds": [],
           "recommended": true
         },

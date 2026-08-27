@@ -543,6 +543,63 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void SingleRootMultiStepResumeRearmsAutomaticRecoveryForRepeatedReloads()
+        {
+            PackageDefinition dependency = CreatePackage(
+                "Dependency",
+                "com.deucarian.dependency");
+            PackageDefinition root = CreatePackage(
+                "Template Root",
+                "com.deucarian.template-root",
+                new[] { dependency.PackageId });
+            PackageDependencyInstallPlan plan = CreateSingleRootDependencyPlan(
+                dependency,
+                root);
+            PackageOperationStateRepository repository =
+                new PackageOperationStateRepository(_temporaryProjectRoot);
+
+            Assert.IsTrue(plan.IsMultiStep);
+            Assert.IsFalse(plan.IsBulk);
+
+            using (PackageInstallService writer = new PackageInstallService(
+                       new ControlledPackageInstallClient(),
+                       repository))
+            {
+                Assert.IsTrue(writer.InstallPlan(plan, "Install Template Root"));
+                PackageOperationAutoResumeState.SimulateBeforeAssemblyReloadForTests();
+
+                Assert.IsTrue(PackageOperationAutoResumeState.HasMatchingReloadMarker(
+                    plan.OperationId,
+                    plan.RegistryFingerprint));
+            }
+
+            PackageOperationAutoResumeState.SimulateNewDomainForTests();
+            ControlledPackageInstallClient resumedClient = new ControlledPackageInstallClient();
+            using (PackageInstallService resumed = new PackageInstallService(
+                       resumedClient,
+                       repository))
+            {
+                resumed.ExactTargetAlreadyInstalled =
+                    (packageId, targetUrl, previousIdentity) =>
+                        packageId == dependency.PackageId &&
+                        targetUrl == dependency.StableUrl;
+
+                Assert.IsTrue(resumed.ResumeSavedOperation(plan.RegistryFingerprint));
+                CollectionAssert.AreEqual(new[] { root.StableUrl }, resumedClient.AddedUrls);
+                Assert.AreEqual(
+                    PackageInstallProgressItemState.AlreadyCorrect,
+                    GetProgress(resumed, dependency.PackageId).State);
+
+                PackageOperationAutoResumeState.AcknowledgeReloadMarker(plan.OperationId);
+                PackageOperationAutoResumeState.SimulateBeforeAssemblyReloadForTests();
+
+                Assert.IsTrue(PackageOperationAutoResumeState.HasMatchingReloadMarker(
+                    plan.OperationId,
+                    plan.RegistryFingerprint));
+            }
+        }
+
+        [Test]
         public void RestartSavedOperationReplaysCompletedStepsAndDiscardClearsState()
         {
             PackageDefinition first = CreatePackage("Restart First", "com.deucarian.restart-first");
@@ -1361,6 +1418,37 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                     rootPaths: new[] { package.DisplayName })),
                 Array.Empty<string>(),
                 registryFingerprint: "registry-fingerprint");
+        }
+
+        private static PackageDependencyInstallPlan CreateSingleRootDependencyPlan(
+            PackageDefinition dependency,
+            PackageDefinition root)
+        {
+            return PackageDependencyInstallPlan.Success(
+                new[]
+                {
+                    new PackageDependencyInstallStep(
+                        dependency,
+                        PackageChannel.Stable,
+                        isDependency: true,
+                        targetUrl: dependency.StableUrl,
+                        rootPackageIds: new[] { root.PackageId },
+                        rootPaths: new[] { root.DisplayName + " -> " + dependency.DisplayName }),
+                    new PackageDependencyInstallStep(
+                        root,
+                        PackageChannel.Stable,
+                        isDependency: false,
+                        targetUrl: root.StableUrl,
+                        prerequisitePackageIds: new[] { dependency.PackageId },
+                        rootPackageIds: new[] { root.PackageId },
+                        rootPaths: new[] { root.DisplayName })
+                },
+                Array.Empty<string>(),
+                registryFingerprint: "registry-fingerprint",
+                rootRequests: new[]
+                {
+                    new PackageOperationRootRequest(root.PackageId, PackageChannel.Stable)
+                });
         }
 
         private static PackageOperationRecoveryRecord CreateRecoveryRecord(

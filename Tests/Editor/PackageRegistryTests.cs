@@ -20,6 +20,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         private const string TemplatePackageId = "com.deucarian.template.game.idle-auto-defense";
         private const string SurvivorsTemplatePackageId = "com.deucarian.template.game.survivors";
         private const string MovementFpsTemplatePackageId = "com.deucarian.template.game.movement-fps";
+        private const string WebViewerTemplatePackageId = "com.deucarian.template.viewer.web";
         private const string EditorPackageId = "com.deucarian.editor";
         private const string GameContentAuthoringPackageId = "com.deucarian.game-content-authoring";
         private const string GameplayFoundationPackageId = "com.deucarian.gameplay-foundation";
@@ -161,6 +162,61 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 PackageGraphNodeType.Template,
                 graph.Nodes.Single(node => node.PackageId == package.PackageId).NodeType);
             Assert.AreEqual("Template", PackageGraphHierarchyDisplay.GetPackageKind(package));
+        }
+
+        [Test]
+        public void TemplateCompositionPresetsParseIntoTypedDefinitions()
+        {
+            const string json =
+                "{ \"schemaVersion\": 2, \"groups\": [" +
+                "{ \"id\": \"templates\", \"displayName\": \"Templates\" }," +
+                "{ \"id\": \"runtime\", \"displayName\": \"Runtime\" }" +
+                "], \"packages\": [" +
+                "{ \"id\": \"com.example.auth\", \"displayName\": \"Authentication\", \"kind\": \"Library\", \"groupId\": \"runtime\", \"stableUrl\": \"https://example.com/auth.git#main\", \"dependencies\": [], \"recommendedWith\": [\"com.example.template\"] }," +
+                "{ \"id\": \"com.example.connection\", \"displayName\": \"Backend Connection\", \"kind\": \"Library\", \"groupId\": \"runtime\", \"stableUrl\": \"https://example.com/connection.git#main\", \"dependencies\": [\"com.example.auth\"], \"recommendedWith\": [\"com.example.template\"] }," +
+                "{ \"id\": \"com.example.template\", \"displayName\": \"Viewer Template\", \"kind\": \"Template\", \"groupId\": \"templates\", \"stableUrl\": \"https://example.com/template.git#main\", \"dependencies\": [], \"compositionPresets\": [" +
+                "{ \"id\": \"core\", \"displayName\": \"Core\", \"description\": \"Vendor-neutral viewer.\", \"packageIds\": [], \"recommended\": true }," +
+                "{ \"id\": \"authenticated\", \"displayName\": \"Authenticated\", \"packageIds\": [\"com.example.auth\"] }," +
+                "{ \"id\": \"backend\", \"displayName\": \"Backend\", \"packageIds\": [\"com.example.connection\"] }" +
+                "] }" +
+                "] }";
+
+            PackageRegistryLoadResult result = new PackageRegistryLoader()
+                .LoadFromJson(json, PackageRegistrySource.Bundled);
+            PackageDefinition template = PackageRegistryProvider
+                .CreatePackageDefinitions(result.Registry)
+                .Single(package => package.PackageId == "com.example.template");
+
+            Assert.IsTrue(result.IsValid, result.ErrorMessage);
+            Assert.AreEqual(3, template.CompositionPresets.Count);
+            Assert.IsTrue(template.CompositionPresets[0].Recommended);
+            CollectionAssert.AreEquivalent(
+                new[] { "com.example.auth", "com.example.connection" },
+                template.OptionalCompanions);
+            CollectionAssert.AreEqual(
+                new[] { "com.example.connection" },
+                template.CompositionPresets[2].PackageIds);
+        }
+
+        [Test]
+        public void TemplateCompositionPresetRejectsPackageOutsideOptionalCompanions()
+        {
+            const string json =
+                "{ \"schemaVersion\": 2, \"groups\": [" +
+                "{ \"id\": \"templates\", \"displayName\": \"Templates\" }," +
+                "{ \"id\": \"runtime\", \"displayName\": \"Runtime\" }" +
+                "], \"packages\": [" +
+                "{ \"id\": \"com.example.auth\", \"displayName\": \"Authentication\", \"kind\": \"Library\", \"groupId\": \"runtime\", \"stableUrl\": \"https://example.com/auth.git#main\", \"dependencies\": [] }," +
+                "{ \"id\": \"com.example.template\", \"displayName\": \"Viewer Template\", \"kind\": \"Template\", \"groupId\": \"templates\", \"stableUrl\": \"https://example.com/template.git#main\", \"dependencies\": [], \"compositionPresets\": [" +
+                "{ \"id\": \"invalid\", \"displayName\": \"Invalid\", \"packageIds\": [\"com.example.auth\"] }" +
+                "] }" +
+                "] }";
+
+            PackageRegistryLoadResult result = new PackageRegistryLoader()
+                .LoadFromJson(json, PackageRegistrySource.Bundled);
+
+            Assert.IsFalse(result.IsValid);
+            StringAssert.Contains("may only select optional companions derived from recommendedWith", result.ErrorMessage);
         }
 
         [TestCase("", "Package com.deucarian.invalid has unknown kind")]
@@ -1023,6 +1079,48 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             StringAssert.Contains(
                 "Template-Game-Movement-FPS.git#develop",
                 movementFpsTemplate.developmentUrl);
+        }
+
+        [Test]
+        public void BundledWebViewerTemplateOffersMeaningfulConnectionPresets()
+        {
+            string registryJson = File.ReadAllText(GetBundledRegistryPath());
+            PackageRegistryLoadResult result = new PackageRegistryLoader()
+                .LoadFromJson(registryJson, PackageRegistrySource.Bundled);
+            PackageDefinition template = PackageRegistryProvider
+                .CreatePackageDefinitions(result.Registry)
+                .Single(package => package.PackageId == WebViewerTemplatePackageId);
+
+            Assert.IsTrue(result.IsValid, result.ErrorMessage);
+            CollectionAssert.AreEquivalent(
+                new[]
+                {
+                    "com.deucarian.activity-visualization.simultria",
+                    "com.deucarian.simultria-api",
+                    "com.deucarian.simultria-viewer-connection",
+                    "com.deucarian.simultria.rendering"
+                },
+                template.OptionalCompanions);
+            CollectionAssert.AreEqual(
+                new[] { "core", "authenticated", "simultria", "simultria-activity" },
+                template.CompositionPresets.Select(preset => preset.Id).ToArray());
+            CollectionAssert.AreEqual(
+                new[] { "com.deucarian.simultria-api" },
+                template.CompositionPresets[1].PackageIds);
+            CollectionAssert.AreEqual(
+                new[]
+                {
+                    "com.deucarian.simultria-viewer-connection",
+                    "com.deucarian.simultria.rendering"
+                },
+                template.CompositionPresets[2].PackageIds);
+            CollectionAssert.AreEqual(
+                new[]
+                {
+                    "com.deucarian.activity-visualization.simultria",
+                    "com.deucarian.simultria-viewer-connection"
+                },
+                template.CompositionPresets[3].PackageIds);
         }
 
         [Test]

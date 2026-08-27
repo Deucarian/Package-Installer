@@ -6,7 +6,7 @@
 
 It is the Deucarian ecosystem front door for installing standalone packages, integration packages, suite packages, templates, and explicitly declared package samples from Package Registry metadata.
 
-Current package version: `1.1.84`.
+Current package version: `1.1.96`.
 
 ## When to use it
 
@@ -162,6 +162,14 @@ Registered packages are first-class UPM packages with their own package IDs:
 - `com.deucarian.template.game.movement-fps`
 
 `Install All` installs all missing non-template registered packages in dependency order. Template packages remain visible and individually installable, but global install-all operations skip them so starter projects are not pulled in as normal runtime or system packages. Single install, reinstall, single update, and update-all operations install missing registered Deucarian dependencies first, then install the requested package.
+
+Templates may also declare named composition presets. The installer presents
+those as a small setup choice, lets developers fine-tune optional connections,
+and sends the resulting package roots through the same dependency-first plan.
+Required companions are shown as included automatically rather than exposed as
+another manual dependency decision. For canonical registries, the optional
+companion list is derived from packages whose `recommendedWith` points at the
+Template, so reverse relationships are not duplicated in registry data.
 
 Package IDs remain branded as `com.deucarian.*`. Display names are supplied by the registry and used by the installer UI.
 Technical details such as package IDs, selected references, installed references, revisions, and raw update messages are available from each row's Advanced foldout.
@@ -329,7 +337,7 @@ Keeping the installer editor-only ensures:
 
 ## Versioning
 
-Current package version: `1.1.84`.
+Current package version: `1.1.96`.
 
 Branch strategy:
 

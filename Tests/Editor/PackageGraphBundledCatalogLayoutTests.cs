@@ -18,7 +18,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             PackageGraphModel graph = CreateBundledGraph();
             PackageGraphLayout layoutEngine = new PackageGraphLayout();
 
-            Assert.AreEqual(50, graph.Nodes.Count, "The bundled catalog coverage changed; audit the new focus states.");
+            Assert.AreEqual(63, graph.Nodes.Count, "The bundled catalog coverage changed; audit the new focus states.");
 
             foreach (PackageGraphNode focusNode in graph.Nodes)
             {
@@ -45,7 +45,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             PackageGraphModel graph = CreateBundledGraph();
             PackageGraphLayout layoutEngine = new PackageGraphLayout();
 
-            Assert.AreEqual(15, graph.Groups.Count, "The bundled category coverage changed; audit the new category states.");
+            Assert.AreEqual(16, graph.Groups.Count, "The bundled category coverage changed; audit the new category states.");
 
             foreach (PackageGraphGroup group in graph.Groups)
             {
@@ -104,7 +104,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
-        public void SessionFocus_UsesConsistentEdgeClearanceWithoutDenseLayoutPadding()
+        public void SessionFocus_IntegrationLaneUsesMinimumClearanceFromNearestBlocker()
         {
             PackageGraphModel graph = CreateBundledGraph();
             PackageGraphLayoutResult layout = new PackageGraphLayout().Calculate(
@@ -119,8 +119,39 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             PackageGraphGroupLayoutNode runtimeServices = layout.GroupNodes.Single(groupNode =>
                 groupNode.GroupId == "runtime-services" &&
                 groupNode.RepresentedPackageIds.Contains("com.deucarian.session", StringComparer.OrdinalIgnoreCase));
+            HashSet<string> integrationPackageIds = new HashSet<string>(
+                graph.Nodes
+                    .Where(node => node != null &&
+                                   node.NodeType == PackageGraphNodeType.Integration &&
+                                   layout.NodeRects.ContainsKey(node.PackageId))
+                    .Select(node => node.PackageId),
+                StringComparer.OrdinalIgnoreCase);
+            Rect[] integrationRects = integrationPackageIds
+                .Select(packageId => layout.NodeRects[packageId])
+                .ToArray();
+            float integrationLaneTop = integrationRects.Min(rect => rect.yMin);
+            float integrationLaneXMin = integrationRects.Min(rect => rect.xMin);
+            float integrationLaneXMax = integrationRects.Max(rect => rect.xMax);
+            Rect integrationLaneSpan = Rect.MinMaxRect(
+                integrationLaneXMin,
+                integrationLaneTop,
+                integrationLaneXMax,
+                integrationLaneTop);
+            float nearestBlockerBottom = layout.NodeRects
+                .Where(pair => !integrationPackageIds.Contains(pair.Key))
+                .Select(pair => pair.Value)
+                .Concat(layout.GroupNodes.Select(groupNode => groupNode.Rect))
+                .Where(rect =>
+                    rect.xMin < integrationLaneSpan.xMax &&
+                    rect.xMax > integrationLaneSpan.xMin &&
+                    rect.yMax <= integrationLaneTop + Tolerance)
+                .Max(rect => rect.yMax);
+
             Assert.That(session.yMin - runtimeServices.Rect.yMax, Is.EqualTo(ExpectedCategoryGap).Within(Tolerance));
-            Assert.That(sessionApiIntegration.yMin - session.yMax, Is.EqualTo(ExpectedFocusGap).Within(Tolerance));
+            Assert.That(sessionApiIntegration.yMin, Is.EqualTo(integrationLaneTop).Within(Tolerance));
+            Assert.That(
+                integrationLaneTop - nearestBlockerBottom,
+                Is.EqualTo(ExpectedFocusGap).Within(Tolerance));
         }
 
         private static PackageGraphModel CreateBundledGraph()

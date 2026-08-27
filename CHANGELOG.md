@@ -1,9 +1,81 @@
 # Changelog
 
-## 1.1.84 - 2026-08-27
+## 1.1.96 - 2026-08-27
 
-- Regenerated the bundled registry after Authentication's Command Routing
-  adapter became an optional, version-defined integration.
+- Regenerated the bundled registry for generic Authentication, Simultria
+  Viewer Integration, API 2.0, and the optional Authentication/Command Routing
+  adapter edge while preserving the platform-neutral Viewer Template split.
+
+## 1.1.95 - 2026-08-26
+
+- Registered the platform-neutral Viewer Template and projected the Web Viewer
+  as its target-specific adapter with the reduced direct dependency set.
+
+## 1.1.94 - 2026-08-25
+
+- Audited all package and category focus layouts against the expanded Simultria
+  catalog and kept integration lanes at the minimum safe clearance from their
+  nearest related content.
+- Refreshed generated catalog icons to use IDs vendored by the shared Editor
+  package.
+- Made dense-overflow clipboard validation deterministic without relying on
+  the operating system clipboard during headless test runs.
+
+## 1.1.93 - 2026-08-25
+
+- Added the shared Simultria rendering and Activity integration packages to
+  the generated catalog, including Simultria and Activity Viewer composition
+  presets.
+
+## 1.1.92 - 2026-08-21
+
+- Migrate local, embedded, exact-SHA, feature, and development package sources
+  to the selected stable canonical Git `#main` URL instead of retaining a
+  noncanonical source or treating it as uncheckable.
+- Preserve clear remote-main diagnostics without falling back to local disk.
+
+## 1.1.91 - 2026-08-20
+
+- Refreshed the generated package catalog so Simultria Viewer Connection
+  installs its direct shared Session dependency before the integration.
+
+## 1.1.90 - 2026-08-19
+
+- Refreshed the generated package catalog so Simultria API installs its
+  required shared Editor dependency before exposing environment profile tools.
+
+## 1.1.89 - 2026-08-19
+
+- Added registry-defined template composition presets with a minimal setup
+  selector for core, authenticated, and backend-connected viewer installs.
+- Optional connections selected by a preset now install through the existing
+  dependency-first planner, including automatically required companions.
+
+## 1.1.88 - 2026-08-18
+
+- Refreshed the bundled dependency graph for API's shared Editor tooling and
+  the Web Viewer Template's Session API integration.
+
+## 1.1.87 - 2026-08-18
+
+- Corrected the bundled dependency graph so the Web Viewer Template installs
+  the shared Session package before the template.
+
+## 1.1.86 - 2026-08-18
+
+- Added Viewer Authentication and the authenticated Web Viewer dependency
+  closure to the bundled package catalog.
+
+## 1.1.85 - 2026-08-17
+
+- Automatically resume accepted single-root, multi-step dependency installs
+  after Unity script reloads instead of showing recovery after every dependency.
+- Added repeated-reload coverage for installing one template with dependencies.
+
+## 1.1.84 - 2026-08-14
+
+- Refreshed the bundled catalog for review of the reusable Web Viewer package
+  ecosystem and its dependency-first installation graph.
 
 ## 1.1.83 - 2026-07-24
 

@@ -10622,14 +10622,24 @@ namespace Deucarian.PackageInstaller.Editor
 
         internal bool HasKeyboardActivationForTests => !string.IsNullOrEmpty(_diagnostic);
 
-        internal void ActivateForTests()
+        internal void ActivateForTests(Action<string> clipboardWriter = null)
         {
-            Activate();
+            CopyDiagnostic(clipboardWriter ?? WriteToSystemClipboard);
         }
 
         private void Activate()
         {
-            EditorGUIUtility.systemCopyBuffer = _diagnostic;
+            CopyDiagnostic(WriteToSystemClipboard);
+        }
+
+        private void CopyDiagnostic(Action<string> clipboardWriter)
+        {
+            clipboardWriter?.Invoke(_diagnostic);
+        }
+
+        private static void WriteToSystemClipboard(string diagnostic)
+        {
+            EditorGUIUtility.systemCopyBuffer = diagnostic;
         }
     }
 
