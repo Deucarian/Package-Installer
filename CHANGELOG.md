@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.96 - 2026-08-27
+
+- Regenerated the bundled registry for generic Authentication, Simultria
+  Viewer Integration, API 2.0, and the optional Authentication/Command Routing
+  adapter edge while preserving the platform-neutral Viewer Template split.
+
 ## 1.1.95 - 2026-08-26
 
 - Registered the platform-neutral Viewer Template and projected the Web Viewer

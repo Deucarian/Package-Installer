@@ -460,20 +460,19 @@
       "groupId": "ui-presentation"
     },
     {
-      "id": "com.deucarian.viewer-authentication",
-      "displayName": "Deucarian Viewer Authentication",
+      "id": "com.deucarian.authentication",
+      "displayName": "Deucarian Authentication",
       "category": "Core",
       "type": "Core",
       "kind": "Library",
       "ecosystemGroup": "Runtime Services",
       "overviewOrder": 24,
-      "description": "Reusable viewer session composition, live API authentication, secure auth commands, sanitized status, shared development tooling, and an optional runtime connection-provider seam.",
+      "description": "Reusable authentication session lifecycle, explicit-target API authentication, secure local persistence, sanitized status, and an optional viewer integration assembly.",
       "iconKey": "key-round",
       "stableUrl": "https://github.com/Deucarian/Viewer-Authentication.git#main",
       "developmentUrl": "https://github.com/Deucarian/Viewer-Authentication.git#develop",
       "dependencies": [
         "com.deucarian.api",
-        "com.deucarian.command-routing",
         "com.deucarian.editor",
         "com.deucarian.session",
         "com.deucarian.session.api-integration"
@@ -488,7 +487,7 @@
       "kind": "Integration",
       "ecosystemGroup": "Integrations",
       "overviewOrder": 26,
-      "description": "Optional Simultria environments, endpoint catalog, typed API lookups, viewer authentication adapter, and deterministic viewer-model resolution.",
+      "description": "Simultria API definition, typed lookups, authentication adapter, and reusable no-fallback Unity build routing.",
       "iconKey": "plug-zap",
       "stableUrl": "https://github.com/Deucarian/Simultria-API.git#main",
       "developmentUrl": "https://github.com/Deucarian/Simultria-API.git#develop",
@@ -497,13 +496,13 @@
         "com.deucarian.editor",
         "com.deucarian.session",
         "com.deucarian.session.api-integration",
-        "com.deucarian.viewer-authentication"
+        "com.deucarian.authentication"
       ],
       "integrationTargets": [
         "com.deucarian.api",
         "com.deucarian.session",
         "com.deucarian.session.api-integration",
-        "com.deucarian.viewer-authentication"
+        "com.deucarian.authentication"
       ],
       "recommendedWith": [
         "com.deucarian.template.viewer",
@@ -512,14 +511,14 @@
       "groupId": "runtime-services"
     },
     {
-      "id": "com.deucarian.simultria-viewer-connection",
-      "displayName": "Deucarian Simultria Viewer Connection",
+      "id": "com.deucarian.simultria-viewer-integration",
+      "displayName": "Deucarian Simultria Viewer Integration",
       "category": "Integration",
       "type": "Integration",
       "kind": "Integration",
       "ecosystemGroup": "Integrations",
       "overviewOrder": 27,
-      "description": "Optional credential-free Simultria viewer profiles, environment status, stable editor/runtime authentication handoff, trusted API-client composition, and command-routed auto-load tooling.",
+      "description": "Optional Simultria viewer development context, explicit API settings, environment status, stable editor/runtime authentication handoff, and command-routed auto-load tooling.",
       "iconKey": "plug",
       "stableUrl": "https://github.com/Deucarian/Simultria-Viewer-Connection.git#main",
       "developmentUrl": "https://github.com/Deucarian/Simultria-Viewer-Connection.git#develop",
@@ -530,13 +529,13 @@
         "com.deucarian.logging",
         "com.deucarian.session",
         "com.deucarian.simultria-api",
-        "com.deucarian.viewer-authentication"
+        "com.deucarian.authentication"
       ],
       "integrationTargets": [
         "com.deucarian.api",
         "com.deucarian.command-routing",
         "com.deucarian.simultria-api",
-        "com.deucarian.viewer-authentication"
+        "com.deucarian.authentication"
       ],
       "recommendedWith": [
         "com.deucarian.template.viewer",
@@ -617,13 +616,13 @@
     },
     {
       "id": "com.deucarian.viewer-navigation",
-      "displayName": "Deucarian Viewer Navigation",
+      "displayName": "Deucarian Viewer Navigation Experience",
       "category": "World",
       "type": "Core",
       "kind": "Library",
       "ecosystemGroup": "Experience & Interaction",
       "overviewOrder": 27,
-      "description": "Canonical Report Viewer-proven navigation preset, toolbar, Orbit/Fly state, Top Down, Return to Origin, six-face view cube, reference bounds, and input coordination.",
+      "description": "Reusable viewer navigation experience composing canonical Orbit/Fly and top-down state, toolbar, origin, reference bounds, view cube, and input coordination over generic Camera Navigation.",
       "iconKey": "boxes",
       "stableUrl": "https://github.com/Deucarian/Viewer-Navigation.git#main",
       "developmentUrl": "https://github.com/Deucarian/Viewer-Navigation.git#develop",
@@ -701,17 +700,17 @@
         "com.deucarian.session",
         "com.deucarian.simultria-api",
         "com.deucarian.simultria.rendering",
-        "com.deucarian.simultria-viewer-connection",
+        "com.deucarian.simultria-viewer-integration",
         "com.deucarian.template.viewer",
-        "com.deucarian.viewer-authentication"
+        "com.deucarian.authentication"
       ],
       "integrationTargets": [
         "com.deucarian.activity-visualization",
         "com.deucarian.command-routing",
         "com.deucarian.simultria-api",
         "com.deucarian.simultria.rendering",
-        "com.deucarian.simultria-viewer-connection",
-        "com.deucarian.viewer-authentication"
+        "com.deucarian.simultria-viewer-integration",
+        "com.deucarian.authentication"
       ],
       "recommendedWith": [
         "com.deucarian.template.viewer",
@@ -1044,7 +1043,7 @@
         "com.deucarian.viewer-navigation",
         "com.deucarian.viewer-rendering",
         "com.deucarian.viewer-shell",
-        "com.deucarian.viewer-authentication",
+        "com.deucarian.authentication",
         "com.deucarian.webgl-template"
       ],
       "suiteMembers": [
@@ -1065,7 +1064,7 @@
         "com.deucarian.viewer-navigation",
         "com.deucarian.viewer-rendering",
         "com.deucarian.viewer-shell",
-        "com.deucarian.viewer-authentication",
+        "com.deucarian.authentication",
         "com.deucarian.webgl-template"
       ],
       "groupId": "world-xr-interaction",
@@ -1553,7 +1552,7 @@
         "com.deucarian.session.api-integration",
         "com.deucarian.theming",
         "com.deucarian.ui",
-        "com.deucarian.viewer-authentication",
+        "com.deucarian.authentication",
         "com.deucarian.viewer-navigation",
         "com.deucarian.viewer-rendering",
         "com.deucarian.viewer-shell"
@@ -1591,7 +1590,7 @@
         "com.deucarian.command-routing.webgl-integration",
         "com.deucarian.diagnostics",
         "com.deucarian.template.viewer",
-        "com.deucarian.viewer-authentication",
+        "com.deucarian.authentication",
         "com.deucarian.webgl-template"
       ],
       "compositionPresets": [
@@ -1615,7 +1614,7 @@
           "displayName": "Simultria Viewer",
           "description": "Core viewer plus the complete Simultria API, canonical model rendering, stable authentication session, trusted model-loading client, environment, and command-routed development auto-load connection.",
           "packageIds": [
-            "com.deucarian.simultria-viewer-connection",
+            "com.deucarian.simultria-viewer-integration",
             "com.deucarian.simultria.rendering"
           ]
         },
@@ -1625,7 +1624,7 @@
           "description": "Simultria viewer composition with live Activity metadata, Processor model relationships, Activity visibility commands, and generated command-test scenarios.",
           "packageIds": [
             "com.deucarian.activity-visualization.simultria",
-            "com.deucarian.simultria-viewer-connection"
+            "com.deucarian.simultria-viewer-integration"
           ]
         }
       ],

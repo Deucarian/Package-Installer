@@ -6,7 +6,7 @@
 
 It is the Deucarian ecosystem front door for installing standalone packages, integration packages, suite packages, templates, and explicitly declared package samples from Package Registry metadata.
 
-Current package version: `1.1.95`.
+Current package version: `1.1.96`.
 
 ## When to use it
 
@@ -337,7 +337,7 @@ Keeping the installer editor-only ensures:
 
 ## Versioning
 
-Current package version: `1.1.95`.
+Current package version: `1.1.96`.
 
 Branch strategy:
 
