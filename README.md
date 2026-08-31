@@ -6,7 +6,7 @@
 
 It is the Deucarian ecosystem front door for installing standalone packages, integration packages, suite packages, templates, and explicitly declared package samples from Package Registry metadata.
 
-Current package version: `1.1.95`.
+Current package version: `1.1.97`.
 
 ## When to use it
 
@@ -28,14 +28,14 @@ Current package version: `1.1.95`.
 Open it from:
 
 ```text
-Tools > Deucarian > Package Installer
+Tools > Deucarian > Package Installer...
 ```
 
 Select Stable or Development, choose a package, and click `Install`. Ordinary safe one-package actions start immediately; a contextual preflight appears only for bulk, multi-step, source-migration, downgrade, fallback, conflict, or destructive operations. Import samples only when the package detail view shows a sample you explicitly want.
 
 ## Deucarian Menu
 
-The installer keeps its Unity Editor entry point at `Tools > Deucarian > Package Installer`. This package does not own the Theming, Logging, Object Loading, Session, or Selection menu groups; those packages provide their own package-local menu items under the shared `Tools > Deucarian` menu.
+The installer keeps its governed standalone Unity Editor entry point at `Tools > Deucarian > Package Installer...` and registers a sanitized status card and stable open action explicitly with Deucarian Control Center. Package Registry owns the approved global menu policy.
 
 The installer can install standalone packages, integration packages, and explicitly declared package samples without making this package a runtime dependency of any other package.
 
@@ -62,7 +62,7 @@ You can also use Unity's Package Manager window:
 1. Open `Window > Package Manager`.
 2. Select `+ > Add package from git URL...`.
 3. Enter the installer Git URL.
-4. Open `Tools > Deucarian > Package Installer`.
+4. Open `Tools > Deucarian > Package Installer...`.
 
 ## Unity compatibility
 
@@ -237,9 +237,9 @@ git diff --check
 
 `Check for Updates` is source-aware. Git-installed packages are compared by installed revision and the latest revision returned by `git ls-remote`. Every registry-installed Deucarian package is reported as a Git source migration using the selected catalog URL; the installer does not query npm metadata or dist-tags for this decision.
 
-For non-installer packages, `Migrate to Git` queues the selected stable or development catalog URL directly. Package Installer never silently migrates itself: `Open Bootstrap` uses `Tools > Deucarian > Bootstrap > Open Bootstrapper`, and if Bootstrap is absent the UI and logs provide the exact Bootstrap Git URL and menu instructions. A source migration remains actionable even when target SHA or `package.json` metadata cannot be fetched.
+For non-installer packages, `Migrate to Git` queues the selected stable or development catalog URL directly. Package Installer never silently migrates itself: `Open Bootstrap` invokes Bootstrap's stable public editor API through a narrow optional reflection bridge, and if Bootstrap is absent the UI and logs provide the exact Bootstrap Git URL and menu instructions. The bridge performs an exact type/method lookup and never scans assemblies. A source migration remains actionable even when target SHA or `package.json` metadata cannot be fetched.
 
-Legacy npm Package Installer `1.1.12` cannot display that new migration action because its already-loaded assembly predates this flow. Install Bootstrap from `https://github.com/Deucarian/Bootstrap.git#main` (or `#develop`), open `Tools > Deucarian > Bootstrap > Open Bootstrapper`, and let Bootstrap replace only Package Installer after resolving Editor and Logging from Git. Existing `scopedRegistries` entries are detected read-only and are not removed or rewritten.
+Legacy npm Package Installer `1.1.12` cannot display that new migration action because its already-loaded assembly predates this flow. Install Bootstrap from `https://github.com/Deucarian/Bootstrap.git#main` (or `#develop`), open `Tools > Deucarian > Set Up or Repair...`, and let Bootstrap replace only Package Installer after resolving Editor and Logging from Git. Existing `scopedRegistries` entries are detected read-only and are not removed or rewritten.
 
 Unknown Git revisions are shown as "Cannot determine update" while the package remains installed. Missing Git metadata, local/file packages, and embedded packages stay neutral instead of marking the row as failed.
 
@@ -310,7 +310,7 @@ This package is editor-only and exposes no runtime API for game code.
 The user-facing entry point is the Unity menu item:
 
 ```text
-Tools/Deucarian/Tools and Quality/Package Installer
+Tools/Deucarian/Package Installer...
 ```
 
 The implementation is split into internal editor classes:
@@ -337,7 +337,7 @@ Keeping the installer editor-only ensures:
 
 ## Versioning
 
-Current package version: `1.1.95`.
+Current package version: `1.1.97`.
 
 Branch strategy:
 
@@ -370,7 +370,7 @@ After installing, updating, or removing a package, the installer refreshes insta
 - A removal warning lists installed dependents: remove those dependents first, or deliberately confirm removal if you are repairing an unusual project state.
 - Update status is unknown: the installed package may be embedded, local/file-based, missing Git metadata, or unavailable from the current network.
 - Package Installer shows `Reload pending`: fix any Console compilation errors, then use `Retry Script Reload` so Unity can load the resolved installer assembly.
-- A registry-installed Package Installer shows `Source migration available`: install/open Bootstrap and use `Tools > Deucarian > Bootstrap > Open Bootstrapper`; Package Installer does not self-migrate silently.
+- A registry-installed Package Installer shows `Source migration available`: install/open Bootstrap and use `Tools > Deucarian > Set Up or Repair...`; Package Installer does not self-migrate silently.
 - Legacy npm `1.1.12`, or a compile-blocked first hop from `1.1.60`, cannot expose the new recovery UI from its old running assembly: use Bootstrap or the selected Git manifest URL once, then reload scripts.
 - Samples do not import: confirm the package is installed, then import the sample explicitly from the package details panel or Unity Package Manager.
 
