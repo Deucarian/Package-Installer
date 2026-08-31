@@ -914,7 +914,19 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 package.resolvedPath,
                 relativePath.Replace('/', Path.DirectorySeparatorChar));
             Assert.IsTrue(File.Exists(fullPath), "Expected package file at '" + fullPath + "'.");
-            return File.ReadAllText(fullPath);
+            string extension = Path.GetExtension(fullPath);
+            if (!string.Equals(extension, ".cs", StringComparison.OrdinalIgnoreCase))
+            {
+                return File.ReadAllText(fullPath);
+            }
+
+            string directory = Path.GetDirectoryName(fullPath);
+            string stem = Path.GetFileNameWithoutExtension(fullPath);
+            return string.Join(
+                Environment.NewLine,
+                Directory.GetFiles(directory, stem + "*.cs")
+                    .OrderBy(path => path, StringComparer.Ordinal)
+                    .Select(File.ReadAllText));
         }
 
         private static void AssertRuleValues(string css, string selector, params string[] nameValuePairs)

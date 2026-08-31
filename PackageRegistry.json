@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-08-26",
+  "updatedAt": "2026-08-31",
   "architectureStandard": {
     "path": "ARCHITECTURE.md",
     "url": "https://github.com/Deucarian/Package-Registry/blob/main/ARCHITECTURE.md"
@@ -435,6 +435,7 @@
       "developmentUrl": "https://github.com/Deucarian/UI-FLow.git#develop",
       "dependencies": [
         "com.deucarian.common",
+        "com.deucarian.editor",
         "com.deucarian.logging"
       ],
       "groupId": "ui-presentation"
@@ -574,7 +575,8 @@
       "stableUrl": "https://github.com/Deucarian/XR-UI.git#main",
       "developmentUrl": "https://github.com/Deucarian/XR-UI.git#develop",
       "dependencies": [
-        "com.deucarian.common"
+        "com.deucarian.common",
+        "com.deucarian.editor"
       ],
       "groupId": "world-xr-interaction"
     },
@@ -1359,7 +1361,9 @@
       "iconKey": "flask-conical",
       "stableUrl": "https://github.com/Deucarian/Test-Automation.git#main",
       "developmentUrl": "https://github.com/Deucarian/Test-Automation.git#develop",
-      "dependencies": []
+      "dependencies": [
+        "com.deucarian.editor"
+      ]
     },
     {
       "id": "com.deucarian.auto-defense-suite",
@@ -1469,6 +1473,7 @@
         "com.deucarian.attacks",
         "com.deucarian.common",
         "com.deucarian.combat",
+        "com.deucarian.editor",
         "com.deucarian.encounters",
         "com.deucarian.game-content-authoring",
         "com.deucarian.gameplay-foundation",
@@ -1508,6 +1513,7 @@
       "dependencies": [
         "com.deucarian.common",
         "com.deucarian.combat",
+        "com.deucarian.editor",
         "com.deucarian.game-content-authoring",
         "com.deucarian.gameplay-foundation",
         "com.deucarian.run-upgrades"
