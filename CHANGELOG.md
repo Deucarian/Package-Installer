@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.1.97 - 2026-08-31
+
+- Registered a sanitized package-catalog card and stable Package Installer tool with Deucarian Control Center.
+- Moved the standalone entry to `Tools/Deucarian/Package Installer...` and updated the Bootstrap repair bridge.
+- Replaced the reverse Bootstrap menu-string call with a narrow optional bridge to Bootstrap's public editor API.
+- Updated the shared editor dependency to `com.deucarian.editor` 1.2.0.
+
+## 1.1.96 - 2026-08-27
+
+- Regenerated the bundled registry for generic Authentication, Simultria
+  Viewer Integration, API 2.0, and the optional Authentication/Command Routing
+  adapter edge while preserving the platform-neutral Viewer Template split.
+
 ## 1.1.95 - 2026-08-26
 
 - Registered the platform-neutral Viewer Template and projected the Web Viewer

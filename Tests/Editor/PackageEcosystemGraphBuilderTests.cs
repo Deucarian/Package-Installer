@@ -26,9 +26,9 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         [Test]
         public void Window_RegistersProductionPackageInstallerMenuPath()
         {
-            Assert.AreEqual("Tools/Deucarian/Tools and Quality/Package Installer", PackageInstallerWindow.MenuPathForTests);
+            Assert.AreEqual("Tools/Deucarian/Package Installer...", PackageInstallerWindow.MenuPathForTests);
             CollectionAssert.AreEqual(
-                new[] { "Tools/Deucarian/Tools and Quality/Package Installer" },
+                new[] { "Tools/Deucarian/Package Installer..." },
                 PackageInstallerWindow.UserFacingMenuPathsForTests.ToArray());
             Assert.IsFalse(PackageInstallerWindow.UserFacingMenuPathsForTests.Any(
                 path => path.StartsWith("Deucarian/", StringComparison.OrdinalIgnoreCase)));
@@ -207,7 +207,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
-        public void StartupUpdateCheckIsTheOnlyRegisteredEditorStartupHook()
+        public void RegisteredEditorStartupHooksAreExplicitAndBounded()
         {
             System.Reflection.Assembly packageInstallerAssembly = typeof(PackageInstallerWindow).Assembly;
             Type[] startupHookTypes = packageInstallerAssembly
@@ -221,7 +221,11 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 .ToArray();
 
             CollectionAssert.AreEquivalent(
-                new[] { typeof(PackageInstallerStartupUpdateCheck) },
+                new[]
+                {
+                    typeof(PackageInstallerControlCenterIntegration),
+                    typeof(PackageInstallerStartupUpdateCheck)
+                },
                 startupHookTypes);
             Assert.IsEmpty(startupHookMethods);
         }
