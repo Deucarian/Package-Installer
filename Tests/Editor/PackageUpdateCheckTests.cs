@@ -593,7 +593,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 PackageSourceMigrationAction.InstallSelectedGitUrl,
                 PackageInstallerWindow.GetSourceMigrationActionForTests(otherPackage));
             Assert.AreEqual(
-                "Tools/Deucarian/Bootstrap/Open Bootstrapper",
+                "Tools/Deucarian/Set Up or Repair...",
                 PackageInstallerWindow.BootstrapMenuPathForTests);
             Assert.AreEqual(
                 "https://github.com/Deucarian/Bootstrap.git#main",

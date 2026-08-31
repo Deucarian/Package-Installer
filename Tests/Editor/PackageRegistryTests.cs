@@ -809,6 +809,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 new[]
                 {
                     "com.deucarian.common",
+                    "com.deucarian.editor",
                     "com.deucarian.logging"
                 },
                 uiFlow.dependencies);
@@ -969,7 +970,9 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 .Single(package => package.id == "com.deucarian.test-automation");
             Assert.AreEqual("Tools", testAutomation.category);
             Assert.AreEqual("tools-quality", testAutomation.groupId);
-            CollectionAssert.IsEmpty(testAutomation.dependencies);
+            CollectionAssert.AreEqual(
+                new[] { "com.deucarian.editor" },
+                testAutomation.dependencies);
 
             PackageRegistryEntry monetization = result.Registry.packages
                 .Single(package => package.id == MonetizationPackageId);
