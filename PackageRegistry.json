@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-08-31",
+  "updatedAt": "2026-09-02",
   "architectureStandard": {
     "path": "ARCHITECTURE.md",
     "url": "https://github.com/Deucarian/Package-Registry/blob/main/ARCHITECTURE.md"
@@ -519,12 +519,13 @@
       "kind": "Integration",
       "ecosystemGroup": "Integrations",
       "overviewOrder": 27,
-      "description": "Optional Simultria viewer development context, explicit API settings, environment status, stable editor/runtime authentication handoff, and command-routed auto-load tooling.",
+      "description": "Shared Simultria viewer environment, authenticated runtime connection and model initialization, credential-free development context, and reversible build lifecycle.",
       "iconKey": "plug",
       "stableUrl": "https://github.com/Deucarian/Simultria-Viewer-Connection.git#main",
       "developmentUrl": "https://github.com/Deucarian/Simultria-Viewer-Connection.git#develop",
       "dependencies": [
         "com.deucarian.api",
+        "com.deucarian.build-pipeline",
         "com.deucarian.command-routing",
         "com.deucarian.editor",
         "com.deucarian.logging",
@@ -534,6 +535,7 @@
       ],
       "integrationTargets": [
         "com.deucarian.api",
+        "com.deucarian.build-pipeline",
         "com.deucarian.command-routing",
         "com.deucarian.simultria-api",
         "com.deucarian.authentication"
@@ -1550,6 +1552,7 @@
         "com.deucarian.api",
         "com.deucarian.camera-navigation",
         "com.deucarian.command-routing",
+        "com.deucarian.common",
         "com.deucarian.diagnostics",
         "com.deucarian.logging",
         "com.deucarian.object-loading",
@@ -1586,7 +1589,7 @@
       "ecosystemGroup": "Templates",
       "groupId": "templates-viewers",
       "overviewOrder": 10,
-      "description": "WebGL adapter for the platform-neutral Viewer Template, with secure browser commands, deployment-configured iframe routing, page lifecycle projection, a local host harness, and project-owned build profiles.",
+      "description": "WebGL adapter for the platform-neutral Viewer Template, with secure browser commands, page lifecycle projection, a local host harness, and one declarative product build workflow.",
       "iconKey": "panels-top-left",
       "stableUrl": "https://github.com/Deucarian/Template-Viewer-Web.git#main",
       "developmentUrl": "https://github.com/Deucarian/Template-Viewer-Web.git#develop",
@@ -1596,6 +1599,7 @@
         "com.deucarian.command-routing.webgl-integration",
         "com.deucarian.diagnostics",
         "com.deucarian.template.viewer",
+        "com.deucarian.theming",
         "com.deucarian.authentication",
         "com.deucarian.webgl-template"
       ],

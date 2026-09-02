@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.98 - 2026-09-02
+
+- Regenerated the bundled registry for the audited shared viewer dependency
+  graph: Simultria Viewer Integration now declares Build Pipeline, Template
+  Viewer declares Common, and Template Viewer Web declares Theming.
+
 ## 1.1.97 - 2026-08-31
 
 - Registered a sanitized package-catalog card and stable Package Installer tool with Deucarian Control Center.
