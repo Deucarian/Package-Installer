@@ -18,7 +18,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             PackageGraphModel graph = CreateBundledGraph();
             PackageGraphLayout layoutEngine = new PackageGraphLayout();
 
-            Assert.AreEqual(63, graph.Nodes.Count, "The bundled catalog coverage changed; audit the new focus states.");
+            Assert.AreEqual(64, graph.Nodes.Count, "The bundled catalog coverage changed; audit the new focus states.");
 
             foreach (PackageGraphNode focusNode in graph.Nodes)
             {
