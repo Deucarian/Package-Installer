@@ -1100,7 +1100,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 {
                     "com.deucarian.activity-visualization.simultria",
                     "com.deucarian.simultria-api",
-                    "com.deucarian.simultria-viewer-connection",
+                    "com.deucarian.simultria-viewer-integration",
                     "com.deucarian.simultria.rendering"
                 },
                 template.OptionalCompanions);
@@ -1113,7 +1113,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             CollectionAssert.AreEqual(
                 new[]
                 {
-                    "com.deucarian.simultria-viewer-connection",
+                    "com.deucarian.simultria-viewer-integration",
                     "com.deucarian.simultria.rendering"
                 },
                 template.CompositionPresets[2].PackageIds);
@@ -1121,7 +1121,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 new[]
                 {
                     "com.deucarian.activity-visualization.simultria",
-                    "com.deucarian.simultria-viewer-connection"
+                    "com.deucarian.simultria-viewer-integration"
                 },
                 template.CompositionPresets[3].PackageIds);
         }
