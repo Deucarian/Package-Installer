@@ -574,7 +574,7 @@
       "ecosystemGroup": "Experience & Interaction",
       "overviewOrder": 32,
       "description": "Reusable keyed warning and notification episodes with atomic updates, timing policy, semantic feedback, diagnostics, and non-modal uGUI presentation.",
-      "iconKey": "bell",
+      "iconKey": "triangle-alert",
       "stableUrl": "https://github.com/Deucarian/Notifications.git#main",
       "developmentUrl": "https://github.com/Deucarian/Notifications.git#develop",
       "dependencies": [

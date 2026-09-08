@@ -748,7 +748,10 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 AssertColor(DeucarianEditorVisualShell.MainPanel, 37f / 255f, 36f / 255f, 33f / 255f, 0.88f);
                 AssertColor(DeucarianEditorVisualShell.NestedSurface, 48f / 255f, 46f / 255f, 42f / 255f, 0.82f);
                 AssertColor(DeucarianEditorVisualShell.HeaderPanel, 42f / 255f, 41f / 255f, 38f / 255f, 0.92f);
-                AssertColor(DeucarianEditorVisualShell.Border, 98f / 255f, 186f / 255f, 182f / 255f, 0.24f);
+                if (DeucarianEditorAppearance.DecorativeBackgrounds)
+                    AssertColor(DeucarianEditorVisualShell.Border, 98f / 255f, 186f / 255f, 182f / 255f, 0.24f);
+                else
+                    Assert.AreEqual(DeucarianEditorVisualShell.SubtleBorder, DeucarianEditorVisualShell.Border);
                 AssertColor(DeucarianEditorVisualShell.InteractiveBorder, 98f / 255f, 186f / 255f, 182f / 255f, 0.62f);
                 AssertColor(DeucarianEditorVisualShell.SubtleBorder, 242f / 255f, 239f / 255f, 231f / 255f, 0.12f);
                 AssertColor(DeucarianEditorVisualShell.Text, 242f / 255f, 239f / 255f, 231f / 255f, 1f);
@@ -760,7 +763,10 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 AssertColor(DeucarianEditorVisualShell.MainPanel, 1f, 1f, 1f, 0.90f);
                 AssertColor(DeucarianEditorVisualShell.NestedSurface, 242f / 255f, 239f / 255f, 231f / 255f, 0.88f);
                 AssertColor(DeucarianEditorVisualShell.HeaderPanel, 1f, 1f, 1f, 0.94f);
-                AssertColor(DeucarianEditorVisualShell.Border, 27f / 255f, 26f / 255f, 24f / 255f, 0.14f);
+                if (DeucarianEditorAppearance.DecorativeBackgrounds)
+                    AssertColor(DeucarianEditorVisualShell.Border, 27f / 255f, 26f / 255f, 24f / 255f, 0.14f);
+                else
+                    Assert.AreEqual(DeucarianEditorVisualShell.SubtleBorder, DeucarianEditorVisualShell.Border);
                 AssertColor(DeucarianEditorVisualShell.InteractiveBorder, 15f / 255f, 98f / 255f, 106f / 255f, 0.58f);
                 AssertColor(DeucarianEditorVisualShell.SubtleBorder, 27f / 255f, 26f / 255f, 24f / 255f, 0.09f);
                 AssertColor(DeucarianEditorVisualShell.Text, 27f / 255f, 26f / 255f, 24f / 255f, 1f);
