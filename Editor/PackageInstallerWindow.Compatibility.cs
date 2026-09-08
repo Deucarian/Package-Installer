@@ -2,13 +2,16 @@ namespace Deucarian.PackageInstaller.Editor
 {
     internal sealed partial class PackageInstallerWindow
     {
-        internal static PackageChannel ResolveSelectedChannel(PackageDefinition package,
-            PackageChannelSelection project, PackageChannelSelection selection, bool hasInstalled, PackageChannel installed)
-            => PackageChannelPolicy.ResolveSelectedChannel(package, project, selection, hasInstalled, installed);
+        internal static PackageChannel ResolveSelectedChannel(PackageDefinition packageDefinition,
+            PackageChannelSelection projectSelection, PackageChannelSelection packageSelection,
+            bool hasInstalledChannel, PackageChannel installedChannel)
+            => PackageChannelPolicy.ResolveSelectedChannel(packageDefinition, projectSelection,
+                packageSelection, hasInstalledChannel, installedChannel);
 
-        internal static string GetContextualChannelProvenance(PackageDefinition package,
-            PackageChannelSelection project, PackageChannelSelection selection, bool hasInstalled,
-            PackageChannel installed, string sourceReason)
-            => PackageChannelPolicy.GetContextualChannelProvenance(package, project, selection, hasInstalled, installed, sourceReason);
+        internal static string GetContextualChannelProvenance(PackageDefinition packageDefinition,
+            PackageChannelSelection projectSelection, PackageChannelSelection packageSelection,
+            bool hasInstalledChannel, PackageChannel installedChannel, string installedSourceReason)
+            => PackageChannelPolicy.GetContextualChannelProvenance(packageDefinition, projectSelection,
+                packageSelection, hasInstalledChannel, installedChannel, installedSourceReason);
     }
 }
