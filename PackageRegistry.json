@@ -580,7 +580,8 @@
       "dependencies": [
         "com.deucarian.diagnostics",
         "com.deucarian.editor",
-        "com.deucarian.theming"
+        "com.deucarian.theming",
+        "com.deucarian.ui"
       ],
       "groupId": "ui-presentation"
     },

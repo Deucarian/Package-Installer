@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.98 - 2026-09-08
+
+- Projected the Notifications dependency on reusable Deucarian UI visibility motion into the bundled catalog.
+
 ## 1.1.97 - 2026-08-31
 
 - Registered a sanitized package-catalog card and stable Package Installer tool with Deucarian Control Center.
