@@ -13,7 +13,6 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed partial class PackageInstallerWindow
     {
 
-
         private void PromptForSavedOperationRecovery()
         {
             new PackageOperationRecoveryWorkflow(
@@ -25,14 +24,6 @@ namespace Deucarian.PackageInstaller.Editor
                 (title, message, icon) => ShowInformationDialog(title, message, icon)).Start();
         }
 
-
-
-
-
-
-
-
-
         internal static PackageChannel GetRecoveryRequestedChannelForTests(
             PackageOperationRecoveryRecord recovery,
             string rootPackageId,
@@ -40,8 +31,6 @@ namespace Deucarian.PackageInstaller.Editor
         {
             return PackageOperationRecoveryPolicy.GetRecoveryRequestedChannel(recovery, rootPackageId, fallback);
         }
-
-
 
         internal static string FormatRecoveryPlanDeltaForTests(
             PackageOperationRecoveryRecord recovery,

@@ -13,7 +13,6 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed partial class PackageInstallerWindow
     {
 
-
         private VisualElement CreateGlobalChannelOverridePopup()
         {
             VisualElement popup = new VisualElement { name = GlobalChannelOverridePopupName };
@@ -149,14 +148,6 @@ namespace Deucarian.PackageInstaller.Editor
             HideGlobalChannelOverridePopup();
             Repaint();
         }
-
-
-
-
-
-
-
-
 
         private void PositionGlobalChannelOverridePopup()
         {

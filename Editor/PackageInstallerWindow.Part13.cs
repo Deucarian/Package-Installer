@@ -13,7 +13,6 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed partial class PackageInstallerWindow
     {
 
-
         private void DrawPackageStatusContent(PackageDefinition packageDefinition)
         {
             VisualStatus status = GetPackageVisualStatus(packageDefinition);
@@ -21,51 +20,51 @@ namespace Deucarian.PackageInstaller.Editor
                 packageDefinition,
                 GetSelectedChannel(packageDefinition));
 
-            DrawStatusBadge(status.Label, status.Kind, GUILayout.Width(150f));
+            ImGui.DrawStatusBadge(status.Label, status.Kind, GUILayout.Width(150f));
             GUILayout.Space(6f);
-            DrawKeyValueRow("Domain", GetPackageHierarchyPath(packageDefinition));
-            DrawKeyValueRow("Package kind", GetPackageKindDisplayName(packageDefinition));
-            DrawKeyValueRow("Package ID", packageDefinition.PackageId);
+            ImGui.DrawKeyValueRow("Domain", GetPackageHierarchyPath(packageDefinition));
+            ImGui.DrawKeyValueRow("Package kind", GetPackageKindDisplayName(packageDefinition));
+            ImGui.DrawKeyValueRow("Package ID", packageDefinition.PackageId);
 
             if (_packageDetectionService.TryGetInstalledPackage(
                     packageDefinition.PackageId,
                     out PackageManagerPackageInfo packageInfo))
             {
-                DrawKeyValueRow("Package", "Installed");
-                DrawKeyValueRow("Version", GetPackageVersionText(packageInfo.version, updateStatus));
+                ImGui.DrawKeyValueRow("Package", "Installed");
+                ImGui.DrawKeyValueRow("Version", GetPackageVersionText(packageInfo.version, updateStatus));
             }
             else
             {
-                DrawKeyValueRow("Package", "Not installed");
-                DrawKeyValueRow("Version", "-");
+                ImGui.DrawKeyValueRow("Package", "Not installed");
+                ImGui.DrawKeyValueRow("Version", "-");
             }
 
-            DrawKeyValueRow("Update", GetUpdateStatusText(updateStatus));
-            DrawKeyValueRow("Installed rev", string.IsNullOrWhiteSpace(updateStatus.ShortInstalledRevision) ? "-" : updateStatus.ShortInstalledRevision);
-            DrawKeyValueRow("Latest rev", string.IsNullOrWhiteSpace(updateStatus.ShortLatestRevision) ? "-" : updateStatus.ShortLatestRevision);
+            ImGui.DrawKeyValueRow("Update", GetUpdateStatusText(updateStatus));
+            ImGui.DrawKeyValueRow("Installed rev", string.IsNullOrWhiteSpace(updateStatus.ShortInstalledRevision) ? "-" : updateStatus.ShortInstalledRevision);
+            ImGui.DrawKeyValueRow("Latest rev", string.IsNullOrWhiteSpace(updateStatus.ShortLatestRevision) ? "-" : updateStatus.ShortLatestRevision);
 
             if (updateStatus.HasUnbumpedPackageVersionWarning)
             {
-                DrawInlineHelp(updateStatus.PackageVersionWarningMessage, VisualStatusKind.UpdateAvailable);
+                ImGui.DrawInlineHelp(updateStatus.PackageVersionWarningMessage, PackageInstallerVisualStatusKind.UpdateAvailable);
             }
             else if ((updateStatus.IsSourceMigrationAvailable || updateStatus.IsReloadPending) &&
                      !string.IsNullOrWhiteSpace(updateStatus.Message))
             {
-                DrawInlineHelp(updateStatus.Message, VisualStatusKind.UpdateAvailable);
+                ImGui.DrawInlineHelp(updateStatus.Message, PackageInstallerVisualStatusKind.UpdateAvailable);
             }
             else if (updateStatus.Kind == PackageUpdateStatusKind.CannotDetermine && !string.IsNullOrWhiteSpace(updateStatus.Message))
             {
-                DrawInlineHelp(updateStatus.Message, VisualStatusKind.Info);
+                ImGui.DrawInlineHelp(updateStatus.Message, PackageInstallerVisualStatusKind.Info);
             }
             else if (updateStatus.Kind == PackageUpdateStatusKind.Failed && !string.IsNullOrWhiteSpace(updateStatus.Message))
             {
-                DrawInlineHelp(updateStatus.Message, VisualStatusKind.Failed);
+                ImGui.DrawInlineHelp(updateStatus.Message, PackageInstallerVisualStatusKind.Failed);
             }
         }
 
         private void DrawChannelPanel(PackageDefinition packageDefinition)
         {
-            DrawPanel("Channel", () =>
+            ImGui.DrawPanel("Channel", () =>
             {
                 PackageChannel selectedChannel = GetSelectedChannel(packageDefinition);
                 string selectedUrl = packageDefinition.GetUrl(selectedChannel);
@@ -74,11 +73,11 @@ namespace Deucarian.PackageInstaller.Editor
                 {
                     EditorGUILayout.LabelField(
                         "Selected",
-                        _mutedMiniLabelStyle,
+                        _styles.MutedMiniLabelStyle,
                         GUILayout.Width(DeucarianEditorWorkbenchGUI.DetailLabelWidth));
                     DrawChannelPopup(packageDefinition);
                     GUILayout.Space(6f);
-                    DrawStatusBadge(PackageChannelPolicy.GetChannelLabel(selectedChannel), VisualStatusKind.Info, GUILayout.Width(104f));
+                    ImGui.DrawStatusBadge(PackageChannelPolicy.GetChannelLabel(selectedChannel), PackageInstallerVisualStatusKind.Info, GUILayout.Width(104f));
                     GUILayout.FlexibleSpace();
                 }
 
@@ -88,15 +87,15 @@ namespace Deucarian.PackageInstaller.Editor
                 {
                     EditorGUILayout.LabelField(
                         PackageChannelPolicy.GetChannelLabel(selectedChannel) + " installs from the configured package URL/ref.",
-                        _mutedMiniLabelStyle);
+                        _styles.MutedMiniLabelStyle);
                 }
                 else
                 {
-                    DrawInlineHelp("No package URL is configured for this channel.", VisualStatusKind.Failed);
+                    ImGui.DrawInlineHelp("No package URL is configured for this channel.", PackageInstallerVisualStatusKind.Failed);
                 }
 
-                DrawKeyValueRow("Stable", string.IsNullOrWhiteSpace(packageDefinition.StableUrl) ? "Not configured" : "Configured");
-                DrawKeyValueRow("Development", string.IsNullOrWhiteSpace(packageDefinition.DevelopmentUrl) ? "Not configured" : "Configured");
+                ImGui.DrawKeyValueRow("Stable", string.IsNullOrWhiteSpace(packageDefinition.StableUrl) ? "Not configured" : "Configured");
+                ImGui.DrawKeyValueRow("Development", string.IsNullOrWhiteSpace(packageDefinition.DevelopmentUrl) ? "Not configured" : "Configured");
 
                 PackageChannelSelection projectSelection = _stateRepository != null
                     ? _stateRepository.GetProjectChannelSelection()
@@ -122,7 +121,7 @@ namespace Deucarian.PackageInstaller.Editor
                 if (!string.IsNullOrWhiteSpace(provenance))
                 {
                     GUILayout.Space(6f);
-                    DrawKeyValueRow("Source", provenance);
+                    ImGui.DrawKeyValueRow("Source", provenance);
 
                     if (packageSelection.HasValue &&
                         DeucarianEditorWorkbenchGUI.DrawCompactIconAction(
@@ -137,8 +136,6 @@ namespace Deucarian.PackageInstaller.Editor
                 }
             }, GUILayout.ExpandWidth(true));
         }
-
-
 
         private void ResetPackageChannelOverride(PackageDefinition packageDefinition)
         {
@@ -167,11 +164,11 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            DrawPanel("Requirements", () =>
+            ImGui.DrawPanel("Requirements", () =>
             {
                 if (packageDefinition.Dependencies.Count > 0)
                 {
-                    EditorGUILayout.LabelField("Dependencies", _miniLabelStyle);
+                    EditorGUILayout.LabelField("Dependencies", _styles.MiniLabelStyle);
 
                     foreach (string dependencyId in packageDefinition.Dependencies)
                     {
@@ -186,11 +183,11 @@ namespace Deucarian.PackageInstaller.Editor
                         GUILayout.Space(6f);
                     }
 
-                    EditorGUILayout.LabelField("Required by", _miniLabelStyle);
+                    EditorGUILayout.LabelField("Required by", _styles.MiniLabelStyle);
 
                     foreach (PackageReverseDependency dependent in dependents)
                     {
-                        DrawKeyValueRow(
+                        ImGui.DrawKeyValueRow(
                             dependent.DisplayName,
                             dependent.Source == PackageReverseDependencySource.Registry
                                 ? "Registry relationship"
@@ -204,7 +201,7 @@ namespace Deucarian.PackageInstaller.Editor
         {
             if (!PackageRegistryProvider.TryGetPackage(dependencyId, out PackageDefinition dependencyDefinition))
             {
-                DrawKeyValueRow(dependencyId, "Not registered");
+                ImGui.DrawKeyValueRow(dependencyId, "Not registered");
                 return;
             }
 
@@ -213,25 +210,25 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (Event.current.type == EventType.Repaint)
             {
-                DeucarianEditorVisualShell.DrawInsetSurface(rowRect, _sampleRowBackgroundColor, _separatorColor, 6f);
+                DeucarianEditorVisualShell.DrawInsetSurface(rowRect, _styles.SampleRowBackgroundColor, _styles.SeparatorColor, 6f);
             }
 
             Rect markerRect = new Rect(rowRect.x + 8f, rowRect.y + 5f, 28f, 18f);
-            DrawInlineIcon(markerRect, status.IconId, status.Kind, status.Label);
+            ImGui.DrawInlineIcon(markerRect, status.IconId, status.Kind, status.Label);
 
             Rect nameRect = new Rect(rowRect.x + 44f, rowRect.y + 5f, rowRect.width - 164f, 18f);
             GUI.Label(
                 nameRect,
                 new GUIContent(dependencyDefinition.DisplayName, GetPackageTooltip(dependencyDefinition)),
-                _rowTitleStyle);
+                _styles.RowTitleStyle);
 
             Rect statusRect = new Rect(rowRect.xMax - 108f, rowRect.y + 5f, 96f, 18f);
-            DrawStatusBadge(statusRect, status.Label, status.Kind, _rowStatusStyle);
+            ImGui.DrawStatusBadge(statusRect, status.Label, status.Kind, _styles.RowStatusStyle);
         }
 
         private void DrawActionsPanel(PackageDefinition packageDefinition)
         {
-            DrawPanel("Actions", () =>
+            ImGui.DrawPanel("Actions", () =>
             {
                 DrawPackageActionButtons(packageDefinition, true);
             });

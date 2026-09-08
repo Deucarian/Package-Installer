@@ -338,38 +338,11 @@ namespace Deucarian.PackageInstaller.Editor
         private Button _operationFooterDetailsButton;
         private Label _operationFooterVersionLabel;
         private PackageGraphView _graphView;
+        private readonly PackageInstallerWindowStyles _styles = new PackageInstallerWindowStyles();
+        private PackageInstallerImGui _imGui;
+        private PackageInstallerImGui ImGui => _imGui ?? (_imGui = new PackageInstallerImGui(_styles, GetDetailsContentWidth));
+        private void EnsureStyles() => _styles.Ensure();
         private PackageInstallerResponsiveMode _responsiveMode = PackageInstallerResponsiveMode.Wide;
-
-        private bool _stylesInitialized;
-        private bool _lastProSkin;
-        private Color _mainBackgroundColor;
-        private Color _sidebarBackgroundColor;
-        private Color _detailsBackgroundColor;
-        private Color _headerPanelBackgroundColor;
-        private Color _sampleRowBackgroundColor;
-        private Color _panelBorderColor;
-        private Color _interactiveBorderColor;
-        private Color _separatorColor;
-        private Color _rowBackgroundColor;
-        private Color _rowHoverColor;
-        private Color _rowSelectedColor;
-        private Color _operationDrawerBackgroundColor;
-        private Color _operationDrawerBorderColor;
-        private Color _textColor;
-        private Color _mutedTextColor;
-
-        private GUIStyle _sidebarStyle;
-        private GUIStyle _detailsStyle;
-        private GUIStyle _sampleRowStyle;
-        private GUIStyle _titleStyle;
-        private GUIStyle _subtitleStyle;
-        private GUIStyle _sectionTitleStyle;
-        private GUIStyle _miniLabelStyle;
-        private GUIStyle _mutedMiniLabelStyle;
-        private GUIStyle _rowTitleStyle;
-        private GUIStyle _rowSubLabelStyle;
-        private GUIStyle _rowStatusStyle;
-        private GUIStyle _foldoutStyle;
 
         internal static bool DefaultsToEcosystemGraphForTests => DefaultInstallerViewMode == InstallerViewMode.EcosystemGraph;
 

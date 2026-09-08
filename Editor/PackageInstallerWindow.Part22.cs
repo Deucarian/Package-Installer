@@ -13,23 +13,6 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed partial class PackageInstallerWindow
     {
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         private void TryPromptForSavedOperationRecovery()
         {
             if (!_promptSavedOperationAfterDetectionRefresh ||

@@ -13,7 +13,6 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed partial class PackageInstallerWindow
     {
 
-
         private static float CalculateOperationDrawerScrollHeight(int contentLineCount)
         {
             const float lineHeight = 18f;
@@ -294,26 +293,26 @@ namespace Deucarian.PackageInstaller.Editor
             return "Idle";
         }
 
-        private VisualStatusKind GetGlobalOperationStatusKind(OperationProgressView operation)
+        private PackageInstallerVisualStatusKind GetGlobalOperationStatusKind(OperationProgressView operation)
         {
             string stateLabel = GetGlobalOperationStateLabel(operation);
 
             if (string.Equals(stateLabel, "Failed", StringComparison.OrdinalIgnoreCase))
             {
-                return VisualStatusKind.Failed;
+                return PackageInstallerVisualStatusKind.Failed;
             }
 
             if (string.Equals(stateLabel, "Idle", StringComparison.OrdinalIgnoreCase))
             {
-                return VisualStatusKind.Info;
+                return PackageInstallerVisualStatusKind.Info;
             }
 
             if (string.Equals(stateLabel, "Complete", StringComparison.OrdinalIgnoreCase))
             {
-                return VisualStatusKind.Installed;
+                return PackageInstallerVisualStatusKind.Installed;
             }
 
-            return VisualStatusKind.Busy;
+            return PackageInstallerVisualStatusKind.Busy;
         }
 
         private string GetOperationBarTitle(OperationProgressView operation)

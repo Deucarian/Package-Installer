@@ -13,7 +13,6 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed partial class PackageInstallerWindow
     {
 
-
         private void HandleRegistryChanged()
         {
             InvalidateGraphModelCache("registry changed");
@@ -313,15 +312,12 @@ namespace Deucarian.PackageInstaller.Editor
                     : null);
         }
 
-
-
         internal static string FormatTerminalRetryPlanDeltaForTests(
             PackageOperationTerminalSnapshot snapshot,
             PackageDependencyInstallPlan freshPlan)
         {
             return PackageOperationPlanReview.FormatTerminalRetryPlanDelta(snapshot, freshPlan);
         }
-
 
     }
 }

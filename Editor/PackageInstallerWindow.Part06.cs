@@ -13,7 +13,6 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed partial class PackageInstallerWindow
     {
 
-
         private void UpdateViewVisibility()
         {
             bool graphMode = _viewMode == InstallerViewMode.EcosystemGraph;

@@ -13,10 +13,9 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed partial class PackageInstallerWindow
     {
 
-
         private static void ApplyOperationFooterData(
             VisualElement footer,
-            VisualStatusKind statusKind,
+            PackageInstallerVisualStatusKind statusKind,
             string statusText,
             string summaryText,
             bool detailsExpanded,
@@ -32,7 +31,7 @@ namespace Deucarian.PackageInstaller.Editor
             string safeVersionText = string.IsNullOrWhiteSpace(packageVersionText)
                 ? PackageInstallerRuntimeIdentity.PackageId
                 : packageVersionText.Trim();
-            Color statusColor = GetStatusColor(statusKind);
+            Color statusColor = PackageInstallerStatusPresentation.GetStatusColor(statusKind);
 
             Image statusIcon = footer.Q<Image>(OperationFooterStatusIconName);
             Label statusLabel = footer.Q<Label>(OperationFooterStatusLabelName);
@@ -42,7 +41,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (statusIcon != null)
             {
-                statusIcon.image = DeucarianEditorIcons.GetIcon(GetStatusIconId(statusKind));
+                statusIcon.image = DeucarianEditorIcons.GetIcon(PackageInstallerStatusPresentation.GetStatusIconId(statusKind));
                 statusIcon.style.display = DisplayStyle.Flex;
                 statusIcon.tooltip = safeStatusText;
                 statusIcon.tintColor = statusColor;
@@ -83,7 +82,7 @@ namespace Deucarian.PackageInstaller.Editor
             }
         }
 
-        private static void SetFooterStatusClass(VisualElement element, VisualStatusKind statusKind)
+        private static void SetFooterStatusClass(VisualElement element, PackageInstallerVisualStatusKind statusKind)
         {
             if (element == null)
             {
@@ -103,28 +102,28 @@ namespace Deucarian.PackageInstaller.Editor
 
             switch (statusKind)
             {
-                case VisualStatusKind.Installed:
+                case PackageInstallerVisualStatusKind.Installed:
                     element.AddToClassList(
                         DeucarianEditorWorkbenchSurfaces.FooterStatusSuccessClass);
                     break;
-                case VisualStatusKind.NotInstalled:
+                case PackageInstallerVisualStatusKind.NotInstalled:
                     element.AddToClassList(
                         DeucarianEditorWorkbenchSurfaces.FooterStatusNeutralClass);
                     break;
-                case VisualStatusKind.UpdateAvailable:
+                case PackageInstallerVisualStatusKind.UpdateAvailable:
                     element.AddToClassList(
                         DeucarianEditorWorkbenchSurfaces.FooterStatusWarningClass);
                     break;
-                case VisualStatusKind.Failed:
+                case PackageInstallerVisualStatusKind.Failed:
                     element.AddToClassList(
                         DeucarianEditorWorkbenchSurfaces.FooterStatusErrorClass);
                     break;
-                case VisualStatusKind.Busy:
+                case PackageInstallerVisualStatusKind.Busy:
                     element.AddToClassList(
                         DeucarianEditorWorkbenchSurfaces.FooterStatusBusyClass);
                     break;
-                case VisualStatusKind.Info:
-                case VisualStatusKind.Integration:
+                case PackageInstallerVisualStatusKind.Info:
+                case PackageInstallerVisualStatusKind.Integration:
                 default:
                     element.AddToClassList(
                         DeucarianEditorWorkbenchSurfaces.FooterStatusNeutralClass);

@@ -13,7 +13,6 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed partial class PackageInstallerWindow
     {
 
-
         private void RemovePackage(PackageDefinition packageDefinition)
         {
             if (packageDefinition == null)
@@ -125,11 +124,11 @@ namespace Deucarian.PackageInstaller.Editor
                 templateDefinition,
                 explicitSelection);
 
-            DrawPanel("Viewer Setup", () =>
+            ImGui.DrawPanel("Viewer Setup", () =>
             {
                 EditorGUILayout.LabelField(
                     "Choose the reusable viewer core, then add only the connection your project needs.",
-                    _mutedMiniLabelStyle);
+                    _styles.MutedMiniLabelStyle);
                 GUILayout.Space(8f);
 
                 using (new EditorGUILayout.HorizontalScope())
@@ -162,11 +161,11 @@ namespace Deucarian.PackageInstaller.Editor
                 if (!string.IsNullOrWhiteSpace(activePresetDescription))
                 {
                     GUILayout.Space(5f);
-                    EditorGUILayout.LabelField(activePresetDescription, _mutedMiniLabelStyle);
+                    EditorGUILayout.LabelField(activePresetDescription, _styles.MutedMiniLabelStyle);
                 }
 
                 GUILayout.Space(8f);
-                EditorGUILayout.LabelField("Connections", _miniLabelStyle);
+                EditorGUILayout.LabelField("Connections", _styles.MiniLabelStyle);
                 GUILayout.Space(3f);
 
                 foreach (string companionId in templateDefinition.OptionalCompanions)
@@ -175,9 +174,9 @@ namespace Deucarian.PackageInstaller.Editor
                             companionId,
                             out PackageDefinition companionDefinition))
                     {
-                        DrawInlineHelp(
+                        ImGui.DrawInlineHelp(
                             "Optional connection is unavailable: " + companionId,
-                            VisualStatusKind.Failed);
+                            PackageInstallerVisualStatusKind.Failed);
                         continue;
                     }
 
@@ -231,7 +230,7 @@ namespace Deucarian.PackageInstaller.Editor
                                 ? selectedPackage.DisplayName
                                 : id)
                             .ToArray());
-                DrawInlineHelp(selectionSummary, VisualStatusKind.Info);
+                ImGui.DrawInlineHelp(selectionSummary, PackageInstallerVisualStatusKind.Info);
             });
         }
 

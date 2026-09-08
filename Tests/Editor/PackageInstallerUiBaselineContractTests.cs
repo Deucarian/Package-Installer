@@ -358,7 +358,9 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 "Editor/Assets/Styles/DeucarianEditor.uss");
             string graphSource = ReadPackageFile(
                 "com.deucarian.package-installer",
-                "Editor/UI/PackageInstaller/PackageEcosystemGraphView.cs");
+                "Editor/UI/PackageInstaller/PackageGraphToolbarControls.cs") + ReadPackageFile(
+                "com.deucarian.package-installer",
+                "Editor/UI/PackageInstaller/PackageGraphEdgePainter.cs");
 
             foreach (string role in new[]
                      {
@@ -662,14 +664,14 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 "private static void DrawColoredLabel",
                 StringComparison.Ordinal);
             Assert.GreaterOrEqual(drawColoredLabelStart, 0);
-            int ensureStylesStart = workbenchSource.IndexOf(
-                "private static void EnsureStyles",
+            int methodEnd = workbenchSource.IndexOf(
+                "\n        }",
                 drawColoredLabelStart,
                 StringComparison.Ordinal);
-            Assert.Greater(ensureStylesStart, drawColoredLabelStart);
+            Assert.Greater(methodEnd, drawColoredLabelStart);
             string drawColoredLabelSource = workbenchSource.Substring(
                 drawColoredLabelStart,
-                ensureStylesStart - drawColoredLabelStart);
+                methodEnd - drawColoredLabelStart);
             Assert.That(drawColoredLabelSource, Does.Not.Contain("new GUIStyle(style)"));
 
             Assert.AreEqual(10, DeucarianEditorLayoutMetrics.PageHorizontalPadding);

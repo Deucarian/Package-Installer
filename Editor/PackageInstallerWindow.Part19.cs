@@ -13,62 +13,6 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed partial class PackageInstallerWindow
     {
 
-
-        private static string GetStatusIconId(VisualStatusKind statusKind)
-        {
-            switch (statusKind)
-            {
-                case VisualStatusKind.Installed:
-                    return DeucarianEditorIconIds.Success;
-                case VisualStatusKind.NotInstalled:
-                    return DeucarianEditorIconIds.Optional;
-                case VisualStatusKind.UpdateAvailable:
-                    return DeucarianEditorIconIds.Update;
-                case VisualStatusKind.Failed:
-                    return DeucarianEditorIconIds.Error;
-                case VisualStatusKind.Busy:
-                    return DeucarianEditorIconIds.Busy;
-                case VisualStatusKind.Integration:
-                    return DeucarianEditorIconIds.Integration;
-                case VisualStatusKind.Info:
-                default:
-                    return DeucarianEditorIconIds.Info;
-            }
-        }
-
-        private static DeucarianEditorStatus ToEditorStatus(VisualStatusKind statusKind)
-        {
-            switch (statusKind)
-            {
-                case VisualStatusKind.Installed:
-                    return DeucarianEditorStatus.Success;
-                case VisualStatusKind.UpdateAvailable:
-                    return DeucarianEditorStatus.Warning;
-                case VisualStatusKind.Failed:
-                    return DeucarianEditorStatus.Error;
-                case VisualStatusKind.NotInstalled:
-                    return DeucarianEditorStatus.Disabled;
-                case VisualStatusKind.Busy:
-                case VisualStatusKind.Info:
-                case VisualStatusKind.Integration:
-                default:
-                    return DeucarianEditorStatus.Info;
-            }
-        }
-
-        private static MessageType ToMessageType(VisualStatusKind statusKind)
-        {
-            switch (statusKind)
-            {
-                case VisualStatusKind.Failed:
-                    return MessageType.Error;
-                case VisualStatusKind.UpdateAvailable:
-                    return MessageType.Warning;
-                default:
-                    return MessageType.Info;
-            }
-        }
-
         private static string GetDependencyDisplayNames(PackageDefinition integrationDefinition)
         {
             if (integrationDefinition == null || integrationDefinition.Dependencies.Count == 0)
@@ -155,12 +99,6 @@ namespace Deucarian.PackageInstaller.Editor
                 installedChannel);
         }
 
-
-
-
-
-
-
         private void SetSelectedChannel(PackageDefinition packageDefinition, PackageChannel channel)
         {
             if (packageDefinition == null)
@@ -210,10 +148,6 @@ namespace Deucarian.PackageInstaller.Editor
 
             _preferences.SetCategoryExpanded(category, expanded);
         }
-
-
-
-
 
         private void EnsureValidSelection()
         {

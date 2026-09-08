@@ -13,19 +13,12 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed partial class PackageInstallerWindow
     {
 
-
-
-
-
-
         internal static bool CanReuseSavedExactTargetsForTests(
             PackageOperationRecoveryRecord recovery,
             PackageDependencyInstallPlan freshPlan)
         {
             return PackageOperationRecoveryPolicy.CanReuseSavedExactTargets(recovery, freshPlan);
         }
-
-
 
         internal static PackageOperationRecoveryDisposition GetRecoveryDispositionForTests(
             PackageOperationRecoveryRecord recovery,
@@ -34,8 +27,6 @@ namespace Deucarian.PackageInstaller.Editor
         {
             return PackageOperationRecoveryPolicy.GetRecoveryDisposition(recovery, freshPlan, hasMatchingReloadMarker);
         }
-
-
 
         private void TrackPendingUpdateStatusInvalidations(IEnumerable<PackageDefinition> packageDefinitions)
         {

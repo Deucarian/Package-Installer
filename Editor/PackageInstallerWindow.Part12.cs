@@ -13,7 +13,6 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed partial class PackageInstallerWindow
     {
 
-
         private void InstallGraphGroupPackages(
             PackageGraphGroup group,
             IReadOnlyCollection<PackageDefinition> packageDefinitions)
@@ -302,7 +301,7 @@ namespace Deucarian.PackageInstaller.Editor
         {
             VisualStatus status = GetPackageVisualStatus(packageDefinition);
 
-            DrawPanel("Overview", () =>
+            ImGui.DrawPanel("Overview", () =>
             {
                 using (new EditorGUILayout.HorizontalScope())
                 {
@@ -310,7 +309,7 @@ namespace Deucarian.PackageInstaller.Editor
                     DrawPackageIcon(
                         iconRect,
                         packageDefinition,
-                        packageDefinition.IsIntegration ? VisualStatusKind.Integration : status.Kind);
+                        packageDefinition.IsIntegration ? PackageInstallerVisualStatusKind.Integration : status.Kind);
 
                     GUILayout.Space(8f);
 
@@ -319,33 +318,33 @@ namespace Deucarian.PackageInstaller.Editor
                         string displayName = GetDetailDisplayName(packageDefinition);
                         EditorGUILayout.LabelField(
                             new GUIContent(displayName, displayName),
-                            _titleStyle,
+                            _styles.TitleStyle,
                             GUILayout.ExpandWidth(true));
 
                         if (!string.IsNullOrWhiteSpace(packageDefinition.Description))
                         {
                             EditorGUILayout.LabelField(
                                 new GUIContent(packageDefinition.Description, packageDefinition.Description),
-                                _subtitleStyle);
+                                _styles.SubtitleStyle);
                         }
 
                         if (packageDefinition.HasDisplayVersion)
                         {
-                            DrawKeyValueRow("Version", packageDefinition.DisplayVersion);
+                            ImGui.DrawKeyValueRow("Version", packageDefinition.DisplayVersion);
                         }
                     }
 
                     GUILayout.Space(8f);
-                    DrawStatusBadge(status.Label, status.Kind, GUILayout.Width(132f));
+                    ImGui.DrawStatusBadge(status.Label, status.Kind, GUILayout.Width(132f));
                 }
             }, GUILayout.ExpandWidth(true));
         }
 
-        private void DrawPackageIcon(Rect rect, PackageDefinition packageDefinition, VisualStatusKind statusKind)
+        private void DrawPackageIcon(Rect rect, PackageDefinition packageDefinition, PackageInstallerVisualStatusKind statusKind)
         {
             if (Event.current.type == EventType.Repaint)
             {
-                Color color = GetStatusColor(statusKind);
+                Color color = PackageInstallerStatusPresentation.GetStatusColor(statusKind);
                 DeucarianEditorVisualShell.DrawInsetSurface(
                     rect,
                     DeucarianEditorColors.WithAlpha(color, 0.12f),
@@ -394,7 +393,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void DrawStatusPanel(PackageDefinition packageDefinition)
         {
-            DrawPanel(packageDefinition.IsIntegration ? "Integration Status" : "Status", () =>
+            ImGui.DrawPanel(packageDefinition.IsIntegration ? "Integration Status" : "Status", () =>
             {
                 DrawPackageStatusContent(packageDefinition);
             }, GUILayout.ExpandWidth(true));

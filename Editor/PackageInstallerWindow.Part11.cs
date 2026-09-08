@@ -13,15 +13,6 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed partial class PackageInstallerWindow
     {
 
-
-
-
-
-
-
-
-
-
         private static void DrawSingleLineLabel(Rect rect, GUIContent content, GUIStyle style)
         {
             if (style == null)
@@ -199,24 +190,24 @@ namespace Deucarian.PackageInstaller.Editor
                 node.Status == PackageGraphNodeStatus.Missing ||
                 node.Status == PackageGraphNodeStatus.Warning);
 
-            DrawPanel("Group", () =>
+            ImGui.DrawPanel("Group", () =>
             {
-                EditorGUILayout.LabelField(group.DisplayName, _titleStyle);
+                EditorGUILayout.LabelField(group.DisplayName, _styles.TitleStyle);
 
                 if (!string.IsNullOrWhiteSpace(group.Description))
                 {
-                    EditorGUILayout.LabelField(group.Description, _subtitleStyle);
+                    EditorGUILayout.LabelField(group.Description, _styles.SubtitleStyle);
                 }
 
-                DrawKeyValueRow("Packages", descendants.Length.ToString());
-                DrawKeyValueRow("Installed", installedCount.ToString());
-                DrawKeyValueRow("Missing", missingCount.ToString());
-                DrawKeyValueRow("Updates", updateCount.ToString());
+                ImGui.DrawKeyValueRow("Packages", descendants.Length.ToString());
+                ImGui.DrawKeyValueRow("Installed", installedCount.ToString());
+                ImGui.DrawKeyValueRow("Missing", missingCount.ToString());
+                ImGui.DrawKeyValueRow("Updates", updateCount.ToString());
             }, GUILayout.ExpandWidth(true));
 
             if (missingPackages.Length > 0 || packagesWithUpdates.Length > 0)
             {
-                DrawPanel("Actions", () =>
+                ImGui.DrawPanel("Actions", () =>
                 {
                     if (missingPackages.Length > 0 &&
                         DeucarianEditorWorkbenchGUI.DrawCompactIconAction(

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.3 - 2026-09-09
+
+- Move window-specific style lifetime, IMGUI rendering and visual status mapping into composed owners. Update graph regression tests to call the extracted policies directly instead of reflecting private visual-layer methods.
+
 ## 1.2.2 - 2026-09-09
 
 - Move two-pass edge-stroke policy into the shared appearance owner; the production painter no longer depends on a visual layer's test entry point.

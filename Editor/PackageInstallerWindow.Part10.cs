@@ -13,7 +13,6 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed partial class PackageInstallerWindow
     {
 
-
         private void DrawEcosystemOverviewGroupsPanel()
         {
             PackageGraphNavigationRow[] navigationRows = PackageGraphNavigationModel.CreateEcosystemOverviewGroupNavigationRows(
@@ -21,11 +20,11 @@ namespace Deucarian.PackageInstaller.Editor
                     _graphNavigationState)
                 .ToArray();
 
-            DrawPanel("Groups", () =>
+            ImGui.DrawPanel("Groups", () =>
             {
                 if (navigationRows.Length == 0)
                 {
-                    EditorGUILayout.LabelField("No ecosystem navigation is available.", _mutedMiniLabelStyle);
+                    EditorGUILayout.LabelField("No ecosystem navigation is available.", _styles.MutedMiniLabelStyle);
                     SynchronizeDetailsNavigationHover(null);
                     return;
                 }
@@ -62,26 +61,26 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 bool highlighted = selected || hover || graphHover || keyboardFocused;
                 Color activePathBackground = Color.Lerp(
-                    _sampleRowBackgroundColor,
-                    _rowSelectedColor,
+                    _styles.SampleRowBackgroundColor,
+                    _styles.RowSelectedColor,
                     0.22f);
                 DeucarianEditorVisualShell.DrawInsetSurface(
                     rowRect,
                     selected
-                        ? _rowSelectedColor
+                        ? _styles.RowSelectedColor
                         : highlighted
-                            ? _rowHoverColor
+                            ? _styles.RowHoverColor
                             : row.IsInActivePath
                                 ? activePathBackground
-                                : _sampleRowBackgroundColor,
-                    highlighted || row.IsInActivePath ? _interactiveBorderColor : _separatorColor,
+                                : _styles.SampleRowBackgroundColor,
+                    highlighted || row.IsInActivePath ? _styles.InteractiveBorderColor : _styles.SeparatorColor,
                     4f);
 
                 if (selected || row.HasAttention)
                 {
                     EditorGUI.DrawRect(
                         new Rect(rowRect.x, rowRect.y, 3f, rowRect.height),
-                        row.HasAttention ? GetStatusColor(VisualStatusKind.UpdateAvailable) : _interactiveBorderColor);
+                        row.HasAttention ? PackageInstallerStatusPresentation.GetStatusColor(PackageInstallerVisualStatusKind.UpdateAvailable) : _styles.InteractiveBorderColor);
                 }
             }
 
@@ -114,7 +113,7 @@ namespace Deucarian.PackageInstaller.Editor
                 DrawSingleLineLabel(
                     disclosureRect,
                     new GUIContent(row.IsExpanded ? "v" : ">", row.Tooltip),
-                    row.IsInActivePath ? _miniLabelStyle : _mutedMiniLabelStyle);
+                    row.IsInActivePath ? _styles.MiniLabelStyle : _styles.MutedMiniLabelStyle);
             }
 
             Rect iconRect = new Rect(
@@ -136,7 +135,7 @@ namespace Deucarian.PackageInstaller.Editor
                 Mathf.Max(0f, rowRect.xMax - rightPadding - contentX),
                 18f);
             float gap = 8f;
-            float desiredSummaryWidth = _mutedMiniLabelStyle.CalcSize(summaryContent).x + 2f;
+            float desiredSummaryWidth = _styles.MutedMiniLabelStyle.CalcSize(summaryContent).x + 2f;
             float maximumSummaryWidth = Mathf.Max(0f, contentRect.width - 40f - gap);
             float summaryWidth = Mathf.Min(
                 desiredSummaryWidth,
@@ -152,8 +151,8 @@ namespace Deucarian.PackageInstaller.Editor
                 Mathf.Max(0f, summaryRect.x - gap - contentRect.x),
                 contentRect.height);
 
-            DrawSingleLineLabel(nameRect, nameContent, _miniLabelStyle);
-            DrawSingleLineLabel(summaryRect, summaryContent, _mutedMiniLabelStyle);
+            DrawSingleLineLabel(nameRect, nameContent, _styles.MiniLabelStyle);
+            DrawSingleLineLabel(summaryRect, summaryContent, _styles.MutedMiniLabelStyle);
             return hover;
         }
 
@@ -228,13 +227,6 @@ namespace Deucarian.PackageInstaller.Editor
 
             GUI.DrawTexture(rect, icon, ScaleMode.ScaleToFit, true);
         }
-
-
-
-
-
-
-
 
     }
 }

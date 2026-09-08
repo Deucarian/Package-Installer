@@ -13,7 +13,6 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed partial class PackageInstallerWindow
     {
 
-
         private void OnDisable()
         {
             AssemblyReloadEvents.beforeAssemblyReload -= HandleBeforeAssemblyReload;

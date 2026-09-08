@@ -13,7 +13,6 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed partial class PackageInstallerWindow
     {
 
-
         private void NavigateGraphToGroupOrRoot(string groupId)
         {
             if (string.IsNullOrWhiteSpace(groupId))
@@ -138,58 +137,11 @@ namespace Deucarian.PackageInstaller.Editor
             }
         }
 
-        private void EnsureStyles()
-        {
-            bool proSkin = EditorGUIUtility.isProSkin;
-
-            if (_stylesInitialized && _lastProSkin == proSkin)
-            {
-                return;
-            }
-
-            _stylesInitialized = true;
-            _lastProSkin = proSkin;
-
-            _mainBackgroundColor = DeucarianEditorWorkbenchGUI.MainBackgroundColor;
-            _sidebarBackgroundColor = DeucarianEditorWorkbenchGUI.SidebarBackgroundColor;
-            _detailsBackgroundColor = DeucarianEditorWorkbenchGUI.DetailsBackgroundColor;
-            _headerPanelBackgroundColor = DeucarianEditorWorkbenchGUI.HeaderPanelBackgroundColor;
-            _sampleRowBackgroundColor = DeucarianEditorWorkbenchGUI.SampleRowBackgroundColor;
-            _panelBorderColor = DeucarianEditorWorkbenchGUI.PanelBorderColor;
-            _interactiveBorderColor = DeucarianEditorWorkbenchGUI.InteractiveBorderColor;
-            _separatorColor = DeucarianEditorWorkbenchGUI.SeparatorColor;
-            _rowBackgroundColor = DeucarianEditorWorkbenchGUI.RowBackgroundColor;
-            _rowHoverColor = DeucarianEditorWorkbenchGUI.RowHoverColor;
-            _rowSelectedColor = DeucarianEditorWorkbenchGUI.RowSelectedColor;
-            _operationDrawerBackgroundColor = DeucarianEditorWorkbenchGUI.PanelBackgroundColor;
-            _operationDrawerBackgroundColor.a = 0.52f;
-            _operationDrawerBorderColor = DeucarianEditorWorkbenchGUI.InteractiveBorderColor;
-            _operationDrawerBorderColor.a = 0.38f;
-            _textColor = DeucarianEditorWorkbenchGUI.TextColor;
-            _mutedTextColor = DeucarianEditorWorkbenchGUI.MutedTextColor;
-
-            // Keep the released per-window ownership semantics while sourcing every
-            // initial value from the shared Editor workbench contract.
-            _sidebarStyle = new GUIStyle(DeucarianEditorWorkbenchGUI.SidebarStyle);
-            _detailsStyle = new GUIStyle(DeucarianEditorWorkbenchGUI.DetailsStyle);
-            _sampleRowStyle = new GUIStyle(DeucarianEditorWorkbenchGUI.SampleRowStyle);
-            _titleStyle = new GUIStyle(DeucarianEditorWorkbenchGUI.TitleStyle);
-            _subtitleStyle = new GUIStyle(DeucarianEditorWorkbenchGUI.SubtitleStyle);
-            _sectionTitleStyle = new GUIStyle(DeucarianEditorWorkbenchGUI.SectionTitleStyle);
-            _miniLabelStyle = new GUIStyle(DeucarianEditorWorkbenchGUI.MiniLabelStyle);
-            _mutedMiniLabelStyle = new GUIStyle(DeucarianEditorWorkbenchGUI.MutedMiniLabelStyle);
-            _rowTitleStyle = new GUIStyle(DeucarianEditorWorkbenchGUI.RowTitleStyle);
-            _rowSubLabelStyle = new GUIStyle(DeucarianEditorWorkbenchGUI.RowSubLabelStyle);
-            _rowStatusStyle = new GUIStyle(DeucarianEditorWorkbenchGUI.RowStatusStyle);
-            _foldoutStyle = new GUIStyle(DeucarianEditorWorkbenchGUI.FoldoutStyle);
-
-        }
-
         private void DrawWindowBackground()
         {
             DeucarianEditorVisualShell.DrawWindowBackground(
                 new Rect(0f, 0f, position.width, position.height),
-                _mainBackgroundColor);
+                _styles.MainBackgroundColor);
         }
 
         private void DrawHeader()
@@ -200,10 +152,10 @@ namespace Deucarian.PackageInstaller.Editor
                 "Deucarian Package Installer",
                 "Install, update, remove, and compose Deucarian packages through first-class integration packages.");
 
-            BeginSurface(
+            ImGui.BeginSurface(
                 DeucarianEditorStyles.SectionBox,
-                _headerPanelBackgroundColor,
-                _panelBorderColor,
+                _styles.HeaderPanelBackgroundColor,
+                _styles.PanelBorderColor,
                 GUILayout.ExpandWidth(true));
 
             using (new EditorGUILayout.HorizontalScope())
@@ -241,18 +193,18 @@ namespace Deucarian.PackageInstaller.Editor
         {
             using (new EditorGUILayout.HorizontalScope())
             {
-                EditorGUILayout.LabelField("Registry", _mutedMiniLabelStyle, GUILayout.Width(54f));
-                DrawStatusBadge(PackageRegistryProvider.All.Count + " packages", VisualStatusKind.Info, GUILayout.Width(104f));
+                EditorGUILayout.LabelField("Registry", _styles.MutedMiniLabelStyle, GUILayout.Width(54f));
+                ImGui.DrawStatusBadge(PackageRegistryProvider.All.Count + " packages", PackageInstallerVisualStatusKind.Info, GUILayout.Width(104f));
 
                 if (PackageRegistryProvider.IsRemoteRefreshing)
                 {
-                    DrawStatusBadge("Refreshing", VisualStatusKind.Busy, GUILayout.Width(92f));
+                    ImGui.DrawStatusBadge("Refreshing", PackageInstallerVisualStatusKind.Busy, GUILayout.Width(92f));
                 }
                 else
                 {
                     EditorGUILayout.LabelField(
                         new GUIContent(PackageRegistryProvider.StatusMessage, PackageRegistryProvider.StatusMessage),
-                        _mutedMiniLabelStyle,
+                        _styles.MutedMiniLabelStyle,
                         GUILayout.ExpandWidth(true));
                 }
             }

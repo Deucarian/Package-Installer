@@ -13,7 +13,6 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed partial class PackageInstallerWindow
     {
 
-
         private void ValidatePendingReloadState(PackageGraphModel graph)
         {
             if (!_reloadStatePendingValidation)
@@ -100,8 +99,6 @@ namespace Deucarian.PackageInstaller.Editor
                 ? group
                 : null;
         }
-
-
 
         private string GetPackageHierarchyPath(PackageDefinition packageDefinition)
         {
@@ -362,26 +359,26 @@ namespace Deucarian.PackageInstaller.Editor
             }
         }
 
-        private static VisualStatusKind GetSampleImportStatusKind(PackageSampleImportStatus status)
+        private static PackageInstallerVisualStatusKind GetSampleImportStatusKind(PackageSampleImportStatus status)
         {
             if (status == null)
             {
-                return VisualStatusKind.NotInstalled;
+                return PackageInstallerVisualStatusKind.NotInstalled;
             }
 
             switch (status.State)
             {
                 case PackageSampleImportState.Importing:
-                    return VisualStatusKind.Busy;
+                    return PackageInstallerVisualStatusKind.Busy;
                 case PackageSampleImportState.Imported:
                 case PackageSampleImportState.AlreadyImported:
-                    return VisualStatusKind.Installed;
+                    return PackageInstallerVisualStatusKind.Installed;
                 case PackageSampleImportState.Canceled:
-                    return VisualStatusKind.NotInstalled;
+                    return PackageInstallerVisualStatusKind.NotInstalled;
                 case PackageSampleImportState.Failed:
-                    return VisualStatusKind.Failed;
+                    return PackageInstallerVisualStatusKind.Failed;
                 default:
-                    return VisualStatusKind.NotInstalled;
+                    return PackageInstallerVisualStatusKind.NotInstalled;
             }
         }
 
