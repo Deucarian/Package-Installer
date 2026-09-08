@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.1 - 2026-09-09
+
+- Separate graph route planning, geometry, painting, controls and membership rendering from visual layers. Compose layout projection, occlusion rendering and drag state.
+- Share geometry snapshots, ancestor queries and layout snapshot policies; preserve graph navigation, animation and input behavior with focused regression tests.
+
 ## 1.2.0 - Unreleased
 
 - Separate recovery workflow and policy, channel selection, graph navigation, deterministic layout animation and window preferences. Synchronize the canonical fallback catalog.
