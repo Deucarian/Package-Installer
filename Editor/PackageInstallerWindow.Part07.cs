@@ -90,7 +90,7 @@ namespace Deucarian.PackageInstaller.Editor
                 refreshGraph: false);
             _graphNavigationState = PackageGraphNavigationState.Package(
                 packageDefinition.PackageId,
-                GetGraphPackageGroupId(packageDefinition.PackageId));
+                PackageGraphNavigationModel.GetGraphPackageGroupId(packageDefinition.PackageId));
 
             switch (action)
             {

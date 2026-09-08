@@ -103,9 +103,9 @@ namespace Deucarian.PackageInstaller.Editor
             foreach (PackageDependencyInstallStep step in plan.Steps)
             {
                 string channelLabel = step.RequestedChannel == step.Channel
-                    ? GetChannelLabel(step.Channel)
-                    : GetChannelLabel(step.RequestedChannel) + " requested -> " +
-                      GetChannelLabel(step.Channel) + " target";
+                    ? PackageChannelPolicy.GetChannelLabel(step.Channel)
+                    : PackageChannelPolicy.GetChannelLabel(step.RequestedChannel) + " requested -> " +
+                      PackageChannelPolicy.GetChannelLabel(step.Channel) + " target";
                 lines.Add(
                     "- " + step.PackageDefinition.DisplayName +
                     " [" + channelLabel + "]" +

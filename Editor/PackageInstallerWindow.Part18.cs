@@ -14,11 +14,6 @@ namespace Deucarian.PackageInstaller.Editor
     {
 
 
-        private string GetOperationDrawerPreferenceKey()
-        {
-            return OperationDrawerPreferencePrefix + Application.dataPath.Replace("\\", "/");
-        }
-
         private string GetProgressStepText(OperationProgressView operation)
         {
             if (operation == null || operation.TotalSteps <= 0)

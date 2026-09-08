@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.0 - Unreleased
+
+- Separate recovery workflow and policy, channel selection, graph navigation, deterministic layout animation and window preferences. Synchronize the canonical fallback catalog.
+
 ## 1.1.98 - 2026-09-08
 
 - Projected the Notifications dependency on reusable Deucarian UI visibility motion into the bundled catalog.

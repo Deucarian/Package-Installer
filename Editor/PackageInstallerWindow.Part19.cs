@@ -93,7 +93,7 @@ namespace Deucarian.PackageInstaller.Editor
         private void DrawChannelPopup(PackageDefinition packageDefinition)
         {
             PackageChannel selectedChannel = GetSelectedChannel(packageDefinition);
-            PackageChannel[] channelOptions = GetChannelOptions(packageDefinition, selectedChannel);
+            PackageChannel[] channelOptions = PackageChannelPolicy.GetChannelOptions(packageDefinition, selectedChannel);
             string[] channelLabels = channelOptions.Select(GetChannelLabel).ToArray();
             int selectedIndex = Mathf.Max(0, Array.IndexOf(channelOptions, selectedChannel));
 
@@ -132,7 +132,7 @@ namespace Deucarian.PackageInstaller.Editor
                     out installedChannel,
                     out _);
 
-            return ResolveSelectedChannel(
+            return PackageChannelPolicy.ResolveSelectedChannel(
                 packageDefinition,
                 projectSelection,
                 packageSelection,
@@ -147,7 +147,7 @@ namespace Deucarian.PackageInstaller.Editor
             bool hasInstalledChannel,
             PackageChannel installedChannel)
         {
-            return ResolveSelectedChannel(
+            return PackageChannelPolicy.ResolveSelectedChannel(
                 packageDefinition,
                 projectSelection,
                 packageSelection,
@@ -155,59 +155,11 @@ namespace Deucarian.PackageInstaller.Editor
                 installedChannel);
         }
 
-        internal static PackageChannel ResolveSelectedChannel(
-            PackageDefinition packageDefinition,
-            PackageChannelSelection projectSelection,
-            PackageChannelSelection packageSelection,
-            bool hasInstalledChannel,
-            PackageChannel installedChannel)
-        {
-            if (packageDefinition == null)
-            {
-                return PackageChannel.Stable;
-            }
 
-            PackageChannelSelection latestExplicitSelection = GetLatestExplicitChannelSelection(
-                projectSelection,
-                packageSelection);
 
-            if (latestExplicitSelection.HasValue)
-            {
-                return ResolveConfiguredChannel(packageDefinition, latestExplicitSelection.Channel);
-            }
 
-            return PackageChannel.Stable;
-        }
 
-        private static PackageChannelSelection GetLatestExplicitChannelSelection(
-            PackageChannelSelection projectSelection,
-            PackageChannelSelection packageSelection)
-        {
-            if (packageSelection.HasValue &&
-                (!projectSelection.HasValue ||
-                 packageSelection.ChangedAtUtcTicks > projectSelection.ChangedAtUtcTicks))
-            {
-                return packageSelection;
-            }
 
-            return projectSelection.HasValue
-                ? projectSelection
-                : PackageChannelSelection.None;
-        }
-
-        private static PackageChannel ResolveConfiguredChannel(
-            PackageDefinition packageDefinition,
-            PackageChannel channel)
-        {
-            if (channel == PackageChannel.Development &&
-                packageDefinition != null &&
-                packageDefinition.HasDevelopmentUrl)
-            {
-                return PackageChannel.Development;
-            }
-
-            return PackageChannel.Stable;
-        }
 
         private void SetSelectedChannel(PackageDefinition packageDefinition, PackageChannel channel)
         {
@@ -246,15 +198,7 @@ namespace Deucarian.PackageInstaller.Editor
                 return true;
             }
 
-            if (_categoryFoldouts.TryGetValue(category, out bool expanded))
-            {
-                return expanded;
-            }
-
-            string key = GetCategoryFoldoutPreferenceKey(category);
-            expanded = EditorPrefs.GetBool(key, true);
-            _categoryFoldouts[category] = expanded;
-            return expanded;
+            return _preferences.IsCategoryExpanded(category);
         }
 
         private void SetCategoryExpanded(string category, bool expanded)
@@ -264,52 +208,12 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            _categoryFoldouts[category] = expanded;
-            EditorPrefs.SetBool(GetCategoryFoldoutPreferenceKey(category), expanded);
+            _preferences.SetCategoryExpanded(category, expanded);
         }
 
-        private string GetCategoryFoldoutPreferenceKey(string category)
-        {
-            return CategoryFoldoutPreferencePrefix +
-                   Application.dataPath.Replace("\\", "/") +
-                   "." +
-                   category.Trim();
-        }
 
-        private static PackageChannel[] GetChannelOptions(
-            PackageDefinition packageDefinition,
-            PackageChannel selectedChannel)
-        {
-            List<PackageChannel> channels = new List<PackageChannel>
-            {
-                PackageChannel.Stable
-            };
 
-            if (packageDefinition != null && packageDefinition.HasDevelopmentUrl)
-            {
-                channels.Add(PackageChannel.Development);
-            }
 
-            if (selectedChannel == PackageChannel.Custom)
-            {
-                channels.Add(PackageChannel.Custom);
-            }
-
-            return channels.Distinct().ToArray();
-        }
-
-        private static string GetChannelLabel(PackageChannel channel)
-        {
-            switch (channel)
-            {
-                case PackageChannel.Development:
-                    return "Development";
-                case PackageChannel.Custom:
-                    return "Custom";
-                default:
-                    return "Stable";
-            }
-        }
 
         private void EnsureValidSelection()
         {

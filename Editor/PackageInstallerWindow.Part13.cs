@@ -78,7 +78,7 @@ namespace Deucarian.PackageInstaller.Editor
                         GUILayout.Width(DeucarianEditorWorkbenchGUI.DetailLabelWidth));
                     DrawChannelPopup(packageDefinition);
                     GUILayout.Space(6f);
-                    DrawStatusBadge(GetChannelLabel(selectedChannel), VisualStatusKind.Info, GUILayout.Width(104f));
+                    DrawStatusBadge(PackageChannelPolicy.GetChannelLabel(selectedChannel), VisualStatusKind.Info, GUILayout.Width(104f));
                     GUILayout.FlexibleSpace();
                 }
 
@@ -87,7 +87,7 @@ namespace Deucarian.PackageInstaller.Editor
                 if (!string.IsNullOrWhiteSpace(selectedUrl))
                 {
                     EditorGUILayout.LabelField(
-                        GetChannelLabel(selectedChannel) + " installs from the configured package URL/ref.",
+                        PackageChannelPolicy.GetChannelLabel(selectedChannel) + " installs from the configured package URL/ref.",
                         _mutedMiniLabelStyle);
                 }
                 else
@@ -111,7 +111,7 @@ namespace Deucarian.PackageInstaller.Editor
                         packageDefinition,
                         out installedChannel,
                         out installedSourceReason);
-                string provenance = GetContextualChannelProvenance(
+                string provenance = PackageChannelPolicy.GetContextualChannelProvenance(
                     packageDefinition,
                     projectSelection,
                     packageSelection,
@@ -138,48 +138,7 @@ namespace Deucarian.PackageInstaller.Editor
             }, GUILayout.ExpandWidth(true));
         }
 
-        internal static string GetContextualChannelProvenance(
-            PackageDefinition packageDefinition,
-            PackageChannelSelection projectSelection,
-            PackageChannelSelection packageSelection,
-            bool hasInstalledChannel,
-            PackageChannel installedChannel,
-            string installedSourceReason)
-        {
-            if (packageDefinition == null)
-            {
-                return string.Empty;
-            }
 
-            if (hasInstalledChannel && installedChannel == PackageChannel.Custom)
-            {
-                return string.IsNullOrWhiteSpace(installedSourceReason)
-                    ? "Custom installed source"
-                    : "Custom installed source - " + installedSourceReason.Trim();
-            }
-
-            PackageChannelSelection explicitSelection = GetLatestExplicitChannelSelection(
-                projectSelection,
-                packageSelection);
-
-            if (!explicitSelection.HasValue)
-            {
-                return string.Empty;
-            }
-
-            bool packageOverride = packageSelection.HasValue &&
-                                   (!projectSelection.HasValue ||
-                                    packageSelection.ChangedAtUtcTicks > projectSelection.ChangedAtUtcTicks);
-            string scope = packageOverride ? "Package override" : "Project override";
-
-            if (explicitSelection.Channel == PackageChannel.Development &&
-                !packageDefinition.HasDevelopmentUrl)
-            {
-                return scope + " requested Development - using Stable fallback";
-            }
-
-            return scope + " - " + GetChannelLabel(explicitSelection.Channel);
-        }
 
         private void ResetPackageChannelOverride(PackageDefinition packageDefinition)
         {

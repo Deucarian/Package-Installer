@@ -315,7 +315,7 @@ namespace Deucarian.PackageInstaller.Editor
             DrawSelectableValue("Selected URL", packageDefinition.GetUrl(selectedChannel));
             DrawSelectableValue("Stable URL", packageDefinition.StableUrl);
             DrawSelectableValue("Development URL", packageDefinition.DevelopmentUrl);
-            DrawSelectableValue("Selected ref", GetChannelLabel(selectedChannel));
+            DrawSelectableValue("Selected ref", PackageChannelPolicy.GetChannelLabel(selectedChannel));
 
             if (_packageDetectionService.TryGetInstalledPackage(
                     packageDefinition.PackageId,
@@ -357,29 +357,16 @@ namespace Deucarian.PackageInstaller.Editor
                 return false;
             }
 
-            if (!_advancedFoldouts.TryGetValue(key, out bool expanded))
-            {
-                expanded = EditorPrefs.GetBool(GetAdvancedFoldoutPreferenceKey(key), false);
-                _advancedFoldouts[key] = expanded;
-            }
+            bool expanded = _preferences.IsAdvancedExpanded(key);
 
             bool nextExpanded = EditorGUILayout.Foldout(expanded, "Advanced", true, _foldoutStyle);
 
             if (nextExpanded != expanded)
             {
-                _advancedFoldouts[key] = nextExpanded;
-                EditorPrefs.SetBool(GetAdvancedFoldoutPreferenceKey(key), nextExpanded);
+                _preferences.SetAdvancedExpanded(key, nextExpanded);
             }
 
             return nextExpanded;
-        }
-
-        private string GetAdvancedFoldoutPreferenceKey(string packageId)
-        {
-            return AdvancedFoldoutPreferencePrefix +
-                   Application.dataPath.Replace("\\", "/") +
-                   "." +
-                   packageId;
         }
 
         private string GetOperationFooterSummaryLine(OperationProgressView operation)

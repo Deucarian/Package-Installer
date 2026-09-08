@@ -400,7 +400,7 @@ namespace Deucarian.PackageInstaller.Editor
         private void SetOperationDetailsExpanded(bool expanded)
         {
             _operationDetailsExpanded = expanded;
-            EditorPrefs.SetBool(GetOperationDrawerPreferenceKey(), expanded);
+            _preferences.OperationDetailsExpanded = expanded;
             UpdateViewVisibility();
             _operationDrawerContainer?.MarkDirtyRepaint();
             RefreshOperationDrawerContent();

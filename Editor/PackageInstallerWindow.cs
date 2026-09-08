@@ -241,9 +241,6 @@ namespace Deucarian.PackageInstaller.Editor
         internal const string GlobalChannelOverrideButtonName = "package-installer-global-channel-override";
         internal const string GlobalChannelOverridePopupName = "package-installer-global-channel-override-popup";
         internal const string GlobalChannelOverrideResetButtonName = "package-installer-global-channel-override-reset";
-        private const string AdvancedFoldoutPreferencePrefix = "Deucarian.PackageInstaller.AdvancedFoldout.";
-        private const string CategoryFoldoutPreferencePrefix = "Deucarian.PackageInstaller.CategoryFoldout.";
-        private const string OperationDrawerPreferencePrefix = "Deucarian.PackageInstaller.OperationDrawer.";
         private const string GraphStyleSheetPath =
             "Packages/com.deucarian.package-installer/Editor/UI/PackageInstaller/PackageInstallerGraph.uss";
         private const string InstallerMenuPath = "Tools/Deucarian/Package Installer...";
@@ -263,10 +260,7 @@ namespace Deucarian.PackageInstaller.Editor
         private PackageDependencyInstaller _packageDependencyInstaller;
         private PackageGraphBuilder _packageGraphBuilder;
         private PackageInstallerStateRepository _stateRepository;
-        private readonly Dictionary<string, bool> _advancedFoldouts =
-            new Dictionary<string, bool>();
-        private readonly Dictionary<string, bool> _categoryFoldouts =
-            new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        private readonly PackageInstallerWindowPreferences _preferences = new PackageInstallerWindowPreferences();
         private readonly Dictionary<string, HashSet<string>> _templateCompositionSelections =
             new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, string> _templateCompositionPresetIds =

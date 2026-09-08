@@ -158,7 +158,7 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            PackageDependencyInstallPlan freshPlan = CreateFreshTerminalRetryPlan(
+            PackageDependencyInstallPlan freshPlan = PackageOperationRecoveryPolicy.CreateFreshTerminalRetryPlan(
                 snapshot,
                 _packageDependencyInstaller,
                 packageId => PackageRegistryProvider.TryGetPackage(
@@ -177,7 +177,7 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            string delta = FormatTerminalRetryPlanDelta(snapshot, freshPlan);
+            string delta = PackageOperationPlanReview.FormatTerminalRetryPlanDelta(snapshot, freshPlan);
             if (!freshPlan.RequiresPreflight && string.IsNullOrWhiteSpace(delta))
             {
                 StartTerminalRetryPlan(snapshot, freshPlan);
@@ -199,7 +199,7 @@ namespace Deucarian.PackageInstaller.Editor
                 DeucarianEditorIconIds.Refresh,
                 new[] { restartAction, cancelAction })
             {
-                Details = BuildTerminalRetryReview(snapshot, freshPlan, delta),
+                Details = PackageOperationPlanReview.BuildTerminalRetryReview(snapshot, freshPlan, delta),
                 DefaultActionId = restartAction.Id,
                 CancelActionId = cancelAction.Id
             };
@@ -220,7 +220,7 @@ namespace Deucarian.PackageInstaller.Editor
         {
             if (!CanStartTerminalRetryPlan(snapshot, freshPlan))
             {
-                RecordStaleConfirmation(
+                PackageOperationRecoveryPolicy.RecordStaleConfirmation(
                     "Retry package operation",
                     "Package or registry state changed before the retry could start.");
                 return;
@@ -305,7 +305,7 @@ namespace Deucarian.PackageInstaller.Editor
                     group => group.Key,
                     group => group.First(),
                     StringComparer.OrdinalIgnoreCase);
-            return CreateFreshTerminalRetryPlan(
+            return PackageOperationRecoveryPolicy.CreateFreshTerminalRetryPlan(
                 snapshot,
                 installer,
                 packageId => definitions.TryGetValue(packageId, out PackageDefinition definition)
@@ -313,97 +313,15 @@ namespace Deucarian.PackageInstaller.Editor
                     : null);
         }
 
-        private static PackageDependencyInstallPlan CreateFreshTerminalRetryPlan(
-            PackageOperationTerminalSnapshot snapshot,
-            PackageDependencyInstaller installer,
-            Func<string, PackageDefinition> packageResolver)
-        {
-            if (snapshot == null || !snapshot.CanRestart || installer == null || packageResolver == null)
-            {
-                return null;
-            }
 
-            PackageOperationRootRequest[] rootRequests = snapshot.RestartRoots
-                .Where(root => root != null && !string.IsNullOrWhiteSpace(root.PackageId))
-                .GroupBy(root => root.PackageId, StringComparer.OrdinalIgnoreCase)
-                .Select(group => group.First())
-                .ToArray();
-            PackageDefinition[] roots = rootRequests
-                .Select(root => packageResolver(root.PackageId))
-                .Where(definition => definition != null)
-                .ToArray();
-            if (roots.Length == 0 || roots.Length != rootRequests.Length)
-            {
-                return null;
-            }
-
-            Dictionary<string, PackageChannel> channels = rootRequests.ToDictionary(
-                root => root.PackageId,
-                root => root.Channel,
-                StringComparer.OrdinalIgnoreCase);
-            return installer.CreateInstallPlan(
-                roots,
-                package => channels.TryGetValue(package.PackageId, out PackageChannel channel)
-                    ? channel
-                    : PackageChannel.Stable,
-                includeInstalledRequestedPackages: true);
-        }
 
         internal static string FormatTerminalRetryPlanDeltaForTests(
             PackageOperationTerminalSnapshot snapshot,
             PackageDependencyInstallPlan freshPlan)
         {
-            return FormatTerminalRetryPlanDelta(snapshot, freshPlan);
+            return PackageOperationPlanReview.FormatTerminalRetryPlanDelta(snapshot, freshPlan);
         }
 
-        private static string FormatTerminalRetryPlanDelta(
-            PackageOperationTerminalSnapshot snapshot,
-            PackageDependencyInstallPlan freshPlan)
-        {
-            if (snapshot == null || freshPlan == null || !freshPlan.IsValid)
-            {
-                return string.Empty;
-            }
 
-            HashSet<string> retryRootIds = new HashSet<string>(
-                snapshot.RestartRoots.Select(root => root.PackageId),
-                StringComparer.OrdinalIgnoreCase);
-            Dictionary<string, PackageOperationStepSnapshot> previous = snapshot.Steps
-                .Where(step => step != null &&
-                               ((!step.IsDependency && retryRootIds.Contains(step.PackageId)) ||
-                                 step.RootPackageIds.Any(retryRootIds.Contains)))
-                .GroupBy(step => step.PackageId, StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
-            Dictionary<string, PackageDependencyInstallStep> current = freshPlan.Steps
-                .Where(step => step != null && step.PackageDefinition != null)
-                .GroupBy(step => step.PackageDefinition.PackageId, StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
-            List<string> lines = new List<string>();
-
-            foreach (string packageId in previous.Keys.Union(current.Keys, StringComparer.OrdinalIgnoreCase)
-                         .OrderBy(id => id, StringComparer.OrdinalIgnoreCase))
-            {
-                bool hadPrevious = previous.TryGetValue(packageId, out PackageOperationStepSnapshot oldStep);
-                bool hasCurrent = current.TryGetValue(packageId, out PackageDependencyInstallStep newStep);
-                if (!hadPrevious)
-                {
-                    lines.Add("Added: " + newStep.PackageDefinition.DisplayName + " -> " + newStep.TargetUrl);
-                }
-                else if (!hasCurrent)
-                {
-                    lines.Add("Now skipped: " + oldStep.DisplayName + " is already correct or no longer required.");
-                }
-                else if (oldStep.Channel != newStep.Channel ||
-                         !string.Equals(oldStep.TargetUrl, newStep.TargetUrl, StringComparison.Ordinal))
-                {
-                    lines.Add(
-                        "Changed: " + newStep.PackageDefinition.DisplayName +
-                        "\n  was [" + GetChannelLabel(oldStep.Channel) + "] " + oldStep.TargetUrl +
-                        "\n  now [" + GetChannelLabel(newStep.Channel) + "] " + newStep.TargetUrl);
-                }
-            }
-
-            return string.Join("\n", lines.ToArray());
-        }
     }
 }

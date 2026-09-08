@@ -2027,161 +2027,8 @@ namespace Deucarian.PackageInstaller.Editor
         }
     }
 
-    internal sealed class PackageGraphContextMenuRequest
-    {
-        public PackageGraphContextMenuRequest(VisualElement target, Vector2 viewportPosition, Vector2 worldPosition)
-        {
-            Target = target;
-            ViewportPosition = viewportPosition;
-            WorldPosition = worldPosition;
-        }
 
-        public VisualElement Target { get; }
 
-        public Vector2 ViewportPosition { get; }
-
-        public Vector2 WorldPosition { get; }
-    }
-
-    internal enum PackageGraphSpotlightKind
-    {
-        None,
-        Root,
-        Category,
-        Package,
-        Attention
-    }
-
-    internal sealed class PackageGraphSpotlightLayer : VisualElement
-    {
-        public const string LayerName = "ecosystem-graph-spotlight-layer";
-        private const string SpotlightName = "ecosystem-graph-spotlight";
-
-        private static Texture2D _rootTexture;
-        private static Texture2D _categoryTexture;
-        private static Texture2D _packageTexture;
-        private static Texture2D _attentionTexture;
-
-        private readonly VisualElement _spotlight;
-
-        public PackageGraphSpotlightLayer()
-        {
-            name = LayerName;
-            AddToClassList("dpi-graph-spotlight-layer");
-            pickingMode = PickingMode.Ignore;
-            style.position = Position.Absolute;
-            style.left = 0f;
-            style.right = 0f;
-            style.top = 0f;
-            style.bottom = 0f;
-            style.overflow = Overflow.Hidden;
-
-            _spotlight = new VisualElement { name = SpotlightName };
-            _spotlight.AddToClassList("dpi-graph-spotlight");
-            _spotlight.pickingMode = PickingMode.Ignore;
-            _spotlight.style.position = Position.Absolute;
-            _spotlight.style.display = DisplayStyle.None;
-            Add(_spotlight);
-        }
-
-        internal VisualElement SpotlightForTests => _spotlight;
-
-        public void SetSpotlight(
-            Vector2 viewportCenter,
-            float radius,
-            PackageGraphSpotlightKind kind,
-            bool visible)
-        {
-            if (!visible || kind == PackageGraphSpotlightKind.None || radius <= 1f)
-            {
-                _spotlight.style.display = DisplayStyle.None;
-                return;
-            }
-
-            float diameter = radius * 2f;
-            _spotlight.style.display = DisplayStyle.Flex;
-            _spotlight.style.left = viewportCenter.x - radius;
-            _spotlight.style.top = viewportCenter.y - radius;
-            _spotlight.style.width = diameter;
-            _spotlight.style.height = diameter;
-            _spotlight.style.backgroundImage = new StyleBackground(GetTexture(kind));
-            _spotlight.style.opacity = GetOpacity(kind);
-            _spotlight.EnableInClassList("dpi-graph-spotlight--root", kind == PackageGraphSpotlightKind.Root);
-            _spotlight.EnableInClassList("dpi-graph-spotlight--category", kind == PackageGraphSpotlightKind.Category);
-            _spotlight.EnableInClassList("dpi-graph-spotlight--package", kind == PackageGraphSpotlightKind.Package);
-            _spotlight.EnableInClassList("dpi-graph-spotlight--attention", kind == PackageGraphSpotlightKind.Attention);
-            MarkDirtyRepaint();
-        }
-
-        private static float GetOpacity(PackageGraphSpotlightKind kind)
-        {
-            switch (kind)
-            {
-                case PackageGraphSpotlightKind.Root:
-                    return 0.28f;
-                case PackageGraphSpotlightKind.Category:
-                    return 0.38f;
-                case PackageGraphSpotlightKind.Attention:
-                    return 0.44f;
-                case PackageGraphSpotlightKind.Package:
-                    return 0.42f;
-                default:
-                    return 0f;
-            }
-        }
-
-        private static Texture2D GetTexture(PackageGraphSpotlightKind kind)
-        {
-            switch (kind)
-            {
-                case PackageGraphSpotlightKind.Root:
-                    return _rootTexture ?? (_rootTexture = CreateSpotlightTexture(
-                        DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorPalette.Cobalt, 0.24f),
-                        DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorGraphTheme.Canvas, 0f)));
-                case PackageGraphSpotlightKind.Category:
-                    return _categoryTexture ?? (_categoryTexture = CreateSpotlightTexture(
-                        DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorPalette.Grove, 0.24f),
-                        DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorGraphTheme.Canvas, 0f)));
-                case PackageGraphSpotlightKind.Attention:
-                    return _attentionTexture ?? (_attentionTexture = CreateSpotlightTexture(
-                        DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorGraphTheme.Update, 0.26f),
-                        DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorGraphTheme.Canvas, 0f)));
-                case PackageGraphSpotlightKind.Package:
-                default:
-                    return _packageTexture ?? (_packageTexture = CreateSpotlightTexture(
-                        DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorPalette.Tideline, 0.28f),
-                        DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorGraphTheme.Canvas, 0f)));
-            }
-        }
-
-        private static Texture2D CreateSpotlightTexture(Color center, Color edge)
-        {
-            const int size = 96;
-            Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
-            {
-                name = "PackageGraphSpotlight",
-                hideFlags = HideFlags.HideAndDontSave,
-                wrapMode = TextureWrapMode.Clamp,
-                filterMode = FilterMode.Bilinear
-            };
-
-            Vector2 midpoint = new Vector2((size - 1) * 0.5f, (size - 1) * 0.5f);
-            float maxDistance = Mathf.Max(1f, midpoint.magnitude);
-
-            for (int y = 0; y < size; y++)
-            {
-                for (int x = 0; x < size; x++)
-                {
-                    float distance = Vector2.Distance(new Vector2(x, y), midpoint) / maxDistance;
-                    float t = Mathf.SmoothStep(0f, 1f, distance);
-                    texture.SetPixel(x, y, Color.Lerp(center, edge, t));
-                }
-            }
-
-            texture.Apply(false, true);
-            return texture;
-        }
-    }
 
     internal sealed class PackageGraphViewport : VisualElement
     {
@@ -2978,436 +2825,11 @@ namespace Deucarian.PackageInstaller.Editor
         }
     }
 
-    internal static class PackageGraphActiveLayoutBounds
-    {
-        public static Rect Calculate(PackageGraphLayoutResult layout)
-        {
-            if (layout == null)
-            {
-                return new Rect(0f, 0f, PackageGraphLayout.CanvasWidth, PackageGraphLayout.CanvasHeight);
-            }
 
-            Rect bounds = default(Rect);
-            bool hasBounds = false;
 
-            if (IsOverviewLikeLayout(layout.Mode))
-            {
-                AddRect(ref bounds, ref hasBounds, layout.HubRect);
 
-                foreach (PackageGraphRingGuide guide in layout.RingGuides)
-                {
-                    if (guide == null)
-                    {
-                        continue;
-                    }
 
-                    AddRect(
-                        ref bounds,
-                        ref hasBounds,
-                        guide.CircleRect);
-                }
-            }
 
-            foreach (Rect nodeRect in layout.NodeRects.Values)
-            {
-                AddRect(ref bounds, ref hasBounds, nodeRect);
-            }
-
-            foreach (PackageGraphGroupLayoutNode groupNode in layout.GroupNodes)
-            {
-                if (groupNode == null)
-                {
-                    continue;
-                }
-
-                AddRect(ref bounds, ref hasBounds, groupNode.Rect);
-                AddRect(ref bounds, ref hasBounds, groupNode.HubRect);
-
-                if (!groupNode.Collapsed && groupNode.OrbitRadius > 0.01f)
-                {
-                    AddRect(
-                        ref bounds,
-                        ref hasBounds,
-                        new Rect(
-                            groupNode.HubCenter.x - groupNode.OrbitRadius,
-                            groupNode.HubCenter.y - groupNode.OrbitRadius,
-                            groupNode.OrbitRadius * 2f,
-                            groupNode.OrbitRadius * 2f));
-                }
-            }
-
-            foreach (PackageGraphOverflowSummary summary in layout.OverflowSummaries)
-            {
-                if (summary != null)
-                {
-                    AddRect(ref bounds, ref hasBounds, summary.Rect);
-                }
-            }
-
-            if (!hasBounds)
-            {
-                bounds = new Rect(
-                    PackageGraphLayout.GraphCenter.x - 1f,
-                    PackageGraphLayout.GraphCenter.y - 1f,
-                    2f,
-                    2f);
-            }
-
-            return Expand(bounds, GetPadding(layout.Mode));
-        }
-
-        private static void AddRect(ref Rect bounds, ref bool hasBounds, Rect rect)
-        {
-            if (rect.width <= 0.01f || rect.height <= 0.01f)
-            {
-                return;
-            }
-
-            bounds = hasBounds ? Union(bounds, rect) : rect;
-            hasBounds = true;
-        }
-
-        private static float GetPadding(PackageGraphLayoutMode mode)
-        {
-            return mode == PackageGraphLayoutMode.Focus ? 56f : 64f;
-        }
-
-        private static bool IsOverviewLikeLayout(PackageGraphLayoutMode mode)
-        {
-            return mode == PackageGraphLayoutMode.Overview;
-        }
-
-        private static Rect Union(Rect first, Rect second)
-        {
-            return Rect.MinMaxRect(
-                Mathf.Min(first.xMin, second.xMin),
-                Mathf.Min(first.yMin, second.yMin),
-                Mathf.Max(first.xMax, second.xMax),
-                Mathf.Max(first.yMax, second.yMax));
-        }
-
-        private static Rect Expand(Rect rect, float amount)
-        {
-            return new Rect(
-                rect.x - amount,
-                rect.y - amount,
-                rect.width + amount * 2f,
-                rect.height + amount * 2f);
-        }
-    }
-
-    internal readonly struct PackageGraphNodeVisualState
-    {
-        public PackageGraphNodeVisualState(
-            Rect rect,
-            float opacity,
-            float scale,
-            PackageGraphNodePresentationLevel presentationLevel,
-            bool visible,
-            bool entering,
-            bool leaving)
-        {
-            Rect = rect;
-            Opacity = Mathf.Clamp01(opacity);
-            Scale = Mathf.Max(0.01f, scale);
-            PresentationLevel = presentationLevel;
-            Visible = visible;
-            Entering = entering;
-            Leaving = leaving;
-        }
-
-        public Rect Rect { get; }
-
-        public float Opacity { get; }
-
-        public float Scale { get; }
-
-        public PackageGraphNodePresentationLevel PresentationLevel { get; }
-
-        public bool Visible { get; }
-
-        public bool Entering { get; }
-
-        public bool Leaving { get; }
-
-        public static PackageGraphNodeVisualState Stable(
-            Rect rect,
-            PackageGraphNodePresentationLevel presentationLevel)
-        {
-            return new PackageGraphNodeVisualState(rect, 1f, 1f, presentationLevel, true, false, false);
-        }
-
-        public PackageGraphNodeVisualState WithRect(Rect rect)
-        {
-            return new PackageGraphNodeVisualState(
-                rect,
-                Opacity,
-                Scale,
-                PresentationLevel,
-                Visible,
-                Entering,
-                Leaving);
-        }
-    }
-
-    internal readonly struct CategoryStatusSlice
-    {
-        public CategoryStatusSlice(
-            PackageGraphCategoryStatusKey statusKey,
-            int count,
-            Color color,
-            int sortOrder,
-            string tooltipLabel)
-        {
-            StatusKey = statusKey;
-            Count = Math.Max(0, count);
-            Color = color;
-            SortOrder = sortOrder;
-            TooltipLabel = tooltipLabel ?? string.Empty;
-        }
-
-        public PackageGraphCategoryStatusKey StatusKey { get; }
-
-        public int Count { get; }
-
-        public Color Color { get; }
-
-        public int SortOrder { get; }
-
-        public string TooltipLabel { get; }
-    }
-
-    internal readonly struct CategoryStatusRingSegment
-    {
-        public CategoryStatusRingSegment(
-            PackageGraphCategoryStatusKey statusKey,
-            int count,
-            Color color,
-            float startDegrees,
-            float sweepDegrees,
-            float separatorAfterDegrees,
-            bool fullRing)
-        {
-            StatusKey = statusKey;
-            Count = Math.Max(0, count);
-            Color = color;
-            StartDegrees = startDegrees;
-            SweepDegrees = Mathf.Clamp(sweepDegrees, 0f, 360f);
-            SeparatorAfterDegrees = Mathf.Max(0f, separatorAfterDegrees);
-            FullRing = fullRing;
-        }
-
-        public PackageGraphCategoryStatusKey StatusKey { get; }
-
-        public int Count { get; }
-
-        public Color Color { get; }
-
-        public float StartDegrees { get; }
-
-        public float SweepDegrees { get; }
-
-        public float SeparatorAfterDegrees { get; }
-
-        public bool FullRing { get; }
-    }
-
-    internal readonly struct CategoryStatusRingVisualState
-    {
-        public CategoryStatusRingVisualState(
-            string ringId,
-            Vector2 center,
-            float radius,
-            float thickness,
-            IReadOnlyList<CategoryStatusSlice> slices,
-            bool hoverActive,
-            bool muted = false)
-        {
-            RingId = ringId ?? string.Empty;
-            Center = center;
-            Radius = Mathf.Max(0f, radius);
-            Thickness = Mathf.Max(1f, thickness);
-            Slices = slices == null
-                ? Array.Empty<CategoryStatusSlice>()
-                : slices
-                    .Where(slice => slice.Count > 0)
-                    .OrderBy(slice => slice.SortOrder)
-                    .ToArray();
-            HoverActive = hoverActive;
-            Muted = muted;
-        }
-
-        public string RingId { get; }
-
-        public Vector2 Center { get; }
-
-        public float Radius { get; }
-
-        public float Thickness { get; }
-
-        public IReadOnlyList<CategoryStatusSlice> Slices { get; }
-
-        public bool HoverActive { get; }
-
-        public bool Muted { get; }
-
-        public int TotalCount => Slices.Sum(slice => slice.Count);
-    }
-
-    internal static class PackageGraphCategoryStatusVisuals
-    {
-        internal const float StatusRingSeparatorDegrees = 1.4f;
-
-        private static Color InstalledColor => DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorGraphTheme.Installed, 0.88f);
-        private static Color NotInstalledColor => DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorGraphTheme.Available, 0.82f);
-        private static Color AttentionColor => DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorGraphTheme.Update, 0.92f);
-        private static Color UnknownColor => DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorGraphTheme.Unknown, 0.72f);
-        private static Color EmptyNeutralColor => DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorGraphTheme.Edge, 0.36f);
-
-        public static IReadOnlyList<CategoryStatusSlice> CreateSlices(
-            PackageGraphCategoryStatusSummary summary)
-        {
-            CategoryStatusSlice[] slices =
-            {
-                CreateSlice(PackageGraphCategoryStatusKey.Installed, summary.InstalledCount),
-                CreateSlice(PackageGraphCategoryStatusKey.NotInstalled, summary.NotInstalledCount),
-                CreateSlice(PackageGraphCategoryStatusKey.Attention, summary.AttentionCount),
-                CreateSlice(PackageGraphCategoryStatusKey.Unknown, summary.UnknownCount)
-            };
-            return slices
-                .Where(slice => slice.Count > 0)
-                .OrderBy(slice => slice.SortOrder)
-                .ToArray();
-        }
-
-        public static IReadOnlyList<CategoryStatusRingSegment> CreateRingSegments(
-            PackageGraphCategoryStatusSummary summary)
-        {
-            return CreateRingSegments(CreateSlices(summary), summary.TotalCount, StatusRingSeparatorDegrees);
-        }
-
-        public static IReadOnlyList<CategoryStatusRingSegment> CreateRingSegments(
-            IReadOnlyList<CategoryStatusSlice> slices,
-            int totalCount,
-            float separatorDegrees = StatusRingSeparatorDegrees)
-        {
-            CategoryStatusSlice[] nonZeroSlices = (slices ?? Array.Empty<CategoryStatusSlice>())
-                .Where(slice => slice.Count > 0)
-                .OrderBy(slice => slice.SortOrder)
-                .ToArray();
-
-            if (nonZeroSlices.Length == 0 || totalCount <= 0)
-            {
-                return new[]
-                {
-                    new CategoryStatusRingSegment(
-                        PackageGraphCategoryStatusKey.Unknown,
-                        0,
-                        EmptyNeutralColor,
-                        -90f,
-                        360f,
-                        0f,
-                        true)
-                };
-            }
-
-            if (nonZeroSlices.Length == 1)
-            {
-                CategoryStatusSlice slice = nonZeroSlices[0];
-                return new[]
-                {
-                    new CategoryStatusRingSegment(
-                        slice.StatusKey,
-                        slice.Count,
-                        slice.Color,
-                        -90f,
-                        360f,
-                        0f,
-                        true)
-                };
-            }
-
-            int safeTotalCount = Math.Max(1, nonZeroSlices.Sum(slice => slice.Count));
-            float safeGap = Mathf.Clamp(separatorDegrees, 0f, 24f);
-            float totalGap = safeGap * nonZeroSlices.Length;
-            float usableAngle = Mathf.Max(0f, 360f - totalGap);
-            float cursor = -90f;
-            float remainingUsableAngle = usableAngle;
-            List<CategoryStatusRingSegment> segments = new List<CategoryStatusRingSegment>(nonZeroSlices.Length);
-
-            for (int index = 0; index < nonZeroSlices.Length; index++)
-            {
-                CategoryStatusSlice slice = nonZeroSlices[index];
-                bool last = index == nonZeroSlices.Length - 1;
-                float sweep = last
-                    ? remainingUsableAngle
-                    : usableAngle * (slice.Count / (float)safeTotalCount);
-                sweep = Mathf.Max(0f, sweep);
-                remainingUsableAngle = Mathf.Max(0f, remainingUsableAngle - sweep);
-
-                segments.Add(new CategoryStatusRingSegment(
-                    slice.StatusKey,
-                    slice.Count,
-                    slice.Color,
-                    cursor,
-                    sweep,
-                    safeGap,
-                    false));
-                cursor += sweep + safeGap;
-            }
-
-            return segments;
-        }
-
-        public static CategoryStatusSlice CreateSlice(
-            PackageGraphCategoryStatusKey statusKey,
-            int count)
-        {
-            switch (statusKey)
-            {
-                case PackageGraphCategoryStatusKey.Installed:
-                    return new CategoryStatusSlice(statusKey, count, InstalledColor, 10, "installed");
-                case PackageGraphCategoryStatusKey.NotInstalled:
-                    return new CategoryStatusSlice(statusKey, count, NotInstalledColor, 20, "not installed");
-                case PackageGraphCategoryStatusKey.Attention:
-                    return new CategoryStatusSlice(statusKey, count, AttentionColor, 30, "attention");
-                default:
-                    return new CategoryStatusSlice(statusKey, count, UnknownColor, 40, "unknown");
-            }
-        }
-
-        public static Color GetColor(PackageGraphCategoryStatusKey statusKey)
-        {
-            switch (statusKey)
-            {
-                case PackageGraphCategoryStatusKey.Installed:
-                    return InstalledColor;
-                case PackageGraphCategoryStatusKey.NotInstalled:
-                    return NotInstalledColor;
-                case PackageGraphCategoryStatusKey.Attention:
-                    return AttentionColor;
-                default:
-                    return UnknownColor;
-            }
-        }
-
-        public static Color GetColor(PackageGraphNode package)
-        {
-            return GetColor(PackageGraphCategoryStatusClassifier.Classify(package));
-        }
-
-        public static string FormatTotal(int totalCount)
-        {
-            return totalCount == 1 ? "1 package" : totalCount + " packages";
-        }
-
-        public static string FormatSummary(PackageGraphCategoryStatusSummary summary)
-        {
-            return summary.InstalledCount + " installed   " +
-                   summary.NotInstalledCount + " not installed   " +
-                   summary.AttentionCount + " attention";
-        }
-    }
 
     internal sealed class PackageGraphCanvas : VisualElement
     {
@@ -3420,28 +2842,7 @@ namespace Deucarian.PackageInstaller.Editor
         private readonly Action _rootFocused;
         private readonly Action<PackageGraphGroup> _groupFocused;
         private readonly PackageGraphLayout _layout = new PackageGraphLayout();
-        private readonly Dictionary<string, Rect> _animatedNodeRects =
-            new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, PackageGraphNodeVisualState> _nodeVisualStates =
-            new Dictionary<string, PackageGraphNodeVisualState>(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, Rect> _animatedGroupRects =
-            new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, Vector2> _animatedGroupCenters =
-            new Dictionary<string, Vector2>(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, float> _animatedGroupOrbitRadii =
-            new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, Rect> _transitionStartRects =
-            new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, PackageGraphNodeVisualState> _transitionStartNodeVisualStates =
-            new Dictionary<string, PackageGraphNodeVisualState>(StringComparer.OrdinalIgnoreCase);
-        private readonly HashSet<string> _transitionEnteringNodeIds =
-            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, Rect> _transitionStartGroupRects =
-            new Dictionary<string, Rect>(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, Vector2> _transitionStartGroupCenters =
-            new Dictionary<string, Vector2>(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, float> _transitionStartGroupOrbitRadii =
-            new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+        private readonly PackageGraphLayoutAnimation _animation = new PackageGraphLayoutAnimation();
         private readonly Dictionary<string, PackageGraphNodeElement> _nodeElements =
             new Dictionary<string, PackageGraphNodeElement>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, PackageGraphGroupElement> _groupElements =
@@ -3652,15 +3053,15 @@ namespace Deucarian.PackageInstaller.Editor
             ? _layoutResult.GroupNodes
             : Array.Empty<PackageGraphGroupLayoutNode>();
 
-        internal IReadOnlyDictionary<string, float> AnimatedGroupOrbitRadiiForTests => _animatedGroupOrbitRadii;
+        internal IReadOnlyDictionary<string, float> AnimatedGroupOrbitRadiiForTests => _animation.GroupOrbitRadii;
 
-        internal IReadOnlyDictionary<string, Vector2> AnimatedGroupCentersForTests => _animatedGroupCenters;
+        internal IReadOnlyDictionary<string, Vector2> AnimatedGroupCentersForTests => _animation.GroupCenters;
 
-        internal IReadOnlyDictionary<string, Rect> AnimatedGroupRectsForTests => _animatedGroupRects;
+        internal IReadOnlyDictionary<string, Rect> AnimatedGroupRectsForTests => _animation.Groups;
 
-        internal IReadOnlyDictionary<string, Rect> AnimatedNodeRectsForTests => _animatedNodeRects;
+        internal IReadOnlyDictionary<string, Rect> AnimatedNodeRectsForTests => _animation.Nodes;
 
-        internal IReadOnlyDictionary<string, PackageGraphNodeVisualState> NodeVisualStatesForTests => _nodeVisualStates;
+        internal IReadOnlyDictionary<string, PackageGraphNodeVisualState> NodeVisualStatesForTests => _animation.NodeStates;
 
         internal IReadOnlyList<PackageGraphOrbitVisualState> OrbitVisualStatesForTests =>
             _membershipLayer.BuildOrbitVisualStatesForTests();
@@ -3737,7 +3138,7 @@ namespace Deucarian.PackageInstaller.Editor
             switch (anchor.Kind)
             {
                 case PackageGraphTransitionAnchorKind.Package:
-                    if (_animatedNodeRects.TryGetValue(anchor.Id, out Rect animatedNodeRect))
+                    if (_animation.Nodes.TryGetValue(anchor.Id, out Rect animatedNodeRect))
                     {
                         center = animatedNodeRect.center;
                         return true;
@@ -3752,24 +3153,24 @@ namespace Deucarian.PackageInstaller.Editor
 
                     break;
                 case PackageGraphTransitionAnchorKind.Group:
-                    if (_animatedGroupCenters.TryGetValue(anchor.Id, out Vector2 animatedGroupCenter))
+                    if (_animation.GroupCenters.TryGetValue(anchor.Id, out Vector2 animatedGroupCenter))
                     {
                         center = animatedGroupCenter;
                         return true;
                     }
 
-                    if (_animatedGroupRects.TryGetValue(anchor.Id, out Rect animatedGroupRect))
+                    if (_animation.Groups.TryGetValue(anchor.Id, out Rect animatedGroupRect))
                     {
-                        PackageGraphGroupLayoutNode animatedGroupNode = FindGroupLayoutNode(_layoutResult, anchor.Id);
+                        PackageGraphGroupLayoutNode animatedGroupNode = PackageGraphTransitionGeometry.FindGroupLayoutNode(_layoutResult, anchor.Id);
                         center = animatedGroupNode != null
-                            ? GetGroupHubRect(animatedGroupNode, animatedGroupRect).center
+                            ? PackageGraphTransitionGeometry.GetGroupHubRect(animatedGroupNode, animatedGroupRect).center
                             : animatedGroupRect.center;
                         return true;
                     }
 
                     if (_layoutResult != null)
                     {
-                        PackageGraphGroupLayoutNode groupNode = FindGroupLayoutNode(_layoutResult, anchor.Id);
+                        PackageGraphGroupLayoutNode groupNode = PackageGraphTransitionGeometry.FindGroupLayoutNode(_layoutResult, anchor.Id);
 
                         if (groupNode != null)
                         {
@@ -4201,10 +3602,10 @@ namespace Deucarian.PackageInstaller.Editor
                     _layoutResult,
                     PackageGraphCategoryStatusSummary.Create(_visibleGraph.Nodes),
                     _searchState,
-                    _animatedNodeRects,
-                    _animatedGroupRects,
-                    _animatedGroupCenters,
-                    _animatedGroupOrbitRadii,
+                    _animation.Nodes,
+                    _animation.Groups,
+                    _animation.GroupCenters,
+                    _animation.GroupOrbitRadii,
                     GetActiveHoverGroupId(),
                     _interactionsLocked);
                 StartLayoutTransition(
@@ -4354,9 +3755,9 @@ namespace Deucarian.PackageInstaller.Editor
 
         private Dictionary<string, Rect> CaptureCurrentNodeRects()
         {
-            if (_animatedNodeRects.Count > 0)
+            if (_animation.Nodes.Count > 0)
             {
-                return new Dictionary<string, Rect>(_animatedNodeRects, StringComparer.OrdinalIgnoreCase);
+                return new Dictionary<string, Rect>(_animation.Nodes, StringComparer.OrdinalIgnoreCase);
             }
 
             return _layoutResult != null
@@ -4366,10 +3767,10 @@ namespace Deucarian.PackageInstaller.Editor
 
         private Dictionary<string, PackageGraphNodeVisualState> CaptureCurrentNodeVisualStates()
         {
-            if (_nodeVisualStates.Count > 0)
+            if (_animation.NodeStates.Count > 0)
             {
                 return new Dictionary<string, PackageGraphNodeVisualState>(
-                    _nodeVisualStates,
+                    _animation.NodeStates,
                     StringComparer.OrdinalIgnoreCase);
             }
 
@@ -4385,7 +3786,7 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 states[nodeRect.Key] = PackageGraphNodeVisualState.Stable(
                     nodeRect.Value,
-                    GetPresentationLevel(nodeRect.Key));
+                    _animation.GetPresentationLevel(nodeRect.Key));
             }
 
             return states;
@@ -4393,9 +3794,9 @@ namespace Deucarian.PackageInstaller.Editor
 
         private Dictionary<string, Rect> CaptureCurrentGroupRects()
         {
-            if (_animatedGroupRects.Count > 0)
+            if (_animation.Groups.Count > 0)
             {
-                return new Dictionary<string, Rect>(_animatedGroupRects, StringComparer.OrdinalIgnoreCase);
+                return new Dictionary<string, Rect>(_animation.Groups, StringComparer.OrdinalIgnoreCase);
             }
 
             return _layoutResult != null
@@ -4408,9 +3809,9 @@ namespace Deucarian.PackageInstaller.Editor
 
         private Dictionary<string, Vector2> CaptureCurrentGroupCenters()
         {
-            if (_animatedGroupCenters.Count > 0)
+            if (_animation.GroupCenters.Count > 0)
             {
-                return new Dictionary<string, Vector2>(_animatedGroupCenters, StringComparer.OrdinalIgnoreCase);
+                return new Dictionary<string, Vector2>(_animation.GroupCenters, StringComparer.OrdinalIgnoreCase);
             }
 
             return _layoutResult != null
@@ -4426,9 +3827,9 @@ namespace Deucarian.PackageInstaller.Editor
 
         private Dictionary<string, float> CaptureCurrentGroupOrbitRadii()
         {
-            if (_animatedGroupOrbitRadii.Count > 0)
+            if (_animation.GroupOrbitRadii.Count > 0)
             {
-                return new Dictionary<string, float>(_animatedGroupOrbitRadii, StringComparer.OrdinalIgnoreCase);
+                return new Dictionary<string, float>(_animation.GroupOrbitRadii, StringComparer.OrdinalIgnoreCase);
             }
 
             return _layoutResult != null
@@ -4449,105 +3850,9 @@ namespace Deucarian.PackageInstaller.Editor
             IReadOnlyDictionary<string, Vector2> previousGroupCenters,
             IReadOnlyDictionary<string, float> previousGroupOrbitRadii)
         {
-            _animatedNodeRects.Clear();
-            _nodeVisualStates.Clear();
-            _animatedGroupRects.Clear();
-            _animatedGroupCenters.Clear();
-            _animatedGroupOrbitRadii.Clear();
-            _transitionStartRects.Clear();
-            _transitionStartNodeVisualStates.Clear();
-            _transitionEnteringNodeIds.Clear();
-            _transitionStartGroupRects.Clear();
-            _transitionStartGroupCenters.Clear();
-            _transitionStartGroupOrbitRadii.Clear();
-            bool shouldAnimate = false;
-            bool hasPreviousNodeFrame = previousRects != null && previousRects.Count > 0;
-            bool hasPreviousGroupFrame = previousGroupRects != null && previousGroupRects.Count > 0;
-
-            foreach (KeyValuePair<string, Rect> target in _layoutResult.NodeRects)
-            {
-                Rect previous = default(Rect);
-                bool hasPreviousNodeRect = hasPreviousNodeFrame &&
-                                           previousRects.TryGetValue(target.Key, out previous);
-                bool entering = !hasPreviousNodeRect && (hasPreviousNodeFrame || hasPreviousGroupFrame);
-                Rect start = !entering
-                    ? hasPreviousNodeRect ? previous : target.Value
-                    : CreateEnteringNodeStartRect(target.Key, target.Value, previousGroupRects);
-                PackageGraphNodePresentationLevel presentationLevel = GetPresentationLevel(target.Key);
-                PackageGraphNodeVisualState startState =
-                    !entering &&
-                    previousNodeVisualStates != null &&
-                    previousNodeVisualStates.TryGetValue(target.Key, out PackageGraphNodeVisualState previousVisualState)
-                        ? previousVisualState.WithRect(start)
-                        : new PackageGraphNodeVisualState(
-                            start,
-                            entering ? 0f : 1f,
-                            entering ? 0.24f : 1f,
-                            presentationLevel,
-                            true,
-                            entering,
-                            false);
-                _transitionStartRects[target.Key] = start;
-                _animatedNodeRects[target.Key] = start;
-                _transitionStartNodeVisualStates[target.Key] = startState;
-                _nodeVisualStates[target.Key] = startState;
-
-                if (entering)
-                {
-                    _transitionEnteringNodeIds.Add(target.Key);
-                }
-
-                if (!AreRectsClose(start, target.Value) || entering)
-                {
-                    shouldAnimate = true;
-                }
-            }
-
-            foreach (PackageGraphGroupLayoutNode target in _layoutResult.GroupNodes)
-            {
-                if (target == null)
-                {
-                    continue;
-                }
-
-                Rect previous = default(Rect);
-                bool hasPreviousGroupRect = hasPreviousGroupFrame &&
-                                            previousGroupRects != null &&
-                                            previousGroupRects.TryGetValue(target.GroupId, out previous);
-                Rect start = hasPreviousGroupRect
-                    ? previous
-                    : hasPreviousGroupFrame
-                        ? CreateEnteringGroupStartRect(target, previousGroupRects)
-                        : target.Rect;
-                Vector2 startCenter = previousGroupCenters != null &&
-                                      previousGroupCenters.TryGetValue(target.GroupId, out Vector2 previousCenter)
-                    ? previousCenter
-                    : GetGroupHubRect(target, start).center;
-                float previousRadius = 0f;
-                bool hasPreviousRadius = hasPreviousGroupFrame &&
-                                         previousGroupOrbitRadii != null &&
-                                         previousGroupOrbitRadii.TryGetValue(target.GroupId, out previousRadius);
-                bool enteringGroup = hasPreviousGroupFrame && !hasPreviousRadius;
-                float startRadius = !hasPreviousGroupFrame
-                    ? target.OrbitRadius
-                    : enteringGroup
-                        ? target.OrbitRadius * 0.24f
-                        : previousRadius;
-                _transitionStartGroupRects[target.GroupId] = start;
-                _animatedGroupRects[target.GroupId] = start;
-                _transitionStartGroupCenters[target.GroupId] = startCenter;
-                _animatedGroupCenters[target.GroupId] = startCenter;
-                _transitionStartGroupOrbitRadii[target.GroupId] = startRadius;
-                _animatedGroupOrbitRadii[target.GroupId] = startRadius;
-
-                if (!AreRectsClose(start, target.Rect) ||
-                    Vector2.Distance(startCenter, target.HubCenter) > 0.25f ||
-                    Mathf.Abs(startRadius - target.OrbitRadius) > 0.25f)
-                {
-                    shouldAnimate = true;
-                }
-            }
-
+            bool shouldAnimate = _animation.Begin(_layoutResult,
+                new PackageGraphTransitionOrigins(_visibleGraph, _layoutResult, GetActiveCenter()),
+                previousRects, previousNodeVisualStates, previousGroupRects, previousGroupCenters, previousGroupOrbitRadii);
             if (!shouldAnimate)
             {
                 _layoutAnimationActive = false;
@@ -4593,60 +3898,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void ApplyLayoutTransitionProgress(float linearProgress)
         {
-            if (_layoutResult == null)
-            {
-                return;
-            }
-
-            float eased = SmoothStep(Mathf.Clamp01(linearProgress));
-
-            foreach (KeyValuePair<string, Rect> target in _layoutResult.NodeRects)
-            {
-                Rect start = _transitionStartRects.TryGetValue(target.Key, out Rect startRect)
-                    ? startRect
-                    : target.Value;
-                _animatedNodeRects[target.Key] = LerpRect(start, target.Value, eased);
-                PackageGraphNodePresentationLevel presentationLevel = GetPresentationLevel(target.Key);
-                bool entering = _transitionEnteringNodeIds.Contains(target.Key);
-                float opacity = entering ? EvaluateEnteringOpacity(eased) : 1f;
-                float scale = entering ? EvaluateEnteringScale(eased) : 1f;
-                _nodeVisualStates[target.Key] = new PackageGraphNodeVisualState(
-                    _animatedNodeRects[target.Key],
-                    opacity,
-                    scale,
-                    presentationLevel,
-                    true,
-                    entering,
-                    false);
-            }
-
-            foreach (PackageGraphGroupLayoutNode target in _layoutResult.GroupNodes)
-            {
-                if (target == null)
-                {
-                    continue;
-                }
-
-                Rect start = _transitionStartGroupRects.TryGetValue(target.GroupId, out Rect startRect)
-                    ? startRect
-                    : target.Rect;
-                Vector2 startCenter = _transitionStartGroupCenters.TryGetValue(
-                    target.GroupId,
-                    out Vector2 transitionStartCenter)
-                    ? transitionStartCenter
-                    : GetGroupHubRect(target, start).center;
-                float startRadius = _transitionStartGroupOrbitRadii.TryGetValue(
-                    target.GroupId,
-                    out float transitionStartRadius)
-                    ? transitionStartRadius
-                    : target.OrbitRadius;
-                Vector2 center = Vector2.Lerp(startCenter, target.HubCenter, eased);
-                Rect lerpedRect = LerpRect(start, target.Rect, eased);
-                _animatedGroupCenters[target.GroupId] = center;
-                _animatedGroupRects[target.GroupId] = PositionGroupRectFromHubCenter(target, lerpedRect, center);
-                _animatedGroupOrbitRadii[target.GroupId] = Mathf.Lerp(startRadius, target.OrbitRadius, eased);
-            }
-
+            _animation.Evaluate(linearProgress);
             ApplyAnimatedLayout();
         }
 
@@ -4655,84 +3907,13 @@ namespace Deucarian.PackageInstaller.Editor
             ApplyLayoutTransitionProgress(linearProgress);
         }
 
-        private Rect CreateEnteringNodeStartRect(
-            string packageId,
-            Rect targetRect,
-            IReadOnlyDictionary<string, Rect> previousGroupRects)
-        {
-            if (_visibleGraph != null &&
-                _visibleGraph.TryGetNode(packageId, out PackageGraphNode node))
-            {
-                PackageGraphGroupLayoutNode targetGroup = FindGroupLayoutNode(_layoutResult, node.GroupId);
 
-                if (targetGroup != null &&
-                    targetGroup.OrbitRadius > 0.01f &&
-                    TryGetTargetDirection(targetGroup.HubCenter, targetRect.center, out Vector2 direction))
-                {
-                    float initialRadius = Mathf.Max(32f, targetGroup.OrbitRadius * 0.24f);
-                    return CenterRectOn(targetRect, targetGroup.HubCenter + direction * initialRadius);
-                }
 
-                if (TryGetPreviousGroupRect(node.GroupId, previousGroupRects, out Rect groupRect))
-                {
-                    return CenterRectOn(targetRect, groupRect.center);
-                }
-            }
 
-            return CenterRectOn(targetRect, GetActiveCenter());
-        }
 
-        private Rect CreateEnteringGroupStartRect(
-            PackageGraphGroupLayoutNode target,
-            IReadOnlyDictionary<string, Rect> previousGroupRects)
-        {
-            if (target != null &&
-                target.Group != null &&
-                TryGetPreviousGroupRect(target.Group.ParentGroupId, previousGroupRects, out Rect parentRect))
-            {
-                return CenterRectOn(target.Rect, parentRect.center);
-            }
 
-            return CenterRectOn(target != null ? target.Rect : default(Rect), GetActiveCenter());
-        }
 
-        private bool TryGetPreviousGroupRect(
-            string groupId,
-            IReadOnlyDictionary<string, Rect> previousGroupRects,
-            out Rect groupRect)
-        {
-            HashSet<string> visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            string currentGroupId = groupId;
 
-            while (!string.IsNullOrWhiteSpace(currentGroupId) && visited.Add(currentGroupId))
-            {
-                if (previousGroupRects != null &&
-                    previousGroupRects.TryGetValue(currentGroupId, out groupRect))
-                {
-                    return true;
-                }
-
-                if (_visibleGraph == null ||
-                    !_visibleGraph.TryGetGroup(currentGroupId, out PackageGraphGroup group))
-                {
-                    break;
-                }
-
-                currentGroupId = group.ParentGroupId;
-            }
-
-            groupRect = default(Rect);
-            return false;
-        }
-
-        private static Rect CenterRectOn(Rect rect, Vector2 center)
-        {
-            return new Rect(
-                center.x - rect.width * 0.5f,
-                center.y - rect.height * 0.5f,
-                rect.width,
-                rect.height);
-        }
 
         private void SetInteractionsLocked(bool locked)
         {
@@ -4748,35 +3929,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void CopyTargetRectsToAnimatedRects()
         {
-            _animatedNodeRects.Clear();
-            _nodeVisualStates.Clear();
-            _animatedGroupRects.Clear();
-            _animatedGroupCenters.Clear();
-            _animatedGroupOrbitRadii.Clear();
-
-            if (_layoutResult == null)
-            {
-                return;
-            }
-
-            foreach (KeyValuePair<string, Rect> target in _layoutResult.NodeRects)
-            {
-                _animatedNodeRects[target.Key] = target.Value;
-                _nodeVisualStates[target.Key] = PackageGraphNodeVisualState.Stable(
-                    target.Value,
-                    GetPresentationLevel(target.Key));
-            }
-
-            foreach (PackageGraphGroupLayoutNode target in _layoutResult.GroupNodes)
-            {
-                if (target != null)
-                {
-                    _animatedGroupRects[target.GroupId] = target.Rect;
-                    _animatedGroupCenters[target.GroupId] = target.HubCenter;
-                    _animatedGroupOrbitRadii[target.GroupId] = target.OrbitRadius;
-                }
-            }
-
+            _animation.Snap(_layoutResult);
             NotifyActiveVisualCenterChanged();
         }
 
@@ -4839,49 +3992,11 @@ namespace Deucarian.PackageInstaller.Editor
             }
         }
 
-        private static PackageGraphGroupLayoutNode FindGroupLayoutNode(
-            PackageGraphLayoutResult layout,
-            string groupId)
-        {
-            return layout != null && !string.IsNullOrWhiteSpace(groupId)
-                ? layout.GroupNodes.FirstOrDefault(candidate =>
-                    candidate != null &&
-                    string.Equals(candidate.GroupId, groupId, StringComparison.OrdinalIgnoreCase))
-                : null;
-        }
 
-        private static Rect GetGroupHubRect(PackageGraphGroupLayoutNode groupNode, Rect groupRect)
-        {
-            if (groupNode == null)
-            {
-                return groupRect;
-            }
 
-            Vector2 offset = groupNode.HubRect.position - groupNode.Rect.position;
-            return new Rect(
-                groupRect.x + offset.x,
-                groupRect.y + offset.y,
-                groupNode.HubRect.width,
-                groupNode.HubRect.height);
-        }
 
-        private static Rect PositionGroupRectFromHubCenter(
-            PackageGraphGroupLayoutNode groupNode,
-            Rect currentRect,
-            Vector2 hubCenter)
-        {
-            if (groupNode == null)
-            {
-                return CenterRectOn(currentRect, hubCenter);
-            }
 
-            Vector2 offset = groupNode.HubRect.position - groupNode.Rect.position;
-            return new Rect(
-                hubCenter.x - offset.x - groupNode.HubRect.width * 0.5f,
-                hubCenter.y - offset.y - groupNode.HubRect.height * 0.5f,
-                currentRect.width,
-                currentRect.height);
-        }
+
 
         internal static void ProjectOrbitalChildrenForTests(
             PackageGraphModel graph,
@@ -4891,129 +4006,16 @@ namespace Deucarian.PackageInstaller.Editor
             IDictionary<string, Vector2> groupCenters,
             IDictionary<string, float> groupOrbitRadii)
         {
-            ProjectOrbitalChildren(graph, layout, nodeRects, groupRects, groupCenters, groupOrbitRadii);
+            PackageGraphTransitionGeometry.ProjectOrbitalChildren(graph, layout, nodeRects, groupRects, groupCenters, groupOrbitRadii);
         }
 
-        private static void ProjectOrbitalChildren(
-            PackageGraphModel graph,
-            PackageGraphLayoutResult layout,
-            IDictionary<string, Rect> nodeRects,
-            IDictionary<string, Rect> groupRects,
-            IDictionary<string, Vector2> groupCenters,
-            IDictionary<string, float> groupOrbitRadii)
-        {
-            if (graph == null ||
-                layout == null ||
-                layout.Mode == PackageGraphLayoutMode.Focus ||
-                nodeRects == null ||
-                groupRects == null ||
-                groupCenters == null ||
-                groupOrbitRadii == null)
-            {
-                return;
-            }
 
-            Dictionary<string, PackageGraphGroupLayoutNode> groupNodeById = layout.GroupNodes
-                .Where(groupNode => groupNode != null)
-                .GroupBy(groupNode => groupNode.GroupId, StringComparer.OrdinalIgnoreCase)
-                .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
 
-            foreach (PackageGraphGroupLayoutNode groupNode in layout.GroupNodes)
-            {
-                if (groupNode == null ||
-                    groupNode.Group == null ||
-                    groupNode.Collapsed ||
-                    !groupCenters.TryGetValue(groupNode.GroupId, out Vector2 center) ||
-                    !groupOrbitRadii.TryGetValue(groupNode.GroupId, out float radius) ||
-                    radius <= 0.01f)
-                {
-                    continue;
-                }
 
-                foreach (PackageGraphGroup childGroup in graph.Groups)
-                {
-                    if (childGroup == null ||
-                        !string.Equals(childGroup.ParentGroupId, groupNode.GroupId, StringComparison.OrdinalIgnoreCase) ||
-                        !groupNodeById.TryGetValue(childGroup.Id, out PackageGraphGroupLayoutNode childGroupNode) ||
-                        !groupRects.TryGetValue(childGroup.Id, out Rect childGroupRect) ||
-                        !TryGetTargetDirection(groupNode.HubCenter, childGroupNode.HubCenter, out Vector2 direction))
-                    {
-                        continue;
-                    }
 
-                    Vector2 childCenter = center + direction * radius;
-                    groupCenters[childGroup.Id] = childCenter;
-                    groupRects[childGroup.Id] = PositionGroupRectFromHubCenter(
-                        childGroupNode,
-                        childGroupRect,
-                        childCenter);
-                }
 
-                foreach (PackageGraphNode childNode in graph.Nodes)
-                {
-                    if (childNode == null ||
-                        !string.Equals(childNode.GroupId, groupNode.GroupId, StringComparison.OrdinalIgnoreCase) ||
-                        !layout.NodeRects.TryGetValue(childNode.PackageId, out Rect targetNodeRect) ||
-                        !nodeRects.TryGetValue(childNode.PackageId, out Rect childRect) ||
-                        !TryGetTargetDirection(groupNode.HubCenter, targetNodeRect.center, out Vector2 direction))
-                    {
-                        continue;
-                    }
 
-                    nodeRects[childNode.PackageId] = CenterRectOn(childRect, center + direction * radius);
-                }
-            }
-        }
 
-        private static bool TryGetTargetDirection(
-            Vector2 center,
-            Vector2 targetChildCenter,
-            out Vector2 direction)
-        {
-            Vector2 delta = targetChildCenter - center;
-
-            if (delta.sqrMagnitude <= 0.0001f)
-            {
-                direction = default(Vector2);
-                return false;
-            }
-
-            direction = delta.normalized;
-            return true;
-        }
-
-        private void SyncNodeVisualStateRects()
-        {
-            foreach (KeyValuePair<string, Rect> rect in _animatedNodeRects)
-            {
-                if (_nodeVisualStates.TryGetValue(rect.Key, out PackageGraphNodeVisualState state))
-                {
-                    _nodeVisualStates[rect.Key] = state.WithRect(rect.Value);
-                    continue;
-                }
-
-                _nodeVisualStates[rect.Key] = PackageGraphNodeVisualState.Stable(
-                    rect.Value,
-                    GetPresentationLevel(rect.Key));
-            }
-        }
-
-        private void RebuildStableNodeVisualStates(IReadOnlyDictionary<string, Rect> rects)
-        {
-            _nodeVisualStates.Clear();
-
-            if (rects == null)
-            {
-                return;
-            }
-
-            foreach (KeyValuePair<string, Rect> rect in rects)
-            {
-                _nodeVisualStates[rect.Key] = PackageGraphNodeVisualState.Stable(
-                    rect.Value,
-                    GetPresentationLevel(rect.Key));
-            }
-        }
 
         private void RemoveNodeVisuals(IEnumerable<string> packageIds)
         {
@@ -5029,8 +4031,8 @@ namespace Deucarian.PackageInstaller.Editor
                     continue;
                 }
 
-                _animatedNodeRects.Remove(packageId);
-                _nodeVisualStates.Remove(packageId);
+                _animation.Nodes.Remove(packageId);
+                _animation.NodeStates.Remove(packageId);
 
                 if (_nodeElements.TryGetValue(packageId, out PackageGraphNodeElement element))
                 {
@@ -5040,77 +4042,38 @@ namespace Deucarian.PackageInstaller.Editor
             }
         }
 
-        private PackageGraphNodePresentationLevel GetPresentationLevel(string packageId)
-        {
-            return _layoutResult != null &&
-                   !string.IsNullOrWhiteSpace(packageId) &&
-                   _layoutResult.NodePresentationLevels.TryGetValue(
-                       packageId,
-                       out PackageGraphNodePresentationLevel presentationLevel)
-                ? presentationLevel
-                : PackageGraphNodePresentationLevel.Compact;
-        }
 
-        private static float EvaluateEnteringOpacity(float progress)
-        {
-            float t = Mathf.Clamp01(progress);
 
-            if (t <= 0.20f)
-            {
-                return 0f;
-            }
 
-            if (t <= 0.65f)
-            {
-                return Mathf.Lerp(0f, 0.75f, (t - 0.20f) / 0.45f);
-            }
 
-            return Mathf.Lerp(0.75f, 1f, (t - 0.65f) / 0.35f);
-        }
 
-        private static float EvaluateEnteringScale(float progress)
-        {
-            float t = Mathf.Clamp01(progress);
-
-            if (t <= 0.20f)
-            {
-                return 0.24f;
-            }
-
-            if (t <= 0.65f)
-            {
-                return Mathf.Lerp(0.24f, 0.85f, (t - 0.20f) / 0.45f);
-            }
-
-            return Mathf.Lerp(0.85f, 1f, (t - 0.65f) / 0.35f);
-        }
 
         private void ApplyAnimatedLayout(bool updateEdgeLayer = true)
         {
-            ProjectOrbitalChildren(
+            PackageGraphTransitionGeometry.ProjectOrbitalChildren(
                 _visibleGraph,
                 _layoutResult,
-                _animatedNodeRects,
-                _animatedGroupRects,
-                _animatedGroupCenters,
-                _animatedGroupOrbitRadii);
-            SyncNodeVisualStateRects();
+                _animation.Nodes,
+                _animation.Groups,
+                _animation.GroupCenters,
+                _animation.GroupOrbitRadii);
+            _animation.SyncNodeVisualStateRects();
             UpdateConnectionOcclusionLayout();
 
             foreach (KeyValuePair<string, PackageGraphNodeElement> nodeElement in _nodeElements)
             {
-                if (_nodeVisualStates.TryGetValue(nodeElement.Key, out PackageGraphNodeVisualState state))
+                if (_animation.NodeStates.TryGetValue(nodeElement.Key, out PackageGraphNodeVisualState state))
                 {
                     SetElementVisualState(nodeElement.Value, state);
                     nodeElement.Value.pickingMode = _interactionsLocked
                         ? PickingMode.Ignore
                         : nodeElement.Value.pickingMode;
                 }
-                else if (_animatedNodeRects.TryGetValue(nodeElement.Key, out Rect rect))
+                else if (_animation.Nodes.TryGetValue(nodeElement.Key, out Rect rect))
                 {
                     SetElementVisualState(
                         nodeElement.Value,
-                        PackageGraphNodeVisualState.Stable(rect, GetPresentationLevel(nodeElement.Key)));
+                        PackageGraphNodeVisualState.Stable(rect, _animation.GetPresentationLevel(nodeElement.Key)));
                     nodeElement.Value.pickingMode = _interactionsLocked
                         ? PickingMode.Ignore
                         : nodeElement.Value.pickingMode;
@@ -5119,7 +4082,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             foreach (KeyValuePair<string, PackageGraphGroupElement> groupElement in _groupElements)
             {
-                if (_animatedGroupRects.TryGetValue(groupElement.Key, out Rect rect))
+                if (_animation.Groups.TryGetValue(groupElement.Key, out Rect rect))
                 {
                     SetElementRect(groupElement.Value, rect);
                 }
@@ -5131,7 +4094,7 @@ namespace Deucarian.PackageInstaller.Editor
                 {
                     IReadOnlyDictionary<string, Rect> routeNodeRects = _layoutResult != null
                         ? _layoutResult.NodeRects
-                        : _animatedNodeRects;
+                        : _animation.Nodes;
                     _edgeLayer.UpdateRects(routeNodeRects, CreateTargetGroupRectSnapshot());
                 }
 
@@ -5139,10 +4102,10 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             _membershipLayer.UpdateRects(
-                _animatedNodeRects,
-                _animatedGroupRects,
-                _animatedGroupCenters,
-                _animatedGroupOrbitRadii);
+                _animation.Nodes,
+                _animation.Groups,
+                _animation.GroupCenters,
+                _animation.GroupOrbitRadii);
             _membershipLayer.MarkDirtyRepaint();
             NotifyActiveVisualCenterChanged();
         }
@@ -5255,7 +4218,7 @@ namespace Deucarian.PackageInstaller.Editor
                 _groupSymbolOcclusionElements[groupNode.GroupId] = symbolOcclusion;
             }
 
-            foreach (KeyValuePair<string, Rect> nodeRect in _animatedNodeRects)
+            foreach (KeyValuePair<string, Rect> nodeRect in _animation.Nodes)
             {
                 VisualElement nodeOcclusion = new VisualElement
                 {
@@ -5293,7 +4256,7 @@ namespace Deucarian.PackageInstaller.Editor
                     ? ResolvePackageElementOpacity(nodeElement)
                     : 1f;
 
-                if (_nodeVisualStates.TryGetValue(occlusion.Key, out PackageGraphNodeVisualState state))
+                if (_animation.NodeStates.TryGetValue(occlusion.Key, out PackageGraphNodeVisualState state))
                 {
                     float effectiveOpacity = state.Opacity * interactionOpacity;
                     SetElementRect(occlusion.Value, state.Rect);
@@ -5309,7 +4272,7 @@ namespace Deucarian.PackageInstaller.Editor
                         nodeElement.style.opacity = effectiveOpacity;
                     }
                 }
-                else if (_animatedNodeRects.TryGetValue(occlusion.Key, out Rect rect))
+                else if (_animation.Nodes.TryGetValue(occlusion.Key, out Rect rect))
                 {
                     SetElementRect(occlusion.Value, rect);
                     occlusion.Value.style.opacity = interactionOpacity;
@@ -5325,12 +4288,12 @@ namespace Deucarian.PackageInstaller.Editor
             foreach (PackageGraphGroupLayoutNode groupNode in _layoutResult.GroupNodes)
             {
                 if (groupNode == null ||
-                    !_animatedGroupRects.TryGetValue(groupNode.GroupId, out Rect groupRect))
+                    !_animation.Groups.TryGetValue(groupNode.GroupId, out Rect groupRect))
                 {
                     continue;
                 }
 
-                Rect hubRect = GetGroupHubRect(groupNode, groupRect);
+                Rect hubRect = PackageGraphTransitionGeometry.GetGroupHubRect(groupNode, groupRect);
 
                 if (_groupSymbolOcclusionElements.TryGetValue(groupNode.GroupId, out VisualElement symbol))
                 {
@@ -5456,13 +4419,13 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 foreach (PackageGraphNode node in _visibleGraph.Nodes)
                 {
-                    if (!_animatedNodeRects.TryGetValue(node.PackageId, out Rect rect))
+                    if (!_animation.Nodes.TryGetValue(node.PackageId, out Rect rect))
                     {
                         continue;
                     }
 
                     PackageGraphNodeElement nodeElement = CreateNodeElement(node, focus, _layoutResult);
-                    if (_nodeVisualStates.TryGetValue(node.PackageId, out PackageGraphNodeVisualState visualState))
+                    if (_animation.NodeStates.TryGetValue(node.PackageId, out PackageGraphNodeVisualState visualState))
                     {
                         SetElementVisualState(nodeElement, visualState);
                     }
@@ -6167,27 +5130,11 @@ namespace Deucarian.PackageInstaller.Editor
             return element != null && element.ClassListContains(className);
         }
 
-        private static Rect LerpRect(Rect start, Rect end, float t)
-        {
-            return new Rect(
-                Mathf.Lerp(start.x, end.x, t),
-                Mathf.Lerp(start.y, end.y, t),
-                Mathf.Lerp(start.width, end.width, t),
-                Mathf.Lerp(start.height, end.height, t));
-        }
 
-        private static float SmoothStep(float t)
-        {
-            return t * t * (3f - 2f * t);
-        }
 
-        private static bool AreRectsClose(Rect first, Rect second)
-        {
-            return Mathf.Abs(first.x - second.x) < 0.5f &&
-                   Mathf.Abs(first.y - second.y) < 0.5f &&
-                   Mathf.Abs(first.width - second.width) < 0.5f &&
-                   Mathf.Abs(first.height - second.height) < 0.5f;
-        }
+
+
+
 
         private static void StretchToCanvas(VisualElement element)
         {
@@ -6221,125 +5168,8 @@ namespace Deucarian.PackageInstaller.Editor
         }
     }
 
-    internal readonly struct PackageGraphOrbitVisualState
-    {
-        public PackageGraphOrbitVisualState(
-            string orbitId,
-            Vector2 center,
-            float radius,
-            float fillOpacity,
-            float strokeOpacity,
-            bool emphasized,
-            bool muted,
-            bool visible,
-            bool empty)
-        {
-            OrbitId = orbitId ?? string.Empty;
-            Center = center;
-            Radius = Mathf.Max(0f, radius);
-            FillOpacity = Mathf.Clamp01(fillOpacity);
-            StrokeOpacity = Mathf.Clamp01(strokeOpacity);
-            Emphasized = emphasized;
-            Muted = muted;
-            Visible = visible;
-            Empty = empty;
-        }
 
-        public string OrbitId { get; }
 
-        public Vector2 Center { get; }
-
-        public float Radius { get; }
-
-        public float FillOpacity { get; }
-
-        public float StrokeOpacity { get; }
-
-        public bool Emphasized { get; }
-
-        public bool Muted { get; }
-
-        public bool Visible { get; }
-
-        public bool Empty { get; }
-    }
-
-    internal readonly struct PackageGraphStructuralMembershipSegment
-    {
-        public PackageGraphStructuralMembershipSegment(Vector2 from, Vector2 to)
-            : this(from, to, Array.Empty<string>())
-        {
-        }
-
-        public PackageGraphStructuralMembershipSegment(Vector2 from, Vector2 to, string packageId)
-            : this(
-                from,
-                to,
-                string.IsNullOrWhiteSpace(packageId)
-                    ? Array.Empty<string>()
-                    : new[] { packageId })
-        {
-        }
-
-        public PackageGraphStructuralMembershipSegment(
-            Vector2 from,
-            Vector2 to,
-            IReadOnlyList<string> packageIds)
-        {
-            From = from;
-            To = to;
-            PackageIds = packageIds == null
-                ? Array.Empty<string>()
-                : packageIds
-                    .Where(packageId => !string.IsNullOrWhiteSpace(packageId))
-                    .Select(packageId => packageId.Trim())
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToArray();
-            PackageId = PackageIds.Count == 1 ? PackageIds[0] : string.Empty;
-        }
-
-        public Vector2 From { get; }
-
-        public Vector2 To { get; }
-
-        public string PackageId { get; }
-
-        public IReadOnlyList<string> PackageIds { get; }
-
-        public float Length => Vector2.Distance(From, To);
-    }
-
-    internal readonly struct PackageGraphStructuralMembershipRoute
-    {
-        public PackageGraphStructuralMembershipRoute(
-            string groupId,
-            IReadOnlyList<string> packageIds,
-            IReadOnlyList<PackageGraphStructuralMembershipSegment> segments,
-            bool usesBus)
-        {
-            GroupId = groupId ?? string.Empty;
-            PackageIds = packageIds == null
-                ? Array.Empty<string>()
-                : packageIds
-                    .Where(packageId => !string.IsNullOrWhiteSpace(packageId))
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToArray();
-            Segments = segments == null
-                ? Array.Empty<PackageGraphStructuralMembershipSegment>()
-                : segments.Where(segment => segment.Length > 0.01f).ToArray();
-            UsesBus = usesBus;
-        }
-
-        public string GroupId { get; }
-
-        public IReadOnlyList<string> PackageIds { get; }
-
-        public IReadOnlyList<PackageGraphStructuralMembershipSegment> Segments { get; }
-
-        public bool UsesBus { get; }
-
-        public PackageGraphRouteKind RouteKind => PackageGraphRouteKind.StructuralMembership;
-    }
 
     internal sealed class PackageGraphMembershipLayer : VisualElement
     {
@@ -7541,518 +6371,14 @@ namespace Deucarian.PackageInstaller.Editor
         }
     }
 
-    internal enum PackageGraphEdgeRoutePort
-    {
-        Auto,
-        Left,
-        Right,
-        Top,
-        Bottom
-    }
 
-    internal enum PackageGraphEdgeRouteZone
-    {
-        Direct,
-        Providers,
-        Dependents,
-        Integrations,
-        CompanionsAndSuites
-    }
 
-    internal enum PackageGraphRouteKind
-    {
-        StructuralMembership,
-        Dependency,
-        Integration,
-        OptionalCompanion,
-        SuiteMembership,
-        CompositeDependencyIntegration
-    }
 
-    [Flags]
-    internal enum PackageGraphConnectionSemantics
-    {
-        None = 0,
-        Dependency = 1 << 0,
-        Integration = 1 << 1,
-        OptionalCompanion = 1 << 2,
-        SuiteMembership = 1 << 3,
-        Recommended = 1 << 4
-    }
 
-    internal readonly struct PackageGraphConnectionBundle
-    {
-        public PackageGraphConnectionBundle(
-            string sourcePackageId,
-            string targetPackageId,
-            IReadOnlyList<PackageGraphEdge> edges)
-        {
-            SourcePackageId = sourcePackageId ?? string.Empty;
-            TargetPackageId = targetPackageId ?? string.Empty;
-            Edges = edges == null
-                ? Array.Empty<PackageGraphEdge>()
-                : edges
-                    .Where(edge => edge != null)
-                    .OrderBy(edge => GetSemanticPriority(edge.Kind))
-                    .ThenBy(edge => edge.Key, StringComparer.OrdinalIgnoreCase)
-                    .ToArray();
-            PrimaryEdge = Edges.Count > 0
-                ? Edges[0]
-                : new PackageGraphEdge(SourcePackageId, TargetPackageId, PackageGraphEdgeKind.HardDependency, PackageGraphEdgeState.Active, string.Empty);
-            Semantics = BuildSemantics(Edges);
-            Key = SourcePackageId + ">" + TargetPackageId + ":" + Semantics;
-        }
 
-        public string SourcePackageId { get; }
 
-        public string TargetPackageId { get; }
 
-        public IReadOnlyList<PackageGraphEdge> Edges { get; }
 
-        public PackageGraphEdge PrimaryEdge { get; }
-
-        public PackageGraphConnectionSemantics Semantics { get; }
-
-        public string Key { get; }
-
-        public bool HasDependency => HasSemantic(PackageGraphConnectionSemantics.Dependency);
-
-        public bool HasIntegration => HasSemantic(PackageGraphConnectionSemantics.Integration);
-
-        public bool HasOptionalCompanion => HasSemantic(PackageGraphConnectionSemantics.OptionalCompanion);
-
-        public bool HasSuiteMembership => HasSemantic(PackageGraphConnectionSemantics.SuiteMembership);
-
-        public bool HasRecommended => HasSemantic(PackageGraphConnectionSemantics.Recommended);
-
-        public bool IsCompositeDependencyIntegration => HasDependency && HasIntegration;
-
-        public bool ConnectsPackage(string packageId)
-        {
-            return !string.IsNullOrWhiteSpace(packageId) &&
-                   (string.Equals(SourcePackageId, packageId, StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(TargetPackageId, packageId, StringComparison.OrdinalIgnoreCase));
-        }
-
-        public string GetOtherPackageId(string packageId)
-        {
-            if (string.Equals(SourcePackageId, packageId, StringComparison.OrdinalIgnoreCase))
-            {
-                return TargetPackageId;
-            }
-
-            return string.Equals(TargetPackageId, packageId, StringComparison.OrdinalIgnoreCase)
-                ? SourcePackageId
-                : string.Empty;
-        }
-
-        public bool HasKind(PackageGraphEdgeKind kind)
-        {
-            return Edges.Any(edge => edge.Kind == kind);
-        }
-
-        public PackageGraphEdge GetEdge(PackageGraphEdgeKind kind)
-        {
-            return Edges.FirstOrDefault(edge => edge.Kind == kind);
-        }
-
-        public bool HasSemantic(PackageGraphConnectionSemantics semantic)
-        {
-            return (Semantics & semantic) == semantic;
-        }
-
-        private static PackageGraphConnectionSemantics BuildSemantics(IEnumerable<PackageGraphEdge> edges)
-        {
-            PackageGraphConnectionSemantics semantics = PackageGraphConnectionSemantics.None;
-
-            foreach (PackageGraphEdge edge in edges ?? Array.Empty<PackageGraphEdge>())
-            {
-                switch (edge.Kind)
-                {
-                    case PackageGraphEdgeKind.HardDependency:
-                        semantics |= PackageGraphConnectionSemantics.Dependency;
-                        break;
-                    case PackageGraphEdgeKind.IntegrationConnection:
-                        semantics |= PackageGraphConnectionSemantics.Integration;
-                        break;
-                    case PackageGraphEdgeKind.OptionalCompanion:
-                        semantics |= PackageGraphConnectionSemantics.OptionalCompanion;
-                        break;
-                    case PackageGraphEdgeKind.SuiteMembership:
-                        semantics |= PackageGraphConnectionSemantics.SuiteMembership;
-                        break;
-                    case PackageGraphEdgeKind.Recommended:
-                        semantics |= PackageGraphConnectionSemantics.Recommended;
-                        break;
-                }
-            }
-
-            return semantics;
-        }
-
-        internal static int GetSemanticPriority(PackageGraphEdgeKind kind)
-        {
-            switch (kind)
-            {
-                case PackageGraphEdgeKind.HardDependency:
-                    return 0;
-                case PackageGraphEdgeKind.IntegrationConnection:
-                    return 1;
-                case PackageGraphEdgeKind.OptionalCompanion:
-                    return 2;
-                case PackageGraphEdgeKind.SuiteMembership:
-                    return 3;
-                case PackageGraphEdgeKind.Recommended:
-                    return 4;
-                default:
-                    return 10;
-            }
-        }
-    }
-
-    internal readonly struct PackageGraphEdgeRoute
-    {
-        public PackageGraphEdgeRoute(
-            PackageGraphEdge edge,
-            PackageGraphEdgeRoutePort sourcePort,
-            PackageGraphEdgeRoutePort targetPort,
-            PackageGraphEdgeRouteZone zone,
-            string sharedTrunkId,
-            int branchIndex,
-            int branchCount,
-            IReadOnlyList<Vector2> points)
-            : this(
-                new PackageGraphConnectionBundle(
-                    edge != null ? edge.FromPackageId : string.Empty,
-                    edge != null ? edge.ToPackageId : string.Empty,
-                    edge != null ? new[] { edge } : Array.Empty<PackageGraphEdge>()),
-                sourcePort,
-                targetPort,
-                zone,
-                sharedTrunkId,
-                branchIndex,
-                branchCount,
-                points)
-        {
-        }
-
-        public PackageGraphEdgeRoute(
-            PackageGraphConnectionBundle bundle,
-            PackageGraphEdgeRoutePort sourcePort,
-            PackageGraphEdgeRoutePort targetPort,
-            PackageGraphEdgeRouteZone zone,
-            string sharedTrunkId,
-            int branchIndex,
-            int branchCount,
-            IReadOnlyList<Vector2> points)
-        {
-            Bundle = bundle;
-            Edge = bundle.PrimaryEdge;
-            SourcePort = sourcePort;
-            TargetPort = targetPort;
-            Zone = zone;
-            SharedTrunkId = sharedTrunkId ?? string.Empty;
-            BranchIndex = Mathf.Max(0, branchIndex);
-            BranchCount = Mathf.Max(1, branchCount);
-            Points = points ?? Array.Empty<Vector2>();
-            RouteKind = ResolveRouteKind(bundle);
-        }
-
-        public PackageGraphEdge Edge { get; }
-
-        public PackageGraphConnectionBundle Bundle { get; }
-
-        public PackageGraphEdgeRoutePort SourcePort { get; }
-
-        public PackageGraphEdgeRoutePort TargetPort { get; }
-
-        public PackageGraphEdgeRouteZone Zone { get; }
-
-        public string SharedTrunkId { get; }
-
-        public int BranchIndex { get; }
-
-        public int BranchCount { get; }
-
-        public IReadOnlyList<Vector2> Points { get; }
-
-        public PackageGraphRouteKind RouteKind { get; }
-
-        public bool UsesSharedTrunk => BranchCount > 1 && !string.IsNullOrWhiteSpace(SharedTrunkId);
-
-        public bool HasSemantic(PackageGraphConnectionSemantics semantic)
-        {
-            return Bundle.HasSemantic(semantic);
-        }
-
-        public bool HasKind(PackageGraphEdgeKind kind)
-        {
-            return Bundle.HasKind(kind);
-        }
-
-        private static PackageGraphRouteKind ResolveRouteKind(PackageGraphConnectionBundle bundle)
-        {
-            if (bundle.IsCompositeDependencyIntegration)
-            {
-                return PackageGraphRouteKind.CompositeDependencyIntegration;
-            }
-
-            if (bundle.HasDependency)
-            {
-                return PackageGraphRouteKind.Dependency;
-            }
-
-            if (bundle.HasIntegration)
-            {
-                return PackageGraphRouteKind.Integration;
-            }
-
-            if (bundle.HasOptionalCompanion || bundle.HasRecommended)
-            {
-                return PackageGraphRouteKind.OptionalCompanion;
-            }
-
-            return bundle.HasSuiteMembership
-                ? PackageGraphRouteKind.SuiteMembership
-                : PackageGraphRouteKind.Dependency;
-        }
-    }
-
-    internal struct PackageGraphEdgeRouteBuildDiagnostics
-    {
-        public int RouteCount;
-        public int RouteCacheHits;
-        public int RouteCacheMisses;
-        public int RouteCacheNoEntryMisses;
-        public int RouteCacheLayoutMisses;
-        public int RouteCacheEndpointMisses;
-        public int RouteCacheFocusGraphMisses;
-        public int RouteCacheStyleMisses;
-        public long RouteCacheLookupTicks;
-        public long RouteCalculationTicks;
-        public long GeometryLayoutReadTicks;
-        public long VisualElementReuseTicks;
-        public long StyleClassUpdateTicks;
-        public long PainterPassTicks;
-
-        public void AddRouteCacheLookupTicks(long ticks)
-        {
-            RouteCacheLookupTicks += Math.Max(0L, ticks);
-        }
-
-        public void AddRouteCacheMiss(PackageGraphEdgeRouteCacheMissReason reason)
-        {
-            RouteCacheMisses++;
-
-            switch (reason)
-            {
-                case PackageGraphEdgeRouteCacheMissReason.LayoutSignatureChanged:
-                    RouteCacheLayoutMisses++;
-                    break;
-                case PackageGraphEdgeRouteCacheMissReason.EndpointGeometryChanged:
-                    RouteCacheEndpointMisses++;
-                    break;
-                case PackageGraphEdgeRouteCacheMissReason.FocusGraphChanged:
-                    RouteCacheFocusGraphMisses++;
-                    break;
-                case PackageGraphEdgeRouteCacheMissReason.RouteStyleOptionsChanged:
-                    RouteCacheStyleMisses++;
-                    break;
-                default:
-                    RouteCacheNoEntryMisses++;
-                    break;
-            }
-        }
-
-        public void AddRouteCalculationTicks(long ticks)
-        {
-            RouteCalculationTicks += Math.Max(0L, ticks);
-        }
-
-        public void AddGeometryLayoutReadTicks(long ticks)
-        {
-            GeometryLayoutReadTicks += Math.Max(0L, ticks);
-        }
-
-        public void AddVisualElementReuseTicks(long ticks)
-        {
-            VisualElementReuseTicks += Math.Max(0L, ticks);
-        }
-
-        public void AddStyleClassUpdateTicks(long ticks)
-        {
-            StyleClassUpdateTicks += Math.Max(0L, ticks);
-        }
-
-        public void AddPainterPassTicks(long ticks)
-        {
-            PainterPassTicks += Math.Max(0L, ticks);
-        }
-    }
-
-    internal enum PackageGraphEdgeRouteCacheMissReason
-    {
-        None,
-        NoExistingEntry,
-        LayoutSignatureChanged,
-        EndpointGeometryChanged,
-        FocusGraphChanged,
-        RouteStyleOptionsChanged
-    }
-
-    internal readonly struct PackageGraphEdgeRouteCacheKey
-    {
-        public PackageGraphEdgeRouteCacheKey(
-            string identityKey,
-            string focusGraphKey,
-            string layoutSignature,
-            string endpointGeometryKey,
-            string routeStyleKey)
-        {
-            IdentityKey = identityKey ?? string.Empty;
-            FocusGraphKey = focusGraphKey ?? string.Empty;
-            LayoutSignature = layoutSignature ?? string.Empty;
-            EndpointGeometryKey = endpointGeometryKey ?? string.Empty;
-            RouteStyleKey = routeStyleKey ?? string.Empty;
-            FullKey =
-                IdentityKey +
-                "|fg=" + FocusGraphKey +
-                "|layout=" + LayoutSignature +
-                "|endpoints=" + EndpointGeometryKey +
-                "|style=" + RouteStyleKey;
-        }
-
-        public string FullKey { get; }
-
-        public string IdentityKey { get; }
-
-        public string FocusGraphKey { get; }
-
-        public string LayoutSignature { get; }
-
-        public string EndpointGeometryKey { get; }
-
-        public string RouteStyleKey { get; }
-    }
-
-    internal sealed class PackageGraphEdgeRouteCache
-    {
-        private const int MaxCachedRoutes = 512;
-
-        private readonly Dictionary<string, CachedPackageGraphEdgeRoute> _routes =
-            new Dictionary<string, CachedPackageGraphEdgeRoute>(StringComparer.Ordinal);
-        private readonly Dictionary<string, PackageGraphEdgeRouteCacheKey> _lastKeyByIdentity =
-            new Dictionary<string, PackageGraphEdgeRouteCacheKey>(StringComparer.Ordinal);
-
-        public int Count => _routes.Count;
-
-        public bool TryGet(
-            PackageGraphEdgeRouteCacheKey key,
-            PackageGraphConnectionBundle bundle,
-            out PackageGraphEdgeRoute route,
-            out PackageGraphEdgeRouteCacheMissReason missReason)
-        {
-            if (!string.IsNullOrEmpty(key.FullKey) &&
-                _routes.TryGetValue(key.FullKey, out CachedPackageGraphEdgeRoute cachedRoute))
-            {
-                route = cachedRoute.CreateRoute(bundle);
-                missReason = PackageGraphEdgeRouteCacheMissReason.None;
-                return true;
-            }
-
-            route = default(PackageGraphEdgeRoute);
-            missReason = GetMissReason(key);
-            return false;
-        }
-
-        public void Store(PackageGraphEdgeRouteCacheKey key, PackageGraphEdgeRoute route)
-        {
-            if (string.IsNullOrEmpty(key.FullKey) ||
-                string.IsNullOrEmpty(key.IdentityKey) ||
-                route.Points == null ||
-                route.Points.Count < 2)
-            {
-                return;
-            }
-
-            // Cache invalidation is encoded in the stable key parts: focus graph, target layout,
-            // endpoint geometry, and route style. Transient animation state intentionally stays out.
-            if (_routes.Count >= MaxCachedRoutes)
-            {
-                _routes.Clear();
-                _lastKeyByIdentity.Clear();
-            }
-
-            _routes[key.FullKey] = new CachedPackageGraphEdgeRoute(route);
-            _lastKeyByIdentity[key.IdentityKey] = key;
-        }
-
-        private PackageGraphEdgeRouteCacheMissReason GetMissReason(PackageGraphEdgeRouteCacheKey key)
-        {
-            if (string.IsNullOrEmpty(key.IdentityKey) ||
-                !_lastKeyByIdentity.TryGetValue(key.IdentityKey, out PackageGraphEdgeRouteCacheKey previousKey))
-            {
-                return PackageGraphEdgeRouteCacheMissReason.NoExistingEntry;
-            }
-
-            if (!string.Equals(previousKey.FocusGraphKey, key.FocusGraphKey, StringComparison.Ordinal))
-            {
-                return PackageGraphEdgeRouteCacheMissReason.FocusGraphChanged;
-            }
-
-            if (!string.Equals(previousKey.LayoutSignature, key.LayoutSignature, StringComparison.Ordinal))
-            {
-                return PackageGraphEdgeRouteCacheMissReason.LayoutSignatureChanged;
-            }
-
-            if (!string.Equals(previousKey.EndpointGeometryKey, key.EndpointGeometryKey, StringComparison.Ordinal))
-            {
-                return PackageGraphEdgeRouteCacheMissReason.EndpointGeometryChanged;
-            }
-
-            if (!string.Equals(previousKey.RouteStyleKey, key.RouteStyleKey, StringComparison.Ordinal))
-            {
-                return PackageGraphEdgeRouteCacheMissReason.RouteStyleOptionsChanged;
-            }
-
-            return PackageGraphEdgeRouteCacheMissReason.NoExistingEntry;
-        }
-
-        private readonly struct CachedPackageGraphEdgeRoute
-        {
-            private readonly PackageGraphEdgeRoutePort _sourcePort;
-            private readonly PackageGraphEdgeRoutePort _targetPort;
-            private readonly PackageGraphEdgeRouteZone _zone;
-            private readonly string _sharedTrunkId;
-            private readonly int _branchIndex;
-            private readonly int _branchCount;
-            private readonly Vector2[] _points;
-
-            public CachedPackageGraphEdgeRoute(PackageGraphEdgeRoute route)
-            {
-                _sourcePort = route.SourcePort;
-                _targetPort = route.TargetPort;
-                _zone = route.Zone;
-                _sharedTrunkId = route.SharedTrunkId;
-                _branchIndex = route.BranchIndex;
-                _branchCount = route.BranchCount;
-                _points = route.Points.ToArray();
-            }
-
-            public PackageGraphEdgeRoute CreateRoute(PackageGraphConnectionBundle bundle)
-            {
-                return new PackageGraphEdgeRoute(
-                    bundle,
-                    _sourcePort,
-                    _targetPort,
-                    _zone,
-                    _sharedTrunkId,
-                    _branchIndex,
-                    _branchCount,
-                    _points);
-            }
-        }
-    }
 
     internal sealed class PackageGraphEdgeLayer : VisualElement
     {
@@ -10578,313 +8904,9 @@ namespace Deucarian.PackageInstaller.Editor
         }
     }
 
-    internal static class PackageGraphKeyboard
-    {
-        public static bool Activate(KeyDownEvent evt, VisualElement owner, Action action)
-        {
-            if (evt == null || owner == null || evt.target != owner || !IsActivationKey(evt.keyCode))
-            {
-                return false;
-            }
 
-            action?.Invoke();
-            evt.StopPropagation();
-            return true;
-        }
 
-        internal static bool IsActivationKey(KeyCode keyCode)
-        {
-            return keyCode == KeyCode.Return ||
-                   keyCode == KeyCode.KeypadEnter ||
-                   keyCode == KeyCode.Space;
-        }
-    }
 
-    internal sealed class PackageGraphOverflowSummaryElement : Label
-    {
-        private readonly string _diagnostic;
-
-        public PackageGraphOverflowSummaryElement(string text, string diagnostic)
-            : base(text)
-        {
-            _diagnostic = diagnostic ?? string.Empty;
-            focusable = true;
-            tabIndex = 0;
-            pickingMode = PickingMode.Position;
-            RegisterCallback<ClickEvent>(evt =>
-            {
-                Activate();
-                evt.StopPropagation();
-            });
-            RegisterCallback<KeyDownEvent>(evt =>
-                PackageGraphKeyboard.Activate(evt, this, Activate));
-        }
-
-        internal bool HasKeyboardActivationForTests => !string.IsNullOrEmpty(_diagnostic);
-
-        internal void ActivateForTests(Action<string> clipboardWriter = null)
-        {
-            CopyDiagnostic(clipboardWriter ?? WriteToSystemClipboard);
-        }
-
-        private void Activate()
-        {
-            CopyDiagnostic(WriteToSystemClipboard);
-        }
-
-        private void CopyDiagnostic(Action<string> clipboardWriter)
-        {
-            clipboardWriter?.Invoke(_diagnostic);
-        }
-
-        private static void WriteToSystemClipboard(string diagnostic)
-        {
-            EditorGUIUtility.systemCopyBuffer = diagnostic;
-        }
-    }
-
-    internal enum PackageGraphNodeVisualMode
-    {
-        Overview,
-        Focus,
-        Stack
-    }
-
-    internal sealed class PackageGraphGroupElement : VisualElement
-    {
-        public PackageGraphGroupElement(
-            PackageGraphGroupLayoutNode groupNode,
-            PackageGraphLayoutMode layoutMode,
-            bool hoverContext,
-            bool hoverDimmed,
-            string backTooltip,
-            bool interactionsEnabled,
-            Action<PackageGraphGroup> groupFocused,
-            Action<string> previewGroup,
-            Action<string> clearPreviewGroup,
-            int searchMatchCount = 0)
-        {
-            if (groupNode == null || groupNode.Group == null)
-            {
-                throw new ArgumentNullException(nameof(groupNode));
-            }
-
-            name = "group-" + groupNode.GroupId;
-            AddToClassList("dpi-graph-group");
-            AddToClassList("dpi-graph-group--" + GetRingClass(groupNode.Ring));
-            EnableInClassList("dpi-graph-group--focused", groupNode.Focused);
-            EnableInClassList("dpi-graph-group--collapsed", groupNode.Collapsed);
-            EnableInClassList(
-                "dpi-graph-group--overview",
-                layoutMode == PackageGraphLayoutMode.Overview);
-            EnableInClassList("dpi-graph-group--locked", !interactionsEnabled);
-            EnableInClassList("dpi-graph-group--attention", groupNode.AttentionCount > 0);
-            EnableInClassList("dpi-graph-group--empty", groupNode.PackageCount == 0);
-            EnableInClassList("dpi-graph-group--hover-context", hoverContext);
-            EnableInClassList("dpi-graph-group--hover-dimmed", hoverDimmed);
-            bool hasBackAffordance = !string.IsNullOrWhiteSpace(backTooltip);
-            EnableInClassList("dpi-graph-group--has-back", hasBackAffordance);
-            tooltip = hasBackAffordance ? backTooltip : groupNode.Group.DisplayName;
-            focusable = interactionsEnabled;
-            tabIndex = interactionsEnabled ? 0 : -1;
-
-            if (interactionsEnabled)
-            {
-                RegisterCallback<MouseEnterEvent>(_ => previewGroup?.Invoke(groupNode.GroupId));
-                RegisterCallback<MouseLeaveEvent>(_ => clearPreviewGroup?.Invoke(groupNode.GroupId));
-                RegisterCallback<FocusInEvent>(_ => previewGroup?.Invoke(groupNode.GroupId));
-                RegisterCallback<FocusOutEvent>(_ => clearPreviewGroup?.Invoke(groupNode.GroupId));
-                RegisterCallback<ClickEvent>(evt =>
-                {
-                    groupFocused?.Invoke(groupNode.Group);
-                    evt.StopPropagation();
-                });
-                RegisterCallback<KeyDownEvent>(evt => PackageGraphKeyboard.Activate(
-                    evt,
-                    this,
-                    () => groupFocused?.Invoke(groupNode.Group)));
-            }
-
-            float symbolSize = Mathf.Min(groupNode.HubRect.width, groupNode.HubRect.height);
-            float symbolLeft = groupNode.HubRect.x - groupNode.Rect.x;
-            float symbolTop = groupNode.HubRect.y - groupNode.Rect.y;
-
-            VisualElement symbol = new VisualElement();
-            symbol.AddToClassList("dpi-graph-group__symbol");
-            symbol.style.position = Position.Absolute;
-            symbol.style.left = symbolLeft;
-            symbol.style.top = symbolTop;
-            symbol.style.width = symbolSize;
-            symbol.style.height = symbolSize;
-            Add(symbol);
-
-            VisualElement symbolHighlight = new VisualElement();
-            symbolHighlight.AddToClassList("dpi-graph-group__glass-highlight");
-            symbolHighlight.pickingMode = PickingMode.Ignore;
-            symbol.Add(symbolHighlight);
-
-            VisualElement symbolSheen = DeucarianEditorGlassSheen.Create();
-            symbol.Add(symbolSheen);
-
-            if (interactionsEnabled)
-            {
-                RegisterCallback<MouseEnterEvent>(_ => DeucarianEditorGlassSheen.Play(symbolSheen));
-            }
-
-            Image icon = new Image
-            {
-                image = DeucarianEditorIcons.GetPackageIcon(groupNode.Group.IconKey),
-                scaleMode = ScaleMode.ScaleToFit,
-                tintColor = DeucarianEditorTheme.Text
-            };
-            icon.AddToClassList("dpi-graph-group__icon");
-            symbol.Add(icon);
-
-            VisualElement caption = new VisualElement();
-            caption.AddToClassList("dpi-graph-group__caption");
-            caption.style.position = Position.Absolute;
-            caption.style.left = 0f;
-            caption.style.top = symbolTop + symbolSize + 7f;
-            caption.style.width = groupNode.Rect.width;
-            Add(caption);
-
-            VisualElement titleRow = new VisualElement();
-            titleRow.AddToClassList("dpi-graph-category-caption-row");
-            caption.Add(titleRow);
-
-            if (hasBackAffordance)
-            {
-                Image back = CreateElementIcon(DeucarianEditorIconIds.Back);
-                back.AddToClassList("dpi-graph-back-hint");
-                back.AddToClassList("dpi-graph-back-hint--category");
-                back.AddToClassList("dpi-graph-group__back-hint");
-                back.pickingMode = PickingMode.Ignore;
-                back.tooltip = backTooltip;
-                titleRow.Add(back);
-            }
-
-            Label title = new Label(GetTitle(groupNode));
-            title.AddToClassList("dpi-graph-group__title");
-            titleRow.Add(title);
-
-            string subtitleText = layoutMode == PackageGraphLayoutMode.Overview && searchMatchCount > 0
-                ? searchMatchCount + (searchMatchCount == 1 ? " match" : " matches")
-                : (groupNode.Collapsed && !string.IsNullOrWhiteSpace(groupNode.SummaryLabel)
-                    ? groupNode.SummaryLabel
-                    : PackageGraphCategoryStatusVisuals.FormatTotal(groupNode.PackageCount));
-            Label subtitle = new Label(subtitleText);
-            subtitle.AddToClassList("dpi-graph-group__subtitle");
-            caption.Add(subtitle);
-
-            VisualElement stats = new VisualElement();
-            stats.AddToClassList("dpi-graph-group__stats");
-            stats.Add(CreateStat("Installed", groupNode.InstalledCount, "installed"));
-            stats.Add(CreateStat("Not installed", groupNode.NotInstalledCount, "available"));
-            if (groupNode.AttentionCount > 0)
-            {
-                stats.Add(CreateStat("Attention", groupNode.AttentionCount, "attention"));
-            }
-
-            if (groupNode.UnknownCount > 0)
-            {
-                stats.Add(CreateStat("Unknown", groupNode.UnknownCount, "unknown"));
-            }
-
-            caption.Add(stats);
-
-        }
-
-        public void SetHoverState(bool hoverContext, bool hoverDimmed)
-        {
-            EnableInClassList("dpi-graph-group--hover-context", hoverContext);
-            EnableInClassList("dpi-graph-group--hover-dimmed", hoverDimmed);
-        }
-
-        private static string GetTitle(PackageGraphGroupLayoutNode groupNode)
-        {
-            return groupNode.Group.DisplayName;
-        }
-
-        private static VisualElement CreateStat(string label, int count, string className)
-        {
-            VisualElement stat = DeucarianEditorIconTextButton.CreateContent(
-                GetStatusIcon(className),
-                count + " " + label.ToLowerInvariant(),
-                leading: true);
-            Color color = GetStatusColor(className);
-            Image icon = stat.Q<Image>(className: DeucarianEditorIconTextButton.IconClass);
-            Label text = stat.Q<Label>(className: DeucarianEditorIconTextButton.LabelClass);
-            if (icon != null)
-            {
-                icon.tintColor = color;
-            }
-            if (text != null)
-            {
-                text.style.color = color;
-            }
-            stat.AddToClassList("dpi-graph-group__stat");
-            stat.AddToClassList("dpi-graph-group__stat--" + className);
-            return stat;
-        }
-
-        private static string GetStatusIcon(string className)
-        {
-            switch (className)
-            {
-                case "installed":
-                    return DeucarianEditorIconIds.Success;
-                case "update":
-                case "attention":
-                    return DeucarianEditorIconIds.Warning;
-                case "unknown":
-                    return DeucarianEditorIconIds.Info;
-                default:
-                    return DeucarianEditorIconIds.Available;
-            }
-        }
-
-        private static Color GetStatusColor(string className)
-        {
-            switch (className)
-            {
-                case "installed":
-                    return DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorGraphTheme.Installed, 0.90f);
-                case "attention":
-                case "update":
-                    return DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorGraphTheme.Update, 0.95f);
-                case "unknown":
-                    return DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorGraphTheme.Unknown, 0.84f);
-                default:
-                    return DeucarianEditorGraphTheme.WithAlpha(DeucarianEditorGraphTheme.Available, 0.90f);
-            }
-        }
-
-        private static Image CreateElementIcon(string iconId)
-        {
-            return new Image
-            {
-                image = DeucarianEditorIcons.GetIcon(iconId),
-                scaleMode = ScaleMode.ScaleToFit,
-                tintColor = DeucarianEditorTheme.Text,
-                pickingMode = PickingMode.Ignore
-            };
-        }
-
-        private static string GetRingClass(PackageGraphLayoutRing ring)
-        {
-            switch (ring)
-            {
-                case PackageGraphLayoutRing.Runtime:
-                    return "runtime";
-                case PackageGraphLayoutRing.Integration:
-                    return "integration";
-                case PackageGraphLayoutRing.Suite:
-                    return "suite";
-                default:
-                    return "infrastructure";
-            }
-        }
-    }
 
     internal sealed class PackageGraphNodeElement : VisualElement
     {

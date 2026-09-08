@@ -57,7 +57,7 @@ namespace Deucarian.PackageInstaller.Editor
                     _packageDetectionService == null ||
                     !_packageDetectionService.IsInstalled(packageDefinition.PackageId))
                 {
-                    RecordStaleConfirmation(
+                    PackageOperationRecoveryPolicy.RecordStaleConfirmation(
                         "Remove " + packageDefinition.DisplayName,
                         "Package state changed while the removal confirmation was open.");
                     return;
