@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.4 - 2026-09-09
+
+- Cover per-window style isolation and preserve baseline UI assertions across the composed window/presenter source files.
+
 ## 1.2.3 - 2026-09-09
 
 - Move window-specific style lifetime, IMGUI rendering and visual status mapping into composed owners. Update graph regression tests to call the extracted policies directly instead of reflecting private visual-layer methods.

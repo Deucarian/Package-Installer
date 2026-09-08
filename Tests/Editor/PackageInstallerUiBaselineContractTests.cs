@@ -930,10 +930,12 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
             string directory = Path.GetDirectoryName(fullPath);
             string stem = Path.GetFileNameWithoutExtension(fullPath);
+            IEnumerable<string> sources = Directory.GetFiles(directory, stem + "*.cs");
+            if (stem == "PackageInstallerWindow")
+                sources = sources.Concat(new[] { Path.Combine(directory, "PackageInstallerImGui.cs") });
             return string.Join(
                 Environment.NewLine,
-                Directory.GetFiles(directory, stem + "*.cs")
-                    .OrderBy(path => path, StringComparer.Ordinal)
+                sources.OrderBy(path => path, StringComparer.Ordinal)
                     .Select(File.ReadAllText));
         }
 
