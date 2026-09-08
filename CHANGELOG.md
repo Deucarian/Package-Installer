@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.6 - 2026-09-09
+
+- Assert shared button heights through their existing public style-value checks, without also coupling those checks to a private constant's spelling.
+
 ## 1.2.5 - 2026-09-09
 
 - Keep source-contract tests compatible with both the original and extracted shared workbench-style owners.

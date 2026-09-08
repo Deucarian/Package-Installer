@@ -640,9 +640,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                          "DeucarianEditorLayoutMetrics.SurfaceHorizontalPadding",
                          "DeucarianEditorLayoutMetrics.SurfaceVerticalPadding",
                          "DeucarianEditorLayoutMetrics.SurfaceSpacing)",
-                         "titleStyle.fontSize = 15;",
-                         "primaryButtonStyle.fixedHeight = ButtonHeight;",
-                         "secondaryButtonStyle.fixedHeight = ButtonHeight;"
+                         "titleStyle.fontSize = 15;"
                      })
             {
                 Assert.That(workbenchSource, Does.Contain(declaration));
