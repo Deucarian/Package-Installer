@@ -94,7 +94,7 @@ namespace Deucarian.PackageInstaller.Editor
         {
             PackageChannel selectedChannel = GetSelectedChannel(packageDefinition);
             PackageChannel[] channelOptions = PackageChannelPolicy.GetChannelOptions(packageDefinition, selectedChannel);
-            string[] channelLabels = channelOptions.Select(GetChannelLabel).ToArray();
+            string[] channelLabels = channelOptions.Select(PackageChannelPolicy.GetChannelLabel).ToArray();
             int selectedIndex = Mathf.Max(0, Array.IndexOf(channelOptions, selectedChannel));
 
             using (new EditorGUI.DisabledScope(channelOptions.Length <= 1 || IsAnyOperationBusy()))
