@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.5 - 2026-09-09
+
+- Keep source-contract tests compatible with both the original and extracted shared workbench-style owners.
+
 ## 1.2.4 - 2026-09-09
 
 - Cover per-window style isolation and preserve baseline UI assertions across the composed window/presenter source files.

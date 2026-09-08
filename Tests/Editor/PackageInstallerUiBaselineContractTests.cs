@@ -933,6 +933,9 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             IEnumerable<string> sources = Directory.GetFiles(directory, stem + "*.cs");
             if (stem == "PackageInstallerWindow")
                 sources = sources.Concat(new[] { Path.Combine(directory, "PackageInstallerImGui.cs") });
+            string workbenchStyles = Path.Combine(directory, "DeucarianEditorWorkbenchStyles.cs");
+            if (stem == "DeucarianEditorWorkbenchGUI" && File.Exists(workbenchStyles))
+                sources = sources.Concat(new[] { workbenchStyles });
             return string.Join(
                 Environment.NewLine,
                 sources.OrderBy(path => path, StringComparer.Ordinal)
