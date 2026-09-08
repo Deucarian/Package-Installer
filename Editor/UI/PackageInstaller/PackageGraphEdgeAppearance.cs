@@ -17,6 +17,14 @@ namespace Deucarian.PackageInstaller.Editor
 {
     internal static class PackageGraphEdgeAppearance
     {
+        internal static bool UsesTwoPassStroke(PackageGraphEdgeKind kind)
+        {
+            return kind == PackageGraphEdgeKind.HardDependency ||
+                   kind == PackageGraphEdgeKind.IntegrationConnection ||
+                   kind == PackageGraphEdgeKind.OptionalCompanion ||
+                   kind == PackageGraphEdgeKind.SuiteMembership;
+        }
+
         internal static bool IsRouteEmphasized(
             PackageGraphEdgeRoute route,
             PackageGraphFocus focus,

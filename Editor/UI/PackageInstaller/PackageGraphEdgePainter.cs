@@ -200,7 +200,7 @@ namespace Deucarian.PackageInstaller.Editor
             bool emphasized,
             bool focusMode)
         {
-            if (points == null || points.Count < 2 || !UsesTwoPassStrokeForTests(kind))
+            if (points == null || points.Count < 2 || !PackageGraphEdgeAppearance.UsesTwoPassStroke(kind))
             {
                 return;
             }

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.2 - 2026-09-09
+
+- Move two-pass edge-stroke policy into the shared appearance owner; the production painter no longer depends on a visual layer's test entry point.
+
 ## 1.2.1 - 2026-09-09
 
 - Separate graph route planning, geometry, painting, controls and membership rendering from visual layers. Compose layout projection, occlusion rendering and drag state.

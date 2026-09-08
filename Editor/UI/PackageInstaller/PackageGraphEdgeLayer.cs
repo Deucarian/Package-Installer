@@ -205,10 +205,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         internal static bool UsesTwoPassStrokeForTests(PackageGraphEdgeKind kind)
         {
-            return kind == PackageGraphEdgeKind.HardDependency ||
-                   kind == PackageGraphEdgeKind.IntegrationConnection ||
-                   kind == PackageGraphEdgeKind.OptionalCompanion ||
-                   kind == PackageGraphEdgeKind.SuiteMembership;
+            return PackageGraphEdgeAppearance.UsesTwoPassStroke(kind);
         }
 
         internal static Color ResolveEdgeStatusColorForTests(
