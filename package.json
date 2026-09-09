@@ -19,7 +19,7 @@
     "package-manager"
   ],
   "dependencies": {
-    "com.deucarian.editor": "1.4.0",
+    "com.deucarian.editor": "1.4.1",
     "com.deucarian.logging": "1.0.4"
   }
 }
