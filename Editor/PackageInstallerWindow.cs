@@ -241,9 +241,6 @@ namespace Deucarian.PackageInstaller.Editor
         internal const string GlobalChannelOverrideButtonName = "package-installer-global-channel-override";
         internal const string GlobalChannelOverridePopupName = "package-installer-global-channel-override-popup";
         internal const string GlobalChannelOverrideResetButtonName = "package-installer-global-channel-override-reset";
-        private const string AdvancedFoldoutPreferencePrefix = "Deucarian.PackageInstaller.AdvancedFoldout.";
-        private const string CategoryFoldoutPreferencePrefix = "Deucarian.PackageInstaller.CategoryFoldout.";
-        private const string OperationDrawerPreferencePrefix = "Deucarian.PackageInstaller.OperationDrawer.";
         private const string GraphStyleSheetPath =
             "Packages/com.deucarian.package-installer/Editor/UI/PackageInstaller/PackageInstallerGraph.uss";
         private const string InstallerMenuPath = "Tools/Deucarian/Package Installer...";
@@ -263,10 +260,7 @@ namespace Deucarian.PackageInstaller.Editor
         private PackageDependencyInstaller _packageDependencyInstaller;
         private PackageGraphBuilder _packageGraphBuilder;
         private PackageInstallerStateRepository _stateRepository;
-        private readonly Dictionary<string, bool> _advancedFoldouts =
-            new Dictionary<string, bool>();
-        private readonly Dictionary<string, bool> _categoryFoldouts =
-            new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        private readonly PackageInstallerWindowPreferences _preferences = new PackageInstallerWindowPreferences();
         private readonly Dictionary<string, HashSet<string>> _templateCompositionSelections =
             new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, string> _templateCompositionPresetIds =
@@ -344,38 +338,11 @@ namespace Deucarian.PackageInstaller.Editor
         private Button _operationFooterDetailsButton;
         private Label _operationFooterVersionLabel;
         private PackageGraphView _graphView;
+        private readonly PackageInstallerWindowStyles _styles = new PackageInstallerWindowStyles();
+        private PackageInstallerImGui _imGui;
+        private PackageInstallerImGui ImGui => _imGui ?? (_imGui = new PackageInstallerImGui(_styles, GetDetailsContentWidth));
+        private void EnsureStyles() => _styles.Ensure();
         private PackageInstallerResponsiveMode _responsiveMode = PackageInstallerResponsiveMode.Wide;
-
-        private bool _stylesInitialized;
-        private bool _lastProSkin;
-        private Color _mainBackgroundColor;
-        private Color _sidebarBackgroundColor;
-        private Color _detailsBackgroundColor;
-        private Color _headerPanelBackgroundColor;
-        private Color _sampleRowBackgroundColor;
-        private Color _panelBorderColor;
-        private Color _interactiveBorderColor;
-        private Color _separatorColor;
-        private Color _rowBackgroundColor;
-        private Color _rowHoverColor;
-        private Color _rowSelectedColor;
-        private Color _operationDrawerBackgroundColor;
-        private Color _operationDrawerBorderColor;
-        private Color _textColor;
-        private Color _mutedTextColor;
-
-        private GUIStyle _sidebarStyle;
-        private GUIStyle _detailsStyle;
-        private GUIStyle _sampleRowStyle;
-        private GUIStyle _titleStyle;
-        private GUIStyle _subtitleStyle;
-        private GUIStyle _sectionTitleStyle;
-        private GUIStyle _miniLabelStyle;
-        private GUIStyle _mutedMiniLabelStyle;
-        private GUIStyle _rowTitleStyle;
-        private GUIStyle _rowSubLabelStyle;
-        private GUIStyle _rowStatusStyle;
-        private GUIStyle _foldoutStyle;
 
         internal static bool DefaultsToEcosystemGraphForTests => DefaultInstallerViewMode == InstallerViewMode.EcosystemGraph;
 

@@ -13,7 +13,6 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed partial class PackageInstallerWindow
     {
 
-
         private VisualElement CreateGlobalChannelOverridePopup()
         {
             VisualElement popup = new VisualElement { name = GlobalChannelOverridePopupName };
@@ -73,11 +72,11 @@ namespace Deucarian.PackageInstaller.Editor
             }
 
             PackageChannelSelection selection = GetGlobalProjectChannelSelection();
-            _globalChannelDropdown.SetValueWithoutNotify(GetChannelLabel(selection.Channel));
+            _globalChannelDropdown.SetValueWithoutNotify(PackageChannelPolicy.GetChannelLabel(selection.Channel));
 
             if (_globalChannelResetButton != null)
             {
-                bool showReset = ShouldShowGlobalChannelReset(selection);
+                bool showReset = PackageChannelPolicy.ShouldShowGlobalChannelReset(selection);
                 _globalChannelResetButton.style.display = showReset
                     ? DisplayStyle.Flex
                     : DisplayStyle.None;
@@ -107,8 +106,8 @@ namespace Deucarian.PackageInstaller.Editor
             PackageChannelSelection selection = GetGlobalProjectChannelSelection();
             DeucarianEditorCommandBar.SetText(
                 _graphGlobalChannelButton,
-                FormatGlobalChannelButtonLabel(selection));
-            _graphGlobalChannelButton.tooltip = GetGlobalChannelButtonTooltip(selection);
+                PackageChannelPolicy.FormatGlobalChannelButtonLabel(selection));
+            _graphGlobalChannelButton.tooltip = PackageChannelPolicy.GetGlobalChannelButtonTooltip(selection);
         }
 
         private void SetGlobalChannelOverride(PackageChannel channel)
@@ -148,31 +147,6 @@ namespace Deucarian.PackageInstaller.Editor
             RefreshGraphView("global channel override cleared");
             HideGlobalChannelOverridePopup();
             Repaint();
-        }
-
-        private static string FormatGlobalChannelButtonLabel(PackageChannelSelection selection)
-        {
-            return (selection.HasValue ? "Override: " : "Channel: ") +
-                   GetChannelLabel(selection.Channel);
-        }
-
-        private static string GetGlobalChannelButtonTooltip(PackageChannelSelection selection)
-        {
-            return selection.HasValue
-                ? "An explicit project channel override is active. Open to change it or return to the inherited/default channel."
-                : "No explicit project override is active. Open to set a project channel override.";
-        }
-
-        private static bool ShouldShowGlobalChannelReset(PackageChannelSelection selection)
-        {
-            return selection.HasValue;
-        }
-
-        private static PackageChannel ParseChannelLabel(string label)
-        {
-            return string.Equals(label, GetChannelLabel(PackageChannel.Development), StringComparison.OrdinalIgnoreCase)
-                ? PackageChannel.Development
-                : PackageChannel.Stable;
         }
 
         private void PositionGlobalChannelOverridePopup()
@@ -252,10 +226,10 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void ApplyGlobalChannelOverrideFromPopup()
         {
-            PackageChannel channel = ParseChannelLabel(
+            PackageChannel channel = PackageChannelPolicy.ParseChannelLabel(
                 _globalChannelDropdown != null
                     ? _globalChannelDropdown.value
-                    : GetChannelLabel(GetGlobalProjectChannel()));
+                    : PackageChannelPolicy.GetChannelLabel(GetGlobalProjectChannel()));
             SetGlobalChannelOverride(channel);
             HideGlobalChannelOverridePopup();
         }

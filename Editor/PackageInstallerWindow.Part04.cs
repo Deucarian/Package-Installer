@@ -13,7 +13,6 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed partial class PackageInstallerWindow
     {
 
-
         private void UpdateActivityRetryButton()
         {
             if (_operationDrawerRetryButton == null)
@@ -297,7 +296,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             ApplyOperationFooterData(
                 footer,
-                VisualStatusKind.Info,
+                PackageInstallerVisualStatusKind.Info,
                 "Idle",
                 "No operation running.",
                 false,
