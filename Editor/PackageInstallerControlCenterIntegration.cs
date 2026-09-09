@@ -21,7 +21,7 @@ namespace Deucarian.PackageInstaller.Editor
                 PackageId,
                 "package-plus",
                 new[] { "upm", "packages", "dependencies", "updates" },
-                10));
+                10, createPage: PackageInstallerWindow.CreatePage));
             DeucarianControlCenterRegistry.RegisterCardProvider(
                 new PackageInstallerCardProvider());
         }

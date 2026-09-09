@@ -28,7 +28,7 @@ namespace Deucarian.PackageInstaller.Editor
             internal InstallerWorkspace(PackageInstallerWindow owner)
             {
                 this.owner = owner;
-                View = new DeucarianEditorCollectionWorkspace(owner.rootVisualElement, Application.productName,
+                View = new DeucarianEditorCollectionWorkspace(owner.PageRoot, Application.productName,
                     "Package Installer", "Find, review and update your project’s packages.",
                     DeucarianToolIds.PackageInstaller, "Search packages…");
                 tabs = new DeucarianEditorChoiceBar(new[] { "Installed", "Updates", "Browse", "Dependency graph" },

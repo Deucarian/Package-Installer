@@ -15,9 +15,11 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void OnDisable()
         {
+            navigation?.Dispose();
+            navigation = null;
             _workspace?.Dispose();
             _workspace = null;
-            rootVisualElement.UnregisterCallback<KeyDownEvent>(HandleRootKeyDown);
+            PageRoot.UnregisterCallback<KeyDownEvent>(HandleRootKeyDown);
             AssemblyReloadEvents.beforeAssemblyReload -= HandleBeforeAssemblyReload;
             DismissPendingConfirmation(refreshUi: false);
 
@@ -69,11 +71,25 @@ namespace Deucarian.PackageInstaller.Editor
             _stateRepository = null;
             PackageInstallerWindowReloadState.ClearForNormalDisable();
         }
-
         private void CreateGUI()
         {
+            navigation?.Dispose();
+            navigation = new DeucarianEditorPageSession(this, DeucarianToolIds.PackageInstaller, BuildPage);
+        }
+
+        internal static IDeucarianEditorPage CreatePage() =>
+            DeucarianEditorWindowPages.Create<PackageInstallerWindow>(
+                (window, root) => window.BuildPage(root), activate: (window, route) => window.OnFocus());
+
+        private DeucarianEditorPageSession navigation;
+        private VisualElement pageRoot;
+        private VisualElement PageRoot => pageRoot ?? rootVisualElement;
+
+        private void BuildPage(VisualElement root)
+        {
+            pageRoot = root;
             _workspace?.Dispose();
-            rootVisualElement.Clear();
+            PageRoot.Clear();
             _workspace = new InstallerWorkspace(this);
             VisualElement content = _workspace.View.Workspace.Content;
             _windowContentRoot = content;
@@ -82,10 +98,10 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (graphStyleSheet != null)
             {
-                rootVisualElement.styleSheets.Add(graphStyleSheet);
+                PageRoot.styleSheets.Add(graphStyleSheet);
             }
 
-            rootVisualElement.RegisterCallback<KeyDownEvent>(HandleRootKeyDown);
+            PageRoot.RegisterCallback<KeyDownEvent>(HandleRootKeyDown);
             content.RegisterCallback<GeometryChangedEvent>(evt => ApplyResponsiveLayout(evt.newRect.width));
             _listViewContainerHost = _workspace.View.Collection;
 
@@ -292,7 +308,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void ShowGlobalChannelOverridePopup()
         {
-            if (rootVisualElement == null || _graphGlobalChannelButton == null)
+            if (PageRoot == null || _graphGlobalChannelButton == null)
             {
                 return;
             }
@@ -300,17 +316,17 @@ namespace Deucarian.PackageInstaller.Editor
             if (_globalChannelPopup == null)
             {
                 _globalChannelPopup = CreateGlobalChannelOverridePopup();
-                rootVisualElement.Add(_globalChannelPopup);
+                PageRoot.Add(_globalChannelPopup);
             }
 
             UpdateGlobalChannelOverridePopup();
             PositionGlobalChannelOverridePopup();
             _globalChannelPopup.style.display = DisplayStyle.Flex;
             _globalChannelPopup.BringToFront();
-            rootVisualElement.RegisterCallback<MouseDownEvent>(
+            PageRoot.RegisterCallback<MouseDownEvent>(
                 HandleGlobalChannelOverrideRootMouseDown,
                 TrickleDown.TrickleDown);
-            rootVisualElement.RegisterCallback<KeyDownEvent>(
+            PageRoot.RegisterCallback<KeyDownEvent>(
                 HandleGlobalChannelOverrideRootKeyDown,
                 TrickleDown.TrickleDown);
         }
