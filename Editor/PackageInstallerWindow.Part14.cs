@@ -41,7 +41,7 @@ namespace Deucarian.PackageInstaller.Editor
                     }
                     else
                     {
-                        EditorGUILayout.LabelField("Install this package from the selected channel.", _styles.MutedMiniLabelStyle);
+                        DeucarianEditorTextGUI.LabelField("Install this package from the selected channel.", _styles.MutedMiniLabelStyle);
                     }
                 }
                 else
@@ -81,7 +81,7 @@ namespace Deucarian.PackageInstaller.Editor
                     }
                     else
                     {
-                        EditorGUILayout.LabelField("Package is installed. Reinstall uses the selected channel URL/ref.", _styles.MutedMiniLabelStyle);
+                        DeucarianEditorTextGUI.LabelField("Package is installed. Reinstall uses the selected channel URL/ref.", _styles.MutedMiniLabelStyle);
                     }
                 }
 

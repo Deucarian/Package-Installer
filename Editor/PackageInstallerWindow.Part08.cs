@@ -240,10 +240,10 @@ namespace Deucarian.PackageInstaller.Editor
             int matchedCount = categoryViews.Sum(view => view.FilteredPackageCount);
             int visibleCount = categoryViews.Sum(view => view.VisiblePackages.Count);
 
-            EditorGUILayout.LabelField("Package List", _styles.SectionTitleStyle);
+            DeucarianEditorTextGUI.LabelField("Package List", _styles.SectionTitleStyle);
 
             EditorGUI.BeginChangeCheck();
-            string nextSearchText = EditorGUILayout.TextField(
+            string nextSearchText = DeucarianEditorInputGUI.TextField(
                 new GUIContent("Search", "Find packages by package name, package ID, domain, or kind."),
                 _visibilityFilterState.SearchText);
 
@@ -253,15 +253,15 @@ namespace Deucarian.PackageInstaller.Editor
                 Repaint();
             }
 
-            EditorGUILayout.LabelField("Visibility", _styles.MutedMiniLabelStyle);
+            DeucarianEditorTextGUI.LabelField("Visibility", _styles.MutedMiniLabelStyle);
 
             using (new EditorGUILayout.HorizontalScope())
             {
-                bool nextShowInstalled = EditorGUILayout.ToggleLeft(
+                bool nextShowInstalled = DeucarianEditorInputGUI.ToggleLeft(
                     new GUIContent("Installed", "Show packages that Unity reports as installed."),
                     _visibilityFilterState.ShowInstalled,
                     GUILayout.Width(92f));
-                bool nextShowNotInstalled = EditorGUILayout.ToggleLeft(
+                bool nextShowNotInstalled = DeucarianEditorInputGUI.ToggleLeft(
                     new GUIContent("Not Installed", "Show packages that Unity does not report as installed."),
                     _visibilityFilterState.ShowNotInstalled,
                     GUILayout.Width(118f));
@@ -276,7 +276,7 @@ namespace Deucarian.PackageInstaller.Editor
                 }
             }
 
-            EditorGUILayout.LabelField(
+            DeucarianEditorTextGUI.LabelField(
                 GetSidebarFilterSummary(totalCount, matchedCount, visibleCount),
                 _styles.MutedMiniLabelStyle);
         }
@@ -344,7 +344,7 @@ namespace Deucarian.PackageInstaller.Editor
                     updateKind,
                     GUILayout.Width(compact ? 132f : 146f));
 
-                EditorGUILayout.LabelField(
+                DeucarianEditorTextGUI.LabelField(
                     new GUIContent(
                         "Last Checked: " + GetLastUpdateCheckLabel(),
                         GetLastUpdateCheckTooltip()),
@@ -354,7 +354,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (!string.IsNullOrWhiteSpace(_packageUpdateCheckService.LastFailureMessage))
             {
-                EditorGUILayout.LabelField(
+                DeucarianEditorTextGUI.LabelField(
                     new GUIContent(
                         _packageUpdateCheckService.LastFailureMessage,
                         _packageUpdateCheckService.LastFailureMessage),

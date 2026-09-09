@@ -323,14 +323,14 @@ namespace Deucarian.PackageInstaller.Editor
                     using (new EditorGUILayout.VerticalScope(GUILayout.ExpandWidth(true)))
                     {
                         string displayName = GetDetailDisplayName(packageDefinition);
-                        EditorGUILayout.LabelField(
+                        DeucarianEditorTextGUI.LabelField(
                             new GUIContent(displayName, displayName),
                             _styles.TitleStyle,
                             GUILayout.ExpandWidth(true));
 
                         if (!string.IsNullOrWhiteSpace(packageDefinition.Description))
                         {
-                            EditorGUILayout.LabelField(
+                            DeucarianEditorTextGUI.LabelField(
                                 new GUIContent(packageDefinition.Description, packageDefinition.Description),
                                 _styles.SubtitleStyle);
                         }
