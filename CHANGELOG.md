@@ -1,5 +1,34 @@
 # Changelog
 
+## 1.2.6 - 2026-09-09
+
+- Assert shared button heights through their existing public style-value checks, without also coupling those checks to a private constant's spelling.
+
+## 1.2.5 - 2026-09-09
+
+- Keep source-contract tests compatible with both the original and extracted shared workbench-style owners.
+
+## 1.2.4 - 2026-09-09
+
+- Cover per-window style isolation and preserve baseline UI assertions across the composed window/presenter source files.
+
+## 1.2.3 - 2026-09-09
+
+- Move window-specific style lifetime, IMGUI rendering and visual status mapping into composed owners. Update graph regression tests to call the extracted policies directly instead of reflecting private visual-layer methods.
+
+## 1.2.2 - 2026-09-09
+
+- Move two-pass edge-stroke policy into the shared appearance owner; the production painter no longer depends on a visual layer's test entry point.
+
+## 1.2.1 - 2026-09-09
+
+- Separate graph route planning, geometry, painting, controls and membership rendering from visual layers. Compose layout projection, occlusion rendering and drag state.
+- Share geometry snapshots, ancestor queries and layout snapshot policies; preserve graph navigation, animation and input behavior with focused regression tests.
+
+## 1.2.0 - Unreleased
+
+- Separate recovery workflow and policy, channel selection, graph navigation, deterministic layout animation and window preferences. Synchronize the canonical fallback catalog.
+
 ## 1.1.98 - 2026-09-08
 
 - Projected the Notifications dependency on reusable Deucarian UI visibility motion into the bundled catalog.

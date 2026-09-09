@@ -13,7 +13,6 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed partial class PackageInstallerWindow
     {
 
-
         private static string GetDefaultActionLabel(PackageInstallerActionKind actionKind)
         {
             switch (actionKind)
@@ -205,17 +204,17 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void DrawSidebar()
         {
-            Rect rect = BeginSurface(
-                _sidebarStyle,
-                _sidebarBackgroundColor,
-                _panelBorderColor,
+            Rect rect = ImGui.BeginSurface(
+                _styles.SidebarStyle,
+                _styles.SidebarBackgroundColor,
+                _styles.PanelBorderColor,
                 GUILayout.Width(SidebarWidth),
                 GUILayout.ExpandHeight(true));
 
             IReadOnlyList<PackageCategoryListView> categoryViews = GetPackageCategoryViews();
             DrawSidebarFilterControls(categoryViews);
             GUILayout.Space(8f);
-            DrawHorizontalSeparator();
+            ImGui.DrawHorizontalSeparator();
             GUILayout.Space(8f);
 
             _sidebarScrollPosition = EditorGUILayout.BeginScrollView(_sidebarScrollPosition);
@@ -241,7 +240,7 @@ namespace Deucarian.PackageInstaller.Editor
             int matchedCount = categoryViews.Sum(view => view.FilteredPackageCount);
             int visibleCount = categoryViews.Sum(view => view.VisiblePackages.Count);
 
-            EditorGUILayout.LabelField("Package List", _sectionTitleStyle);
+            EditorGUILayout.LabelField("Package List", _styles.SectionTitleStyle);
 
             EditorGUI.BeginChangeCheck();
             string nextSearchText = EditorGUILayout.TextField(
@@ -254,7 +253,7 @@ namespace Deucarian.PackageInstaller.Editor
                 Repaint();
             }
 
-            EditorGUILayout.LabelField("Visibility", _mutedMiniLabelStyle);
+            EditorGUILayout.LabelField("Visibility", _styles.MutedMiniLabelStyle);
 
             using (new EditorGUILayout.HorizontalScope())
             {
@@ -279,7 +278,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             EditorGUILayout.LabelField(
                 GetSidebarFilterSummary(totalCount, matchedCount, visibleCount),
-                _mutedMiniLabelStyle);
+                _styles.MutedMiniLabelStyle);
         }
 
         private string GetSidebarFilterSummary(int totalCount, int matchedCount, int visibleCount)
@@ -323,7 +322,7 @@ namespace Deucarian.PackageInstaller.Editor
                 string message = categoryViews.Any(view => view.PackageCount > 0)
                     ? "No packages match the active filters."
                     : "No package entries are available in the active registry.";
-                DrawInlineHelp(message, VisualStatusKind.Info);
+                ImGui.DrawInlineHelp(message, PackageInstallerVisualStatusKind.Info);
             }
         }
 
@@ -332,15 +331,15 @@ namespace Deucarian.PackageInstaller.Editor
             PackageDefinition[] packagesWithUpdates = GetPackagesWithUpdates();
             int updateCount = packagesWithUpdates.Length;
             bool checking = _packageUpdateCheckService.IsChecking;
-            VisualStatusKind updateKind = checking
-                ? VisualStatusKind.Busy
+            PackageInstallerVisualStatusKind updateKind = checking
+                ? PackageInstallerVisualStatusKind.Busy
                 : updateCount > 0
-                    ? VisualStatusKind.UpdateAvailable
-                    : VisualStatusKind.Installed;
+                    ? PackageInstallerVisualStatusKind.UpdateAvailable
+                    : PackageInstallerVisualStatusKind.Installed;
 
             using (new EditorGUILayout.HorizontalScope())
             {
-                DrawStatusBadge(
+                ImGui.DrawStatusBadge(
                     checking ? "Checking updates" : "Updates Available: " + updateCount,
                     updateKind,
                     GUILayout.Width(compact ? 132f : 146f));
@@ -349,7 +348,7 @@ namespace Deucarian.PackageInstaller.Editor
                     new GUIContent(
                         "Last Checked: " + GetLastUpdateCheckLabel(),
                         GetLastUpdateCheckTooltip()),
-                    _mutedMiniLabelStyle,
+                    _styles.MutedMiniLabelStyle,
                     GUILayout.MinWidth(compact ? 120f : 170f));
             }
 
@@ -359,7 +358,7 @@ namespace Deucarian.PackageInstaller.Editor
                     new GUIContent(
                         _packageUpdateCheckService.LastFailureMessage,
                         _packageUpdateCheckService.LastFailureMessage),
-                    _mutedMiniLabelStyle);
+                    _styles.MutedMiniLabelStyle);
             }
         }
 

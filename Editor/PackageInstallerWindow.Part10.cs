@@ -13,19 +13,18 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed partial class PackageInstallerWindow
     {
 
-
         private void DrawEcosystemOverviewGroupsPanel()
         {
-            PackageGraphNavigationRow[] navigationRows = CreateEcosystemOverviewGroupNavigationRows(
+            PackageGraphNavigationRow[] navigationRows = PackageGraphNavigationModel.CreateEcosystemOverviewGroupNavigationRows(
                     _lastPackageGraph,
                     _graphNavigationState)
                 .ToArray();
 
-            DrawPanel("Groups", () =>
+            ImGui.DrawPanel("Groups", () =>
             {
                 if (navigationRows.Length == 0)
                 {
-                    EditorGUILayout.LabelField("No ecosystem navigation is available.", _mutedMiniLabelStyle);
+                    EditorGUILayout.LabelField("No ecosystem navigation is available.", _styles.MutedMiniLabelStyle);
                     SynchronizeDetailsNavigationHover(null);
                     return;
                 }
@@ -62,26 +61,26 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 bool highlighted = selected || hover || graphHover || keyboardFocused;
                 Color activePathBackground = Color.Lerp(
-                    _sampleRowBackgroundColor,
-                    _rowSelectedColor,
+                    _styles.SampleRowBackgroundColor,
+                    _styles.RowSelectedColor,
                     0.22f);
                 DeucarianEditorVisualShell.DrawInsetSurface(
                     rowRect,
                     selected
-                        ? _rowSelectedColor
+                        ? _styles.RowSelectedColor
                         : highlighted
-                            ? _rowHoverColor
+                            ? _styles.RowHoverColor
                             : row.IsInActivePath
                                 ? activePathBackground
-                                : _sampleRowBackgroundColor,
-                    highlighted || row.IsInActivePath ? _interactiveBorderColor : _separatorColor,
+                                : _styles.SampleRowBackgroundColor,
+                    highlighted || row.IsInActivePath ? _styles.InteractiveBorderColor : _styles.SeparatorColor,
                     4f);
 
                 if (selected || row.HasAttention)
                 {
                     EditorGUI.DrawRect(
                         new Rect(rowRect.x, rowRect.y, 3f, rowRect.height),
-                        row.HasAttention ? GetStatusColor(VisualStatusKind.UpdateAvailable) : _interactiveBorderColor);
+                        row.HasAttention ? PackageInstallerStatusPresentation.GetStatusColor(PackageInstallerVisualStatusKind.UpdateAvailable) : _styles.InteractiveBorderColor);
                 }
             }
 
@@ -114,7 +113,7 @@ namespace Deucarian.PackageInstaller.Editor
                 DrawSingleLineLabel(
                     disclosureRect,
                     new GUIContent(row.IsExpanded ? "v" : ">", row.Tooltip),
-                    row.IsInActivePath ? _miniLabelStyle : _mutedMiniLabelStyle);
+                    row.IsInActivePath ? _styles.MiniLabelStyle : _styles.MutedMiniLabelStyle);
             }
 
             Rect iconRect = new Rect(
@@ -126,7 +125,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             GUIContent nameContent = new GUIContent(row.DisplayName, row.Tooltip);
             string summaryText = !row.IsPackage && _responsiveMode != PackageInstallerResponsiveMode.Wide
-                ? FormatCompactEcosystemOverviewGroupStatusSummary(row.StatusSummary)
+                ? PackageGraphNavigationModel.FormatCompactEcosystemOverviewGroupStatusSummary(row.StatusSummary)
                 : row.Summary;
             GUIContent summaryContent = new GUIContent(summaryText, row.Summary);
             float contentX = iconRect.xMax + 9f;
@@ -136,7 +135,7 @@ namespace Deucarian.PackageInstaller.Editor
                 Mathf.Max(0f, rowRect.xMax - rightPadding - contentX),
                 18f);
             float gap = 8f;
-            float desiredSummaryWidth = _mutedMiniLabelStyle.CalcSize(summaryContent).x + 2f;
+            float desiredSummaryWidth = _styles.MutedMiniLabelStyle.CalcSize(summaryContent).x + 2f;
             float maximumSummaryWidth = Mathf.Max(0f, contentRect.width - 40f - gap);
             float summaryWidth = Mathf.Min(
                 desiredSummaryWidth,
@@ -152,8 +151,8 @@ namespace Deucarian.PackageInstaller.Editor
                 Mathf.Max(0f, summaryRect.x - gap - contentRect.x),
                 contentRect.height);
 
-            DrawSingleLineLabel(nameRect, nameContent, _miniLabelStyle);
-            DrawSingleLineLabel(summaryRect, summaryContent, _mutedMiniLabelStyle);
+            DrawSingleLineLabel(nameRect, nameContent, _styles.MiniLabelStyle);
+            DrawSingleLineLabel(summaryRect, summaryContent, _styles.MutedMiniLabelStyle);
             return hover;
         }
 
@@ -229,127 +228,5 @@ namespace Deucarian.PackageInstaller.Editor
             GUI.DrawTexture(rect, icon, ScaleMode.ScaleToFit, true);
         }
 
-        private static string FormatEcosystemOverviewGroupStatusSummary(
-            PackageGraphCategoryStatusSummary statusSummary)
-        {
-            List<string> parts = new List<string>();
-
-            if (statusSummary.AttentionCount > 0)
-            {
-                parts.Add(statusSummary.AttentionCount + " attention");
-            }
-
-            if (statusSummary.InstalledCount > 0)
-            {
-                parts.Add(statusSummary.InstalledCount + " installed");
-            }
-
-            if (statusSummary.NotInstalledCount > 0)
-            {
-                parts.Add(statusSummary.NotInstalledCount + " not installed");
-            }
-
-            if (statusSummary.UnknownCount > 0)
-            {
-                parts.Add(statusSummary.UnknownCount + " unknown");
-            }
-
-            return parts.Count == 0 ? "0 packages" : string.Join("   ", parts.ToArray());
-        }
-
-        private static string FormatCompactEcosystemOverviewGroupStatusSummary(
-            PackageGraphCategoryStatusSummary statusSummary)
-        {
-            List<string> parts = new List<string>();
-
-            if (statusSummary.AttentionCount > 0)
-            {
-                parts.Add(statusSummary.AttentionCount + " attention");
-            }
-
-            if (statusSummary.InstalledCount > 0)
-            {
-                parts.Add(statusSummary.InstalledCount + " installed");
-            }
-
-            if (statusSummary.NotInstalledCount > 0)
-            {
-                parts.Add(statusSummary.NotInstalledCount + " not installed");
-            }
-
-            if (statusSummary.UnknownCount > 0)
-            {
-                parts.Add(statusSummary.UnknownCount + " unknown");
-            }
-
-            return parts.Count == 0 ? "0" : string.Join("   ", parts.ToArray());
-        }
-
-        private static IReadOnlyList<PackageGraphNavigationRow> CreateEcosystemOverviewGroupNavigationRows(
-            PackageGraphModel graph,
-            PackageGraphNavigationState navigationState)
-        {
-            List<PackageGraphNavigationRow> rows = new List<PackageGraphNavigationRow>();
-            PackageGraphNode[] graphNodes = graph == null
-                ? Array.Empty<PackageGraphNode>()
-                : graph.Nodes.Where(node => node != null).ToArray();
-            PackageGraphCategoryStatusSummary overviewStatusSummary =
-                PackageGraphCategoryStatusSummary.Create(graphNodes);
-            rows.Add(new PackageGraphNavigationRow(
-                PackageGraphNavigationTargetKind.Overview,
-                "overview",
-                "Deucarian Overview",
-                FormatEcosystemOverviewGroupStatusSummary(overviewStatusSummary),
-                overviewStatusSummary,
-                "package-installer",
-                "Navigate to Deucarian Overview",
-                depth: 0,
-                hasChildren: graph != null && graph.GetRootGroups().Count > 0,
-                isExpanded: !navigationState.IsOverview,
-                isInActivePath: navigationState.IsOverview,
-                isSelected: navigationState.IsOverview,
-                hasAttention: overviewStatusSummary.AttentionCount > 0));
-
-            if (graph == null)
-            {
-                return rows;
-            }
-
-            string activeGroupId = !string.IsNullOrWhiteSpace(navigationState.FocusedPackageId)
-                ? GetGraphPackageGroupId(graph, navigationState.FocusedPackageId)
-                : navigationState.FocusedGroupId;
-            HashSet<string> activeGroupPath = CreateActiveGraphGroupPath(graph, activeGroupId);
-
-            foreach (PackageGraphGroup group in graph.GetRootGroups())
-            {
-                AddEcosystemGroupNavigationRows(
-                    rows,
-                    graph,
-                    group,
-                    0,
-                    activeGroupPath,
-                    navigationState);
-            }
-
-            return rows;
-        }
-
-        private static HashSet<string> CreateActiveGraphGroupPath(
-            PackageGraphModel graph,
-            string activeGroupId)
-        {
-            HashSet<string> activeGroupPath = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            string currentGroupId = activeGroupId ?? string.Empty;
-
-            while (!string.IsNullOrWhiteSpace(currentGroupId) &&
-                   activeGroupPath.Add(currentGroupId) &&
-                   graph != null &&
-                   graph.TryGetGroup(currentGroupId, out PackageGraphGroup group))
-            {
-                currentGroupId = group.ParentGroupId;
-            }
-
-            return activeGroupPath;
-        }
     }
 }

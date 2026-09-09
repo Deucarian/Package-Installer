@@ -13,7 +13,6 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed partial class PackageInstallerWindow
     {
 
-
         private string GetLastUpdateCheckTooltip()
         {
             DateTime? lastCheckedUtc = _packageUpdateCheckService.LastCheckedUtc;
@@ -34,7 +33,7 @@ namespace Deucarian.PackageInstaller.Editor
         {
             if (!string.IsNullOrWhiteSpace(title))
             {
-                EditorGUILayout.LabelField(title, _sectionTitleStyle);
+                EditorGUILayout.LabelField(title, _styles.SectionTitleStyle);
             }
 
             GUILayout.Space(4f);
@@ -70,7 +69,7 @@ namespace Deucarian.PackageInstaller.Editor
             GUIContent content = new GUIContent(
                 GetCategoryHeaderText(categoryView),
                 GetCategoryHeaderTooltip(categoryView));
-            bool nextExpanded = EditorGUILayout.Foldout(expanded, content, true, _foldoutStyle);
+            bool nextExpanded = EditorGUILayout.Foldout(expanded, content, true, _styles.FoldoutStyle);
 
             if (nextExpanded != expanded)
             {
@@ -124,16 +123,16 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (Event.current.type == EventType.Repaint)
             {
-                Color background = selected ? _rowSelectedColor : hover ? _rowHoverColor : _rowBackgroundColor;
+                Color background = selected ? _styles.RowSelectedColor : hover ? _styles.RowHoverColor : _styles.RowBackgroundColor;
                 DeucarianEditorVisualShell.DrawInsetSurface(
                     rowRect,
                     background,
-                    selected || hover ? _interactiveBorderColor : _separatorColor,
+                    selected || hover ? _styles.InteractiveBorderColor : _styles.SeparatorColor,
                     6f);
 
                 if (selected)
                 {
-                    EditorGUI.DrawRect(new Rect(rowRect.x, rowRect.y, 3f, rowRect.height), GetStatusColor(status.Kind));
+                    EditorGUI.DrawRect(new Rect(rowRect.x, rowRect.y, 3f, rowRect.height), PackageInstallerStatusPresentation.GetStatusColor(status.Kind));
                 }
             }
 
@@ -149,29 +148,29 @@ namespace Deucarian.PackageInstaller.Editor
             DeucarianEditorIcons.DrawIcon(
                 packageIconRect,
                 DeucarianEditorIcons.GetPackageIcon(GetPackageIconKey(packageDefinition)),
-                GetStatusColor(status.Kind));
+                PackageInstallerStatusPresentation.GetStatusColor(status.Kind));
 
             Rect titleRect = new Rect(
                 rowRect.x + 42f,
                 rowRect.y + 8f,
                 rowRect.width - 52f,
                 Mathf.Max(22f, rowHeight - 68f));
-            GUI.Label(titleRect, displayNameContent, _rowTitleStyle);
+            GUI.Label(titleRect, displayNameContent, _styles.RowTitleStyle);
 
             Rect packageIdRect = new Rect(rowRect.x + 10f, titleRect.yMax + 4f, rowRect.width - 20f, 16f);
-            GUI.Label(packageIdRect, packageIdContent, _rowSubLabelStyle);
+            GUI.Label(packageIdRect, packageIdContent, _styles.RowSubLabelStyle);
 
             Rect statusRect = new Rect(rowRect.xMax - 112f, rowRect.yMax - 28f, 102f, 20f);
-            DrawStatusBadge(statusRect, status.Label, status.Kind, _rowStatusStyle);
+            ImGui.DrawStatusBadge(statusRect, status.Label, status.Kind, _styles.RowStatusStyle);
 
             Rect metadataRect = new Rect(rowRect.x + 10f, rowRect.yMax - 26f, rowRect.width - 132f, 18f);
-            GUI.Label(metadataRect, metadataContent, _rowSubLabelStyle);
+            GUI.Label(metadataRect, metadataContent, _styles.RowSubLabelStyle);
         }
 
         private float GetSidebarRowHeight(PackageDefinition packageDefinition)
         {
             float titleWidth = Mathf.Max(160f, SidebarWidth - 42f);
-            float titleHeight = _rowTitleStyle.CalcHeight(
+            float titleHeight = _styles.RowTitleStyle.CalcHeight(
                 new GUIContent(GetDisplayNameForSidebar(packageDefinition)),
                 titleWidth);
 
@@ -244,10 +243,10 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void DrawDetailsPane()
         {
-            Rect rect = BeginSurface(
-                _detailsStyle,
-                _detailsBackgroundColor,
-                _panelBorderColor,
+            Rect rect = ImGui.BeginSurface(
+                _styles.DetailsStyle,
+                _styles.DetailsBackgroundColor,
+                _styles.PanelBorderColor,
                 GUILayout.ExpandWidth(true),
                 GUILayout.ExpandHeight(true));
 
@@ -337,42 +336,42 @@ namespace Deucarian.PackageInstaller.Editor
             int notInstalledCount = Math.Max(0, nodes.Length - installedCount);
             EcosystemOverviewAction[] actions = CreateEcosystemOverviewActions(updateCount);
 
-            DrawPanel("Ecosystem Overview", () =>
+            ImGui.DrawPanel("Ecosystem Overview", () =>
             {
-                EditorGUILayout.LabelField("Deucarian Unity Package System", _titleStyle);
+                EditorGUILayout.LabelField("Deucarian Unity Package System", _styles.TitleStyle);
                 EditorGUILayout.LabelField(
                     "Select a group or package node to inspect details. Use pan, zoom, Fit, 100%, and Center to navigate the graph.",
-                    _mutedMiniLabelStyle);
+                    _styles.MutedMiniLabelStyle);
                 GUILayout.Space(8f);
 
-                DrawKeyValueRow("Packages", nodes.Length.ToString());
-                DrawFlatStatusRow(
+                ImGui.DrawKeyValueRow("Packages", nodes.Length.ToString());
+                ImGui.DrawFlatStatusRow(
                     DeucarianEditorIconIds.Success,
                     installedCount + " installed",
-                    VisualStatusKind.Installed);
-                DrawFlatStatusRow(
+                    PackageInstallerVisualStatusKind.Installed);
+                ImGui.DrawFlatStatusRow(
                     DeucarianEditorIconIds.Optional,
                     notInstalledCount + " not installed",
-                    VisualStatusKind.NotInstalled);
-                DrawFlatStatusRow(
+                    PackageInstallerVisualStatusKind.NotInstalled);
+                ImGui.DrawFlatStatusRow(
                     DeucarianEditorIconIds.Update,
                     updateCount + " updates",
-                    VisualStatusKind.UpdateAvailable);
+                    PackageInstallerVisualStatusKind.UpdateAvailable);
                 if (ShouldShowEcosystemAttention(attentionCount))
                 {
-                    DrawFlatStatusRow(
+                    ImGui.DrawFlatStatusRow(
                         DeucarianEditorIconIds.Warning,
                         attentionCount + " attention",
-                        VisualStatusKind.UpdateAvailable);
+                        PackageInstallerVisualStatusKind.UpdateAvailable);
                 }
                 GUILayout.Space(6f);
-                DrawKeyValueRow("Registry", PackageRegistryProvider.StatusMessage);
-                DrawKeyValueRow("Filters", GetActiveFilterSummary());
+                ImGui.DrawKeyValueRow("Registry", PackageRegistryProvider.StatusMessage);
+                ImGui.DrawKeyValueRow("Filters", GetActiveFilterSummary());
             }, GUILayout.ExpandWidth(true));
 
             if (actions.Length > 0)
             {
-                DrawPanel("Actions", () =>
+                ImGui.DrawPanel("Actions", () =>
                 {
                     foreach (EcosystemOverviewAction action in actions)
                     {

@@ -13,7 +13,6 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed partial class PackageInstallerWindow
     {
 
-
         private enum InstallerViewMode
         {
             EcosystemGraph,
@@ -34,17 +33,6 @@ namespace Deucarian.PackageInstaller.Editor
             InstallAll
         }
 
-        private enum VisualStatusKind
-        {
-            Installed,
-            NotInstalled,
-            UpdateAvailable,
-            Failed,
-            Busy,
-            Info,
-            Integration
-        }
-
         internal readonly struct OperationLayoutMetrics
         {
             public const int InlinePadding = DeucarianEditorLayoutMetrics.SurfaceHorizontalPadding;
@@ -57,7 +45,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         private sealed class VisualStatus
         {
-            public VisualStatus(string iconId, string label, VisualStatusKind kind)
+            public VisualStatus(string iconId, string label, PackageInstallerVisualStatusKind kind)
             {
                 IconId = string.IsNullOrWhiteSpace(iconId)
                     ? DeucarianEditorIconIds.Info
@@ -70,7 +58,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             public string Label { get; }
 
-            public VisualStatusKind Kind { get; }
+            public PackageInstallerVisualStatusKind Kind { get; }
         }
 
         private sealed class OperationProgressView
@@ -131,7 +119,7 @@ namespace Deucarian.PackageInstaller.Editor
             int attentionCount,
             int unknownCount)
         {
-            return FormatEcosystemOverviewGroupStatusSummary(
+            return PackageGraphNavigationModel.FormatEcosystemOverviewGroupStatusSummary(
                 new PackageGraphCategoryStatusSummary(
                     installedCount,
                     notInstalledCount,
@@ -143,14 +131,14 @@ namespace Deucarian.PackageInstaller.Editor
             PackageGraphModel graph,
             PackageGraphNavigationState navigationState)
         {
-            return CreateEcosystemOverviewGroupNavigationRows(graph, navigationState);
+            return PackageGraphNavigationModel.CreateEcosystemOverviewGroupNavigationRows(graph, navigationState);
         }
 
         internal static PackageGraphNavigationState CreatePackageNavigationStateForTests(
             PackageGraphModel graph,
             string packageId)
         {
-            return PackageGraphNavigationState.Package(packageId, GetGraphPackageGroupId(graph, packageId));
+            return PackageGraphNavigationState.Package(packageId, PackageGraphNavigationModel.GetGraphPackageGroupId(graph, packageId));
         }
 
         internal static PackageInstallerActionButtonState GetActionButtonStateForTests(
@@ -227,12 +215,12 @@ namespace Deucarian.PackageInstaller.Editor
 
         internal static string FormatGlobalChannelButtonLabelForTests(PackageChannelSelection selection)
         {
-            return FormatGlobalChannelButtonLabel(selection);
+            return PackageChannelPolicy.FormatGlobalChannelButtonLabel(selection);
         }
 
         internal static bool ShouldShowGlobalChannelResetForTests(PackageChannelSelection selection)
         {
-            return ShouldShowGlobalChannelReset(selection);
+            return PackageChannelPolicy.ShouldShowGlobalChannelReset(selection);
         }
 
         internal static bool ShouldDrawGraphNavigationBeforeContextForTests(
@@ -246,7 +234,7 @@ namespace Deucarian.PackageInstaller.Editor
             VisualElement footer = CreateOperationFooterRow(null);
             ApplyOperationFooterData(
                 footer,
-                VisualStatusKind.Installed,
+                PackageInstallerVisualStatusKind.Installed,
                 "Complete",
                 "Last operation complete.",
                 expanded,
@@ -285,7 +273,7 @@ namespace Deucarian.PackageInstaller.Editor
         {
             ApplyOperationFooterData(
                 footer,
-                VisualStatusKind.Installed,
+                PackageInstallerVisualStatusKind.Installed,
                 "Complete",
                 "Last operation complete.",
                 expanded,
@@ -355,7 +343,7 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 EnsureValidSelection();
             }
-            _operationDetailsExpanded = EditorPrefs.GetBool(GetOperationDrawerPreferenceKey(), false);
+            _operationDetailsExpanded = _preferences.OperationDetailsExpanded;
 
             PackageRegistryProvider.RegistryChanged += HandleRegistryChanged;
             _packageInstallService.StateChanged += Repaint;

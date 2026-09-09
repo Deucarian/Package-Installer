@@ -13,62 +13,6 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed partial class PackageInstallerWindow
     {
 
-
-        private static string GetStatusIconId(VisualStatusKind statusKind)
-        {
-            switch (statusKind)
-            {
-                case VisualStatusKind.Installed:
-                    return DeucarianEditorIconIds.Success;
-                case VisualStatusKind.NotInstalled:
-                    return DeucarianEditorIconIds.Optional;
-                case VisualStatusKind.UpdateAvailable:
-                    return DeucarianEditorIconIds.Update;
-                case VisualStatusKind.Failed:
-                    return DeucarianEditorIconIds.Error;
-                case VisualStatusKind.Busy:
-                    return DeucarianEditorIconIds.Busy;
-                case VisualStatusKind.Integration:
-                    return DeucarianEditorIconIds.Integration;
-                case VisualStatusKind.Info:
-                default:
-                    return DeucarianEditorIconIds.Info;
-            }
-        }
-
-        private static DeucarianEditorStatus ToEditorStatus(VisualStatusKind statusKind)
-        {
-            switch (statusKind)
-            {
-                case VisualStatusKind.Installed:
-                    return DeucarianEditorStatus.Success;
-                case VisualStatusKind.UpdateAvailable:
-                    return DeucarianEditorStatus.Warning;
-                case VisualStatusKind.Failed:
-                    return DeucarianEditorStatus.Error;
-                case VisualStatusKind.NotInstalled:
-                    return DeucarianEditorStatus.Disabled;
-                case VisualStatusKind.Busy:
-                case VisualStatusKind.Info:
-                case VisualStatusKind.Integration:
-                default:
-                    return DeucarianEditorStatus.Info;
-            }
-        }
-
-        private static MessageType ToMessageType(VisualStatusKind statusKind)
-        {
-            switch (statusKind)
-            {
-                case VisualStatusKind.Failed:
-                    return MessageType.Error;
-                case VisualStatusKind.UpdateAvailable:
-                    return MessageType.Warning;
-                default:
-                    return MessageType.Info;
-            }
-        }
-
         private static string GetDependencyDisplayNames(PackageDefinition integrationDefinition)
         {
             if (integrationDefinition == null || integrationDefinition.Dependencies.Count == 0)
@@ -93,8 +37,8 @@ namespace Deucarian.PackageInstaller.Editor
         private void DrawChannelPopup(PackageDefinition packageDefinition)
         {
             PackageChannel selectedChannel = GetSelectedChannel(packageDefinition);
-            PackageChannel[] channelOptions = GetChannelOptions(packageDefinition, selectedChannel);
-            string[] channelLabels = channelOptions.Select(GetChannelLabel).ToArray();
+            PackageChannel[] channelOptions = PackageChannelPolicy.GetChannelOptions(packageDefinition, selectedChannel);
+            string[] channelLabels = channelOptions.Select(PackageChannelPolicy.GetChannelLabel).ToArray();
             int selectedIndex = Mathf.Max(0, Array.IndexOf(channelOptions, selectedChannel));
 
             using (new EditorGUI.DisabledScope(channelOptions.Length <= 1 || IsAnyOperationBusy()))
@@ -132,7 +76,7 @@ namespace Deucarian.PackageInstaller.Editor
                     out installedChannel,
                     out _);
 
-            return ResolveSelectedChannel(
+            return PackageChannelPolicy.ResolveSelectedChannel(
                 packageDefinition,
                 projectSelection,
                 packageSelection,
@@ -147,66 +91,12 @@ namespace Deucarian.PackageInstaller.Editor
             bool hasInstalledChannel,
             PackageChannel installedChannel)
         {
-            return ResolveSelectedChannel(
+            return PackageChannelPolicy.ResolveSelectedChannel(
                 packageDefinition,
                 projectSelection,
                 packageSelection,
                 hasInstalledChannel,
                 installedChannel);
-        }
-
-        internal static PackageChannel ResolveSelectedChannel(
-            PackageDefinition packageDefinition,
-            PackageChannelSelection projectSelection,
-            PackageChannelSelection packageSelection,
-            bool hasInstalledChannel,
-            PackageChannel installedChannel)
-        {
-            if (packageDefinition == null)
-            {
-                return PackageChannel.Stable;
-            }
-
-            PackageChannelSelection latestExplicitSelection = GetLatestExplicitChannelSelection(
-                projectSelection,
-                packageSelection);
-
-            if (latestExplicitSelection.HasValue)
-            {
-                return ResolveConfiguredChannel(packageDefinition, latestExplicitSelection.Channel);
-            }
-
-            return PackageChannel.Stable;
-        }
-
-        private static PackageChannelSelection GetLatestExplicitChannelSelection(
-            PackageChannelSelection projectSelection,
-            PackageChannelSelection packageSelection)
-        {
-            if (packageSelection.HasValue &&
-                (!projectSelection.HasValue ||
-                 packageSelection.ChangedAtUtcTicks > projectSelection.ChangedAtUtcTicks))
-            {
-                return packageSelection;
-            }
-
-            return projectSelection.HasValue
-                ? projectSelection
-                : PackageChannelSelection.None;
-        }
-
-        private static PackageChannel ResolveConfiguredChannel(
-            PackageDefinition packageDefinition,
-            PackageChannel channel)
-        {
-            if (channel == PackageChannel.Development &&
-                packageDefinition != null &&
-                packageDefinition.HasDevelopmentUrl)
-            {
-                return PackageChannel.Development;
-            }
-
-            return PackageChannel.Stable;
         }
 
         private void SetSelectedChannel(PackageDefinition packageDefinition, PackageChannel channel)
@@ -246,15 +136,7 @@ namespace Deucarian.PackageInstaller.Editor
                 return true;
             }
 
-            if (_categoryFoldouts.TryGetValue(category, out bool expanded))
-            {
-                return expanded;
-            }
-
-            string key = GetCategoryFoldoutPreferenceKey(category);
-            expanded = EditorPrefs.GetBool(key, true);
-            _categoryFoldouts[category] = expanded;
-            return expanded;
+            return _preferences.IsCategoryExpanded(category);
         }
 
         private void SetCategoryExpanded(string category, bool expanded)
@@ -264,51 +146,7 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            _categoryFoldouts[category] = expanded;
-            EditorPrefs.SetBool(GetCategoryFoldoutPreferenceKey(category), expanded);
-        }
-
-        private string GetCategoryFoldoutPreferenceKey(string category)
-        {
-            return CategoryFoldoutPreferencePrefix +
-                   Application.dataPath.Replace("\\", "/") +
-                   "." +
-                   category.Trim();
-        }
-
-        private static PackageChannel[] GetChannelOptions(
-            PackageDefinition packageDefinition,
-            PackageChannel selectedChannel)
-        {
-            List<PackageChannel> channels = new List<PackageChannel>
-            {
-                PackageChannel.Stable
-            };
-
-            if (packageDefinition != null && packageDefinition.HasDevelopmentUrl)
-            {
-                channels.Add(PackageChannel.Development);
-            }
-
-            if (selectedChannel == PackageChannel.Custom)
-            {
-                channels.Add(PackageChannel.Custom);
-            }
-
-            return channels.Distinct().ToArray();
-        }
-
-        private static string GetChannelLabel(PackageChannel channel)
-        {
-            switch (channel)
-            {
-                case PackageChannel.Development:
-                    return "Development";
-                case PackageChannel.Custom:
-                    return "Custom";
-                default:
-                    return "Stable";
-            }
+            _preferences.SetCategoryExpanded(category, expanded);
         }
 
         private void EnsureValidSelection()

@@ -13,7 +13,6 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed partial class PackageInstallerWindow
     {
 
-
         private void DrawPackageActionButtons(PackageDefinition packageDefinition, bool includeNotes)
         {
             bool installed = _packageDetectionService.IsInstalled(packageDefinition.PackageId);
@@ -35,37 +34,37 @@ namespace Deucarian.PackageInstaller.Editor
 
                     if (missingDependencies.Length > 0)
                     {
-                        DrawInlineHelp(
+                        ImGui.DrawInlineHelp(
                             "Missing dependencies will be installed first: " +
                             string.Join(", ", missingDependencies.Select(package => package.DisplayName).ToArray()),
-                            VisualStatusKind.Info);
+                            PackageInstallerVisualStatusKind.Info);
                     }
                     else
                     {
-                        EditorGUILayout.LabelField("Install this package from the selected channel.", _mutedMiniLabelStyle);
+                        EditorGUILayout.LabelField("Install this package from the selected channel.", _styles.MutedMiniLabelStyle);
                     }
                 }
                 else
                 {
                     if (installedDependents.Count > 0)
                     {
-                        DrawInlineHelp(
+                        ImGui.DrawInlineHelp(
                             "This package is required by installed package(s): " +
                             string.Join(", ", installedDependents
                                 .Select(dependent => dependent.DisplayName)
                                 .ToArray()) +
                             ". Removing it may break those packages.",
-                            VisualStatusKind.UpdateAvailable);
+                            PackageInstallerVisualStatusKind.UpdateAvailable);
                     }
                     else if (updateStatus.Kind == PackageUpdateStatusKind.SwitchAvailable)
                     {
-                        DrawInlineHelp(
+                        ImGui.DrawInlineHelp(
                             "A switch is available for the selected channel.",
-                            VisualStatusKind.UpdateAvailable);
+                            PackageInstallerVisualStatusKind.UpdateAvailable);
                     }
                     else if (updateStatus.IsUpdateAvailable)
                     {
-                        DrawInlineHelp("An update is available for the selected channel.", VisualStatusKind.UpdateAvailable);
+                        ImGui.DrawInlineHelp("An update is available for the selected channel.", PackageInstallerVisualStatusKind.UpdateAvailable);
                     }
                     else if (updateStatus.IsSourceMigrationAvailable)
                     {
@@ -74,15 +73,15 @@ namespace Deucarian.PackageInstaller.Editor
                               "Bootstrap: " + GetBootstrapGitUrl(GetSelectedChannel(packageDefinition)) +
                               ". Then open " + BootstrapMenuPath + "."
                             : "Migrate this registry-installed package to the selected catalog Git URL.";
-                        DrawInlineHelp(migrationHelp, VisualStatusKind.UpdateAvailable);
+                        ImGui.DrawInlineHelp(migrationHelp, PackageInstallerVisualStatusKind.UpdateAvailable);
                     }
                     else if (updateStatus.IsReloadPending)
                     {
-                        DrawInlineHelp(updateStatus.Message, VisualStatusKind.UpdateAvailable);
+                        ImGui.DrawInlineHelp(updateStatus.Message, PackageInstallerVisualStatusKind.UpdateAvailable);
                     }
                     else
                     {
-                        EditorGUILayout.LabelField("Package is installed. Reinstall uses the selected channel URL/ref.", _mutedMiniLabelStyle);
+                        EditorGUILayout.LabelField("Package is installed. Reinstall uses the selected channel URL/ref.", _styles.MutedMiniLabelStyle);
                     }
                 }
 

@@ -13,7 +13,6 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed partial class PackageInstallerWindow
     {
 
-
         private void UpdateViewVisibility()
         {
             bool graphMode = _viewMode == InstallerViewMode.EcosystemGraph;
@@ -347,7 +346,7 @@ namespace Deucarian.PackageInstaller.Editor
                 refreshGraph: false);
             _graphNavigationState = PackageGraphNavigationState.Package(
                 packageDefinition.PackageId,
-                GetGraphPackageGroupId(packageDefinition.PackageId));
+                PackageGraphNavigationModel.GetGraphPackageGroupId(_lastPackageGraph, packageDefinition.PackageId));
             RefreshGraphView("package focus");
         }
 
@@ -383,7 +382,7 @@ namespace Deucarian.PackageInstaller.Editor
         {
             if (!string.IsNullOrWhiteSpace(_graphNavigationState.FocusedPackageId))
             {
-                string parentGroupId = GetGraphPackageGroupId(_graphNavigationState.FocusedPackageId);
+                string parentGroupId = PackageGraphNavigationModel.GetGraphPackageGroupId(_lastPackageGraph, _graphNavigationState.FocusedPackageId);
                 NavigateGraphToGroupOrRoot(parentGroupId);
                 return;
             }
@@ -400,7 +399,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void NavigateGraphToPackageOwner(string packageId)
         {
-            NavigateGraphToGroupOrRoot(GetGraphPackageGroupId(packageId));
+            NavigateGraphToGroupOrRoot(PackageGraphNavigationModel.GetGraphPackageGroupId(_lastPackageGraph, packageId));
         }
     }
 }
