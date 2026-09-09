@@ -1,10 +1,15 @@
 # Deucarian Package Installer
 
+## In-window navigation
+
+The left sidebar changes pages in the current window, keeping each page's draft and session alive. Right-click a sidebar item and choose **Open in new window** for an independent workspace. Closing a workspace releases its pages; ordinary page changes do not reset lab messages or stop package operations.
+
+
 ## Shared workspace (1.3.0)
 
 Open a searchable Installed / Updates / Browse workspace by default, with the dependency graph available as a secondary view. Preserve package planning, confirmations, source selection, samples and operation recovery.
 
-Requires Editor 1.4.1 or newer. Development is delivered through Git `#develop`; this change does not promote the stable `#main` channel.
+Requires Editor 1.5.0 or newer. Development is delivered through Git `#develop`; this change does not promote the stable `#main` channel.
 
 ## What this is
 
@@ -12,7 +17,7 @@ Requires Editor 1.4.1 or newer. Development is delivered through Git `#develop`;
 
 It is the Deucarian ecosystem front door for installing standalone packages, integration packages, suite packages, templates, and explicitly declared package samples from Package Registry metadata.
 
-Current package version: `1.3.0`.
+Current package version: `1.3.1`.
 
 ## When to use it
 

@@ -104,7 +104,7 @@ namespace Deucarian.PackageInstaller.Editor
         [MenuItem(InstallerMenuPath)]
         public static void Open()
         {
-            PackageInstallerWindow window = GetWindow<PackageInstallerWindow>();
+            PackageInstallerWindow window = DeucarianEditorWindowPages.GetStandalone<PackageInstallerWindow>();
             window.titleContent = DeucarianEditorIcons.GetIconContent(
                 DeucarianEditorIconIds.CreatePackage,
                 WindowTitle,
