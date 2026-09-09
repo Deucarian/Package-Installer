@@ -46,6 +46,7 @@ namespace Deucarian.PackageInstaller.Editor
                 View.Workspace.PageActions.Add(check);
                 View.Workspace.PageActions.Add(update);
                 scope = new DeucarianEditorWorkspaceForm(View.Workspace.Scope);
+                scope.EnabledWhen(() => !owner.IsAnyOperationBusy());
                 scope.Choice("installer-project-channel", "Project channel",
                     new[] { "Use package sources", "Stable · main", "Development · develop" },
                     () => { var selection = owner.GetGlobalProjectChannelSelection(); return !selection.HasValue ? 0 : selection.Channel == PackageChannel.Development ? 2 : 1; },

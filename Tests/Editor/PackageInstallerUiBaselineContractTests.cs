@@ -58,6 +58,10 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                     tabs.Children().OfType<Button>().Select(button => button.text).ToArray());
                 Assert.AreEqual(0, tabs.Value);
                 Assert.NotNull(root.Q("installer-project-channel"));
+                SetPrivateField(window, "_plannerFailureRetryAfterRefresh", true);
+                InvokePrivate(window, "UpdateViewVisibility");
+                Assert.IsFalse(root.Q("installer-project-channel").enabledInHierarchy,
+                    "Project sources must not change while a package operation is running.");
                 Assert.NotNull(root.Q<VisualElement>(className: "dpi-graph-mode"));
                 Assert.AreEqual(DisplayStyle.None, root.Q<VisualElement>(className: "dpi-graph-mode").style.display.value);
             }

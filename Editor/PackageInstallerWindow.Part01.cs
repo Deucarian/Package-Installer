@@ -109,7 +109,7 @@ namespace Deucarian.PackageInstaller.Editor
                 DeucarianEditorIconIds.CreatePackage,
                 WindowTitle,
                 "Open the Deucarian Package Installer.");
-            window.minSize = new Vector2(MinWindowWidth, MinWindowHeight);
+            DeucarianEditorWorkspace.ConfigureWindow(window);
             window.Show();
         }
 
