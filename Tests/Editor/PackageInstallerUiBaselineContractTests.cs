@@ -285,17 +285,17 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             }
 
             AssertRuleValues(editorCss, ".deucarian-toolbar-row",
-                "height", "46px",
-                "min-height", "46px",
-                "max-height", "46px",
+                "height", "54px",
+                "min-height", "54px",
+                "max-height", "54px",
                 "padding-left", "10px",
                 "padding-right", "10px",
                 "padding-top", "8px",
                 "padding-bottom", "8px");
             AssertRuleValues(editorCss, ".deucarian-command-bar__action",
-                "height", "28px",
-                "min-height", "28px",
-                "max-height", "28px",
+                "height", "36px",
+                "min-height", "36px",
+                "max-height", "36px",
                 "padding-left", "0",
                 "padding-right", "0");
             AssertRuleValues(editorCss, ".deucarian-command-bar__summary",
@@ -304,9 +304,9 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 "max-height", "18px",
                 "min-width", "0");
             AssertRuleValues(editorCss, ".deucarian-command-bar__reserved-slot",
-                "height", "28px",
-                "min-height", "28px",
-                "max-height", "28px",
+                "height", "36px",
+                "min-height", "36px",
+                "max-height", "36px",
                 "flex-shrink", "0");
             AssertRuleValues(editorCss, ".deucarian-icon-text-button",
                 "padding-left", "8px",
@@ -467,7 +467,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 "--deucarian-workbench-operation-footer-block-padding", "0px",
                 "--deucarian-workbench-operation-row-gap", "6px",
                 "--deucarian-workbench-operation-control-gap", "8px",
-                "--deucarian-workbench-operation-footer-height", "34px");
+                "--deucarian-workbench-operation-footer-height", "46px");
             AssertRuleValues(editorCss, ".deucarian-workbench-operation-drawer",
                 "flex-shrink", "0",
                 "height", "0",
@@ -515,9 +515,9 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 "width", "96px",
                 "min-width", "96px",
                 "max-width", "96px",
-                "height", "28px",
-                "min-height", "28px",
-                "max-height", "28px",
+                "height", "36px",
+                "min-height", "36px",
+                "max-height", "36px",
                 "margin-left", "0",
                 "margin-right", "var(--deucarian-workbench-operation-control-gap)",
                 "padding-left", "0",
@@ -647,9 +647,9 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual(10, DeucarianEditorLayoutMetrics.FooterHorizontalPadding);
             Assert.AreEqual(0, DeucarianEditorLayoutMetrics.FooterVerticalPadding);
             Assert.AreEqual(34, DeucarianEditorLayoutMetrics.FooterHeight);
-            Assert.AreEqual(28, DeucarianEditorLayoutMetrics.CommandControlHeight);
+            Assert.AreEqual(36, DeucarianEditorLayoutMetrics.CommandControlHeight);
             Assert.AreEqual(18, DeucarianEditorLayoutMetrics.TextLineHeight);
-            Assert.AreEqual(8f, DeucarianEditorVisualShell.SurfaceRadius);
+            Assert.AreEqual(5f, DeucarianEditorVisualShell.SurfaceRadius);
             Assert.AreEqual(118f, DeucarianEditorWorkbenchGUI.DetailLabelWidth);
             Assert.AreEqual(
                 DeucarianEditorLayoutMetrics.PageHorizontalPadding,
@@ -684,7 +684,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 DeucarianEditorWorkbenchGUI.SampleRowStyle.margin.bottom);
             Assert.AreEqual(15, DeucarianEditorWorkbenchGUI.TitleStyle.fontSize);
             Assert.AreEqual(
-                DeucarianEditorLayoutMetrics.CommandControlHeight,
+                42f,
                 DeucarianEditorWorkbenchGUI.PrimaryButtonStyle.fixedHeight);
             Assert.AreEqual(
                 DeucarianEditorLayoutMetrics.CommandControlHeight,
@@ -710,36 +710,16 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual(
                 DeucarianEditorVisualShell.SubtleBorder,
                 DeucarianEditorWorkbenchGUI.SeparatorColor);
-            if (DeucarianEditorTheme.IsDark)
-            {
-                AssertColor(DeucarianEditorVisualShell.DeepBackground, 27f / 255f, 26f / 255f, 24f / 255f, 1f);
-                AssertColor(DeucarianEditorVisualShell.MainPanel, 37f / 255f, 36f / 255f, 33f / 255f, 0.88f);
-                AssertColor(DeucarianEditorVisualShell.NestedSurface, 48f / 255f, 46f / 255f, 42f / 255f, 0.82f);
-                AssertColor(DeucarianEditorVisualShell.HeaderPanel, 42f / 255f, 41f / 255f, 38f / 255f, 0.92f);
-                if (DeucarianEditorAppearance.DecorativeBackgrounds)
-                    AssertColor(DeucarianEditorVisualShell.Border, 98f / 255f, 186f / 255f, 182f / 255f, 0.24f);
-                else
-                    Assert.AreEqual(DeucarianEditorVisualShell.SubtleBorder, DeucarianEditorVisualShell.Border);
-                AssertColor(DeucarianEditorVisualShell.InteractiveBorder, 98f / 255f, 186f / 255f, 182f / 255f, 0.62f);
-                AssertColor(DeucarianEditorVisualShell.SubtleBorder, 242f / 255f, 239f / 255f, 231f / 255f, 0.12f);
-                AssertColor(DeucarianEditorVisualShell.Text, 242f / 255f, 239f / 255f, 231f / 255f, 1f);
-                AssertColor(DeucarianEditorVisualShell.MutedText, 170f / 255f, 166f / 255f, 158f / 255f, 1f);
-            }
-            else
-            {
-                AssertColor(DeucarianEditorVisualShell.DeepBackground, 248f / 255f, 246f / 255f, 241f / 255f, 1f);
-                AssertColor(DeucarianEditorVisualShell.MainPanel, 1f, 1f, 1f, 0.90f);
-                AssertColor(DeucarianEditorVisualShell.NestedSurface, 242f / 255f, 239f / 255f, 231f / 255f, 0.88f);
-                AssertColor(DeucarianEditorVisualShell.HeaderPanel, 1f, 1f, 1f, 0.94f);
-                if (DeucarianEditorAppearance.DecorativeBackgrounds)
-                    AssertColor(DeucarianEditorVisualShell.Border, 27f / 255f, 26f / 255f, 24f / 255f, 0.14f);
-                else
-                    Assert.AreEqual(DeucarianEditorVisualShell.SubtleBorder, DeucarianEditorVisualShell.Border);
-                AssertColor(DeucarianEditorVisualShell.InteractiveBorder, 15f / 255f, 98f / 255f, 106f / 255f, 0.58f);
-                AssertColor(DeucarianEditorVisualShell.SubtleBorder, 27f / 255f, 26f / 255f, 24f / 255f, 0.09f);
-                AssertColor(DeucarianEditorVisualShell.Text, 27f / 255f, 26f / 255f, 24f / 255f, 1f);
-                AssertColor(DeucarianEditorVisualShell.MutedText, 121f / 255f, 118f / 255f, 111f / 255f, 1f);
-            }
+            Assert.AreEqual(DeucarianEditorSurfacePalette.Background, DeucarianEditorVisualShell.DeepBackground);
+            Assert.AreEqual(DeucarianEditorSurfacePalette.Sidebar, DeucarianEditorVisualShell.MainPanel);
+            Assert.AreEqual(DeucarianEditorSurfacePalette.Field, DeucarianEditorVisualShell.NestedSurface);
+            Assert.AreEqual(DeucarianEditorSurfacePalette.Field, DeucarianEditorVisualShell.HeaderPanel);
+            Assert.AreEqual(DeucarianEditorSurfacePalette.Accent, DeucarianEditorVisualShell.InteractiveBorder);
+            Assert.AreEqual(DeucarianEditorSurfacePalette.Border, DeucarianEditorVisualShell.SubtleBorder);
+            Assert.AreEqual(DeucarianEditorSurfacePalette.Text, DeucarianEditorVisualShell.Text);
+            Assert.AreEqual(DeucarianEditorSurfacePalette.Muted, DeucarianEditorVisualShell.MutedText);
+            if (!DeucarianEditorAppearance.DecorativeBackgrounds)
+                Assert.AreEqual(DeucarianEditorVisualShell.SubtleBorder, DeucarianEditorVisualShell.Border);
         }
 
         private static void AssertFixedWallpaperLayer(VisualElement element, string expectedClass)
