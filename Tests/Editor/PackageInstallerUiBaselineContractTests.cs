@@ -32,7 +32,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.That(source, Does.Contain("DeucarianEditorWorkbenchGUI.DrawCompactIconAction("));
             Assert.That(source, Does.Contain("DeucarianEditorWorkbenchGUI.DrawStatusIconRow("));
             Assert.That(source, Does.Contain("DeucarianEditorDialog.Show("));
-            Assert.That(source, Does.Contain("DeucarianEditorPackageHeader.CreateBrand("));
+            Assert.That(source, Does.Contain("new DeucarianEditorCollectionWorkspace("));
             Assert.That(source, Does.Contain("DeucarianEditorChrome.DrawBrandHeader("));
             Assert.That(source, Does.Not.Contain("EditorUtility.DisplayDialog"));
             Assert.That(source, Does.Not.Contain("GUILayout.Button("));
@@ -42,62 +42,30 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
-        public void Toolbar_UsesCanonicalLanesComposedActionsAndFixedGeometry()
+        public void Toolbar_UsesSharedWorkspaceAndKeepsGraphSecondary()
         {
-            PackageInstallerWindow window = ScriptableObject.CreateInstance<PackageInstallerWindow>();
-
+            var window = ScriptableObject.CreateInstance<PackageInstallerWindow>();
             try
             {
-                // Keep the serialized label deterministic instead of depending on a
-                // developer's persisted project-channel override.
-                SetPrivateField(window, "_stateRepository", null);
-
-                VisualElement content = new VisualElement();
-                InvokePrivate(window, "BuildViewToolbar", content);
-
-                Assert.AreEqual(1, content.childCount);
-                VisualElement toolbar = content.ElementAt(0);
-                Assert.IsTrue(toolbar.ClassListContains(DeucarianEditorCommandBar.RootClass));
-                Assert.IsTrue(toolbar.ClassListContains(
-                    DeucarianEditorWorkbenchToolbar.StableActionLanesClass));
-                Assert.IsFalse(toolbar.GetClasses().Any(className =>
-                    className.StartsWith("dpi-view-toolbar", StringComparison.Ordinal)));
-                Assert.AreEqual(3, toolbar.childCount);
-
-                VisualElement leading = toolbar.ElementAt(0);
-                Label summary = toolbar.ElementAt(1) as Label;
-                VisualElement trailing = toolbar.ElementAt(2);
-                Assert.IsTrue(leading.ClassListContains(
-                    DeucarianEditorCommandBar.LeadingLaneClass));
-                Assert.NotNull(summary);
-                Assert.IsTrue(summary.ClassListContains(
-                    DeucarianEditorCommandBar.SummaryLaneClass));
-                Assert.AreEqual(WhiteSpace.NoWrap, summary.style.whiteSpace.value);
-                Assert.AreEqual(Overflow.Hidden, summary.style.overflow.value);
-                Assert.AreEqual(TextOverflow.Ellipsis, summary.style.textOverflow.value);
-                Assert.IsTrue(trailing.ClassListContains(
-                    DeucarianEditorCommandBar.TrailingLaneClass));
-
-                Assert.AreEqual(1, leading.childCount);
-                Assert.AreEqual(3, trailing.childCount);
-                VisualElement viewSlot = leading.ElementAt(0);
-                VisualElement channelSlot = trailing.ElementAt(0);
-                VisualElement refreshSlot = trailing.ElementAt(1);
-                VisualElement checkSlot = trailing.ElementAt(2);
-                AssertReservedSlot(viewSlot, 152f);
-                AssertReservedSlot(channelSlot, 184f);
-                AssertReservedSlot(refreshSlot, 104f);
-                AssertReservedSlot(checkSlot, 140f);
-
-                AssertComposedAction(viewSlot.ElementAt(0) as Button, "Ecosystem Graph");
-                AssertComposedAction(channelSlot.ElementAt(0) as Button, "Channel: Stable");
-                AssertComposedAction(refreshSlot.ElementAt(0) as Button, "Refresh");
-                AssertComposedAction(checkSlot.ElementAt(0) as Button, "Check Updates");
+                InvokePrivate(window, "CreateGUI");
+                var root = window.rootVisualElement;
+                Assert.NotNull(root.Q("workspace-navigation"));
+                Assert.NotNull(root.Q("workspace-collection"));
+                Assert.NotNull(root.Q("workspace-details"));
+                var tabs = root.Q<DeucarianEditorChoiceBar>();
+                Assert.NotNull(tabs);
+                CollectionAssert.AreEqual(new[] { "Installed", "Updates", "Browse", "Dependency graph" },
+                    tabs.Children().OfType<Button>().Select(button => button.text).ToArray());
+                Assert.AreEqual(0, tabs.Value);
+                Assert.NotNull(root.Q("installer-project-channel"));
+                SetPrivateField(window, "_plannerFailureRetryAfterRefresh", true);
+                InvokePrivate(window, "UpdateViewVisibility");
+                Assert.IsFalse(root.Q("installer-project-channel").enabledInHierarchy,
+                    "Project sources must not change while a package operation is running.");
+                Assert.NotNull(root.Q<VisualElement>(className: "dpi-graph-mode"));
+                Assert.AreEqual(DisplayStyle.None, root.Q<VisualElement>(className: "dpi-graph-mode").style.display.value);
             }
-            finally
-            {
-                UnityEngine.Object.DestroyImmediate(window);
-            }
+            finally { UnityEngine.Object.DestroyImmediate(window); }
         }
 
         [Test]
@@ -296,8 +264,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 "com.deucarian.package-installer",
                 "Editor/PackageInstallerWindow.cs");
 
-            Assert.That(installerSource, Does.Contain("DeucarianEditorCommandBar.Create("));
-            Assert.That(installerSource, Does.Contain("DeucarianEditorCommandBar.CreateLanes(toolbar)"));
+            Assert.That(installerSource, Does.Contain("new DeucarianEditorCollectionWorkspace("));
+            Assert.That(installerSource, Does.Contain("new DeucarianEditorChoiceBar("));
             Assert.That(installerSource, Does.Contain("DeucarianEditorCommandBar.CreateToggle("));
             Assert.That(installerSource, Does.Contain("DeucarianEditorCommandBar.CreateAction("));
             Assert.That(installerSource, Does.Contain("DeucarianEditorCommandBar.CreateReservedSlot("));

@@ -117,26 +117,6 @@ namespace Deucarian.PackageInstaller.Editor
             }
         }
 
-        private void DrawListViewGui()
-        {
-            EnsureStyles();
-            EnsureValidSelection();
-
-            using (DeucarianEditorWorkbenchGUI.BeginEmbeddedPage(
-                       GUILayout.ExpandHeight(true)))
-            {
-                // DrawHeader();
-
-                using (new EditorGUILayout.HorizontalScope(GUILayout.ExpandHeight(true)))
-                {
-                    DrawSidebar();
-                    GUILayout.Space(8f);
-                    DrawDetailsPane();
-                }
-
-            }
-        }
-
         private void DrawWindowBackground()
         {
             DeucarianEditorVisualShell.DrawWindowBackground(

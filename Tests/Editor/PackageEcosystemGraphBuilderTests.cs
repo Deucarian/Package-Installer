@@ -14,13 +14,13 @@ namespace Deucarian.PackageInstaller.Editor.Tests
     internal sealed class PackageGraphBuilderTests
     {
         [Test]
-        public void Window_ExposesOnlyEcosystemGraphAndCoercesListRequests()
+        public void Window_DefaultsToListAndKeepsDependencyGraphAvailable()
         {
-            Assert.IsTrue(PackageInstallerWindow.DefaultsToEcosystemGraphForTests);
+            Assert.IsFalse(PackageInstallerWindow.DefaultsToEcosystemGraphForTests);
             CollectionAssert.AreEqual(
-                new[] { "Ecosystem Graph" },
+                new[] { "Ecosystem Graph", "List View" },
                 PackageInstallerWindow.ViewToggleOrderForTests.ToArray());
-            Assert.IsTrue(PackageInstallerWindow.ListViewRequestResolvesToEcosystemGraphForTests);
+            Assert.IsFalse(PackageInstallerWindow.ListViewRequestResolvesToEcosystemGraphForTests);
         }
 
         [Test]

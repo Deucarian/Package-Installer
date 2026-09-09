@@ -266,6 +266,13 @@ namespace Deucarian.PackageInstaller.Editor
 
         private float GetDetailsContentWidth()
         {
+            if (_viewMode == InstallerViewMode.List && _workspace != null)
+            {
+                float width = _workspace.View.Details.contentRect.width;
+                if (width > 0f && !float.IsNaN(width) && !float.IsInfinity(width))
+                    return width;
+            }
+
             float graphDetailsContentWidth = _graphDetailsContainer == null
                 ? 0f
                 : _graphDetailsContainer.contentRect.width;
