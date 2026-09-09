@@ -256,12 +256,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
         private static void ApplySearchClasses(VisualElement element, bool searchActive)
         {
-            MethodInfo method = typeof(PackageGraphCanvas).GetMethod(
-                "ApplySearchClasses",
-                BindingFlags.Static | BindingFlags.NonPublic);
-
-            Assert.NotNull(method);
-            method.Invoke(null, new object[] { element, false, false, false, searchActive });
+            PackageGraphCanvasVisuals.ApplySearchClasses(element, false, false, false, searchActive);
         }
 
         private static void SynchronizeOcclusions(PackageGraphCanvas canvas)
@@ -354,12 +349,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             PackageGraphStructuralMembershipSegment segment,
             Rect rect)
         {
-            MethodInfo clipMethod = typeof(PackageGraphMembershipLayer).GetMethod(
-                "TryGetSegmentRectInterval",
-                BindingFlags.Static | BindingFlags.NonPublic);
-            Assert.NotNull(clipMethod);
-            object[] arguments = { segment.From, segment.To, rect, 0f, 0f };
-            return (bool)clipMethod.Invoke(null, arguments);
+            return PackageGraphMembershipSegments.TryGetSegmentRectInterval(
+                segment.From, segment.To, rect, out _, out _);
         }
 
         private static void AssertStyleRect(VisualElement element, Rect expected)

@@ -148,13 +148,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Rect groupRect,
             IReadOnlyList<KeyValuePair<string, Rect>> packageRects)
         {
-            MethodInfo method = typeof(PackageGraphMembershipLayer).GetMethod(
-                "CreateStructuralMembershipRoute",
-                BindingFlags.Static | BindingFlags.NonPublic);
-            Assert.IsNotNull(method, "Structural membership route factory was not found.");
-            return (PackageGraphStructuralMembershipRoute)method.Invoke(
-                null,
-                new object[] { "tools-quality", groupRect, groupRect, packageRects });
+            return PackageGraphMembershipRoutePlanner.CreateStructuralMembershipRoute(
+                "tools-quality", groupRect, groupRect, packageRects);
         }
 
         private static PackageGraphCategoryStatusKey ResolveSegmentStatus(

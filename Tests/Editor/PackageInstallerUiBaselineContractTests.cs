@@ -358,7 +358,9 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 "Editor/Assets/Styles/DeucarianEditor.uss");
             string graphSource = ReadPackageFile(
                 "com.deucarian.package-installer",
-                "Editor/UI/PackageInstaller/PackageEcosystemGraphView.cs");
+                "Editor/UI/PackageInstaller/PackageGraphToolbarControls.cs") + ReadPackageFile(
+                "com.deucarian.package-installer",
+                "Editor/UI/PackageInstaller/PackageGraphEdgePainter.cs");
 
             foreach (string role in new[]
                      {
@@ -638,9 +640,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                          "DeucarianEditorLayoutMetrics.SurfaceHorizontalPadding",
                          "DeucarianEditorLayoutMetrics.SurfaceVerticalPadding",
                          "DeucarianEditorLayoutMetrics.SurfaceSpacing)",
-                         "titleStyle.fontSize = 15;",
-                         "primaryButtonStyle.fixedHeight = ButtonHeight;",
-                         "secondaryButtonStyle.fixedHeight = ButtonHeight;"
+                         "titleStyle.fontSize = 15;"
                      })
             {
                 Assert.That(workbenchSource, Does.Contain(declaration));
@@ -662,14 +662,14 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 "private static void DrawColoredLabel",
                 StringComparison.Ordinal);
             Assert.GreaterOrEqual(drawColoredLabelStart, 0);
-            int ensureStylesStart = workbenchSource.IndexOf(
-                "private static void EnsureStyles",
+            int methodEnd = workbenchSource.IndexOf(
+                "\n        }",
                 drawColoredLabelStart,
                 StringComparison.Ordinal);
-            Assert.Greater(ensureStylesStart, drawColoredLabelStart);
+            Assert.Greater(methodEnd, drawColoredLabelStart);
             string drawColoredLabelSource = workbenchSource.Substring(
                 drawColoredLabelStart,
-                ensureStylesStart - drawColoredLabelStart);
+                methodEnd - drawColoredLabelStart);
             Assert.That(drawColoredLabelSource, Does.Not.Contain("new GUIStyle(style)"));
 
             Assert.AreEqual(10, DeucarianEditorLayoutMetrics.PageHorizontalPadding);
@@ -748,7 +748,10 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 AssertColor(DeucarianEditorVisualShell.MainPanel, 37f / 255f, 36f / 255f, 33f / 255f, 0.88f);
                 AssertColor(DeucarianEditorVisualShell.NestedSurface, 48f / 255f, 46f / 255f, 42f / 255f, 0.82f);
                 AssertColor(DeucarianEditorVisualShell.HeaderPanel, 42f / 255f, 41f / 255f, 38f / 255f, 0.92f);
-                AssertColor(DeucarianEditorVisualShell.Border, 98f / 255f, 186f / 255f, 182f / 255f, 0.24f);
+                if (DeucarianEditorAppearance.DecorativeBackgrounds)
+                    AssertColor(DeucarianEditorVisualShell.Border, 98f / 255f, 186f / 255f, 182f / 255f, 0.24f);
+                else
+                    Assert.AreEqual(DeucarianEditorVisualShell.SubtleBorder, DeucarianEditorVisualShell.Border);
                 AssertColor(DeucarianEditorVisualShell.InteractiveBorder, 98f / 255f, 186f / 255f, 182f / 255f, 0.62f);
                 AssertColor(DeucarianEditorVisualShell.SubtleBorder, 242f / 255f, 239f / 255f, 231f / 255f, 0.12f);
                 AssertColor(DeucarianEditorVisualShell.Text, 242f / 255f, 239f / 255f, 231f / 255f, 1f);
@@ -760,7 +763,10 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 AssertColor(DeucarianEditorVisualShell.MainPanel, 1f, 1f, 1f, 0.90f);
                 AssertColor(DeucarianEditorVisualShell.NestedSurface, 242f / 255f, 239f / 255f, 231f / 255f, 0.88f);
                 AssertColor(DeucarianEditorVisualShell.HeaderPanel, 1f, 1f, 1f, 0.94f);
-                AssertColor(DeucarianEditorVisualShell.Border, 27f / 255f, 26f / 255f, 24f / 255f, 0.14f);
+                if (DeucarianEditorAppearance.DecorativeBackgrounds)
+                    AssertColor(DeucarianEditorVisualShell.Border, 27f / 255f, 26f / 255f, 24f / 255f, 0.14f);
+                else
+                    Assert.AreEqual(DeucarianEditorVisualShell.SubtleBorder, DeucarianEditorVisualShell.Border);
                 AssertColor(DeucarianEditorVisualShell.InteractiveBorder, 15f / 255f, 98f / 255f, 106f / 255f, 0.58f);
                 AssertColor(DeucarianEditorVisualShell.SubtleBorder, 27f / 255f, 26f / 255f, 24f / 255f, 0.09f);
                 AssertColor(DeucarianEditorVisualShell.Text, 27f / 255f, 26f / 255f, 24f / 255f, 1f);
@@ -922,10 +928,15 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
             string directory = Path.GetDirectoryName(fullPath);
             string stem = Path.GetFileNameWithoutExtension(fullPath);
+            IEnumerable<string> sources = Directory.GetFiles(directory, stem + "*.cs");
+            if (stem == "PackageInstallerWindow")
+                sources = sources.Concat(new[] { Path.Combine(directory, "PackageInstallerImGui.cs") });
+            string workbenchStyles = Path.Combine(directory, "DeucarianEditorWorkbenchStyles.cs");
+            if (stem == "DeucarianEditorWorkbenchGUI" && File.Exists(workbenchStyles))
+                sources = sources.Concat(new[] { workbenchStyles });
             return string.Join(
                 Environment.NewLine,
-                Directory.GetFiles(directory, stem + "*.cs")
-                    .OrderBy(path => path, StringComparer.Ordinal)
+                sources.OrderBy(path => path, StringComparer.Ordinal)
                     .Select(File.ReadAllText));
         }
 

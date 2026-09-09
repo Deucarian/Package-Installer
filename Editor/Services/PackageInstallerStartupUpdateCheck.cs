@@ -177,7 +177,7 @@ namespace Deucarian.PackageInstaller.Editor
                 out PackageChannel installedChannel,
                 out _);
 
-            return PackageInstallerWindow.ResolveSelectedChannel(
+            return PackageChannelPolicy.ResolveSelectedChannel(
                 packageDefinition,
                 projectSelection,
                 packageSelection,

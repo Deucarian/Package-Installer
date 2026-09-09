@@ -13,7 +13,6 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed partial class PackageInstallerWindow
     {
 
-
         private void ValidatePendingReloadState(PackageGraphModel graph)
         {
             if (!_reloadStatePendingValidation)
@@ -101,15 +100,6 @@ namespace Deucarian.PackageInstaller.Editor
                 : null;
         }
 
-        private string GetGraphPackageGroupId(string packageId)
-        {
-            return _lastPackageGraph != null &&
-                   !string.IsNullOrWhiteSpace(packageId) &&
-                   _lastPackageGraph.TryGetNode(packageId, out PackageGraphNode node)
-                ? node.GroupId
-                : string.Empty;
-        }
-
         private string GetPackageHierarchyPath(PackageDefinition packageDefinition)
         {
             return PackageGraphHierarchyDisplay.GetPackageHierarchyPath(_lastPackageGraph, packageDefinition);
@@ -159,7 +149,7 @@ namespace Deucarian.PackageInstaller.Editor
                     StringComparison.OrdinalIgnoreCase);
             }
 
-            string hoverTopLevelGroupId = ResolveTopLevelGroupId(_lastPackageGraph, activeHoverGroupId);
+            string hoverTopLevelGroupId = PackageGraphNavigationModel.ResolveTopLevelGroupId(_lastPackageGraph, activeHoverGroupId);
 
             return !string.IsNullOrWhiteSpace(hoverTopLevelGroupId) &&
                    string.Equals(
@@ -339,10 +329,10 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (status != null && status.Kind == PackageUpdateStatusKind.SwitchAvailable)
             {
-                return "Switch to " + GetChannelLabel(channel);
+                return "Switch to " + PackageChannelPolicy.GetChannelLabel(channel);
             }
 
-            return "Update to " + GetChannelLabel(channel);
+            return "Update to " + PackageChannelPolicy.GetChannelLabel(channel);
         }
 
         private static string GetSampleImportStatusText(PackageSampleImportStatus status)
@@ -369,26 +359,26 @@ namespace Deucarian.PackageInstaller.Editor
             }
         }
 
-        private static VisualStatusKind GetSampleImportStatusKind(PackageSampleImportStatus status)
+        private static PackageInstallerVisualStatusKind GetSampleImportStatusKind(PackageSampleImportStatus status)
         {
             if (status == null)
             {
-                return VisualStatusKind.NotInstalled;
+                return PackageInstallerVisualStatusKind.NotInstalled;
             }
 
             switch (status.State)
             {
                 case PackageSampleImportState.Importing:
-                    return VisualStatusKind.Busy;
+                    return PackageInstallerVisualStatusKind.Busy;
                 case PackageSampleImportState.Imported:
                 case PackageSampleImportState.AlreadyImported:
-                    return VisualStatusKind.Installed;
+                    return PackageInstallerVisualStatusKind.Installed;
                 case PackageSampleImportState.Canceled:
-                    return VisualStatusKind.NotInstalled;
+                    return PackageInstallerVisualStatusKind.NotInstalled;
                 case PackageSampleImportState.Failed:
-                    return VisualStatusKind.Failed;
+                    return PackageInstallerVisualStatusKind.Failed;
                 default:
-                    return VisualStatusKind.NotInstalled;
+                    return PackageInstallerVisualStatusKind.NotInstalled;
             }
         }
 

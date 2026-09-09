@@ -13,7 +13,6 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed partial class PackageInstallerWindow
     {
 
-
         private void DrawOptionalCompanionsPanel(PackageDefinition packageDefinition)
         {
             if (packageDefinition == null || packageDefinition.OptionalCompanions.Count == 0)
@@ -21,16 +20,16 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            DrawPanel("Optional Companions", () =>
+            ImGui.DrawPanel("Optional Companions", () =>
             {
-                EditorGUILayout.LabelField("Install optional tooling that enhances this package without becoming a required dependency.", _mutedMiniLabelStyle);
+                EditorGUILayout.LabelField("Install optional tooling that enhances this package without becoming a required dependency.", _styles.MutedMiniLabelStyle);
                 GUILayout.Space(6f);
 
                 foreach (string companionId in packageDefinition.OptionalCompanions)
                 {
                     if (!PackageRegistryProvider.TryGetPackage(companionId, out PackageDefinition companionDefinition))
                     {
-                        DrawInlineHelp("Optional companion is unavailable: " + companionId, VisualStatusKind.Failed);
+                        ImGui.DrawInlineHelp("Optional companion is unavailable: " + companionId, PackageInstallerVisualStatusKind.Failed);
                         continue;
                     }
 
@@ -46,16 +45,16 @@ namespace Deucarian.PackageInstaller.Editor
             bool actionsBusy = IsAnyOperationBusy();
             VisualStatus status = GetPackageVisualStatus(companionDefinition);
 
-            Rect rect = BeginSurface(
-                _sampleRowStyle,
-                _sampleRowBackgroundColor,
-                _separatorColor,
+            Rect rect = ImGui.BeginSurface(
+                _styles.SampleRowStyle,
+                _styles.SampleRowBackgroundColor,
+                _styles.SeparatorColor,
                 GUILayout.ExpandWidth(true));
 
             using (new EditorGUILayout.HorizontalScope())
             {
                 Rect markerRect = GUILayoutUtility.GetRect(30f, 30f, GUILayout.Width(30f), GUILayout.Height(30f));
-                DrawInlineIcon(markerRect, status.IconId, status.Kind, status.Label);
+                ImGui.DrawInlineIcon(markerRect, status.IconId, status.Kind, status.Label);
 
                 GUILayout.Space(8f);
 
@@ -63,12 +62,12 @@ namespace Deucarian.PackageInstaller.Editor
                 {
                     EditorGUILayout.LabelField(
                         new GUIContent(companionDefinition.DisplayName, GetPackageTooltip(companionDefinition)),
-                        _rowTitleStyle);
+                        _styles.RowTitleStyle);
 
                     string description = GetOptionalCompanionDescription(companionDefinition);
                     EditorGUILayout.LabelField(
                         new GUIContent(description, description),
-                        _mutedMiniLabelStyle);
+                        _styles.MutedMiniLabelStyle);
                 }
 
                 GUILayout.Space(8f);
@@ -113,7 +112,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void DrawExtrasPanel(PackageDefinition packageDefinition)
         {
-            DrawPanel("Extras / Samples", () =>
+            ImGui.DrawPanel("Extras / Samples", () =>
             {
                 bool installed = _packageDetectionService.TryGetInstalledPackage(
                     packageDefinition.PackageId,
@@ -129,11 +128,11 @@ namespace Deucarian.PackageInstaller.Editor
                 {
                     if (packageDefinition.Extras.Count == 0)
                     {
-                        EditorGUILayout.LabelField("Install this package to discover package samples.", _mutedMiniLabelStyle);
+                        EditorGUILayout.LabelField("Install this package to discover package samples.", _styles.MutedMiniLabelStyle);
                     }
                     else
                     {
-                        DrawInlineHelp("Install this package before importing samples.", VisualStatusKind.Info);
+                        ImGui.DrawInlineHelp("Install this package before importing samples.", PackageInstallerVisualStatusKind.Info);
                     }
 
                     return;
@@ -141,11 +140,11 @@ namespace Deucarian.PackageInstaller.Editor
 
                 if (sampleDefinitions.Length == 0)
                 {
-                    EditorGUILayout.LabelField("No package samples declared in package.json.", _mutedMiniLabelStyle);
+                    EditorGUILayout.LabelField("No package samples declared in package.json.", _styles.MutedMiniLabelStyle);
                     return;
                 }
 
-                EditorGUILayout.LabelField("Import optional samples and examples for this package.", _mutedMiniLabelStyle);
+                EditorGUILayout.LabelField("Import optional samples and examples for this package.", _styles.MutedMiniLabelStyle);
                 GUILayout.Space(6f);
 
                 foreach (PackageExtraDefinition extraDefinition in sampleDefinitions)
@@ -164,19 +163,19 @@ namespace Deucarian.PackageInstaller.Editor
                 packageDefinition,
                 extraDefinition,
                 packageInfo);
-            Rect rect = BeginSurface(
-                _sampleRowStyle,
-                _sampleRowBackgroundColor,
-                _separatorColor,
+            Rect rect = ImGui.BeginSurface(
+                _styles.SampleRowStyle,
+                _styles.SampleRowBackgroundColor,
+                _styles.SeparatorColor,
                 GUILayout.ExpandWidth(true));
 
             using (new EditorGUILayout.HorizontalScope())
             {
                 Rect markerRect = GUILayoutUtility.GetRect(30f, 30f, GUILayout.Width(30f), GUILayout.Height(30f));
-                DrawInlineIcon(
+                ImGui.DrawInlineIcon(
                     markerRect,
                     DeucarianEditorIconIds.Sample,
-                    VisualStatusKind.Info,
+                    PackageInstallerVisualStatusKind.Info,
                     "Package sample");
 
                 GUILayout.Space(8f);
@@ -185,23 +184,23 @@ namespace Deucarian.PackageInstaller.Editor
                 {
                     EditorGUILayout.LabelField(
                         new GUIContent(extraDefinition.DisplayName, extraDefinition.DisplayName),
-                        _rowTitleStyle);
+                        _styles.RowTitleStyle);
 
                     if (!string.IsNullOrWhiteSpace(extraDefinition.Description))
                     {
                         EditorGUILayout.LabelField(
                             new GUIContent(extraDefinition.Description, extraDefinition.Description),
-                            _mutedMiniLabelStyle);
+                            _styles.MutedMiniLabelStyle);
                     }
 
                     string statusText = GetSampleImportStatusText(status);
 
                     if (!string.IsNullOrWhiteSpace(statusText))
                     {
-                        DrawColoredLabel(
+                        ImGui.DrawColoredLabel(
                             statusText,
-                            _mutedMiniLabelStyle,
-                            GetStatusColor(GetSampleImportStatusKind(status)));
+                            _styles.MutedMiniLabelStyle,
+                            PackageInstallerStatusPresentation.GetStatusColor(GetSampleImportStatusKind(status)));
                     }
                 }
 
@@ -291,7 +290,7 @@ namespace Deucarian.PackageInstaller.Editor
                 return;
             }
 
-            DrawPanel(null, () =>
+            ImGui.DrawPanel(null, () =>
             {
                 if (!DrawAdvancedFoldout(packageDefinition.PackageId))
                 {
@@ -309,44 +308,44 @@ namespace Deucarian.PackageInstaller.Editor
             PackageChannel selectedChannel = GetSelectedChannel(packageDefinition);
             PackageUpdateStatus updateStatus = _packageUpdateCheckService.GetStatus(packageDefinition, selectedChannel);
 
-            DrawSelectableValue("Package ID", packageDefinition.PackageId);
-            DrawSelectableValue("Domain", GetPackageHierarchyPath(packageDefinition));
-            DrawSelectableValue("Package kind", GetPackageKindDisplayName(packageDefinition));
-            DrawSelectableValue("Selected URL", packageDefinition.GetUrl(selectedChannel));
-            DrawSelectableValue("Stable URL", packageDefinition.StableUrl);
-            DrawSelectableValue("Development URL", packageDefinition.DevelopmentUrl);
-            DrawSelectableValue("Selected ref", GetChannelLabel(selectedChannel));
+            ImGui.DrawSelectableValue("Package ID", packageDefinition.PackageId);
+            ImGui.DrawSelectableValue("Domain", GetPackageHierarchyPath(packageDefinition));
+            ImGui.DrawSelectableValue("Package kind", GetPackageKindDisplayName(packageDefinition));
+            ImGui.DrawSelectableValue("Selected URL", packageDefinition.GetUrl(selectedChannel));
+            ImGui.DrawSelectableValue("Stable URL", packageDefinition.StableUrl);
+            ImGui.DrawSelectableValue("Development URL", packageDefinition.DevelopmentUrl);
+            ImGui.DrawSelectableValue("Selected ref", PackageChannelPolicy.GetChannelLabel(selectedChannel));
 
             if (_packageDetectionService.TryGetInstalledPackage(
                     packageDefinition.PackageId,
                     out PackageManagerPackageInfo packageInfo))
             {
-                DrawSelectableValue("Installed source", packageInfo.source.ToString());
-                DrawSelectableValue("Installed version", packageInfo.version);
-                DrawSelectableValue("Installed path", packageInfo.resolvedPath);
+                ImGui.DrawSelectableValue("Installed source", packageInfo.source.ToString());
+                ImGui.DrawSelectableValue("Installed version", packageInfo.version);
+                ImGui.DrawSelectableValue("Installed path", packageInfo.resolvedPath);
             }
 
             if (_packageDetectionService.TryGetInstalledPackageReference(
                     packageDefinition.PackageId,
                     out string installedReference))
             {
-                DrawSelectableValue("Installed ref", installedReference);
+                ImGui.DrawSelectableValue("Installed ref", installedReference);
             }
 
-            DrawSelectableValue("Installed rev", updateStatus.InstalledRevision);
-            DrawSelectableValue("Latest rev", updateStatus.LatestRevision);
-            DrawSelectableValue("Installed version", updateStatus.InstalledVersion);
-            DrawSelectableValue("Target version", updateStatus.LatestVersion);
-            DrawSelectableValue("Dependencies", packageDefinition.Dependencies.Count == 0
+            ImGui.DrawSelectableValue("Installed rev", updateStatus.InstalledRevision);
+            ImGui.DrawSelectableValue("Latest rev", updateStatus.LatestRevision);
+            ImGui.DrawSelectableValue("Installed version", updateStatus.InstalledVersion);
+            ImGui.DrawSelectableValue("Target version", updateStatus.LatestVersion);
+            ImGui.DrawSelectableValue("Dependencies", packageDefinition.Dependencies.Count == 0
                 ? "-"
                 : string.Join(", ", packageDefinition.Dependencies.ToArray()));
-            DrawSelectableValue("Optional companions", packageDefinition.OptionalCompanions.Count == 0
+            ImGui.DrawSelectableValue("Optional companions", packageDefinition.OptionalCompanions.Count == 0
                 ? "-"
                 : string.Join(", ", packageDefinition.OptionalCompanions.ToArray()));
 
             if (!string.IsNullOrWhiteSpace(updateStatus.Message))
             {
-                DrawSelectableValue("State", updateStatus.Message);
+                ImGui.DrawSelectableValue("State", updateStatus.Message);
             }
         }
 
@@ -357,29 +356,16 @@ namespace Deucarian.PackageInstaller.Editor
                 return false;
             }
 
-            if (!_advancedFoldouts.TryGetValue(key, out bool expanded))
-            {
-                expanded = EditorPrefs.GetBool(GetAdvancedFoldoutPreferenceKey(key), false);
-                _advancedFoldouts[key] = expanded;
-            }
+            bool expanded = _preferences.IsAdvancedExpanded(key);
 
-            bool nextExpanded = EditorGUILayout.Foldout(expanded, "Advanced", true, _foldoutStyle);
+            bool nextExpanded = EditorGUILayout.Foldout(expanded, "Advanced", true, _styles.FoldoutStyle);
 
             if (nextExpanded != expanded)
             {
-                _advancedFoldouts[key] = nextExpanded;
-                EditorPrefs.SetBool(GetAdvancedFoldoutPreferenceKey(key), nextExpanded);
+                _preferences.SetAdvancedExpanded(key, nextExpanded);
             }
 
             return nextExpanded;
-        }
-
-        private string GetAdvancedFoldoutPreferenceKey(string packageId)
-        {
-            return AdvancedFoldoutPreferencePrefix +
-                   Application.dataPath.Replace("\\", "/") +
-                   "." +
-                   packageId;
         }
 
         private string GetOperationFooterSummaryLine(OperationProgressView operation)

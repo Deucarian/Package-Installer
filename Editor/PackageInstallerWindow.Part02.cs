@@ -13,7 +13,6 @@ namespace Deucarian.PackageInstaller.Editor
     internal sealed partial class PackageInstallerWindow
     {
 
-
         private void OnDisable()
         {
             AssemblyReloadEvents.beforeAssemblyReload -= HandleBeforeAssemblyReload;
@@ -321,10 +320,10 @@ namespace Deucarian.PackageInstaller.Editor
             PackageChannelSelection selection = GetGlobalProjectChannelSelection();
             Button button = DeucarianEditorCommandBar.CreateAction(
                 DeucarianEditorIconIds.GitBranch,
-                FormatGlobalChannelButtonLabel(selection),
+                PackageChannelPolicy.FormatGlobalChannelButtonLabel(selection),
                 ToggleGlobalChannelOverridePopup,
                 emphasized: true,
-                GetGlobalChannelButtonTooltip(selection));
+                PackageChannelPolicy.GetGlobalChannelButtonTooltip(selection));
             button.name = GlobalChannelOverrideButtonName;
             return button;
         }
