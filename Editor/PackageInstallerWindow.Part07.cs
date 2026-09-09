@@ -173,7 +173,7 @@ namespace Deucarian.PackageInstaller.Editor
         {
             using (new EditorGUILayout.HorizontalScope())
             {
-                EditorGUILayout.LabelField("Registry", _styles.MutedMiniLabelStyle, GUILayout.Width(54f));
+                DeucarianEditorTextGUI.LabelField("Registry", _styles.MutedMiniLabelStyle, GUILayout.Width(54f));
                 ImGui.DrawStatusBadge(PackageRegistryProvider.All.Count + " packages", PackageInstallerVisualStatusKind.Info, GUILayout.Width(104f));
 
                 if (PackageRegistryProvider.IsRemoteRefreshing)
@@ -182,7 +182,7 @@ namespace Deucarian.PackageInstaller.Editor
                 }
                 else
                 {
-                    EditorGUILayout.LabelField(
+                    DeucarianEditorTextGUI.LabelField(
                         new GUIContent(PackageRegistryProvider.StatusMessage, PackageRegistryProvider.StatusMessage),
                         _styles.MutedMiniLabelStyle,
                         GUILayout.ExpandWidth(true));
@@ -213,7 +213,7 @@ namespace Deucarian.PackageInstaller.Editor
             using (new EditorGUILayout.HorizontalScope())
             {
                 bool checkOnStart = PackageUpdateCheckPreferences.CheckOnEditorStart;
-                bool nextCheckOnStart = EditorGUILayout.ToggleLeft(
+                bool nextCheckOnStart = DeucarianEditorInputGUI.ToggleLeft(
                     new GUIContent(
                         "Check on Start",
                         "Run one delayed background update check per Unity editor session."),
@@ -226,7 +226,7 @@ namespace Deucarian.PackageInstaller.Editor
                 }
 
                 bool checkOnOpen = PackageUpdateCheckPreferences.CheckOnWindowOpen;
-                bool nextCheckOnOpen = EditorGUILayout.ToggleLeft(
+                bool nextCheckOnOpen = DeucarianEditorInputGUI.ToggleLeft(
                     new GUIContent(
                         "Check on Open",
                         "Check for updates when the Package Installer window opens. Throttled to once every 30 minutes."),

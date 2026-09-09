@@ -22,7 +22,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             ImGui.DrawPanel("Optional Companions", () =>
             {
-                EditorGUILayout.LabelField("Install optional tooling that enhances this package without becoming a required dependency.", _styles.MutedMiniLabelStyle);
+                DeucarianEditorTextGUI.LabelField("Install optional tooling that enhances this package without becoming a required dependency.", _styles.MutedMiniLabelStyle);
                 GUILayout.Space(6f);
 
                 foreach (string companionId in packageDefinition.OptionalCompanions)
@@ -60,12 +60,12 @@ namespace Deucarian.PackageInstaller.Editor
 
                 using (new EditorGUILayout.VerticalScope(GUILayout.ExpandWidth(true)))
                 {
-                    EditorGUILayout.LabelField(
+                    DeucarianEditorTextGUI.LabelField(
                         new GUIContent(companionDefinition.DisplayName, GetPackageTooltip(companionDefinition)),
                         _styles.RowTitleStyle);
 
                     string description = GetOptionalCompanionDescription(companionDefinition);
-                    EditorGUILayout.LabelField(
+                    DeucarianEditorTextGUI.LabelField(
                         new GUIContent(description, description),
                         _styles.MutedMiniLabelStyle);
                 }
@@ -128,7 +128,7 @@ namespace Deucarian.PackageInstaller.Editor
                 {
                     if (packageDefinition.Extras.Count == 0)
                     {
-                        EditorGUILayout.LabelField("Install this package to discover package samples.", _styles.MutedMiniLabelStyle);
+                        DeucarianEditorTextGUI.LabelField("Install this package to discover package samples.", _styles.MutedMiniLabelStyle);
                     }
                     else
                     {
@@ -140,11 +140,11 @@ namespace Deucarian.PackageInstaller.Editor
 
                 if (sampleDefinitions.Length == 0)
                 {
-                    EditorGUILayout.LabelField("No package samples declared in package.json.", _styles.MutedMiniLabelStyle);
+                    DeucarianEditorTextGUI.LabelField("No package samples declared in package.json.", _styles.MutedMiniLabelStyle);
                     return;
                 }
 
-                EditorGUILayout.LabelField("Import optional samples and examples for this package.", _styles.MutedMiniLabelStyle);
+                DeucarianEditorTextGUI.LabelField("Import optional samples and examples for this package.", _styles.MutedMiniLabelStyle);
                 GUILayout.Space(6f);
 
                 foreach (PackageExtraDefinition extraDefinition in sampleDefinitions)
@@ -182,13 +182,13 @@ namespace Deucarian.PackageInstaller.Editor
 
                 using (new EditorGUILayout.VerticalScope(GUILayout.ExpandWidth(true)))
                 {
-                    EditorGUILayout.LabelField(
+                    DeucarianEditorTextGUI.LabelField(
                         new GUIContent(extraDefinition.DisplayName, extraDefinition.DisplayName),
                         _styles.RowTitleStyle);
 
                     if (!string.IsNullOrWhiteSpace(extraDefinition.Description))
                     {
-                        EditorGUILayout.LabelField(
+                        DeucarianEditorTextGUI.LabelField(
                             new GUIContent(extraDefinition.Description, extraDefinition.Description),
                             _styles.MutedMiniLabelStyle);
                     }
@@ -358,7 +358,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             bool expanded = _preferences.IsAdvancedExpanded(key);
 
-            bool nextExpanded = EditorGUILayout.Foldout(expanded, "Advanced", true, _styles.FoldoutStyle);
+            bool nextExpanded = DeucarianEditorInputGUI.Foldout(expanded, "Advanced", true, _styles.FoldoutStyle);
 
             if (nextExpanded != expanded)
             {
