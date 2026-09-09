@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.3.2] - 2026-09-09
+
+- Register package tooling and navigation actions as shared Control Center pages. Preserve the domain workflow while using Editor-owned submenus, in-window navigation, and UI scaling.
+
 ## [1.3.1] - 2026-09-09
 
 - Keep sidebar navigation in the current workspace and retain page drafts while switching tools.
