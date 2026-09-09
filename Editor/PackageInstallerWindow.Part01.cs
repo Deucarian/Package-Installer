@@ -109,6 +109,7 @@ namespace Deucarian.PackageInstaller.Editor
                 DeucarianEditorIconIds.CreatePackage,
                 WindowTitle,
                 "Open the Deucarian Package Installer.");
+            window.navigation?.Navigate(DeucarianToolIds.PackageInstaller);
             DeucarianEditorWorkspace.ConfigureWindow(window);
             window.Show();
         }
