@@ -4,7 +4,7 @@
 
 Open a searchable Installed / Updates / Browse workspace by default, with the dependency graph available as a secondary view. Preserve package planning, confirmations, source selection, samples and operation recovery.
 
-Requires Editor 1.4.0 or newer. Development is delivered through Git `#develop`; this change does not promote the stable `#main` channel.
+Requires Editor 1.4.1 or newer. Development is delivered through Git `#develop`; this change does not promote the stable `#main` channel.
 
 ## What this is
 
