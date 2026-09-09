@@ -248,8 +248,8 @@ namespace Deucarian.PackageInstaller.Editor
         private const float GlobalChannelOverridePopupMargin = 8f;
         private static readonly string[] GlobalChannelOptionLabels = { "Development", "Stable" };
 
-        private const InstallerViewMode DefaultInstallerViewMode = InstallerViewMode.EcosystemGraph;
-        private static readonly bool ListViewEnabled = false;
+        private const InstallerViewMode DefaultInstallerViewMode = InstallerViewMode.List;
+        private static readonly bool ListViewEnabled = true;
 
         private PackageInstallService _packageInstallService;
         private PackageDetectionService _packageDetectionService;
@@ -338,6 +338,7 @@ namespace Deucarian.PackageInstaller.Editor
         private Button _operationFooterDetailsButton;
         private Label _operationFooterVersionLabel;
         private PackageGraphView _graphView;
+        private InstallerWorkspace _workspace;
         private readonly PackageInstallerWindowStyles _styles = new PackageInstallerWindowStyles();
         private PackageInstallerImGui _imGui;
         private PackageInstallerImGui ImGui => _imGui ?? (_imGui = new PackageInstallerImGui(_styles, GetDetailsContentWidth));

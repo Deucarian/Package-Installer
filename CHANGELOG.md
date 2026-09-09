@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.3.0 - 2026-09-09
+
+- Open a searchable Installed / Updates / Browse workspace by default, with the dependency graph available as a secondary view. Preserve package planning, confirmations, source selection, samples and operation recovery.
+
 ## 1.2.6 - 2026-09-09
 
 - Assert shared button heights through their existing public style-value checks, without also coupling those checks to a private constant's spelling.

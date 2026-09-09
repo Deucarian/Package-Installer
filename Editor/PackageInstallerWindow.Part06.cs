@@ -15,6 +15,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void UpdateViewVisibility()
         {
+            _workspace?.Refresh();
             bool graphMode = _viewMode == InstallerViewMode.EcosystemGraph;
 
             if (_listViewContainerHost != null)
@@ -182,6 +183,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void RefreshGraphView(string reason)
         {
+            _workspace?.Refresh();
             if (_graphView == null)
             {
                 return;
