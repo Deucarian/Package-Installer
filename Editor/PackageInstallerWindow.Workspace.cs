@@ -23,6 +23,9 @@ namespace Deucarian.PackageInstaller.Editor
             private int category;
             private string detailsId;
             private DeucarianEditorWorkspaceForm details;
+            private readonly IVisualElementScheduledItem rowPump;
+            private IEnumerator<object> pendingRows;
+            private bool rowsDirty;
             internal DeucarianEditorCollectionWorkspace View { get; }
 
             internal InstallerWorkspace(PackageInstallerWindow owner)
@@ -54,6 +57,8 @@ namespace Deucarian.PackageInstaller.Editor
                 status = DeucarianEditorWorkspaceControls.Label("", "dw-muted");
                 View.Workspace.Scope.Add(status);
                 View.Workspace.SearchField.RegisterValueChangedCallback(evt => { search = evt.newValue ?? ""; Refresh(); });
+                View.SetItems(Array.Empty<DeucarianEditorCollectionItem>(), null, "Loading packages…");
+                rowPump = owner.PageRoot.schedule.Execute(PumpRows).Every(16);
             }
 
             internal void Refresh()
@@ -66,19 +71,51 @@ namespace Deucarian.PackageInstaller.Editor
                 scope.Refresh();
                 bool busy = owner.IsAnyOperationBusy();
                 refresh.SetEnabled(!busy);
+                bool hasUpdates = owner.GetPackagesWithUpdates().Length > 0;
                 var checkState = CreateActionButtonState(PackageInstallerActionKind.CheckUpdates, owner._activeActionKind,
-                    owner._cancelingActionKind, busy, owner.GetPackagesWithUpdates().Length > 0);
+                    owner._cancelingActionKind, busy, hasUpdates);
                 check.text = checkState.Label;
                 check.SetEnabled(checkState.Enabled);
-                update.SetEnabled(!busy && owner.GetPackagesWithUpdates().Length > 0);
-                DeucarianEditorWorkspaceControls.Show(update, owner.GetPackagesWithUpdates().Length > 0);
+                update.SetEnabled(!busy && hasUpdates);
+                DeucarianEditorWorkspaceControls.Show(update, hasUpdates);
                 status.text = PackageRegistryProvider.StatusMessage + " · Updates: " +
                     (owner._packageUpdateCheckService.LastCheckedUtc.HasValue
                         ? owner._packageUpdateCheckService.LastCheckedUtc.Value.ToLocalTime().ToString("HH:mm:ss") : "not checked");
+                rowsDirty = true;
+            }
+
+            private void PumpRows()
+            {
+                if (rowsDirty)
+                {
+                    pendingRows?.Dispose();
+                    pendingRows = PopulateRows();
+                    rowsDirty = false;
+                }
+                var budget = System.Diagnostics.Stopwatch.StartNew();
+                for (int count = 0; pendingRows != null && count < 8 && budget.ElapsedMilliseconds < 4; count++)
+                {
+                    if (pendingRows.MoveNext()) continue;
+                    pendingRows.Dispose();
+                    pendingRows = null;
+                }
+            }
+
+            private IEnumerator<object> PopulateRows()
+            {
+                if (PackageRegistryProvider.IsLocalLoading || !owner._packageDetectionService.HasSuccessfulRefresh)
+                {
+                    View.SetItems(Array.Empty<DeucarianEditorCollectionItem>(), null,
+                        PackageRegistryProvider.IsLocalLoading ? "Loading package catalog…" :
+                        owner._packageDetectionService.IsRefreshing ? "Finding installed packages…" :
+                        "Installed packages could not be loaded. Use Refresh catalog to retry.");
+                    yield break;
+                }
                 var rows = new List<DeucarianEditorCollectionItem>();
                 PackageDefinition selected = null;
                 foreach (var package in PackageRegistryProvider.All.OrderBy(p => p.DisplayName))
                 {
+                    yield return null;
                     bool installed = owner._packageDetectionService.IsInstalled(package.PackageId);
                     var updateStatus = owner._packageUpdateCheckService.GetStatus(package, owner.GetSelectedChannel(package));
                     if (category == 0 && !installed || category == 1 && !updateStatus.NeedsAttention) continue;
@@ -88,6 +125,8 @@ namespace Deucarian.PackageInstaller.Editor
                     rows.Add(new DeucarianEditorCollectionItem(package.PackageId, package.DisplayName, version,
                         installed ? owner.GetPackageVisualStatus(package).Label : package.Category,
                         () => { owner.SelectDefinition(package, package.IsIntegration ? SelectionKind.Integration : SelectionKind.Package, false); Refresh(); }));
+                    if (rows.Count % 8 == 0)
+                        View.SetItems(rows, owner._selectedPackageId, "Loading packages…");
                 }
                 View.SetItems(rows, selected?.PackageId, category == 1
                     ? "No pending updates in the current results. Check updates to verify against the selected channels."
@@ -135,7 +174,13 @@ namespace Deucarian.PackageInstaller.Editor
                     }
                 }, "installer-package-options"));
             }
-            public void Dispose() => View.Dispose();
+            public void Dispose()
+            {
+                rowPump.Pause();
+                pendingRows?.Dispose();
+                pendingRows = null;
+                View.Dispose();
+            }
         }
     }
 }

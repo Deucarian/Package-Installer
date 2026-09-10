@@ -184,10 +184,12 @@ namespace Deucarian.PackageInstaller.Editor
         private void RefreshGraphView(string reason)
         {
             _workspace?.Refresh();
-            if (_graphView == null)
+            if (_viewMode != InstallerViewMode.EcosystemGraph || _graphContentRow == null ||
+                PackageRegistryProvider.IsLocalLoading)
             {
                 return;
             }
+            EnsureGraphView();
 
             bool graphCacheDirty = _graphModelCacheDirty || _cachedPackageGraph == null;
             string diagnosticReason = graphCacheDirty

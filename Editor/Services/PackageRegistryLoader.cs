@@ -18,6 +18,7 @@ namespace Deucarian.PackageInstaller.Editor
         private readonly string _remoteRegistryUrl;
         private readonly PackageRegistryCache _cache;
         private readonly TimeSpan _requestTimeout;
+        internal PackageRegistryLocalLoad LocalLoad { get; set; }
 
         public PackageRegistryLoader(
             Func<string, Task<string>> remoteFetcher = null,
@@ -52,7 +53,12 @@ namespace Deucarian.PackageInstaller.Editor
 
         public PackageRegistryLoadResult LoadBundled()
         {
-            if (!TryReadBundledRegistryJson(out string json, out string errorMessage))
+            return LoadBundled(ResolveBundledRegistryPath());
+        }
+
+        internal PackageRegistryLoadResult LoadBundled(string registryPath)
+        {
+            if (!TryReadBundledRegistryJson(registryPath, out string json, out string errorMessage))
             {
                 return PackageRegistryLoadResult.Failure(PackageRegistrySource.Bundled, errorMessage);
             }
@@ -214,20 +220,22 @@ namespace Deucarian.PackageInstaller.Editor
             }
         }
 
-        private static bool TryReadBundledRegistryJson(out string json, out string errorMessage)
+        internal static string ResolveBundledRegistryPath()
+        {
+            PackageInfo packageInfo = PackageInfo.FindForAssembly(typeof(PackageRegistryLoader).Assembly);
+            return packageInfo == null || string.IsNullOrWhiteSpace(packageInfo.resolvedPath)
+                ? null : Path.Combine(packageInfo.resolvedPath, BundledRegistryFileName);
+        }
+
+        private static bool TryReadBundledRegistryJson(string registryPath, out string json, out string errorMessage)
         {
             json = string.Empty;
             errorMessage = string.Empty;
-
-            PackageInfo packageInfo = PackageInfo.FindForAssembly(typeof(PackageRegistryLoader).Assembly);
-
-            if (packageInfo == null || string.IsNullOrWhiteSpace(packageInfo.resolvedPath))
+            if (string.IsNullOrWhiteSpace(registryPath))
             {
                 errorMessage = "Could not resolve installer package path.";
                 return false;
             }
-
-            string registryPath = Path.Combine(packageInfo.resolvedPath, BundledRegistryFileName);
 
             if (!File.Exists(registryPath))
             {

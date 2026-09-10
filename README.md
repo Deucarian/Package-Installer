@@ -17,7 +17,9 @@ Requires Editor 1.5.0 or newer. Development is delivered through Git `#develop`;
 
 It is the Deucarian ecosystem front door for installing standalone packages, integration packages, suite packages, templates, and explicitly declared package samples from Package Registry metadata.
 
-Current package version: `1.3.3`.
+Current package version: `1.3.4`.
+
+The Installer opens with a loading state. Local catalog reads run in the background, package rows appear in small batches, and the dependency graph is built only when its tab is selected. You can navigate away while loading; returning resumes the existing page. Remote refresh failures keep the cached or bundled catalog available.
 
 ## When to use it
 
