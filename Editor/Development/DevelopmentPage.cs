@@ -103,12 +103,14 @@ namespace Deucarian.PackageInstaller.Editor.Development
                 if (file.IsStaged) AddRow(rows, file, true);
                 if (file.IsUnstaged || file.IsUntracked) AddRow(rows, file, false);
             }
+            inspected = ReconcileVisibleSelection(rows, selection, inspected);
             review.SetChanges(rows, inspected);
             var snapshot = workflow.Snapshot;
             review.SetSummary(snapshot == null ? "Inspect a repository to see its changes." :
                 snapshot.Files.Count(f => f.IsStaged) + " staged · " + snapshot.Files.Count(f => f.IsUnstaged || f.IsUntracked) + " unstaged · " +
                 (string.IsNullOrEmpty(snapshot.StagingBlockReason) ? "Select files explicitly; related Unity .meta files are reviewed together." : snapshot.StagingBlockReason));
-            review.SetDiff(inspected == null ? "Selected diff" : inspected.Substring(2), workflow.Diff,
+            review.SetDiff(inspected == null ? "Select a file to inspect its diff." : inspected.Substring(2),
+                inspected == null ? string.Empty : workflow.Diff,
                 inspected != null && snapshot != null && snapshot.Files.Any(f => f.Path == inspected.Substring(2) && f.IsBinary));
             review.SetHistory(string.IsNullOrWhiteSpace(workflow.History) ? Array.Empty<DeucarianEditorHistoryItem>() :
                 workflow.History.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
@@ -120,10 +122,21 @@ namespace Deucarian.PackageInstaller.Editor.Development
             string id = (staged ? "S:" : "W:") + file.Path;
             rows.Add(new DeucarianEditorChangeItem(id, file.Path,
                 (staged ? "Staged " + file.IndexStatus : "Unstaged " + file.WorktreeStatus) + (file.IsBinary ? " · binary" : ""),
-                staged, selection.Contains(id), () => { if (workflow.Busy) return; inspected = id; _ = workflow.InspectDiffAsync(file.Path, staged); },
+                staged, rows.Count < DeucarianEditorChangeReview.MaximumVisibleChanges && selection.Contains(id),
+                () => { if (workflow.Busy) return; inspected = id; _ = workflow.InspectDiffAsync(file.Path, staged); },
                 value => { if (value) selection.Add(id); else selection.Remove(id); },
                 string.IsNullOrEmpty(file.OriginalPath) ? "Asset and .meta changes are paired when staging." : "Renamed from " + file.OriginalPath,
                 !workflow.Busy && workflow.Connected && !file.IsConflict));
+        }
+
+        // Only currently reviewable rows may remain selected for a later explicit stage action.
+        internal static string ReconcileVisibleSelection(IReadOnlyList<DeucarianEditorChangeItem> rows,
+            ISet<string> selected, string inspectedId)
+        {
+            var visible = new HashSet<string>(rows.Take(DeucarianEditorChangeReview.MaximumVisibleChanges)
+                .Select(row => row.Id), StringComparer.Ordinal);
+            selected.IntersectWith(visible);
+            return inspectedId != null && visible.Contains(inspectedId) ? inspectedId : null;
         }
 
         private void StageSelected(bool unstage)

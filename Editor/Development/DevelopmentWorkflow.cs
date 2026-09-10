@@ -17,6 +17,7 @@ namespace Deucarian.PackageInstaller.Editor.Development
         private CancellationTokenSource cancellation;
         private DevelopmentGitWorkspace git;
         private bool disposed;
+        private long reviewRevision;
 
         internal DevelopmentWorkflow(string projectRoot, DevelopmentRepositoryService repositories,
             IDevelopmentGitRunner runner, IDevelopmentFileSystem files, PackageDevelopmentSourceService sources)
@@ -34,7 +35,7 @@ namespace Deucarian.PackageInstaller.Editor.Development
         internal string Diff { get; private set; } = "Select a changed file to inspect it.";
         internal string History { get; private set; } = "";
         internal event Action Changed;
-        internal string ConfirmationScope => Package?.Id + "|" + Repository?.Root + "|" + Snapshot?.Head + "|" + Snapshot?.Branch + "|" + Session?.State;
+        internal string ConfirmationScope => reviewRevision + "|" + Package?.Id + "|" + Repository?.Root + "|" + Snapshot?.Head + "|" + Snapshot?.Branch + "|" + Session?.State;
 
         internal void AcceptConfirmation(string scope, Action accepted)
         {
@@ -46,6 +47,7 @@ namespace Deucarian.PackageInstaller.Editor.Development
         internal void SelectPackage(DevelopmentInstalledPackage package)
         {
             if (Busy) return;
+            reviewRevision++;
             Package = package; Repository = null; Snapshot = null; git = null;
             Branches = Array.Empty<string>(); Diff = "Select a changed file to inspect it."; History = "";
             try
@@ -108,8 +110,15 @@ namespace Deucarian.PackageInstaller.Editor.Development
         internal Task TransferAsync(bool push) => RunAsync(push ? "Pushing package branch to origin…" : "Fetching origin…", async token =>
         { RequireConnected(); if (push) await git.PushAsync(token); else await git.FetchAsync(token); await RefreshGit(token); Status = push ? "Package branch pushed to origin." : "Origin fetched. No merge or working-file changes requested."; });
 
-        internal Task InspectDiffAsync(string path, bool staged) => RunAsync("Reading selected package diff…", async token =>
-        { Diff = await git.GetDiffAsync(path, staged, token); Status = "Selected diff loaded locally."; });
+        internal Task InspectDiffAsync(string path, bool staged)
+        {
+            if (!Busy) Diff = "Loading the selected diff…";
+            return RunAsync("Reading selected package diff…", async token =>
+            {
+                try { Diff = await git.GetDiffAsync(path, staged, token); Status = "Selected diff loaded locally."; }
+                catch { Diff = "The diff could not be loaded. Select the file again to retry."; throw; }
+            });
+        }
 
         internal Task HistoryAsync() => RunAsync("Reading recent package history…", async token =>
         { History = await git.GetHistoryAsync(token); Status = "Recent package history loaded."; });
@@ -123,11 +132,16 @@ namespace Deucarian.PackageInstaller.Editor.Development
         private void RequireConnected()
         { if (!Connected) throw new InvalidOperationException("Connect and resolve this package source before changing its repository."); }
         private async Task RefreshGit(CancellationToken token)
-        { Snapshot = await git.RefreshAsync(token); Branches = await git.GetBranchesAsync(token); }
+        {
+            Snapshot = await git.RefreshAsync(token);
+            Diff = "Repository refreshed. Select a changed file to load its current diff.";
+            Branches = await git.GetBranchesAsync(token);
+        }
 
         private async Task RunAsync(string message, Func<CancellationToken, Task> operation)
         {
             if (Busy || disposed) return;
+            reviewRevision++;
             cancellation = new CancellationTokenSource(); Status = message; Changed?.Invoke();
             try { await operation(cancellation.Token); }
             catch (OperationCanceledException) { Status = "Operation canceled. Refresh the repository or check source recovery before continuing."; }

@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Deucarian.Editor;
@@ -105,6 +106,58 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         [Test]
+        public void FailedDiffRequestNeverRepublishesPreviouslyInspectedContent()
+        {
+            var ports = new PagePorts();
+            using (var workflow = CreateWorkflow(ports))
+            {
+                workflow.SelectPackage(Packages()[0]);
+                const string previous = "Previously inspected package diff.";
+                // Seed only the private presentation cache; no repository needs to be mutated
+                // to exercise what observers receive when the next request fails.
+                typeof(DevelopmentWorkflow).GetProperty(nameof(DevelopmentWorkflow.Diff),
+                    BindingFlags.Instance | BindingFlags.NonPublic).SetValue(workflow, previous);
+                var observed = new List<string>();
+                workflow.Changed += () => observed.Add(workflow.Diff);
+                Task operation = workflow.InspectDiffAsync("Runtime/Marker.cs", false);
+                Assert.That(operation.IsCompleted, Is.True, "The uninspected fixture fails without starting Git.");
+                operation.GetAwaiter().GetResult();
+                Assert.That(observed, Is.Not.Empty);
+                CollectionAssert.DoesNotContain(observed, previous);
+                StringAssert.Contains("Loading", observed[0]);
+                StringAssert.Contains("retry", workflow.Diff);
+                ports.AssertNoMutationOrGit();
+            }
+        }
+
+        [Test]
+        public void ConfirmationsExpireAfterAnOperationOrSelectionRoundTrip()
+        {
+            var ports = new PagePorts();
+            using (var workflow = CreateWorkflow(ports))
+            {
+                var packages = Packages();
+                workflow.SelectPackage(packages[0]);
+                int accepted = 0;
+                string beforeRefresh = workflow.ConfirmationScope;
+                Task refresh = workflow.RefreshAsync();
+                Assert.That(refresh.IsCompleted, Is.True, "The uninspected memory fixture fails refresh synchronously.");
+                refresh.GetAwaiter().GetResult();
+                workflow.AcceptConfirmation(beforeRefresh, () => accepted++);
+                Assert.That(accepted, Is.Zero, "Even a failed refresh invalidates an earlier confirmation.");
+
+                string beforeSelection = workflow.ConfirmationScope;
+                workflow.SelectPackage(packages[1]);
+                workflow.SelectPackage(packages[0]);
+                workflow.AcceptConfirmation(beforeSelection, () => accepted++);
+                Assert.That(accepted, Is.Zero, "Returning to the same visible package must not revive an old confirmation.");
+                workflow.AcceptConfirmation(workflow.ConfirmationScope, () => accepted++);
+                Assert.That(accepted, Is.EqualTo(1), "A newly reviewed confirmation remains actionable.");
+                ports.AssertNoMutationOrGit();
+            }
+        }
+
+        [Test]
         public void IdleCancellationPreservesStatusAndDisposalStopsDeferredCapture()
         {
             var ports = new PagePorts();
@@ -123,8 +176,10 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             ports.AssertNoMutationOrGit();
         }
 
-        [Test]
-        public async Task DisposalCancelsAnInFlightInspectionAndSuppressesLatePageNotifications()
+        [UnityTest]
+        public IEnumerator DisposalCancelsAnInFlightInspectionAndSuppressesLatePageNotifications() => DevelopmentAsyncTest.Run(DisposalCancelsAnInFlightInspectionAndSuppressesLatePageNotificationsAsync);
+
+        public async Task DisposalCancelsAnInFlightInspectionAndSuppressesLatePageNotificationsAsync()
         {
             var ports = new PagePorts();
             var workflow = CreateWorkflow(ports);
