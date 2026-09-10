@@ -19,8 +19,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 {
     internal sealed class DevelopmentPageTests
     {
-        private const string Project = "D:/Codex-storage/validation/package-development-20260910/page-test-consumer";
-        private const string Checkout = "D:/Codex-storage/validation/package-development-20260910/page-test-package";
+        private static readonly string Project = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "deucarian-page-test-consumer"));
+        private static readonly string Checkout = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "deucarian-page-test-package"));
 
         [Test]
         public void OpeningAndRoutingDeferCatalogCaptureAndDoNotRunRepositoryOrSourceCommands()

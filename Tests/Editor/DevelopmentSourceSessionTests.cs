@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -14,8 +15,9 @@ namespace Deucarian.PackageInstaller.Editor.Tests
     internal sealed class DevelopmentSourceSessionTests
     {
         private const string Package = "com.deucarian.source-fixture";
-        private const string Root = "D:/Codex-storage/validation/package-development-20260910/virtual-consumer";
-        private const string Checkout = "D:/Codex-storage/validation/package-development-20260910/virtual-checkout";
+        // In-memory adapters never create these paths, which must still be absolute on every test platform.
+        private static readonly string Root = Path.GetFullPath("Library/Deucarian/PackageInstaller/SourceSessionTests/virtual-consumer").Replace('\\', '/');
+        private static readonly string Checkout = Path.GetFullPath("Library/Deucarian/PackageInstaller/SourceSessionTests/virtual-checkout").Replace('\\', '/');
         private const string Original = "https://github.com/Deucarian/Source-Fixture.git#develop";
         private MemoryFiles _files;
         private MemoryStore _store;

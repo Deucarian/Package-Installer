@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.4] - 2026-09-10
+
+### Fixed
+
+- Use native absolute paths in the memory-only source-session and page fixtures on Windows and Linux.
+- Run CI layout tests with a virtual graphics display; allow explicit manual validation of a feature revision against a trusted dependency channel.
+
 ## [1.4.3] - 2026-09-10
 
 ### Fixed
