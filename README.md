@@ -1,6 +1,6 @@
 # Deucarian Package Installer
 
-## Local package development (1.4.4)
+## Local package development (1.4.5)
 
 Use **Control Center → Packages → Package development**, or **Develop locally**
 from an installed package, to inspect/clone its repository, connect local source,

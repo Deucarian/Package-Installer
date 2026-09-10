@@ -4,6 +4,12 @@
 
 - Organize Package Development into Local source, Changes, Publish and History using shared Editor presentation. Preserve async catalog loading and guarded source/Git operations.
 
+## [1.4.5] - 2026-09-10
+
+### Fixed
+
+- Check concurrent GitHub alias deduplication independently of which equivalent repository spelling starts first, retaining exact revision and package-path assertions in both input orders.
+
 ## [1.4.4] - 2026-09-10
 
 ### Fixed
