@@ -15,6 +15,11 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void OnDisable()
         {
+            navigation?.Dispose();
+            navigation = null;
+            _workspace?.Dispose();
+            _workspace = null;
+            PageRoot.UnregisterCallback<KeyDownEvent>(HandleRootKeyDown);
             AssemblyReloadEvents.beforeAssemblyReload -= HandleBeforeAssemblyReload;
             DismissPendingConfirmation(refreshUi: false);
 
@@ -66,39 +71,39 @@ namespace Deucarian.PackageInstaller.Editor
             _stateRepository = null;
             PackageInstallerWindowReloadState.ClearForNormalDisable();
         }
-
         private void CreateGUI()
         {
-            VisualElement content = DeucarianEditorVisualShell.CreateWindowShell(rootVisualElement);
+            navigation?.Dispose();
+            navigation = new DeucarianEditorPageSession(this, DeucarianToolIds.PackageInstaller, BuildPage);
+        }
 
-            if (content == null)
-            {
-                return;
-            }
+        internal static IDeucarianEditorPage CreatePage() =>
+            DeucarianEditorWindowPages.Create<PackageInstallerWindow>(
+                (window, root) => window.BuildPage(root), activate: (window, route) => window.OnFocus());
 
+        private DeucarianEditorPageSession navigation;
+        private VisualElement pageRoot;
+        private VisualElement PageRoot => pageRoot ?? rootVisualElement;
+
+        private void BuildPage(VisualElement root)
+        {
+            pageRoot = root;
+            _workspace?.Dispose();
+            PageRoot.Clear();
+            _workspace = new InstallerWorkspace(this);
+            VisualElement content = _workspace.View.Workspace.Content;
             _windowContentRoot = content;
-            ConfigureFixedWallpaper(rootVisualElement, content);
 
             StyleSheet graphStyleSheet = DeucarianEditorUIResources.LoadStyleSheet(GraphStyleSheetPath);
 
             if (graphStyleSheet != null)
             {
-                rootVisualElement.styleSheets.Add(graphStyleSheet);
+                PageRoot.styleSheets.Add(graphStyleSheet);
             }
 
-            rootVisualElement.RegisterCallback<KeyDownEvent>(HandleRootKeyDown);
+            PageRoot.RegisterCallback<KeyDownEvent>(HandleRootKeyDown);
             content.RegisterCallback<GeometryChangedEvent>(evt => ApplyResponsiveLayout(evt.newRect.width));
-            content.Add(DeucarianEditorPackageHeader.CreateBrand(
-                "Deucarian Package Installer",
-                "Install, update, and compose the Deucarian package ecosystem."));
-            BuildViewToolbar(content);
-
-            _listViewContainerHost = new VisualElement();
-            _listViewContainerHost.AddToClassList("dpi-mode-container");
-            _listViewContainer = new IMGUIContainer(DrawListViewGui);
-            _listViewContainer.style.flexGrow = 1f;
-            _listViewContainerHost.Add(_listViewContainer);
-            content.Add(_listViewContainerHost);
+            _listViewContainerHost = _workspace.View.Collection;
 
             _graphModeContainer = new VisualElement();
             _graphModeContainer.AddToClassList("dpi-mode-container");
@@ -107,20 +112,6 @@ namespace Deucarian.PackageInstaller.Editor
             _graphContentRow = new VisualElement();
             _graphContentRow.AddToClassList("dpi-graph-content-row");
             _graphModeContainer.Add(_graphContentRow);
-
-            _graphView = new PackageGraphView(
-                HandleGraphPackageSelected,
-                HandleGraphPackageAction,
-                HandleGraphBackNavigation,
-                HandleGraphRootFocused,
-                HandleGraphGroupFocused,
-                _visibilityFilterState,
-                HandleVisibilityFilterChanged);
-            _graphContentRow.Add(_graphView);
-
-            _graphDetailsContainer = new IMGUIContainer(DrawGraphDetailsGui);
-            _graphDetailsContainer.AddToClassList("dpi-graph-details");
-            _graphContentRow.Add(_graphDetailsContainer);
 
             content.Add(_graphModeContainer);
 
@@ -141,11 +132,13 @@ namespace Deucarian.PackageInstaller.Editor
                 () => SetOperationDetailsExpanded(!_operationDetailsExpanded),
                 CancelCurrentContextualOperation);
             CacheOperationFooterElements(_operationFooterContainer);
-            content.Add(_operationFooterContainer);
+            _workspace.View.Workspace.Footer.Clear();
+            _workspace.View.Workspace.Footer.Add(_operationFooterContainer);
 
             SetViewMode(_viewMode);
             if (_hasPendingReloadCamera)
             {
+                EnsureGraphView();
                 _graphView.PrepareCameraRestoreAfterReload();
             }
 
@@ -158,6 +151,20 @@ namespace Deucarian.PackageInstaller.Editor
 
             UpdateOperationFooter();
             RefreshGraphView("window initialized");
+            _workspace.Refresh();
+        }
+
+        private void EnsureGraphView()
+        {
+            if (_graphView != null && _graphView.parent == _graphContentRow) return;
+            _graphView = new PackageGraphView(
+                HandleGraphPackageSelected, HandleGraphPackageAction, HandleGraphBackNavigation,
+                HandleGraphRootFocused, HandleGraphGroupFocused, _visibilityFilterState,
+                HandleVisibilityFilterChanged);
+            _graphContentRow.Add(_graphView);
+            _graphDetailsContainer = new IMGUIContainer(DrawGraphDetailsGui);
+            _graphDetailsContainer.AddToClassList("dpi-graph-details");
+            _graphContentRow.Add(_graphDetailsContainer);
         }
 
         private void ApplyResponsiveLayout(float contentWidth)
@@ -224,59 +231,6 @@ namespace Deucarian.PackageInstaller.Editor
         internal static void ConfigureFixedWallpaperForTests(VisualElement root, VisualElement wallpaperHost)
         {
             ConfigureFixedWallpaper(root, wallpaperHost);
-        }
-
-        private void BuildViewToolbar(VisualElement content)
-        {
-            VisualElement toolbar = DeucarianEditorCommandBar.Create(
-                DeucarianEditorWorkbenchToolbarLayout.StableActionLanes);
-            toolbar.name = null;
-            DeucarianEditorCommandBarLanes lanes =
-                DeucarianEditorCommandBar.CreateLanes(toolbar);
-
-            foreach (InstallerViewMode viewMode in GetEnabledInstallerViewModes())
-            {
-                Button viewButton = CreateViewToggleButton(GetInstallerViewModeLabel(viewMode), viewMode);
-
-                if (viewMode == InstallerViewMode.EcosystemGraph)
-                {
-                    _graphViewButton = viewButton;
-                }
-                else
-                {
-                    _listViewButton = viewButton;
-                }
-
-                VisualElement viewSlot = DeucarianEditorCommandBar.CreateReservedSlot(
-                    ViewActionSlotWidth);
-                DeucarianEditorCommandBar.SetReservedContent(viewSlot, viewButton);
-                lanes.Leading.Add(viewSlot);
-            }
-
-            _viewSummaryLabel = lanes.Summary;
-            _viewSummaryLabel.tooltip = string.Empty;
-            _viewSummaryLabel.style.whiteSpace = WhiteSpace.NoWrap;
-            _viewSummaryLabel.style.overflow = Overflow.Hidden;
-            _viewSummaryLabel.style.textOverflow = TextOverflow.Ellipsis;
-
-            _graphGlobalChannelButton = CreateGlobalChannelOverrideButton();
-            _graphRefreshButton = CreateGraphActionButton("Refresh", RefreshPackages);
-            _graphCheckUpdatesButton = CreateGraphActionButton("Check Updates", () => HandleActionButton(PackageInstallerActionKind.CheckUpdates));
-
-            _graphGlobalChannelSlot = CreateCommandSlot(
-                ChannelActionSlotWidth,
-                _graphGlobalChannelButton);
-            _graphRefreshSlot = CreateCommandSlot(
-                RefreshActionSlotWidth,
-                _graphRefreshButton);
-            _graphCheckUpdatesSlot = CreateCommandSlot(
-                CheckUpdatesActionSlotWidth,
-                _graphCheckUpdatesButton);
-            lanes.Trailing.Add(_graphGlobalChannelSlot);
-            lanes.Trailing.Add(_graphRefreshSlot);
-            lanes.Trailing.Add(_graphCheckUpdatesSlot);
-
-            content.Add(toolbar);
         }
 
         private static VisualElement CreateCommandSlot(float width, VisualElement content)
@@ -354,7 +308,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void ShowGlobalChannelOverridePopup()
         {
-            if (rootVisualElement == null || _graphGlobalChannelButton == null)
+            if (PageRoot == null || _graphGlobalChannelButton == null)
             {
                 return;
             }
@@ -362,17 +316,17 @@ namespace Deucarian.PackageInstaller.Editor
             if (_globalChannelPopup == null)
             {
                 _globalChannelPopup = CreateGlobalChannelOverridePopup();
-                rootVisualElement.Add(_globalChannelPopup);
+                PageRoot.Add(_globalChannelPopup);
             }
 
             UpdateGlobalChannelOverridePopup();
             PositionGlobalChannelOverridePopup();
             _globalChannelPopup.style.display = DisplayStyle.Flex;
             _globalChannelPopup.BringToFront();
-            rootVisualElement.RegisterCallback<MouseDownEvent>(
+            PageRoot.RegisterCallback<MouseDownEvent>(
                 HandleGlobalChannelOverrideRootMouseDown,
                 TrickleDown.TrickleDown);
-            rootVisualElement.RegisterCallback<KeyDownEvent>(
+            PageRoot.RegisterCallback<KeyDownEvent>(
                 HandleGlobalChannelOverrideRootKeyDown,
                 TrickleDown.TrickleDown);
         }

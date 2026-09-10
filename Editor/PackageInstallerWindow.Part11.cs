@@ -192,11 +192,11 @@ namespace Deucarian.PackageInstaller.Editor
 
             ImGui.DrawPanel("Group", () =>
             {
-                EditorGUILayout.LabelField(group.DisplayName, _styles.TitleStyle);
+                DeucarianEditorTextGUI.LabelField(group.DisplayName, _styles.TitleStyle);
 
                 if (!string.IsNullOrWhiteSpace(group.Description))
                 {
-                    EditorGUILayout.LabelField(group.Description, _styles.SubtitleStyle);
+                    DeucarianEditorTextGUI.LabelField(group.Description, _styles.SubtitleStyle);
                 }
 
                 ImGui.DrawKeyValueRow("Packages", descendants.Length.ToString());

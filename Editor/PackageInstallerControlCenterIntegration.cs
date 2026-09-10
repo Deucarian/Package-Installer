@@ -21,7 +21,7 @@ namespace Deucarian.PackageInstaller.Editor
                 PackageId,
                 "package-plus",
                 new[] { "upm", "packages", "dependencies", "updates" },
-                10));
+                10, createPage: PackageInstallerWindow.CreatePage, navigationPath: "Packages"));
             DeucarianControlCenterRegistry.RegisterCardProvider(
                 new PackageInstallerCardProvider());
         }
@@ -129,7 +129,7 @@ namespace Deucarian.PackageInstaller.Editor
                         "package-installer.open",
                         "Open Package Installer",
                         PackageInstallerWindow.Open,
-                        "Open the full package workflow.")
+                        "Open the full package workflow.", navigationToolId: DeucarianToolIds.PackageInstaller)
                 },
                 new[] { "package manager", "install", "update", "catalog" });
         }

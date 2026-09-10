@@ -153,12 +153,12 @@ namespace Deucarian.PackageInstaller.Editor
         {
             if (_globalChannelPopup == null ||
                 _graphGlobalChannelButton == null ||
-                rootVisualElement == null)
+                PageRoot == null)
             {
                 return;
             }
 
-            Rect rootBounds = rootVisualElement.worldBound;
+            Rect rootBounds = PageRoot.worldBound;
             Rect buttonBounds = _graphGlobalChannelButton.worldBound;
             float maxLeft = Mathf.Max(
                 GlobalChannelOverridePopupMargin,
@@ -183,12 +183,12 @@ namespace Deucarian.PackageInstaller.Editor
                 _globalChannelPopup.style.display = DisplayStyle.None;
             }
 
-            if (rootVisualElement != null)
+            if (PageRoot != null)
             {
-                rootVisualElement.UnregisterCallback<MouseDownEvent>(
+                PageRoot.UnregisterCallback<MouseDownEvent>(
                     HandleGlobalChannelOverrideRootMouseDown,
                     TrickleDown.TrickleDown);
-                rootVisualElement.UnregisterCallback<KeyDownEvent>(
+                PageRoot.UnregisterCallback<KeyDownEvent>(
                     HandleGlobalChannelOverrideRootKeyDown,
                     TrickleDown.TrickleDown);
             }

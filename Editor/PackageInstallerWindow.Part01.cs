@@ -104,12 +104,13 @@ namespace Deucarian.PackageInstaller.Editor
         [MenuItem(InstallerMenuPath)]
         public static void Open()
         {
-            PackageInstallerWindow window = GetWindow<PackageInstallerWindow>();
+            PackageInstallerWindow window = DeucarianEditorWindowPages.GetStandalone<PackageInstallerWindow>();
             window.titleContent = DeucarianEditorIcons.GetIconContent(
                 DeucarianEditorIconIds.CreatePackage,
                 WindowTitle,
                 "Open the Deucarian Package Installer.");
-            window.minSize = new Vector2(MinWindowWidth, MinWindowHeight);
+            window.navigation?.Navigate(DeucarianToolIds.PackageInstaller);
+            DeucarianEditorWorkspace.ConfigureWindow(window);
             window.Show();
         }
 
@@ -338,7 +339,7 @@ namespace Deucarian.PackageInstaller.Editor
                 packageDefinition => _packageUpdateCheckService != null
                     ? _packageUpdateCheckService.GetStatus(packageDefinition, GetSelectedChannel(packageDefinition))
                     : null);
-            PackageRegistryProvider.RefreshRemote();
+            PackageRegistryProvider.LoadInBackground();
             if (!restoredAfterReload)
             {
                 EnsureValidSelection();
