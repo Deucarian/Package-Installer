@@ -151,6 +151,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         private readonly PackageDetectionService _packageDetectionService;
         private readonly PackageRegistryRemoteFetchDelegate _packageManifestFetcher;
+        private readonly IPackageManifestReader _packageManifestReader;
         private readonly TimeSpan _packageManifestTimeout;
         private readonly PackageUpdateCheckCache _updateCheckCache;
         private readonly PackageInstallerStateRepository _stateRepository;

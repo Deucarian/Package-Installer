@@ -20,26 +20,8 @@ namespace Deucarian.PackageInstaller.Editor
 
         public PackageUpdateStatus GetStatus(PackageDefinition packageDefinition, PackageChannel channel)
         {
-            if (packageDefinition == null)
-            {
-                return PackageUpdateStatus.Unknown(null, channel);
-            }
-
-            string selectedUrl = packageDefinition.GetUrl(channel);
-
-            if (Statuses.TryGetValue(packageDefinition.PackageId, out PackageUpdateStatus status) &&
-                status.Channel == channel &&
-                string.Equals(status.SelectedUrl, selectedUrl, StringComparison.Ordinal))
-            {
-                return status;
-            }
-
-            if (!_packageDetectionService.IsInstalled(packageDefinition.PackageId))
-            {
-                return PackageUpdateStatus.NotInstalled(packageDefinition, channel, selectedUrl);
-            }
-
-            return PackageUpdateStatus.Unknown(packageDefinition, channel);
+            return Development.DevelopmentPackageProtection.ResolveStatus(packageDefinition, channel,
+                Statuses, _packageDetectionService.IsInstalled);
         }
 
         public IEnumerable<PackageDefinition> GetPackagesWithUpdates(
@@ -94,7 +76,8 @@ namespace Deucarian.PackageInstaller.Editor
                 isSelf ? PackageInstallerRuntimeIdentity.Version : string.Empty,
                 isSelf
                     ? PackageInstallerSelfUpdateState.CaptureSnapshot()
-                    : PackageInstallerSelfUpdateSnapshot.None);
+                    : PackageInstallerSelfUpdateSnapshot.None,
+                Development.DevelopmentPackageProtection.IsProtected(packageDefinition.PackageId));
         }
 
         public void Invalidate(string packageId)
@@ -330,7 +313,8 @@ namespace Deucarian.PackageInstaller.Editor
             SharedCheckContext = new UpdateCheckRunContext(
                 CheckCancellation.Token,
                 _packageManifestFetcher,
-                _packageManifestTimeout);
+                _packageManifestTimeout,
+                _packageManifestReader);
         }
 
         private static PackageCheckIntent RegisterPackageIntent(

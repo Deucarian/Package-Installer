@@ -76,6 +76,15 @@ Also run existing repository tests when changing code or asmdefs. Documentation-
 
 All Package Installer development, test, review, and validation Unity projects must reference Deucarian packages through canonical Git URLs. Never use `file:` or embedded package sources. For unmerged work, push the feature branch first and point the disposable Unity host at that Git branch or commit.
 
+The package-local development feature has one scoped test exception, grounded in
+the explicitly requested local-source lifecycle: a disposable target package
+fixture may temporarily use a `file:` reference during connect/restore tests.
+Installer, Editor and supporting packages remain canonical Git-pinned. Use only
+synthetic fixture repositories and local bare remotes; never real application
+projects or production package remotes for fixture commits. See Registry's
+`Documentation~/PACKAGE_LOCAL_DEVELOPMENT.md`. This is not a general exception
+for developing or validating Installer/Editor from local sources.
+
 ## Codex Guidance
 
 - Inspect current files before changing anything.

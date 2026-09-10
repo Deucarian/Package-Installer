@@ -2,6 +2,14 @@ name: Unity EditMode Tests
 
 on:
   workflow_dispatch:
+    inputs:
+      dependency_channel:
+        description: Trusted dependency channel for a manually selected package revision
+        type: choice
+        options:
+          - develop
+          - main
+        default: develop
   # The workflow definition for a self-hosted job must come from the trusted
   # base branch. Fork pull requests are deliberately skipped by the job guard.
   pull_request_target:
@@ -42,7 +50,7 @@ jobs:
       UNITY_EDITOR: /opt/unity/2021.3.45f1/Editor/Unity
       TEMP_NAME: package-installer-${{ github.run_id }}-${{ github.run_attempt }}
       PACKAGE_REVISION: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || github.sha }}
-      DEPENDENCY_REF: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.base.ref || github.ref_name }}
+      DEPENDENCY_REF: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.base.ref || (github.event_name == 'workflow_dispatch' && inputs.dependency_channel || github.ref_name) }}
 
     steps:
       - name: Prepare disposable paths
@@ -260,18 +268,21 @@ jobs:
         run: |
           set -euo pipefail
 
+          # Layout tests need a real graphics device, including on the CI host.
+          command -v xvfb-run
           unity_ld_path="$UNITY_OPENSSL11_LIBDIR"
           if [[ -n "${LD_LIBRARY_PATH:-}" ]]; then
             unity_ld_path="$unity_ld_path:$LD_LIBRARY_PATH"
           fi
 
           set +e
-          env \
+          xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24 -nolisten tcp" env \
             LD_LIBRARY_PATH="$unity_ld_path" \
             CLR_OPENSSL_VERSION_OVERRIDE=1.1 \
+            LIBGL_ALWAYS_SOFTWARE=1 \
             "$UNITY_EDITOR" \
             -batchmode \
-            -nographics \
+            -force-glcore \
             -accept-apiupdate \
             -forgetProjectPath \
             -disableManagedDebugger \

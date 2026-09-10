@@ -154,7 +154,8 @@ namespace Deucarian.PackageInstaller.Editor
             string targetRevision,
             CancellationToken cancellationToken,
             PackageRegistryRemoteFetchDelegate packageManifestFetcher,
-            TimeSpan packageManifestTimeout)
+            TimeSpan packageManifestTimeout,
+            IPackageManifestReader packageManifestReader)
         {
             cancellationToken.ThrowIfCancellationRequested();
             Func<PackageDefinition, PackageChannel, string, PackageVersionResult> resolver =
@@ -169,82 +170,8 @@ namespace Deucarian.PackageInstaller.Editor
                 return PackageVersionResult.Fail("Cannot resolve target package version without a selected package URL.");
             }
 
-            string referenceOverride = string.IsNullOrWhiteSpace(targetRevision)
-                ? string.Empty
-                : targetRevision.Trim();
-
-            string packageJsonUrl = string.Empty;
-            bool resolvedPackageJsonUrl =
-                PackageGitReference.TryParse(
-                    item.SelectedUrl,
-                    out PackageGitReference packageReference) &&
-                packageReference.TryCreateGitHubPackageJsonUrl(
-                    referenceOverride,
-                    out packageJsonUrl);
-            if (!resolvedPackageJsonUrl &&
-                !PackageRegistryPackageNameValidator.TryCreateGitHubPackageJsonUrl(
-                    item.SelectedUrl,
-                    referenceOverride,
-                    out packageJsonUrl))
-            {
-                return PackageVersionResult.Fail("Could not resolve target package.json URL.");
-            }
-
-            return FetchPackageVersion(
-                packageJsonUrl,
-                cancellationToken,
-                packageManifestFetcher,
-                packageManifestTimeout);
-        }
-
-        private static PackageVersionResult FetchPackageVersion(
-            string packageJsonUrl,
-            CancellationToken cancellationToken,
-            PackageRegistryRemoteFetchDelegate packageManifestFetcher,
-            TimeSpan packageManifestTimeout)
-        {
-            if (string.IsNullOrWhiteSpace(packageJsonUrl))
-            {
-                return PackageVersionResult.Fail("Cannot fetch package version without a package.json URL.");
-            }
-
-            try
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                PackageRegistryRemoteFetchResponse response =
-                    PackageRegistryRemoteFetch.ExecuteAsync(
-                            packageManifestFetcher ?? PackageRegistryRemoteFetch.FetchAsync,
-                            packageJsonUrl,
-                            cancellationToken,
-                            packageManifestTimeout)
-                        .GetAwaiter()
-                        .GetResult();
-                cancellationToken.ThrowIfCancellationRequested();
-                string packageJson = response != null ? response.Content : string.Empty;
-
-                if (!PackageRegistryPackageNameValidator.TryReadPackageVersion(
-                        packageJson,
-                        out string packageVersion))
-                {
-                    return PackageVersionResult.Fail("Target package.json did not include a version.");
-                }
-
-                if (!PackageInstallSourceUtility.LooksLikeStableOrPrereleaseVersion(packageVersion))
-                {
-                    return PackageVersionResult.Fail("Target package.json version is not valid SemVer.");
-                }
-
-                return PackageVersionResult.Ok(packageVersion);
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch (Exception exception)
-            {
-                return PackageVersionResult.Fail(
-                    "Could not fetch target package version: " + exception.GetBaseException().Message);
-            }
+            return PackageManifestVersionReader.Read(item.SelectedUrl, targetRevision, cancellationToken,
+                packageManifestReader, packageManifestFetcher, packageManifestTimeout);
         }
 
         private static async Task<CompletedCheckResult[]> RunCheckBatchAsync(
@@ -298,6 +225,7 @@ namespace Deucarian.PackageInstaller.Editor
             private readonly CancellationToken _cancellationToken;
             private readonly PackageRegistryRemoteFetchDelegate _packageManifestFetcher;
             private readonly TimeSpan _packageManifestTimeout;
+            private readonly IPackageManifestReader _packageManifestReader;
             private readonly ConcurrentDictionary<string, Lazy<RemoteRevisionResult>> _remoteRevisions =
                 new ConcurrentDictionary<string, Lazy<RemoteRevisionResult>>(StringComparer.Ordinal);
             private readonly ConcurrentDictionary<string, Lazy<PackageVersionResult>> _packageVersions =
@@ -306,10 +234,12 @@ namespace Deucarian.PackageInstaller.Editor
             public UpdateCheckRunContext(
                 CancellationToken cancellationToken,
                 PackageRegistryRemoteFetchDelegate packageManifestFetcher,
-                TimeSpan packageManifestTimeout)
+                TimeSpan packageManifestTimeout,
+                IPackageManifestReader packageManifestReader = null)
             {
                 _cancellationToken = cancellationToken;
                 _packageManifestFetcher = packageManifestFetcher ?? PackageRegistryRemoteFetch.FetchAsync;
+                _packageManifestReader = packageManifestReader;
                 _packageManifestTimeout = packageManifestTimeout > TimeSpan.Zero
                     ? packageManifestTimeout
                     : TimeSpan.FromMilliseconds(PackageManifestTimeoutMilliseconds);
@@ -361,7 +291,8 @@ namespace Deucarian.PackageInstaller.Editor
                                 targetRevision,
                                 _cancellationToken,
                                 _packageManifestFetcher,
-                                _packageManifestTimeout),
+                                _packageManifestTimeout,
+                                _packageManifestReader),
                             LazyThreadSafetyMode.ExecutionAndPublication))
                     .Value;
             }
