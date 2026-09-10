@@ -62,7 +62,7 @@ namespace Deucarian.PackageInstaller.Editor.Development
         internal Task InspectAsync(string path, bool clone) => RunAsync(clone ? "Cloning package repository…" : "Inspecting package repository…", async token =>
         {
             var candidate = clone
-                ? await repositories.CloneAsync(Package.Id, Package.Remote, path, projectRoot, token)
+                ? await repositories.CloneAsync(Package.Id, Package.Remote, path, projectRoot, token, Package.DevelopmentBranch)
                 : await repositories.PreviewAsync(Package.Id, path, projectRoot, Package.Remote, token);
             if (Managed && (!DevelopmentGitPolicy.SamePath(candidate.Root, Session.RepositoryRoot) ||
                 !DevelopmentGitPolicy.SamePath(candidate.CommonDirectory, Session.CommonDirectory)))
@@ -122,6 +122,17 @@ namespace Deucarian.PackageInstaller.Editor.Development
 
         internal Task HistoryAsync() => RunAsync("Reading recent package history…", async token =>
         { History = await git.GetHistoryAsync(token); Status = "Recent package history loaded."; });
+
+        internal Task OpenPullRequestAsync(Action<string> openBrowser) => RunAsync("Checking the pushed pull request branches…", async token =>
+        {
+            string unavailable = DevelopmentPullRequest.UnavailableReason(Repository, Snapshot, Package?.DevelopmentBranch);
+            if (unavailable.Length != 0) throw new DevelopmentGitException(unavailable);
+            string url = await git.GetPullRequestUrlAsync(Snapshot, Package.DevelopmentBranch, token);
+            token.ThrowIfCancellationRequested();
+            if (disposed) return;
+            openBrowser(url);
+            Status = "Opened the pull request form in your browser. Review and submit it there; no pull request was created by Unity.";
+        });
 
         internal IReadOnlyList<string> ExpandSelection(IEnumerable<string> paths)
             => DevelopmentGitPolicy.IncludeMeta(paths, Snapshot.Files);

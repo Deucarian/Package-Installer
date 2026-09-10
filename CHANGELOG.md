@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.4.1] - 2026-09-10
+
+### Added
+
+- Explicit browser pull-request handoff for a pushed package feature branch on GitHub or Bitbucket Cloud, with read-only remote verification and no PR credentials or management in Unity.
+- Bitbucket Cloud repository identities and package metadata lookup, including private metadata through existing Git authentication.
+
+### Changed
+
+- Preserve the catalog's development branch for local clones and PR destinations; local connect/test/restore remains usable with an external Git client.
+
 ## [1.4.0] - 2026-09-10
 
 ### Added

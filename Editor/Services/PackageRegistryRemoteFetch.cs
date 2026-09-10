@@ -1,6 +1,8 @@
 using System;
+using System.IO;
 using System.Net;
 using System.Net.Http;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -107,6 +109,16 @@ namespace Deucarian.PackageInstaller.Editor
             CancellationToken cancellationToken,
             TimeSpan timeout)
         {
+            return await FetchAsync(url, cancellationToken, timeout, 0).ConfigureAwait(false);
+        }
+
+        internal static Task<PackageRegistryRemoteFetchResponse> FetchManifestAsync(
+            string url, CancellationToken cancellationToken, TimeSpan timeout) =>
+            FetchAsync(url, cancellationToken, timeout, PackageManifestReader.MaximumManifestLength);
+
+        private static async Task<PackageRegistryRemoteFetchResponse> FetchAsync(
+            string url, CancellationToken cancellationToken, TimeSpan timeout, int maximumBytes)
+        {
             using (CancellationTokenSource requestCancellation =
                    CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
             using (HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, url))
@@ -118,11 +130,19 @@ namespace Deucarian.PackageInstaller.Editor
                 {
                     using (HttpResponseMessage response = await HttpClient.SendAsync(
                                request,
-                               HttpCompletionOption.ResponseContentRead,
+                               maximumBytes > 0 ? HttpCompletionOption.ResponseHeadersRead : HttpCompletionOption.ResponseContentRead,
                                requestCancellation.Token).ConfigureAwait(false))
                     {
                         response.EnsureSuccessStatusCode();
-                        string content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                        string content;
+                        if (maximumBytes > 0)
+                        {
+                            if (response.Content.Headers.ContentLength > maximumBytes)
+                                throw new PackageManifestReadException("Public package metadata exceeds the 256 KiB size limit.");
+                            using (Stream stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false))
+                                content = await ReadBoundedManifestAsync(stream, maximumBytes, requestCancellation.Token).ConfigureAwait(false);
+                        }
+                        else content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
                         string entityTag = response.Headers.ETag != null
                             ? response.Headers.ETag.ToString()
                             : string.Empty;
@@ -134,6 +154,25 @@ namespace Deucarian.PackageInstaller.Editor
                     throw new TimeoutException(
                         "Remote request timed out after " + timeout.TotalSeconds + " seconds: " + url);
                 }
+            }
+        }
+
+        internal static async Task<string> ReadBoundedManifestAsync(Stream stream, int maximumBytes, CancellationToken token)
+        {
+            using (var buffer = new MemoryStream())
+            {
+                byte[] block = new byte[4096];
+                int count;
+                while ((count = await stream.ReadAsync(block, 0, Math.Min(block.Length, maximumBytes - (int)buffer.Length + 1), token).ConfigureAwait(false)) > 0)
+                {
+                    if (buffer.Length + count > maximumBytes)
+                        throw new PackageManifestReadException("Public package metadata exceeds the 256 KiB size limit.");
+                    buffer.Write(block, 0, count);
+                }
+                token.ThrowIfCancellationRequested();
+                byte[] bytes = buffer.ToArray();
+                int start = bytes.Length >= 3 && bytes[0] == 239 && bytes[1] == 187 && bytes[2] == 191 ? 3 : 0;
+                return Encoding.UTF8.GetString(bytes, start, bytes.Length - start);
             }
         }
 

@@ -58,6 +58,8 @@ namespace Deucarian.PackageInstaller.Editor.Development
         public Task<IReadOnlyList<string>> GetBranchesAsync(CancellationToken token) => _inspection.GetBranchesAsync(token);
         public Task<string> GetDiffAsync(string path, bool staged, CancellationToken token) => _inspection.GetDiffAsync(path, staged, token);
         public Task<string> GetHistoryAsync(CancellationToken token) => _inspection.GetHistoryAsync(token);
+        public Task<string> GetPullRequestUrlAsync(DevelopmentGitSnapshot reviewed, string target, CancellationToken token)
+            => _inspection.GetPullRequestUrlAsync(reviewed, target, token);
 
         public Task CreateBranchAsync(string branch, CancellationToken token) => ChangeBranch(branch, true, token);
         public Task SelectBranchAsync(string branch, CancellationToken token) => ChangeBranch(branch, false, token);

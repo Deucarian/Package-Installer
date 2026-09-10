@@ -30,6 +30,14 @@ namespace Deucarian.PackageInstaller.Editor.Development
                 branch.EndsWith(".", StringComparison.Ordinal) || branch.Split('/').Any(p => p.EndsWith(".lock", StringComparison.OrdinalIgnoreCase)))
                 throw new DevelopmentGitException("Choose a feature/, codex/, fix/, or bugfix/ branch. Shared and release branches are protected.");
         }
+        public static void RequireSourceBranch(string branch)
+        {
+            if (string.IsNullOrEmpty(branch) || branch.Length > 160 ||
+                !Regex.IsMatch(branch, @"^[A-Za-z0-9][A-Za-z0-9._/-]*$") || branch.Contains("..") ||
+                branch.Contains("//") || branch.EndsWith("/", StringComparison.Ordinal) ||
+                branch.EndsWith(".", StringComparison.Ordinal) || branch.Split('/').Any(p => p.EndsWith(".lock", StringComparison.OrdinalIgnoreCase)))
+                throw new DevelopmentGitException("Select a valid development channel branch.");
+        }
         public static string RequireRelativePath(string path)
         {
             if (string.IsNullOrEmpty(path) || path.Length > 4096 || path.Any(char.IsControl) ||
@@ -54,17 +62,20 @@ namespace Deucarian.PackageInstaller.Editor.Development
             if (allowFixtureRemote && Path.IsPathRooted(remote)) return "fixture:" + Path.GetFullPath(remote).Replace('\\', '/');
             string normalized = remote.Trim();
             if (normalized.StartsWith("git@github.com:", StringComparison.OrdinalIgnoreCase))
-                normalized = "https://github.com/" + normalized.Substring(15);
+                normalized = "https://github.com/" + normalized.Substring("git@github.com:".Length);
+            else if (normalized.StartsWith("git@bitbucket.org:", StringComparison.OrdinalIgnoreCase))
+                normalized = "https://bitbucket.org/" + normalized.Substring("git@bitbucket.org:".Length);
             if (!Uri.TryCreate(normalized, UriKind.Absolute, out Uri uri) ||
-                !(uri.Scheme == "https" || uri.Scheme == "ssh") || !uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase) ||
+                !(uri.Scheme == "https" || uri.Scheme == "ssh") ||
+                !(uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase) || uri.Host.Equals("bitbucket.org", StringComparison.OrdinalIgnoreCase)) ||
                 !(uri.UserInfo.Length == 0 || (uri.Scheme == "ssh" && uri.UserInfo == "git")) ||
                 !uri.IsDefaultPort || uri.Query.Length > 0 || uri.Fragment.Length > 0)
-                throw new DevelopmentGitException("Use the package's credential-free canonical GitHub HTTPS or SSH repository URL.");
+                throw new DevelopmentGitException("Use the package's credential-free canonical GitHub or Bitbucket Cloud HTTPS or SSH repository URL.");
             string repository = uri.AbsolutePath.Trim('/');
             if (repository.EndsWith(".git", StringComparison.OrdinalIgnoreCase)) repository = repository.Substring(0, repository.Length - 4);
             if (!Regex.IsMatch(repository, @"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"))
                 throw new DevelopmentGitException("The package repository remote is invalid.");
-            return "github.com/" + repository.ToLowerInvariant();
+            return uri.Host.ToLowerInvariant() + "/" + repository.ToLowerInvariant();
         }
         public static string DisplayRemote(string identity) => identity.StartsWith("fixture:", StringComparison.Ordinal)
             ? "Disposable local fixture remote" : "https://" + identity + ".git";

@@ -45,6 +45,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 page.Update(new Rect(0, 0, 820, 650));
                 Assert.That(captures, Is.EqualTo(1));
                 Assert.That(page.Root.Q<Button>("development-stage").enabledInHierarchy, Is.False);
+                Assert.That(page.Root.Q<Button>("development-open-pr").enabledInHierarchy, Is.False,
+                    "An uninspected package must not offer a browser handoff.");
                 ports.AssertNoMutationOrGit();
             }
         }
@@ -233,6 +235,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                     input.value = Checkout;
                     var review = page.Root.Q<ScrollView>("review-scroll");
                     var button = page.Root.Q<Button>("development-inspect");
+                    var openPullRequest = page.Root.Q<Button>("development-open-pr");
                     foreach (var size in new[] { new Vector2(1480, 850), new Vector2(820, 650), new Vector2(620, 800) })
                     {
                         window.rootVisualElement.style.width = size.x;
@@ -245,6 +248,9 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                             Assert.That(review.resolvedStyle.height, Is.GreaterThan(40), context);
                             Assert.That(button.worldBound.xMin, Is.GreaterThanOrEqualTo(review.worldBound.xMin - 1), context);
                             Assert.That(button.worldBound.xMax, Is.LessThanOrEqualTo(review.worldBound.xMax + 1), context);
+                            Assert.That(openPullRequest.worldBound.xMin, Is.GreaterThanOrEqualTo(review.worldBound.xMin - 1), context);
+                            Assert.That(openPullRequest.worldBound.xMax, Is.LessThanOrEqualTo(review.worldBound.xMax + 1), context);
+                            Assert.That(openPullRequest.enabledInHierarchy, Is.False, context);
                             Assert.That(input.value, Is.EqualTo(Checkout), context);
                             Assert.That(page.Root.Query<SliderInt>("workspace-scale-slider").ToList().Count, Is.EqualTo(1));
                             var dock = page.Root.Q("workspace-scale");

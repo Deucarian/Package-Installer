@@ -3,10 +3,13 @@
 Open **Control Center → Packages → Package development**, or select an installed
 package in Installer and choose **Develop locally**. This page requires Editor
 1.8.0. The compact history is context for reviewing a package; advanced Git
-operations remain in your external Git client.
+operations remain in your external Git client. The core loop is **connect → edit
+and test in Unity → restore**. Commit and push with your preferred Git client or
+the optional controls on this page; a PR is finished in your browser.
 
 1. Choose an installed catalog package. Enter an absent folder to clone its
-   canonical repository from `develop`, or explicitly inspect an existing root.
+   canonical repository from its development channel branch (normally `develop`),
+   or explicitly inspect an existing root.
    Check the origin, branch, installed revision, repository revision and path.
 2. Choose **Connect local source** and review the existing changes. The project
    temporarily uses a local package reference. Unity resolution and compilation
@@ -22,20 +25,50 @@ operations remain in your external Git client.
    and requires external review; it is never absorbed into this commit.
 5. Fetch to refresh ahead/behind information. Push names the validated origin and
    exact feature branch. A rejection remains a failure; resolve it in your Git
-   client and refresh. Open a pull request into `develop` through your normal
-   repository workflow. This page never merges or force-pushes.
-6. **Restore original source** restores the exact original direct reference, or
+   client and refresh.
+6. Choose **Open pull request in browser**. The page checks the exact pushed
+   feature branch and the catalog's development branch on origin without
+   fetching, committing or changing source state. GitHub prefills both branches;
+   Bitbucket Cloud prefills the source. Verify the displayed destination in your
+   browser, write the description and submit there. An existing PR can be opened
+   from the provider's page. Unity does not create, track or merge PRs. Uncommitted
+   files are kept locally and do not enter the PR. The handoff is also available
+   after restoration while the repository is still inspected.
+7. **Restore original source** restores the exact original direct reference, or
    removes the temporary override if the package was transitive. The clone,
    commits and uncommitted files remain on disk. Source restoration is available
    even if the local checkout is missing.
+
+Once the package change is reviewed and merged, install the desired updated Git
+revision through Installer. Updating the package repository does not silently
+update other consuming projects.
 
 ## State, boundaries and recovery
 
 The page only changes an explicitly validated package repository. It rejects the
 consumer repository, its ancestors and linked worktrees, PackageCache, nested
 package layouts, mismatched package IDs, and ambiguous origin fetch/push URLs.
-First-version remotes are canonical credential-free GitHub HTTPS/SSH repositories.
+Supported remotes are canonical credential-free GitHub or Bitbucket Cloud
+HTTPS/SSH repositories. The repository URL and development branch come from the
+package catalog; migrating a repository requires updating those catalog URLs.
 Git uses existing authentication; this page stores no password or token.
+
+Private package metadata checks use the same existing Git authentication when
+public HTTP access cannot read package.json. Configure access in your normal Git
+environment first. Use credential-free URLs, such as
+`git@bitbucket.org:workspace/repository.git` or
+`https://bitbucket.org/workspace/repository.git`; do not embed passwords or tokens.
+Browser sign-in handles PR access separately. Bitbucket Data Center and other
+hosts are not supported by this flow.
+
+Metadata reads use temporary bare Git storage and never check out or modify your
+package repository. Manifests are limited to 256 KiB. GitHub can fetch the manifest
+without unrelated blobs; Bitbucket Cloud uses a shallow fetch with a 32 MiB
+scratch cancellation budget and a time limit. The budget is checked during the
+transfer, so it is not a hard disk quota. Large private Bitbucket repositories
+may exceed it; the check reports that limit and you can use an existing checkout
+for local development. Successful reads are cached by the resolved revision;
+floating branches are checked again before cached metadata is reused.
 
 Managed sessions block Installer update, reinstall, removal and update-all from
 silently changing their source. Session records live in the project's ignored

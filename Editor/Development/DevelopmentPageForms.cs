@@ -72,6 +72,13 @@ namespace Deucarian.PackageInstaller.Editor.Development
                 workflow.Snapshot.Ahead + " ahead · " + workflow.Snapshot.Behind + " behind (last local remote snapshot; fetch to refresh)");
             review.Commit.Action("development-fetch", "Fetch origin", () => _ = workflow.TransferAsync(false), CanChange);
             review.Commit.Action("development-push", "Push feature branch…", Push, CanChange);
+            review.Commit.ReadOnly("development-pr-branches", "Pull request", () =>
+                (workflow.Snapshot?.Branch ?? "Feature branch") + " → " + (workflow.Package?.DevelopmentBranch ?? "development channel"));
+            review.Commit.Action("development-open-pr", "Open pull request in browser", () =>
+                _ = workflow.OpenPullRequestAsync(UnityEngine.Application.OpenURL), () => !workflow.Busy &&
+                    DevelopmentPullRequest.UnavailableReason(workflow.Repository, workflow.Snapshot, workflow.Package?.DevelopmentBranch).Length == 0);
+            review.Commit.Note(() => "Only pushed commits enter the pull request. Verify the destination branch in your browser; reviewers, checks and merging stay there. " +
+                DevelopmentPullRequest.UnavailableReason(workflow.Repository, workflow.Snapshot, workflow.Package?.DevelopmentBranch));
             cancel = DeucarianEditorWorkspaceControls.Button("Cancel operation", workflow.Cancel);
             workspace.PageActions.Add(cancel);
         }

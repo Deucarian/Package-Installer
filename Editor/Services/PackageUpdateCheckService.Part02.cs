@@ -313,7 +313,8 @@ namespace Deucarian.PackageInstaller.Editor
             SharedCheckContext = new UpdateCheckRunContext(
                 CheckCancellation.Token,
                 _packageManifestFetcher,
-                _packageManifestTimeout);
+                _packageManifestTimeout,
+                _packageManifestReader);
         }
 
         private static PackageCheckIntent RegisterPackageIntent(

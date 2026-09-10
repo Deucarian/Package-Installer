@@ -1,19 +1,27 @@
 using System;
+using System.Linq;
+using System.Text.RegularExpressions;
 
 namespace Deucarian.PackageInstaller.Editor
 {
     internal readonly struct PackageGitReference
     {
         private const string GitPrefix = "git+";
+        private readonly bool metadataRemoteSupported;
+        private readonly string metadataRemote;
 
         private PackageGitReference(
             string repositoryIdentity,
             string packagePath,
-            string referenceName)
+            string referenceName,
+            bool metadataRemoteSupported,
+            string metadataRemote)
         {
             RepositoryIdentity = repositoryIdentity;
             PackagePath = packagePath;
             ReferenceName = referenceName;
+            this.metadataRemoteSupported = metadataRemoteSupported;
+            this.metadataRemote = metadataRemote;
         }
 
         public string RepositoryIdentity { get; }
@@ -36,7 +44,9 @@ namespace Deucarian.PackageInstaller.Editor
                 : new PackageGitReference(
                     RepositoryIdentity,
                     PackagePath,
-                    normalizedReferenceName);
+                    normalizedReferenceName,
+                    metadataRemoteSupported,
+                    metadataRemote);
         }
 
         public bool TryCreateGitHubPackageJsonUrl(
@@ -44,45 +54,77 @@ namespace Deucarian.PackageInstaller.Editor
             out string packageJsonUrl)
         {
             packageJsonUrl = string.Empty;
+            return (RepositoryIdentity ?? string.Empty).StartsWith("github.com/", StringComparison.OrdinalIgnoreCase) &&
+                   TryCreatePackageJsonUrl(referenceNameOverride, out packageJsonUrl);
+        }
+
+        public bool TryCreatePackageJsonUrl(string referenceNameOverride, out string packageJsonUrl)
+        {
+            packageJsonUrl = string.Empty;
+            if (!metadataRemoteSupported) return false;
             PackageGitReference effectiveReference = WithReferenceName(referenceNameOverride);
-            string repositoryIdentity = (effectiveReference.RepositoryIdentity ?? string.Empty)
-                .ToLowerInvariant();
+            string repositoryIdentity = effectiveReference.RepositoryIdentity ?? string.Empty;
             int pathIndex = repositoryIdentity.IndexOf('/');
-
-            if (pathIndex <= 0 ||
-                pathIndex == repositoryIdentity.Length - 1 ||
-                !string.Equals(
-                    repositoryIdentity.Substring(0, pathIndex),
-                    "github.com",
-                    StringComparison.Ordinal))
-            {
-                return false;
-            }
-
+            if (pathIndex <= 0 || pathIndex == repositoryIdentity.Length - 1) return false;
+            string host = repositoryIdentity.Substring(0, pathIndex);
             string repositoryPath = repositoryIdentity.Substring(pathIndex + 1);
+            if (!Regex.IsMatch(repositoryPath, @"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$") ||
+                !SafeMetadataPath(repositoryPath)) return false;
             string manifestPath = string.IsNullOrWhiteSpace(effectiveReference.PackagePath)
                 ? "package.json"
                 : effectiveReference.PackagePath + "/package.json";
             string referenceName = NormalizeReferenceIdentity(effectiveReference.ReferenceName);
+            if (!Regex.IsMatch(referenceName, @"^[A-Za-z0-9][A-Za-z0-9._/-]*$") ||
+                !SafeMetadataPath(referenceName) || !SafeMetadataPath(manifestPath)) return false;
 
-            if (string.IsNullOrWhiteSpace(repositoryPath) ||
-                string.IsNullOrWhiteSpace(referenceName))
-            {
-                return false;
-            }
-
-            packageJsonUrl = "https://raw.githubusercontent.com/" +
-                             repositoryPath + "/" +
-                             referenceName + "/" +
-                             manifestPath;
+            // Bitbucket's src route treats the revision as one URL component, including branch slashes.
+            packageJsonUrl = host == "bitbucket.org"
+                ? "https://api.bitbucket.org/2.0/repositories/" + repositoryPath + "/src/" +
+                  Uri.EscapeDataString(referenceName) + "/" + EscapePath(manifestPath)
+                : "https://raw.githubusercontent.com/" + repositoryPath + "/" +
+                  EscapePath(referenceName) + "/" + EscapePath(manifestPath);
             return true;
+        }
+
+        private static string EscapePath(string value) => string.Join("/", value.Split('/').Select(Uri.EscapeDataString));
+
+        internal bool TryGetMetadataSource(string referenceOverride, out string remote, out string reference, out string manifestPath)
+        {
+            remote = reference = manifestPath = string.Empty;
+            if (!TryCreatePackageJsonUrl(referenceOverride, out _)) return false;
+            PackageGitReference effective = WithReferenceName(referenceOverride);
+            remote = metadataRemote;
+            reference = NormalizeReferenceIdentity(effective.ReferenceName);
+            manifestPath = string.IsNullOrEmpty(PackagePath) ? "package.json" : PackagePath + "/package.json";
+            return true;
+        }
+
+        private static bool SafeMetadataPath(string value) => !string.IsNullOrWhiteSpace(value) &&
+            value.Length <= 4096 && !value.Any(char.IsControl) && !value.Contains("\\") &&
+            value.Split('/').All(part => part.Length > 0 && part != "." && part != "..");
+
+        private static bool SupportsMetadataRemote(string remote)
+        {
+            if (remote.StartsWith("git@", StringComparison.Ordinal))
+            {
+                int colon = remote.IndexOf(':');
+                if (colon < 0) return false;
+                remote = "ssh://" + remote.Substring(0, colon) + "/" + remote.Substring(colon + 1);
+            }
+            if (!Uri.TryCreate(remote, UriKind.Absolute, out Uri uri) ||
+                !(uri.Host == "github.com" || uri.Host == "bitbucket.org") ||
+                !(uri.Scheme == "https" || uri.Scheme == "ssh") || !uri.IsDefaultPort ||
+                !(uri.UserInfo.Length == 0 || (uri.Scheme == "ssh" && uri.UserInfo == "git")) ||
+                uri.Query.Length > 0 || uri.Fragment.Length > 0) return false;
+            return Regex.IsMatch(uri.AbsolutePath, @"^/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/?$") &&
+                   SafeMetadataPath(uri.AbsolutePath.Trim('/'));
         }
 
         public static bool TryParse(string value, out PackageGitReference packageReference)
         {
             packageReference = default(PackageGitReference);
 
-            if (string.IsNullOrWhiteSpace(value))
+            if (string.IsNullOrWhiteSpace(value) || value.Length > 4096 || value.Any(char.IsControl))
             {
                 return false;
             }
@@ -99,10 +141,14 @@ namespace Deucarian.PackageInstaller.Editor
             string remoteAndQuery = trimmedValue.Substring(0, hashIndex);
             string packagePath = string.Empty;
             int queryIndex = remoteAndQuery.IndexOf('?');
+            bool metadataQuerySupported = true;
 
             if (queryIndex >= 0)
             {
-                packagePath = ExtractPackagePath(remoteAndQuery.Substring(queryIndex + 1));
+                string query = remoteAndQuery.Substring(queryIndex + 1);
+                metadataQuerySupported = query.StartsWith("path=", StringComparison.OrdinalIgnoreCase) &&
+                    query.IndexOf('&') < 0 && query.IndexOf(';') < 0;
+                packagePath = ExtractPackagePath(query);
                 remoteAndQuery = remoteAndQuery.Substring(0, queryIndex);
             }
 
@@ -120,7 +166,9 @@ namespace Deucarian.PackageInstaller.Editor
             packageReference = new PackageGitReference(
                 repositoryIdentity,
                 NormalizePackagePath(packagePath),
-                referenceName);
+                referenceName,
+                metadataQuerySupported && SupportsMetadataRemote(remoteAndQuery),
+                remoteAndQuery);
             return true;
         }
 

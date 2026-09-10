@@ -1,6 +1,6 @@
 {
   "name": "com.deucarian.package-installer",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "displayName": "Deucarian Package Installer",
   "description": "Editor-only installer window for installing and composing Deucarian Unity UPM packages.",
   "license": "MIT",

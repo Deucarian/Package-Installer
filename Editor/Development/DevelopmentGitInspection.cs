@@ -32,6 +32,22 @@ namespace Deucarian.PackageInstaller.Editor.Development
             return SafeDisplay((await _git.RunAsync(_repository.Root,
                 new[] { "log", "--no-color", "--format=%h %s", "-12", "HEAD", "--" }, token).ConfigureAwait(false)).RequireSuccess());
         }
+        public async Task<string> GetPullRequestUrlAsync(DevelopmentGitSnapshot reviewed, string target, CancellationToken token)
+        {
+            string url = DevelopmentPullRequest.CreateUrl(_repository, reviewed, target);
+            DevelopmentPullRequest.RequireReviewedHead(await _repositories.RevalidateAsync(_repository, token).ConfigureAwait(false), reviewed);
+            // Query exact branch refs without fetching or changing local refs, source state or credentials.
+            string remote = (await _git.RunAsync(_repository.Root, new[] { "ls-remote", "--heads", "origin",
+                "refs/heads/" + reviewed.Branch, "refs/heads/" + target }, token).ConfigureAwait(false)).RequireSuccess();
+            DevelopmentPullRequest.RequireRemoteBranches(remote, reviewed.Branch, target, reviewed.Head);
+            DevelopmentPullRequest.RequireReviewedHead(await _repositories.RevalidateAsync(_repository, token).ConfigureAwait(false), reviewed);
+            string upstream = (await _git.RunAsync(_repository.Root,
+                new[] { "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}" }, token).ConfigureAwait(false)).RequireSuccess().Trim();
+            if (upstream != reviewed.Upstream)
+                throw new DevelopmentGitException("The upstream changed. Refresh before opening the pull request.");
+            token.ThrowIfCancellationRequested();
+            return url;
+        }
         public async Task<string> GetDiffAsync(string path, bool staged, CancellationToken token)
         {
             await _repositories.RevalidateAsync(_repository, token).ConfigureAwait(false);

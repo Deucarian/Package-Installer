@@ -14,9 +14,10 @@ namespace Deucarian.PackageInstaller.Editor.Development
         public string InstalledRevision { get; }
         public string Source { get; }
         public string InstalledResolvedPath { get; }
+        public string DevelopmentBranch { get; }
 
-        internal DevelopmentInstalledPackage(string id, string name, string remote, string reference, string revision, string source, string resolvedPath = "")
-        { Id = id; Name = name; Remote = remote; InstalledReference = reference; InstalledRevision = revision; Source = source; InstalledResolvedPath = resolvedPath; }
+        internal DevelopmentInstalledPackage(string id, string name, string remote, string reference, string revision, string source, string resolvedPath = "", string developmentBranch = "develop")
+        { Id = id; Name = name; Remote = remote; InstalledReference = reference; InstalledRevision = revision; Source = source; InstalledResolvedPath = resolvedPath; DevelopmentBranch = developmentBranch; }
 
         internal static IReadOnlyList<DevelopmentInstalledPackage> Capture(IEnumerable<PackageDefinition> catalog,
             IEnumerable<PackageInfo> installed)
@@ -32,11 +33,14 @@ namespace Deucarian.PackageInstaller.Editor.Development
                 catch (InvalidOperationException) { continue; }
                 string remote = definition.GetUrl(PackageChannel.Development);
                 int fragment = remote.IndexOf('#');
-                if (fragment >= 0) remote = remote.Substring(0, fragment);
-                try { DevelopmentGitPolicy.RemoteIdentity(remote); }
+                if (fragment < 0 || fragment != remote.LastIndexOf('#') ||
+                    !PackageGitReference.TryParse(remote, out PackageGitReference channel)) continue;
+                string developmentBranch = channel.ReferenceName;
+                remote = remote.Substring(0, fragment);
+                try { DevelopmentGitPolicy.RemoteIdentity(remote); DevelopmentGitPolicy.RequireSourceBranch(developmentBranch); }
                 catch (DevelopmentGitException) { continue; }
                 result.Add(new DevelopmentInstalledPackage(info.name, definition.DisplayName, remote,
-                    reference, info.git?.hash ?? "No Git revision reported", info.source.ToString(), info.resolvedPath));
+                    reference, info.git?.hash ?? "No Git revision reported", info.source.ToString(), info.resolvedPath, developmentBranch));
             }
             return result.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase).ToArray();
         }

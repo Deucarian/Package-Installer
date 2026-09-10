@@ -68,9 +68,7 @@ namespace Deucarian.PackageInstaller.Editor.Development
             DevelopmentGitPolicy.RemoteIdentity(remote, _allowFixtureRemotes);
             DevelopmentGitPolicy.RequireAbsolutePath(destination);
             DevelopmentGitPolicy.RequireAbsolutePath(consumerRoot);
-            if (!Regex.IsMatch(sourceBranch ?? "", @"^[A-Za-z0-9][A-Za-z0-9._/-]*$") ||
-                sourceBranch.Contains("..") || sourceBranch.Contains("//") || sourceBranch.EndsWith("/", StringComparison.Ordinal))
-                throw new DevelopmentGitException("Select a valid source branch before cloning.");
+            DevelopmentGitPolicy.RequireSourceBranch(sourceBranch);
             string full = Path.GetFullPath(destination);
             string parent = _files.Canonicalize(Path.GetDirectoryName(full));
             string canonicalDestination = Path.Combine(parent, Path.GetFileName(full));
