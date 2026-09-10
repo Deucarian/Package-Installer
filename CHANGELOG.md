@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.4.3] - 2026-09-10
+
+### Fixed
+
+- Require Editor 1.8.1, which includes package review controls alongside the feature setup changes already on develop.
+
 ## [1.4.2] - 2026-09-10
 
 ### Fixed

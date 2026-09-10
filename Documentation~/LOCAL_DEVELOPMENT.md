@@ -2,7 +2,7 @@
 
 Open **Control Center → Packages → Package development**, or select an installed
 package in Installer and choose **Develop locally**. This page requires Editor
-1.8.0. The compact history is context for reviewing a package; advanced Git
+1.8.1. The compact history is context for reviewing a package; advanced Git
 operations remain in your external Git client. The core loop is **connect → edit
 and test in Unity → restore**. Commit and push with your preferred Git client or
 the optional controls on this page; a PR is finished in your browser.

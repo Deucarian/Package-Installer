@@ -1,6 +1,6 @@
 # Deucarian Package Installer
 
-## Local package development (1.4.2)
+## Local package development (1.4.3)
 
 Use **Control Center → Packages → Package development**, or **Develop locally**
 from an installed package, to inspect/clone its repository, connect local source,
@@ -10,7 +10,7 @@ Restore reconnects the original reference while preserving local work. Your
 existing Git client can handle commits and pushes; the local-source workflow
 does not require using the in-window Git controls.
 See [the workflow and recovery guide](Documentation~/LOCAL_DEVELOPMENT.md).
-Requires shared Editor 1.8.0. Tests and compilation remain explicit validation
+Requires shared Editor 1.8.1. Tests and compilation remain explicit validation
 steps; source-ready status is not a claim that tests passed.
 
 ## In-window navigation
@@ -30,7 +30,7 @@ Requires Editor 1.5.0 or newer. Development is delivered through Git `#develop`;
 
 It is the Deucarian ecosystem front door for installing standalone packages, integration packages, suite packages, templates, and explicitly declared package samples from Package Registry metadata.
 
-Current package version: `1.4.2`.
+Current package version: `1.4.3`.
 
 The Installer opens with a loading state. Local catalog reads run in the background, package rows appear in small batches, and the dependency graph is built only when its tab is selected. You can navigate away while loading; returning resumes the existing page. Remote refresh failures keep the cached or bundled catalog available.
 
