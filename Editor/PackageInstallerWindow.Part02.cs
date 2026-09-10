@@ -113,20 +113,6 @@ namespace Deucarian.PackageInstaller.Editor
             _graphContentRow.AddToClassList("dpi-graph-content-row");
             _graphModeContainer.Add(_graphContentRow);
 
-            _graphView = new PackageGraphView(
-                HandleGraphPackageSelected,
-                HandleGraphPackageAction,
-                HandleGraphBackNavigation,
-                HandleGraphRootFocused,
-                HandleGraphGroupFocused,
-                _visibilityFilterState,
-                HandleVisibilityFilterChanged);
-            _graphContentRow.Add(_graphView);
-
-            _graphDetailsContainer = new IMGUIContainer(DrawGraphDetailsGui);
-            _graphDetailsContainer.AddToClassList("dpi-graph-details");
-            _graphContentRow.Add(_graphDetailsContainer);
-
             content.Add(_graphModeContainer);
 
             _operationDrawerContainer = CreateOperationDrawer(
@@ -152,6 +138,7 @@ namespace Deucarian.PackageInstaller.Editor
             SetViewMode(_viewMode);
             if (_hasPendingReloadCamera)
             {
+                EnsureGraphView();
                 _graphView.PrepareCameraRestoreAfterReload();
             }
 
@@ -165,6 +152,19 @@ namespace Deucarian.PackageInstaller.Editor
             UpdateOperationFooter();
             RefreshGraphView("window initialized");
             _workspace.Refresh();
+        }
+
+        private void EnsureGraphView()
+        {
+            if (_graphView != null && _graphView.parent == _graphContentRow) return;
+            _graphView = new PackageGraphView(
+                HandleGraphPackageSelected, HandleGraphPackageAction, HandleGraphBackNavigation,
+                HandleGraphRootFocused, HandleGraphGroupFocused, _visibilityFilterState,
+                HandleVisibilityFilterChanged);
+            _graphContentRow.Add(_graphView);
+            _graphDetailsContainer = new IMGUIContainer(DrawGraphDetailsGui);
+            _graphDetailsContainer.AddToClassList("dpi-graph-details");
+            _graphContentRow.Add(_graphDetailsContainer);
         }
 
         private void ApplyResponsiveLayout(float contentWidth)

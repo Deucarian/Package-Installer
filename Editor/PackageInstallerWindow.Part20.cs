@@ -237,7 +237,8 @@ namespace Deucarian.PackageInstaller.Editor
 
         private bool IsAnyOperationBusy()
         {
-            return (_packageInstallService != null && _packageInstallService.IsBusy) ||
+            return PackageRegistryProvider.IsLocalLoading ||
+                   (_packageInstallService != null && _packageInstallService.IsBusy) ||
                    (_confirmationState != null && _confirmationState.IsPending) ||
                    (_packageDependencyInstaller != null &&
                     _packageDependencyInstaller.IsAwaitingPreflight) ||

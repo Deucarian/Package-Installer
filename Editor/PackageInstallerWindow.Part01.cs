@@ -339,7 +339,7 @@ namespace Deucarian.PackageInstaller.Editor
                 packageDefinition => _packageUpdateCheckService != null
                     ? _packageUpdateCheckService.GetStatus(packageDefinition, GetSelectedChannel(packageDefinition))
                     : null);
-            PackageRegistryProvider.RefreshRemote();
+            PackageRegistryProvider.LoadInBackground();
             if (!restoredAfterReload)
             {
                 EnsureValidSelection();

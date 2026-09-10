@@ -85,6 +85,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static void ResetState(PackageRegistryLoader loader)
         {
+            AbandonLocalLoad();
             EditorApplication.update -= UpdateRemoteRefresh;
 
             if (_remoteRefreshOperation != null)

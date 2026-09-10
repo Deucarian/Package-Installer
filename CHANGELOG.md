@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.3.4] - 2026-09-10
+
+### Fixed
+
+- Open the Installer without synchronously reading and parsing the local catalog; show loading, then fill the shared workspace in bounded batches.
+- Coalesce repeated list refreshes and defer dependency graph construction until its tab is selected.
+- Keep navigation usable while loading, pause detached page rendering, and discard obsolete background results after reset or shutdown.
+
+### Changed
+
+- Separate registry definition mapping from the registry loading lifecycle.
+
 ## [1.3.3] - 2026-09-09
 
 ### Changed
