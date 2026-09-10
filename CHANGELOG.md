@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.4.2] - 2026-09-10
+
+### Fixed
+
+- Correct Unity metadata for the PR workflow integration tests so Unity discovers and executes all seven cases.
+
 ## [1.4.1] - 2026-09-10
 
 ### Added
