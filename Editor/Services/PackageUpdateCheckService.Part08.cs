@@ -33,7 +33,8 @@ namespace Deucarian.PackageInstaller.Editor
                 PackageChannel installedChannel,
                 IReadOnlyList<string> packageLockPaths,
                 string runningInstallerVersion,
-                PackageInstallerSelfUpdateSnapshot selfUpdateSnapshot)
+                PackageInstallerSelfUpdateSnapshot selfUpdateSnapshot,
+                bool managedDevelopment = false)
             {
                 PackageDefinition = packageDefinition;
                 Channel = channel;
@@ -48,6 +49,7 @@ namespace Deucarian.PackageInstaller.Editor
                 PackageLockPaths = packageLockPaths ?? Array.Empty<string>();
                 RunningInstallerVersion = runningInstallerVersion ?? string.Empty;
                 SelfUpdateSnapshot = selfUpdateSnapshot;
+                ManagedDevelopment = managedDevelopment;
             }
 
             public PackageDefinition PackageDefinition { get; }
@@ -75,6 +77,7 @@ namespace Deucarian.PackageInstaller.Editor
             public string RunningInstallerVersion { get; }
 
             public PackageInstallerSelfUpdateSnapshot SelfUpdateSnapshot { get; }
+            public bool ManagedDevelopment { get; }
         }
 
         private sealed class TargetedUpdateCheckRequest

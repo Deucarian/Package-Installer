@@ -1,5 +1,45 @@
 # Changelog
 
+## [1.4.4] - 2026-09-10
+
+### Fixed
+
+- Use native absolute paths in the memory-only source-session and page fixtures on Windows and Linux.
+- Run CI layout tests with a virtual graphics display; allow explicit manual validation of a feature revision against a trusted dependency channel.
+
+## [1.4.3] - 2026-09-10
+
+### Fixed
+
+- Require Editor 1.8.1, which includes package review controls alongside the feature setup changes already on develop.
+
+## [1.4.2] - 2026-09-10
+
+### Fixed
+
+- Correct Unity metadata for the PR workflow integration tests so Unity discovers and executes all seven cases.
+
+## [1.4.1] - 2026-09-10
+
+### Added
+
+- Explicit browser pull-request handoff for a pushed package feature branch on GitHub or Bitbucket Cloud, with read-only remote verification and no PR credentials or management in Unity.
+- Bitbucket Cloud repository identities and package metadata lookup, including private metadata through existing Git authentication.
+
+### Changed
+
+- Preserve the catalog's development branch for local clones and PR destinations; local connect/test/restore remains usable with an external Git client.
+
+## [1.4.0] - 2026-09-10
+
+### Added
+
+- Package development page in Control Center using Editor 1.8 shared review controls.
+- Validated package repository cloning/reuse, selected staging with Unity metadata, feature branches, commit, fetch, push and compact history.
+- Recoverable local-source sessions with exact original-reference restoration, checkout claims, concurrent-edit checks and compilation/source status.
+- Fail-closed boundaries for consumer repositories, linked paths, unexpected index changes and managed package source updates.
+- Disposable Git, source-session and shared-page regression coverage.
+
 ## [1.3.4] - 2026-09-10
 
 ### Fixed

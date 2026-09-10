@@ -270,7 +270,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             try
             {
-                _currentRemoveRequest = _packageClient.Remove(packageDefinition.PackageId);
+                _currentRemoveRequest = Development.DevelopmentPackageProtection.Remove(_packageClient, packageDefinition.PackageId);
                 EditorApplication.update -= Update;
                 EditorApplication.update += Update;
                 PackageInstallerLog.Install.Info("Removing " + packageDefinition.DisplayName + " (" + packageDefinition.PackageId + ").");
@@ -343,7 +343,7 @@ namespace Deucarian.PackageInstaller.Editor
                     PackageInstallerSelfUpdateState.Begin(_currentInstall.Url);
                 }
 
-                _currentRequest = _packageClient.Add(_currentInstall.Url);
+                _currentRequest = Development.DevelopmentPackageProtection.Add(_packageClient, _currentInstall.PackageDefinition.PackageId, _currentInstall.Url);
                 EditorApplication.update -= Update;
                 EditorApplication.update += Update;
                 SavePendingOperationState();

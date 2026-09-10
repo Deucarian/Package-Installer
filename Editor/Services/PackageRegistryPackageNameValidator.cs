@@ -69,7 +69,8 @@ namespace Deucarian.PackageInstaller.Editor
             PackageRegistryRemoteFetchDelegate packageJsonFetcher,
             CancellationToken cancellationToken,
             TimeSpan timeout,
-            int maxConcurrency = 4)
+            int maxConcurrency = 4,
+            IPackageManifestReader manifestReader = null)
         {
             if (!PackageRegistryValidator.Validate(registry, out string message))
             {
@@ -91,7 +92,8 @@ namespace Deucarian.PackageInstaller.Editor
                         packageJsonFetcher,
                         semaphore,
                         cancellationToken,
-                        timeout))
+                        timeout,
+                        manifestReader))
                     .ToArray();
                 string[] validationMessages = await Task.WhenAll(validationTasks).ConfigureAwait(false);
 
@@ -112,7 +114,8 @@ namespace Deucarian.PackageInstaller.Editor
             PackageRegistryRemoteFetchDelegate packageJsonFetcher,
             SemaphoreSlim semaphore,
             CancellationToken cancellationToken,
-            TimeSpan timeout)
+            TimeSpan timeout,
+            IPackageManifestReader manifestReader)
         {
             bool enteredSemaphore = false;
             string activePackageJsonUrl = string.Empty;
@@ -129,16 +132,18 @@ namespace Deucarian.PackageInstaller.Editor
                 foreach (string channelUrl in channelUrls)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    if (!TryCreateGitHubPackageJsonUrl(channelUrl, out string packageJsonUrl))
+                    if (!TryCreatePackageJsonUrl(channelUrl, string.Empty, out string packageJsonUrl))
                     {
                         return "Could not resolve target package.json URL for " + package.id +
-                               " from channel URL " + channelUrl + ".";
+                               ". Use a credential-free GitHub or Bitbucket Cloud package reference.";
                     }
 
                     activePackageJsonUrl = packageJsonUrl;
 
                     PackageRegistryRemoteFetchResponse response =
-                        await PackageRegistryRemoteFetch.ExecuteAsync(
+                        manifestReader != null
+                        ? await manifestReader.ReadAsync(channelUrl, string.Empty, cancellationToken, timeout).ConfigureAwait(false)
+                        : await PackageRegistryRemoteFetch.ExecuteAsync(
                             packageJsonFetcher,
                             packageJsonUrl,
                             cancellationToken,
@@ -188,69 +193,15 @@ namespace Deucarian.PackageInstaller.Editor
             out string packageJsonUrl)
         {
             packageJsonUrl = string.Empty;
+            return PackageGitReference.TryParse(packageUrl, out PackageGitReference reference) &&
+                reference.TryCreateGitHubPackageJsonUrl(referenceNameOverride, out packageJsonUrl);
+        }
 
-            if (string.IsNullOrWhiteSpace(packageUrl))
-            {
-                return false;
-            }
-
-            string trimmedUrl = packageUrl.Trim();
-            int hashIndex = trimmedUrl.LastIndexOf('#');
-
-            if (hashIndex < 0 || hashIndex == trimmedUrl.Length - 1)
-            {
-                return false;
-            }
-
-            string referenceName = string.IsNullOrWhiteSpace(referenceNameOverride)
-                ? trimmedUrl.Substring(hashIndex + 1).Trim()
-                : referenceNameOverride.Trim();
-            string urlWithoutReference = trimmedUrl.Substring(0, hashIndex);
-            string packagePath = string.Empty;
-            int queryIndex = urlWithoutReference.IndexOf('?');
-
-            if (queryIndex >= 0)
-            {
-                packagePath = ExtractPackagePath(urlWithoutReference.Substring(queryIndex + 1));
-                urlWithoutReference = urlWithoutReference.Substring(0, queryIndex);
-            }
-
-            if (urlWithoutReference.StartsWith("git+", StringComparison.OrdinalIgnoreCase))
-            {
-                urlWithoutReference = urlWithoutReference.Substring(4);
-            }
-
-            if (!Uri.TryCreate(urlWithoutReference, UriKind.Absolute, out Uri repositoryUri) ||
-                !string.Equals(repositoryUri.Host, "github.com", StringComparison.OrdinalIgnoreCase))
-            {
-                return false;
-            }
-
-            string[] segments = repositoryUri.AbsolutePath.Trim('/').Split('/');
-
-            if (segments.Length < 2)
-            {
-                return false;
-            }
-
-            string owner = Uri.UnescapeDataString(segments[0]);
-            string repository = Uri.UnescapeDataString(segments[1]);
-
-            if (repository.EndsWith(".git", StringComparison.OrdinalIgnoreCase))
-            {
-                repository = repository.Substring(0, repository.Length - 4);
-            }
-
-            string manifestPath = string.IsNullOrWhiteSpace(packagePath)
-                ? "package.json"
-                : packagePath.Trim('/').TrimEnd('/') + "/package.json";
-
-            packageJsonUrl = "https://raw.githubusercontent.com/" +
-                             owner + "/" +
-                             repository + "/" +
-                             referenceName + "/" +
-                             manifestPath;
-            return true;
+        internal static bool TryCreatePackageJsonUrl(string packageUrl, string referenceOverride, out string packageJsonUrl)
+        {
+            packageJsonUrl = string.Empty;
+            return PackageGitReference.TryParse(packageUrl, out PackageGitReference reference) &&
+                reference.TryCreatePackageJsonUrl(referenceOverride, out packageJsonUrl);
         }
 
         internal static bool TryReadPackageName(string packageJson, out string packageName)
@@ -347,32 +298,6 @@ namespace Deucarian.PackageInstaller.Editor
             return string.IsNullOrWhiteSpace(packageJsonUrl)
                 ? string.Empty
                 : " at " + packageJsonUrl;
-        }
-
-        private static string ExtractPackagePath(string query)
-        {
-            if (string.IsNullOrWhiteSpace(query))
-            {
-                return string.Empty;
-            }
-
-            string[] parts = query.Split('&');
-
-            foreach (string part in parts)
-            {
-                int equalsIndex = part.IndexOf('=');
-                string key = equalsIndex >= 0 ? part.Substring(0, equalsIndex) : part;
-
-                if (!string.Equals(key, "path", StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                string value = equalsIndex >= 0 ? part.Substring(equalsIndex + 1) : string.Empty;
-                return Uri.UnescapeDataString(value).Trim();
-            }
-
-            return string.Empty;
         }
 
         [Serializable]

@@ -1487,7 +1487,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             }
 
             Assert.AreEqual(
-                "https://raw.githubusercontent.com/deucarian/object-loading/" +
+                "https://raw.githubusercontent.com/Deucarian/Object-Loading/" +
                 StableRevision + "/package.json",
                 requestedUrl);
             Assert.AreEqual(configuredTimeout, requestedTimeout);
@@ -1524,7 +1524,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                     PackageChannel.Stable);
                 Assert.AreEqual(PackageUpdateStatusKind.SourceMigrationAvailable, status.Kind);
                 StringAssert.Contains("Target metadata was unavailable", status.Message);
-                StringAssert.Contains("Synthetic manifest failure", status.Message);
+                StringAssert.Contains("Target package metadata is unavailable", status.Message);
+                StringAssert.DoesNotContain("Synthetic manifest failure", status.Message);
             }
         }
 

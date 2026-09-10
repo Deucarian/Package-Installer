@@ -15,6 +15,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         private readonly PackageRegistryRemoteFetchDelegate _remoteFetcher;
         private readonly PackageRegistryRemoteFetchDelegate _packageManifestFetcher;
+        private readonly IPackageManifestReader _packageManifestReader;
         private readonly string _remoteRegistryUrl;
         private readonly PackageRegistryCache _cache;
         private readonly TimeSpan _requestTimeout;
@@ -38,10 +39,12 @@ namespace Deucarian.PackageInstaller.Editor
             string remoteRegistryUrl,
             PackageRegistryRemoteFetchDelegate packageManifestFetcher,
             string cachePath,
-            TimeSpan requestTimeout)
+            TimeSpan requestTimeout,
+            IPackageManifestReader packageManifestReader = null)
         {
             _remoteFetcher = remoteFetcher ?? PackageRegistryRemoteFetch.FetchAsync;
             _packageManifestFetcher = packageManifestFetcher ?? PackageRegistryRemoteFetch.FetchAsync;
+            _packageManifestReader = packageManifestReader ?? PackageManifestReader.CreateDefault(_packageManifestFetcher);
             _remoteRegistryUrl = string.IsNullOrWhiteSpace(remoteRegistryUrl)
                 ? RemoteRegistryUrl
                 : remoteRegistryUrl;
@@ -107,7 +110,8 @@ namespace Deucarian.PackageInstaller.Editor
                         _packageManifestFetcher,
                         cancellationToken,
                         _requestTimeout,
-                        4).ConfigureAwait(false);
+                        4,
+                        _packageManifestReader).ConfigureAwait(false);
 
                 if (!string.IsNullOrWhiteSpace(packageNameValidationMessage))
                 {

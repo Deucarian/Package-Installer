@@ -49,14 +49,16 @@ namespace Deucarian.PackageInstaller.Editor
             PackageRegistryRemoteFetchDelegate packageManifestFetcher,
             TimeSpan packageManifestTimeout,
             PackageUpdateCheckCache updateCheckCache,
-            PackageInstallerStateRepository stateRepository)
+            PackageInstallerStateRepository stateRepository,
+            IPackageManifestReader packageManifestReader = null)
             : this(
                 packageDetectionService,
                 packageManifestFetcher,
                 packageManifestTimeout,
                 updateCheckCache,
                 stateRepository,
-                enableCache: true)
+                enableCache: true,
+                packageManifestReader: packageManifestReader)
         {
         }
 
@@ -66,10 +68,12 @@ namespace Deucarian.PackageInstaller.Editor
             TimeSpan packageManifestTimeout,
             PackageUpdateCheckCache updateCheckCache,
             PackageInstallerStateRepository stateRepository,
-            bool enableCache)
+            bool enableCache,
+            IPackageManifestReader packageManifestReader = null)
         {
             _packageDetectionService = packageDetectionService ?? throw new ArgumentNullException(nameof(packageDetectionService));
             _packageManifestFetcher = packageManifestFetcher ?? PackageRegistryRemoteFetch.FetchAsync;
+            _packageManifestReader = packageManifestReader ?? PackageManifestReader.CreateDefault(_packageManifestFetcher);
             _packageManifestTimeout = packageManifestTimeout > TimeSpan.Zero
                 ? packageManifestTimeout
                 : TimeSpan.FromMilliseconds(PackageManifestTimeoutMilliseconds);
