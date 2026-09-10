@@ -49,10 +49,11 @@ namespace Deucarian.PackageInstaller.Editor.Development
             Root = new VisualElement();
             workspace = new DeucarianEditorWorkspace(Root, Application.productName);
             workspace.Title.text = "Package development";
-            workspace.Subtitle.text = "Edit and test one package in this project, then review and push its changes.";
+            workspace.Subtitle.text = "Edit a package here. Review and share its changes.";
             DeucarianEditorWorkspaceNavigation.Populate(workspace, ToolId);
             review = new DeucarianEditorChangeReview(workspace.Content);
             forms = new DevelopmentPageForms(workflow, workspace, review, StageSelected);
+            review.UseSections(workspace.Tabs);
             workspace.FooterLeading.text = "Loading installed packages…";
             workflow.Changed += Refresh;
             beginCatalogLoad();
