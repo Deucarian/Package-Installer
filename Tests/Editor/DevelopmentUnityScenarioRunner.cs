@@ -93,7 +93,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             _state.InstalledReference = reference; _state.InstalledPath = package.resolvedPath;
             await InitializeConsumerBaselineAsync();
             _state.ConsumerHead = await Git(_consumer, "rev-parse", "HEAD");
-            _state.ConsumerIndex = await Git(_consumer, "ls-files", "--stage", "-z");
+            _state.ConsumerIndexHash = IndexHash(await Git(_consumer, "ls-files", "--stage", "-z"));
             Require(!Directory.Exists(_seed) && !Directory.Exists(_remote) && !Directory.Exists(_checkout),
                 "The scenario fixture paths already exist. Preserve them and choose a reviewed new scenario run.");
             Directory.CreateDirectory(_seed);
@@ -159,7 +159,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 File.ReadAllText(Path.Combine(_checkout, "Unselected.txt")) == "Uncommitted work must remain after restore.\n" &&
                 (await Git(_checkout, "status", "--porcelain")).Contains("Unselected.txt");
             _state.ConsumerGitUnchanged = await Git(_consumer, "rev-parse", "HEAD") == _state.ConsumerHead &&
-                await Git(_consumer, "ls-files", "--stage", "-z") == _state.ConsumerIndex;
+                IndexHash(await Git(_consumer, "ls-files", "--stage", "-z")) == _state.ConsumerIndexHash;
             _state.Phase = "complete";
             Save();
         }
@@ -222,6 +222,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         private Task<string> Git(string directory, params string[] arguments) => GitCore(directory, arguments);
+        internal static string IndexHash(string rawIndex) => SourceManifestEdit.Hash(System.Text.Encoding.UTF8.GetBytes(rawIndex));
         private async Task<string> GitCore(string directory, string[] arguments) =>
             (await _git.RunAsync(directory, arguments, CancellationToken.None)).RequireSuccess().Trim();
         private async Task ConfigureIdentity(string directory)

@@ -56,7 +56,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         public string Phase;
         public string OriginalManifestHash;
         public string ConsumerHead;
-        public string ConsumerIndex;
+        public string ConsumerIndexHash;
         public string InstalledReference;
         public string InstalledPath;
         public string CloneHead;
