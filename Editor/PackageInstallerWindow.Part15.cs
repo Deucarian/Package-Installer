@@ -126,7 +126,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             ImGui.DrawPanel("Viewer Setup", () =>
             {
-                EditorGUILayout.LabelField(
+                DeucarianEditorTextGUI.LabelField(
                     "Choose the reusable viewer core, then add only the connection your project needs.",
                     _styles.MutedMiniLabelStyle);
                 GUILayout.Space(8f);
@@ -142,7 +142,7 @@ namespace Deucarian.PackageInstaller.Editor
                         bool pressed = GUILayout.Toggle(
                             selectedPreset,
                             new GUIContent(preset.DisplayName, preset.Description),
-                            EditorStyles.miniButton,
+                            DeucarianEditorWorkbenchGUI.SecondaryButtonStyle,
                             GUILayout.MinWidth(96f));
                         if (pressed && !selectedPreset)
                         {
@@ -161,11 +161,11 @@ namespace Deucarian.PackageInstaller.Editor
                 if (!string.IsNullOrWhiteSpace(activePresetDescription))
                 {
                     GUILayout.Space(5f);
-                    EditorGUILayout.LabelField(activePresetDescription, _styles.MutedMiniLabelStyle);
+                    DeucarianEditorTextGUI.LabelField(activePresetDescription, _styles.MutedMiniLabelStyle);
                 }
 
                 GUILayout.Space(8f);
-                EditorGUILayout.LabelField("Connections", _styles.MiniLabelStyle);
+                DeucarianEditorTextGUI.LabelField("Connections", _styles.MiniLabelStyle);
                 GUILayout.Space(3f);
 
                 foreach (string companionId in templateDefinition.OptionalCompanions)
@@ -193,7 +193,7 @@ namespace Deucarian.PackageInstaller.Editor
                             : _packageDetectionService.IsInstalled(companionId)
                                 ? "  (installed)"
                                 : string.Empty;
-                        nextValue = EditorGUILayout.ToggleLeft(
+                        nextValue = DeucarianEditorInputGUI.ToggleLeft(
                             new GUIContent(
                                 companionDefinition.DisplayName + suffix,
                                 GetPackageTooltip(companionDefinition)),

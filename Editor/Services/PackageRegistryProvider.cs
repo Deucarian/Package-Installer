@@ -24,6 +24,41 @@ namespace Deucarian.PackageInstaller.Editor
         private static int _remoteRefreshGeneration;
         private static bool _bundledLoaded;
         private static bool _remoteRefreshStarted;
+        internal static bool IsLocalLoading => _loader.LocalLoad != null;
+
+        internal static void LoadInBackground()
+        {
+            if (_bundledLoaded) { EnsureLoaded(); return; }
+            if (IsLocalLoading) return;
+            _loader.LocalLoad = new PackageRegistryLocalLoad(_loader, PackageRegistryLoader.ResolveBundledRegistryPath());
+            EditorApplication.update += UpdateLocalLoad;
+        }
+
+        private static void UpdateLocalLoad()
+        {
+            if (!IsLocalLoading || !_loader.LocalLoad.TryComplete(out var snapshot)) return;
+            _loader.LocalLoad = null;
+            EditorApplication.update -= UpdateLocalLoad;
+            ApplyLocalSnapshot(snapshot);
+            StartRemoteRefresh();
+        }
+
+        private static void ApplyLocalSnapshot(PackageRegistryLocalLoad.Snapshot snapshot)
+        {
+            _bundledLoaded = true;
+            _remoteRefreshStarted = true;
+            if (!string.IsNullOrWhiteSpace(snapshot.Warning))
+                PackageInstallerLog.Registry.Warning("Cached registry was ignored: " + snapshot.Warning);
+            ApplyLoadResult(snapshot.Result, logFailures: true);
+            _remoteRefreshStarted = false;
+        }
+
+        private static void AbandonLocalLoad()
+        {
+            EditorApplication.update -= UpdateLocalLoad;
+            _loader.LocalLoad?.Abandon();
+            _loader.LocalLoad = null;
+        }
 
         public static IReadOnlyList<PackageDefinition> StandalonePackages =>
             All.Where(package => !package.IsIntegration).ToArray();
@@ -37,6 +72,7 @@ namespace Deucarian.PackageInstaller.Editor
         {
             get
             {
+                if (IsLocalLoading) return "Loading package catalog…";
                 PackageRegistryLoadResult result = CurrentLoadResult;
                 return result != null ? result.StatusMessage : "Using bundled registry";
             }

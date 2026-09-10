@@ -33,7 +33,7 @@ namespace Deucarian.PackageInstaller.Editor
         {
             if (!string.IsNullOrWhiteSpace(title))
             {
-                EditorGUILayout.LabelField(title, _styles.SectionTitleStyle);
+                DeucarianEditorTextGUI.LabelField(title, _styles.SectionTitleStyle);
             }
 
             GUILayout.Space(4f);
@@ -69,7 +69,7 @@ namespace Deucarian.PackageInstaller.Editor
             GUIContent content = new GUIContent(
                 GetCategoryHeaderText(categoryView),
                 GetCategoryHeaderTooltip(categoryView));
-            bool nextExpanded = EditorGUILayout.Foldout(expanded, content, true, _styles.FoldoutStyle);
+            bool nextExpanded = DeucarianEditorInputGUI.Foldout(expanded, content, true, _styles.FoldoutStyle);
 
             if (nextExpanded != expanded)
             {
@@ -338,8 +338,8 @@ namespace Deucarian.PackageInstaller.Editor
 
             ImGui.DrawPanel("Ecosystem Overview", () =>
             {
-                EditorGUILayout.LabelField("Deucarian Unity Package System", _styles.TitleStyle);
-                EditorGUILayout.LabelField(
+                DeucarianEditorTextGUI.LabelField("Deucarian Unity Package System", _styles.TitleStyle);
+                DeucarianEditorTextGUI.LabelField(
                     "Select a group or package node to inspect details. Use pan, zoom, Fit, 100%, and Center to navigate the graph.",
                     _styles.MutedMiniLabelStyle);
                 GUILayout.Space(8f);

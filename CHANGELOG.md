@@ -1,5 +1,38 @@
 # Changelog
 
+## [1.3.4] - 2026-09-10
+
+### Fixed
+
+- Open the Installer without synchronously reading and parsing the local catalog; show loading, then fill the shared workspace in bounded batches.
+- Coalesce repeated list refreshes and defer dependency graph construction until its tab is selected.
+- Keep navigation usable while loading, pause detached page rendering, and discard obsolete background results after reset or shutdown.
+
+### Changed
+
+- Separate registry definition mapping from the registry loading lifecycle.
+
+## [1.3.3] - 2026-09-09
+
+### Changed
+
+- Adopt the shared Editor 1.7 workspace presentation: neutral surfaces, readable typography, consistent actions and aligned controls.
+- Preserve package workflows and native serialized editing; this is an editor-only presentation update.
+
+## [1.3.2] - 2026-09-09
+
+- Register package tooling and navigation actions as shared Control Center pages. Preserve the domain workflow while using Editor-owned submenus, in-window navigation, and UI scaling.
+
+## [1.3.1] - 2026-09-09
+
+- Keep sidebar navigation in the current workspace and retain page drafts while switching tools.
+- Support explicitly opening independent workspaces through the sidebar context menu.
+
+
+## 1.3.0 - 2026-09-09
+
+- Open a searchable Installed / Updates / Browse workspace by default, with the dependency graph available as a secondary view. Preserve package planning, confirmations, source selection, samples and operation recovery.
+
 ## 1.2.6 - 2026-09-09
 
 - Assert shared button heights through their existing public style-value checks, without also coupling those checks to a private constant's spelling.

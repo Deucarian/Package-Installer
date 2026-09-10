@@ -71,7 +71,7 @@ namespace Deucarian.PackageInstaller.Editor
 
                 using (new EditorGUILayout.HorizontalScope())
                 {
-                    EditorGUILayout.LabelField(
+                    DeucarianEditorTextGUI.LabelField(
                         "Selected",
                         _styles.MutedMiniLabelStyle,
                         GUILayout.Width(DeucarianEditorWorkbenchGUI.DetailLabelWidth));
@@ -85,7 +85,7 @@ namespace Deucarian.PackageInstaller.Editor
 
                 if (!string.IsNullOrWhiteSpace(selectedUrl))
                 {
-                    EditorGUILayout.LabelField(
+                    DeucarianEditorTextGUI.LabelField(
                         PackageChannelPolicy.GetChannelLabel(selectedChannel) + " installs from the configured package URL/ref.",
                         _styles.MutedMiniLabelStyle);
                 }
@@ -168,7 +168,7 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 if (packageDefinition.Dependencies.Count > 0)
                 {
-                    EditorGUILayout.LabelField("Dependencies", _styles.MiniLabelStyle);
+                    DeucarianEditorTextGUI.LabelField("Dependencies", _styles.MiniLabelStyle);
 
                     foreach (string dependencyId in packageDefinition.Dependencies)
                     {
@@ -183,7 +183,7 @@ namespace Deucarian.PackageInstaller.Editor
                         GUILayout.Space(6f);
                     }
 
-                    EditorGUILayout.LabelField("Required by", _styles.MiniLabelStyle);
+                    DeucarianEditorTextGUI.LabelField("Required by", _styles.MiniLabelStyle);
 
                     foreach (PackageReverseDependency dependent in dependents)
                     {

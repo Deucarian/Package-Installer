@@ -43,7 +43,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             using (new EditorGUI.DisabledScope(channelOptions.Length <= 1 || IsAnyOperationBusy()))
             {
-                int nextIndex = EditorGUILayout.Popup(
+                int nextIndex = DeucarianEditorInputGUI.Popup(
                     selectedIndex,
                     channelLabels,
                     GUILayout.Width(118f));

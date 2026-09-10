@@ -266,6 +266,13 @@ namespace Deucarian.PackageInstaller.Editor
 
         private float GetDetailsContentWidth()
         {
+            if (_viewMode == InstallerViewMode.List && _workspace != null)
+            {
+                float width = _workspace.View.Details.contentRect.width;
+                if (width > 0f && !float.IsNaN(width) && !float.IsInfinity(width))
+                    return width;
+            }
+
             float graphDetailsContentWidth = _graphDetailsContainer == null
                 ? 0f
                 : _graphDetailsContainer.contentRect.width;
@@ -316,14 +323,14 @@ namespace Deucarian.PackageInstaller.Editor
                     using (new EditorGUILayout.VerticalScope(GUILayout.ExpandWidth(true)))
                     {
                         string displayName = GetDetailDisplayName(packageDefinition);
-                        EditorGUILayout.LabelField(
+                        DeucarianEditorTextGUI.LabelField(
                             new GUIContent(displayName, displayName),
                             _styles.TitleStyle,
                             GUILayout.ExpandWidth(true));
 
                         if (!string.IsNullOrWhiteSpace(packageDefinition.Description))
                         {
-                            EditorGUILayout.LabelField(
+                            DeucarianEditorTextGUI.LabelField(
                                 new GUIContent(packageDefinition.Description, packageDefinition.Description),
                                 _styles.SubtitleStyle);
                         }

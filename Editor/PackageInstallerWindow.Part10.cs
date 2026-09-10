@@ -24,7 +24,7 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 if (navigationRows.Length == 0)
                 {
-                    EditorGUILayout.LabelField("No ecosystem navigation is available.", _styles.MutedMiniLabelStyle);
+                    DeucarianEditorTextGUI.LabelField("No ecosystem navigation is available.", _styles.MutedMiniLabelStyle);
                     SynchronizeDetailsNavigationHover(null);
                     return;
                 }

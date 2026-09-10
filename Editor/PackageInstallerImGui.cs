@@ -63,7 +63,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         internal void DrawStatusBadge(string text, PackageInstallerVisualStatusKind statusKind, params GUILayoutOption[] options)
         {
-            GUIStyle style = _styles.RowStatusStyle ?? EditorStyles.miniLabel;
+            GUIStyle style = _styles.RowStatusStyle ?? DeucarianEditorWorkbenchGUI.MiniLabelStyle;
             string safeText = text ?? string.Empty;
             GUIContent content = new GUIContent("    " + safeText, safeText);
             Rect rect = GUILayoutUtility.GetRect(content, style, options);
@@ -77,7 +77,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         internal void DrawStatusIndicator(Rect rect, string text, PackageInstallerVisualStatusKind statusKind, GUIStyle style)
         {
-            GUIStyle labelStyle = style ?? _styles.RowStatusStyle ?? EditorStyles.miniLabel;
+            GUIStyle labelStyle = style ?? _styles.RowStatusStyle ?? DeucarianEditorWorkbenchGUI.MiniLabelStyle;
             string safeText = text ?? string.Empty;
             float iconSize = Mathf.Min(16f, Mathf.Min(rect.width, rect.height));
             Rect markerRect = new Rect(rect.x, rect.y + Mathf.Max(0f, (rect.height - iconSize) * 0.5f), iconSize, iconSize);
@@ -122,9 +122,9 @@ namespace Deucarian.PackageInstaller.Editor
         {
             string displayValue = string.IsNullOrWhiteSpace(value) ? "-" : value;
 
-            EditorGUILayout.LabelField(new GUIContent(label, label), _styles.MutedMiniLabelStyle);
+            DeucarianEditorTextGUI.LabelField(new GUIContent(label, label), _styles.MutedMiniLabelStyle);
 
-            GUIStyle selectableStyle = new GUIStyle(EditorStyles.textArea);
+            GUIStyle selectableStyle = new GUIStyle(DeucarianEditorWorkbenchGUI.InputStyles.TextArea);
             selectableStyle.normal.textColor = _styles.TextColor;
             selectableStyle.focused.textColor = _styles.TextColor;
             selectableStyle.hover.textColor = _styles.TextColor;
@@ -149,7 +149,7 @@ namespace Deucarian.PackageInstaller.Editor
         {
             Color previousColor = GUI.contentColor;
             GUI.contentColor = color;
-            EditorGUILayout.LabelField(new GUIContent(text, text), style, options);
+            DeucarianEditorTextGUI.LabelField(new GUIContent(text, text), style, options);
             GUI.contentColor = previousColor;
         }
 
@@ -164,7 +164,7 @@ namespace Deucarian.PackageInstaller.Editor
             string displayText = GetEllipsizedText(safeText, style, rect.width);
             Color previousColor = GUI.contentColor;
             GUI.contentColor = color;
-            GUI.Label(rect, new GUIContent(displayText, safeText), style ?? EditorStyles.label);
+            GUI.Label(rect, new GUIContent(displayText, safeText), style ?? DeucarianEditorWorkbenchGUI.LabelStyle);
             GUI.contentColor = previousColor;
         }
 
@@ -175,7 +175,7 @@ namespace Deucarian.PackageInstaller.Editor
                 return string.Empty;
             }
 
-            GUIStyle resolvedStyle = style ?? EditorStyles.label;
+            GUIStyle resolvedStyle = style ?? DeucarianEditorWorkbenchGUI.LabelStyle;
             GUIContent content = new GUIContent(text);
             if (resolvedStyle.CalcSize(content).x <= maxWidth)
             {

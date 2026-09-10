@@ -1,12 +1,25 @@
 # Deucarian Package Installer
 
+## In-window navigation
+
+The left sidebar changes pages in the current window, keeping each page's draft and session alive. Right-click a sidebar item and choose **Open in new window** for an independent workspace. Closing a workspace releases its pages; ordinary page changes do not reset lab messages or stop package operations.
+
+
+## Shared workspace (1.3.0)
+
+Open a searchable Installed / Updates / Browse workspace by default, with the dependency graph available as a secondary view. Preserve package planning, confirmations, source selection, samples and operation recovery.
+
+Requires Editor 1.5.0 or newer. Development is delivered through Git `#develop`; this change does not promote the stable `#main` channel.
+
 ## What this is
 
 `com.deucarian.package-installer` is a small editor-only Unity Package Manager package that adds a custom installer window for Deucarian packages.
 
 It is the Deucarian ecosystem front door for installing standalone packages, integration packages, suite packages, templates, and explicitly declared package samples from Package Registry metadata.
 
-Current package version: `1.2.6`.
+Current package version: `1.3.4`.
+
+The Installer opens with a loading state. Local catalog reads run in the background, package rows appear in small batches, and the dependency graph is built only when its tab is selected. You can navigate away while loading; returning resumes the existing page. Remote refresh failures keep the cached or bundled catalog available.
 
 ## When to use it
 
@@ -267,7 +280,7 @@ Interrupted plans are stored project-locally beneath `Library/Deucarian/PackageI
 
 The graph keeps its default toolbar compact and progressively discloses package, group, channel, and attention actions only where they apply. Existing controls wrap at wide, compact, and narrow widths without adding permanent toolbar controls.
 
-Ecosystem Graph is currently the only enabled view. List View remains implemented internally but its toggle is hidden and any stale List View request resolves back to Ecosystem Graph.
+Installed, Updates and Browse are the main searchable views. Dependency graph remains available as a secondary view; selecting a package keeps its existing source, planning and recovery workflows.
 
 Packages, groups, summaries, breadcrumbs, and back targets support keyboard focus. Enter or Space activates the focused target, while Escape clears search before backing out of package or group focus. Hover and keyboard focus share route preview behavior, and related-node previews isolate the route to the selected package. Missing registry relationships are diagnostic nodes, and dense relation sets use adaptive wrapping plus a `+N` overflow summary instead of overlapping cards.
 
