@@ -152,6 +152,8 @@ namespace Deucarian.PackageInstaller.Editor
                 var summary = details.Section(package.DisplayName);
                 summary.Note(() => package.Description);
                 summary.ReadOnly("installer-selected-id", "Package", () => package.PackageId);
+                summary.Action("installer-develop", "Develop locally", () => DeucarianEditorNavigation.Open(View.Workspace.Root,
+                    Development.DevelopmentPage.ToolId, package.PackageId), () => owner._packageDetectionService.IsInstalled(package.PackageId));
                 summary.ReadOnly("installer-selected-version", "Installed", () => owner._packageDetectionService.TryGetInstalledPackage(package.PackageId, out var info) ? info.version : "Not installed");
                 summary.ReadOnly("installer-selected-channel", "Channel", () => PackageChannelPolicy.GetChannelLabel(owner.GetSelectedChannel(package)));
                 summary.ReadOnly("installer-selected-update", "Update", () => GetUpdateStatusText(owner._packageUpdateCheckService.GetStatus(package, owner.GetSelectedChannel(package))));

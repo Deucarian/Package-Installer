@@ -24,6 +24,12 @@ namespace Deucarian.PackageInstaller.Editor
                 10, createPage: PackageInstallerWindow.CreatePage, navigationPath: "Packages"));
             DeucarianControlCenterRegistry.RegisterCardProvider(
                 new PackageInstallerCardProvider());
+            DeucarianToolRegistry.Register(new DeucarianToolDescriptor(
+                Development.DevelopmentPage.ToolId, "Package development", "Develop an installed package in a validated local repository.",
+                DeucarianControlCenterArea.BuildAndPackages,
+                () => DeucarianEditorNavigation.Open(null, Development.DevelopmentPage.ToolId),
+                PackageId, "git-branch", new[] { "git", "clone", "staging", "commit", "push", "local source" }, 20,
+                createPage: () => new Development.DevelopmentPage(), navigationPath: "Packages"));
         }
     }
 

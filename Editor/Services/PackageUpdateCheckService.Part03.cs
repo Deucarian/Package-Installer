@@ -149,6 +149,8 @@ namespace Deucarian.PackageInstaller.Editor
             try
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                if (item.ManagedDevelopment)
+                    return Development.DevelopmentPackageProtection.Status(item.PackageDefinition, item.Channel);
                 PackageInstallSourceType sourceType = item.SourceType == PackageInstallSourceType.Unknown
                     ? PackageInstallSourceUtility.Detect(
                         string.Empty,

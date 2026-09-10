@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.4.0] - 2026-09-10
+
+### Added
+
+- Package development page in Control Center using Editor 1.8 shared review controls.
+- Validated package repository cloning/reuse, selected staging with Unity metadata, feature branches, commit, fetch, push and compact history.
+- Recoverable local-source sessions with exact original-reference restoration, checkout claims, concurrent-edit checks and compilation/source status.
+- Fail-closed boundaries for consumer repositories, linked paths, unexpected index changes and managed package source updates.
+- Disposable Git, source-session and shared-page regression coverage.
+
 ## [1.3.4] - 2026-09-10
 
 ### Fixed
