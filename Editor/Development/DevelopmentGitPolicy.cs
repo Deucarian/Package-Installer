@@ -32,8 +32,14 @@ namespace Deucarian.PackageInstaller.Editor.Development
         }
         public static string RequireRelativePath(string path)
         {
-            if (string.IsNullOrEmpty(path) || path.Length > 4096 || Path.IsPathRooted(path) || path.Contains("\\") ||
-                path.Any(char.IsControl) || path.Contains(":")) throw new DevelopmentGitException("Unsupported or unsafe file path.");
+            if (string.IsNullOrEmpty(path) || path.Length > 4096 || path.Any(char.IsControl) ||
+                path.Contains("\\") || path.Contains(":")) throw new DevelopmentGitException("Unsupported or unsafe file path.");
+            // Mono validates characters inside IsPathRooted; do not leak its platform-specific exception.
+            try
+            {
+                if (Path.IsPathRooted(path)) throw new DevelopmentGitException("Unsupported or unsafe file path.");
+            }
+            catch (ArgumentException) { throw new DevelopmentGitException("Unsupported or unsafe file path."); }
             string[] parts = path.Split('/');
             if (parts.Any(p => p.Length == 0 || p == "." || p == ".." ||
                 p.Equals(".git", StringComparison.OrdinalIgnoreCase) || p.Equals("PackageCache", StringComparison.OrdinalIgnoreCase) ||
