@@ -1,4 +1,6 @@
 using System;
+using System.Collections;
+using UnityEngine.TestTools;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -20,8 +22,10 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         private DevelopmentRepository _repository;
         private DevelopmentGitWorkspace _workspace;
 
-        [SetUp]
-        public async Task SetUp()
+        [UnitySetUp]
+        public IEnumerator SetUp() => DevelopmentAsyncTest.Run(SetUpAsync);
+
+        public async Task SetUpAsync()
         {
             string storage = Environment.GetEnvironmentVariable("DEUCARIAN_TEST_ARTIFACT_ROOT");
             if (string.IsNullOrEmpty(storage)) storage = Path.DirectorySeparatorChar == '\\'
@@ -52,8 +56,10 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         }
 
         // Fixtures are retained beneath the explicit validation root as inspectable evidence.
-        [Test]
-        public async Task SelectedStageCommitPushPreservesUnselectedConsumerAndWorkingFiles()
+        [UnityTest]
+        public IEnumerator SelectedStageCommitPushPreservesUnselectedConsumerAndWorkingFiles() => DevelopmentAsyncTest.Run(SelectedStageCommitPushPreservesUnselectedConsumerAndWorkingFilesAsync);
+
+        public async Task SelectedStageCommitPushPreservesUnselectedConsumerAndWorkingFilesAsync()
         {
             await Git(_consumer, "init", "--initial-branch=develop");
             await ConfigureIdentity(_consumer);
@@ -74,8 +80,10 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual(consumerIndex, await Git(_consumer, "ls-files", "--stage", "-z"));
         }
 
-        [Test]
-        public async Task PreStagedWorkAndExternalIndexDriftFailClosed()
+        [UnityTest]
+        public IEnumerator PreStagedWorkAndExternalIndexDriftFailClosed() => DevelopmentAsyncTest.Run(PreStagedWorkAndExternalIndexDriftFailClosedAsync);
+
+        public async Task PreStagedWorkAndExternalIndexDriftFailClosedAsync()
         {
             Write("Other.txt", "pre-staged\n");
             await Git(_repositoryPath, "add", "Other.txt");
@@ -83,25 +91,29 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             DevelopmentGitWorkspace attached = new DevelopmentGitWorkspace(_repository, _repositories, _runner, _files);
             DevelopmentGitSnapshot state = await attached.RefreshAsync(_token);
             Assert.IsNotEmpty(state.StagingBlockReason);
-            Assert.ThrowsAsync<DevelopmentGitException>(async () => await attached.CommitAsync("Do not absorb", _token));
-            Assert.ThrowsAsync<DevelopmentGitException>(async () => await _workspace.CommitAsync("Drift blocked", _token));
+            await DevelopmentAsyncTest.ThrowsAsync<DevelopmentGitException>(async () => await attached.CommitAsync("Do not absorb", _token));
+            await DevelopmentAsyncTest.ThrowsAsync<DevelopmentGitException>(async () => await _workspace.CommitAsync("Drift blocked", _token));
             Assert.AreEqual(existing, await Git(_repositoryPath, "ls-files", "--stage", "-z"));
         }
 
-        [Test]
-        public async Task StageRequiresReviewedMetaAndDetectsConcurrentFileEdit()
+        [UnityTest]
+        public IEnumerator StageRequiresReviewedMetaAndDetectsConcurrentFileEdit() => DevelopmentAsyncTest.Run(StageRequiresReviewedMetaAndDetectsConcurrentFileEditAsync);
+
+        public async Task StageRequiresReviewedMetaAndDetectsConcurrentFileEditAsync()
         {
             Write("Asset.txt", "first\n"); Write("Asset.txt.meta", "guid: pair\n");
             var state = await _workspace.RefreshAsync(_token);
-            Assert.ThrowsAsync<DevelopmentGitException>(async () => await _workspace.StageAsync(new[] { "Asset.txt" }, _token));
+            await DevelopmentAsyncTest.ThrowsAsync<DevelopmentGitException>(async () => await _workspace.StageAsync(new[] { "Asset.txt" }, _token));
             Write("Asset.txt", "concurrent\n");
-            Assert.ThrowsAsync<DevelopmentGitException>(async () => await _workspace.StageAsync(
+            await DevelopmentAsyncTest.ThrowsAsync<DevelopmentGitException>(async () => await _workspace.StageAsync(
                 DevelopmentGitPolicy.IncludeMeta(new[] { "Asset.txt" }, state.Files), _token));
             Assert.AreEqual("", (await Git(_repositoryPath, "diff", "--cached", "--name-only")).Trim());
         }
 
-        [Test]
-        public async Task NewBinaryDeletedAndLiteralPathsRoundTripThroughIndex()
+        [UnityTest]
+        public IEnumerator NewBinaryDeletedAndLiteralPathsRoundTripThroughIndex() => DevelopmentAsyncTest.Run(NewBinaryDeletedAndLiteralPathsRoundTripThroughIndexAsync);
+
+        public async Task NewBinaryDeletedAndLiteralPathsRoundTripThroughIndexAsync()
         {
             string literal = "a [1] $(literal); & name.txt";
             Write(literal, "literal\n");
@@ -117,40 +129,46 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.IsFalse(File.Exists(Path.Combine(_repositoryPath, "Other.txt")));
         }
 
-        [Test]
-        public async Task DirtyCheckoutNeverSwitchesBranchAndSharedBranchesCannotCommit()
+        [UnityTest]
+        public IEnumerator DirtyCheckoutNeverSwitchesBranchAndSharedBranchesCannotCommit() => DevelopmentAsyncTest.Run(DirtyCheckoutNeverSwitchesBranchAndSharedBranchesCannotCommitAsync);
+
+        public async Task DirtyCheckoutNeverSwitchesBranchAndSharedBranchesCannotCommitAsync()
         {
             Write("Other.txt", "dirty\n");
             await _workspace.RefreshAsync(_token);
-            Assert.ThrowsAsync<DevelopmentGitException>(async () => await _workspace.CreateBranchAsync("feature/new", _token));
+            await DevelopmentAsyncTest.ThrowsAsync<DevelopmentGitException>(async () => await _workspace.CreateBranchAsync("feature/new", _token));
             Assert.AreEqual("feature/fixture", (await Git(_repositoryPath, "branch", "--show-current")).Trim());
             Write("Other.txt", "other\n");
             await Git(_repositoryPath, "checkout", "develop");
             await _workspace.RefreshAsync(_token);
-            Assert.ThrowsAsync<DevelopmentGitException>(async () => await _workspace.CommitAsync("Protected", _token));
+            await DevelopmentAsyncTest.ThrowsAsync<DevelopmentGitException>(async () => await _workspace.CommitAsync("Protected", _token));
             await _workspace.CreateBranchAsync("codex/explicit", _token);
             CollectionAssert.Contains(await _workspace.GetBranchesAsync(_token), "codex/explicit");
         }
 
-        [Test]
-        public async Task ConsumerParentWorktreesIdentityAndCacheAreRejected()
+        [UnityTest]
+        public IEnumerator ConsumerParentWorktreesIdentityAndCacheAreRejected() => DevelopmentAsyncTest.Run(ConsumerParentWorktreesIdentityAndCacheAreRejectedAsync);
+
+        public async Task ConsumerParentWorktreesIdentityAndCacheAreRejectedAsync()
         {
-            Assert.ThrowsAsync<DevelopmentGitException>(async () => await _repositories.PreviewAsync(PackageId,
+            await DevelopmentAsyncTest.ThrowsAsync<DevelopmentGitException>(async () => await _repositories.PreviewAsync(PackageId,
                 _repositoryPath, _repositoryPath, _remotePath, _token));
             string nestedConsumer = Path.Combine(_repositoryPath, "ConsumerChild");
             Directory.CreateDirectory(nestedConsumer);
-            Assert.ThrowsAsync<DevelopmentGitException>(async () => await _repositories.PreviewAsync(PackageId,
+            await DevelopmentAsyncTest.ThrowsAsync<DevelopmentGitException>(async () => await _repositories.PreviewAsync(PackageId,
                 _repositoryPath, nestedConsumer, _remotePath, _token));
-            Assert.ThrowsAsync<DevelopmentGitException>(async () => await _repositories.PreviewAsync("com.deucarian.wrong",
+            await DevelopmentAsyncTest.ThrowsAsync<DevelopmentGitException>(async () => await _repositories.PreviewAsync("com.deucarian.wrong",
                 _repositoryPath, _consumer, _remotePath, _token));
             string consumerWorktree = Path.Combine(_root, "ConsumerWorktree");
             await Git(_repositoryPath, "worktree", "add", "-b", "feature/consumer", consumerWorktree);
-            Assert.ThrowsAsync<DevelopmentGitException>(async () => await _repositories.PreviewAsync(PackageId,
+            await DevelopmentAsyncTest.ThrowsAsync<DevelopmentGitException>(async () => await _repositories.PreviewAsync(PackageId,
                 _repositoryPath, consumerWorktree, _remotePath, _token));
         }
 
-        [Test]
-        public async Task LinkedPackageWorktreeIsValidButRemoteDriftBlocksMutation()
+        [UnityTest]
+        public IEnumerator LinkedPackageWorktreeIsValidButRemoteDriftBlocksMutation() => DevelopmentAsyncTest.Run(LinkedPackageWorktreeIsValidButRemoteDriftBlocksMutationAsync);
+
+        public async Task LinkedPackageWorktreeIsValidButRemoteDriftBlocksMutationAsync()
         {
             string linked = Path.Combine(_root, "LinkedPackage");
             await Git(_repositoryPath, "worktree", "add", "-b", "feature/linked", linked);
@@ -158,22 +176,26 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.IsTrue(preview.HasLinkedWorktrees);
             Assert.IsFalse(DevelopmentGitPolicy.SamePath(preview.CommonDirectory, preview.GitDirectory));
             await Git(_repositoryPath, "remote", "set-url", "--push", "origin", Path.Combine(_root, "Unexpected.git"));
-            Assert.ThrowsAsync<DevelopmentGitException>(async () => await _workspace.PushAsync(_token));
+            await DevelopmentAsyncTest.ThrowsAsync<DevelopmentGitException>(async () => await _workspace.PushAsync(_token));
         }
 
-        [Test]
-        public async Task CloneUsesDevelopAndNeverOverwritesExistingDestination()
+        [UnityTest]
+        public IEnumerator CloneUsesDevelopAndNeverOverwritesExistingDestination() => DevelopmentAsyncTest.Run(CloneUsesDevelopAndNeverOverwritesExistingDestinationAsync);
+
+        public async Task CloneUsesDevelopAndNeverOverwritesExistingDestinationAsync()
         {
             string destination = Path.Combine(_root, "ClonedPackage");
             DevelopmentRepository clone = await _repositories.CloneAsync(PackageId, _remotePath, destination, _consumer, _token);
             Assert.AreEqual("develop", clone.Branch);
-            Assert.ThrowsAsync<DevelopmentGitException>(async () => await _repositories.CloneAsync(PackageId,
+            await DevelopmentAsyncTest.ThrowsAsync<DevelopmentGitException>(async () => await _repositories.CloneAsync(PackageId,
                 _remotePath, destination, _consumer, _token));
             Assert.IsTrue(File.Exists(Path.Combine(destination, "package.json")));
         }
 
-        [Test]
-        public async Task PushRejectionAndAheadBehindAreTruthfulWithoutForce()
+        [UnityTest]
+        public IEnumerator PushRejectionAndAheadBehindAreTruthfulWithoutForce() => DevelopmentAsyncTest.Run(PushRejectionAndAheadBehindAreTruthfulWithoutForceAsync);
+
+        public async Task PushRejectionAndAheadBehindAreTruthfulWithoutForceAsync()
         {
             await _workspace.PushAsync(_token);
             string peer = Path.Combine(_root, "Peer");
@@ -184,32 +206,36 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Write("Other.txt", "local divergence\n");
             await _workspace.RefreshAsync(_token); await _workspace.StageAsync(new[] { "Other.txt" }, _token);
             await _workspace.CommitAsync("Local divergence", _token);
-            Assert.ThrowsAsync<DevelopmentGitException>(async () => await _workspace.PushAsync(_token));
+            await DevelopmentAsyncTest.ThrowsAsync<DevelopmentGitException>(async () => await _workspace.PushAsync(_token));
             await _workspace.FetchAsync(_token);
             var state = await _workspace.RefreshAsync(_token);
             Assert.AreEqual(1, state.Ahead); Assert.AreEqual(1, state.Behind);
-            Assert.ThrowsAsync<DevelopmentGitException>(async () => await _workspace.PushAsync(_token));
+            await DevelopmentAsyncTest.ThrowsAsync<DevelopmentGitException>(async () => await _workspace.PushAsync(_token));
             Assert.AreEqual((await Git(peer, "rev-parse", "HEAD")).Trim(),
                 (await Git(_remotePath, "rev-parse", "feature/fixture")).Trim());
         }
 
-        [Test]
-        public async Task CancellationAndOperationLockPreventMutation()
+        [UnityTest]
+        public IEnumerator CancellationAndOperationLockPreventMutation() => DevelopmentAsyncTest.Run(CancellationAndOperationLockPreventMutationAsync);
+
+        public async Task CancellationAndOperationLockPreventMutationAsync()
         {
             using (CancellationTokenSource cancelled = new CancellationTokenSource())
             {
                 cancelled.Cancel();
-                Assert.ThrowsAsync(Is.InstanceOf<OperationCanceledException>(), async () =>
+                await DevelopmentAsyncTest.ThrowsAsync<OperationCanceledException>( async () =>
                     await _workspace.CreateBranchAsync("feature/cancelled", cancelled.Token));
             }
             using (_files.Lock(_repository.CommonDirectory, ".deucarian-development-operation.lock"))
-                Assert.ThrowsAsync<DevelopmentGitException>(async () => await _workspace.CreateBranchAsync("feature/locked", _token));
+                await DevelopmentAsyncTest.ThrowsAsync<DevelopmentGitException>(async () => await _workspace.CreateBranchAsync("feature/locked", _token));
             StringAssert.DoesNotContain("feature/cancelled", await Git(_repositoryPath, "branch", "--list"));
             await Task.CompletedTask;
         }
 
-        [Test]
-        public async Task RawGitErrorsAndOutputOverflowAreNotExposed()
+        [UnityTest]
+        public IEnumerator RawGitErrorsAndOutputOverflowAreNotExposed() => DevelopmentAsyncTest.Run(RawGitErrorsAndOutputOverflowAreNotExposedAsync);
+
+        public async Task RawGitErrorsAndOutputOverflowAreNotExposedAsync()
         {
             DevelopmentGitResult overflow = await new DevelopmentGitProcessRunner(120000, 1).RunAsync(
                 _repositoryPath, new[] { "log", "--oneline" }, _token);
@@ -220,22 +246,26 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             StringAssert.DoesNotContain("private-data", invalid.Failure);
         }
 
-        [Test]
-        public async Task TagOrTrackedPathCannotMasqueradeAsSelectedBranch()
+        [UnityTest]
+        public IEnumerator TagOrTrackedPathCannotMasqueradeAsSelectedBranch() => DevelopmentAsyncTest.Run(TagOrTrackedPathCannotMasqueradeAsSelectedBranchAsync);
+
+        public async Task TagOrTrackedPathCannotMasqueradeAsSelectedBranchAsync()
         {
             await Git(_repositoryPath, "tag", "feature/tag-only");
-            Assert.ThrowsAsync<DevelopmentGitException>(async () => await _workspace.SelectBranchAsync("feature/tag-only", _token));
+            await DevelopmentAsyncTest.ThrowsAsync<DevelopmentGitException>(async () => await _workspace.SelectBranchAsync("feature/tag-only", _token));
             Directory.CreateDirectory(Path.Combine(_repositoryPath, "feature"));
             Write("feature/path-only", "tracked file\n");
             await _workspace.RefreshAsync(_token);
             await _workspace.StageAsync(new[] { "feature/path-only" }, _token);
             await _workspace.CommitAsync("Fixture path", _token);
-            Assert.ThrowsAsync<DevelopmentGitException>(async () => await _workspace.SelectBranchAsync("feature/path-only", _token));
+            await DevelopmentAsyncTest.ThrowsAsync<DevelopmentGitException>(async () => await _workspace.SelectBranchAsync("feature/path-only", _token));
             Assert.AreEqual("feature/fixture", (await Git(_repositoryPath, "branch", "--show-current")).Trim());
         }
 
-        [Test]
-        public async Task NormalHookStagingDriftIsDetectedAndPushRemainsBlocked()
+        [UnityTest]
+        public IEnumerator NormalHookStagingDriftIsDetectedAndPushRemainsBlocked() => DevelopmentAsyncTest.Run(NormalHookStagingDriftIsDetectedAndPushRemainsBlockedAsync);
+
+        public async Task NormalHookStagingDriftIsDetectedAndPushRemainsBlockedAsync()
         {
             string hooks = Path.Combine(_root, "fixture-hooks");
             Directory.CreateDirectory(hooks);
@@ -252,14 +282,16 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             await _workspace.RefreshAsync(_token);
             await _workspace.StageAsync(new[] { "Asset.txt" }, _token);
             string priorHead = await Git(_repositoryPath, "rev-parse", "HEAD");
-            Assert.ThrowsAsync<DevelopmentGitException>(async () => await _workspace.CommitAsync("Normal hook runs", _token));
+            await DevelopmentAsyncTest.ThrowsAsync<DevelopmentGitException>(async () => await _workspace.CommitAsync("Normal hook runs", _token));
             Assert.AreNotEqual(priorHead, await Git(_repositoryPath, "rev-parse", "HEAD"));
             await _workspace.RefreshAsync(_token);
-            Assert.ThrowsAsync<DevelopmentGitException>(async () => await _workspace.PushAsync(_token));
+            await DevelopmentAsyncTest.ThrowsAsync<DevelopmentGitException>(async () => await _workspace.PushAsync(_token));
         }
 
-        [Test]
-        public async Task RenameAndMetaOriginsAreExplicitlyStagedAndPreserved()
+        [UnityTest]
+        public IEnumerator RenameAndMetaOriginsAreExplicitlyStagedAndPreserved() => DevelopmentAsyncTest.Run(RenameAndMetaOriginsAreExplicitlyStagedAndPreservedAsync);
+
+        public async Task RenameAndMetaOriginsAreExplicitlyStagedAndPreservedAsync()
         {
             File.Move(Path.Combine(_repositoryPath, "Asset.txt"), Path.Combine(_repositoryPath, "Moved.txt"));
             File.Move(Path.Combine(_repositoryPath, "Asset.txt.meta"), Path.Combine(_repositoryPath, "Moved.txt.meta"));
@@ -273,18 +305,20 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.IsFalse(File.Exists(Path.Combine(_repositoryPath, "Asset.txt.meta")));
         }
 
-        [Test]
-        public async Task UnselectedIndexChangeDuringStageIsPreservedAndNotAdopted()
+        [UnityTest]
+        public IEnumerator UnselectedIndexChangeDuringStageIsPreservedAndNotAdopted() => DevelopmentAsyncTest.Run(UnselectedIndexChangeDuringStageIsPreservedAndNotAdoptedAsync);
+
+        public async Task UnselectedIndexChangeDuringStageIsPreservedAndNotAdoptedAsync()
         {
             Write("Asset.txt", "selected\n"); Write("Other.txt", "external staged change\n");
             var race = new StageRaceRunner(_runner);
             var workspace = new DevelopmentGitWorkspace(_repository, _repositories, race, _files);
             await workspace.RefreshAsync(_token);
-            Assert.ThrowsAsync<DevelopmentGitException>(async () => await workspace.StageAsync(new[] { "Asset.txt" }, _token));
+            await DevelopmentAsyncTest.ThrowsAsync<DevelopmentGitException>(async () => await workspace.StageAsync(new[] { "Asset.txt" }, _token));
             var state = await workspace.RefreshAsync(_token);
             Assert.IsNotEmpty(state.StagingBlockReason);
             StringAssert.Contains("Other.txt", await Git(_repositoryPath, "diff", "--cached", "--name-only"));
-            Assert.ThrowsAsync<DevelopmentGitException>(async () => await workspace.CommitAsync("Do not absorb external work", _token));
+            await DevelopmentAsyncTest.ThrowsAsync<DevelopmentGitException>(async () => await workspace.CommitAsync("Do not absorb external work", _token));
         }
 
         private sealed class StageRaceRunner : IDevelopmentGitRunner

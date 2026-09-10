@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -6,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Deucarian.PackageInstaller.Editor.Development;
 using NUnit.Framework;
+using UnityEngine.TestTools;
 
 namespace Deucarian.PackageInstaller.Editor.Tests
 {
@@ -61,8 +63,10 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual(0, _resolver.Calls);
         }
 
-        [Test]
-        public async Task SuccessfulConnectionIsJournaledBeforeWriteAndRemainsProtected()
+        [UnityTest]
+        public IEnumerator SuccessfulConnectionIsJournaledBeforeWriteAndRemainsProtected() => DevelopmentAsyncTest.Run(SuccessfulConnectionIsJournaledBeforeWriteAndRemainsProtectedAsync);
+
+        public async Task SuccessfulConnectionIsJournaledBeforeWriteAndRemainsProtectedAsync()
         {
             _files.BeforeWrite = () => Assert.AreEqual(DevelopmentSourceState.Connecting, _store.Record.State);
             PackageDevelopmentSession session = await _service.ConnectAsync(Preview(), CancellationToken.None);
@@ -74,39 +78,47 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             StringAssert.Contains("no reported compilation errors", session.Message);
         }
 
-        [Test]
-        public void ManifestChangedSincePreviewRequiresFreshReview()
+        [UnityTest]
+        public IEnumerator ManifestChangedSincePreviewRequiresFreshReview() => DevelopmentAsyncTest.Run(ManifestChangedSincePreviewRequiresFreshReviewAsync);
+
+        public async Task ManifestChangedSincePreviewRequiresFreshReviewAsync()
         {
             PackageDevelopmentSession session = Preview();
             _files.Bytes = Encoding.UTF8.GetBytes("{\"dependencies\":{},\"testables\":[]}");
-            Assert.ThrowsAsync<InvalidOperationException>(async () => await _service.ConnectAsync(session, CancellationToken.None));
+            await DevelopmentAsyncTest.ThrowsAsync<InvalidOperationException>(async () => await _service.ConnectAsync(session, CancellationToken.None));
             Assert.AreEqual(0, _claims.Acquires);
             Assert.AreEqual(0, _files.Writes);
         }
 
-        [Test]
-        public void ConcurrentManifestWriteKeepsRecoveryRecordAndDoesNotOverwrite()
+        [UnityTest]
+        public IEnumerator ConcurrentManifestWriteKeepsRecoveryRecordAndDoesNotOverwrite() => DevelopmentAsyncTest.Run(ConcurrentManifestWriteKeepsRecoveryRecordAndDoesNotOverwriteAsync);
+
+        public async Task ConcurrentManifestWriteKeepsRecoveryRecordAndDoesNotOverwriteAsync()
         {
             _files.BeforeWrite = () => _files.Bytes = Encoding.UTF8.GetBytes("{\"dependencies\":{\"com.example.concurrent\":\"1\"}}");
-            Assert.ThrowsAsync<InvalidOperationException>(async () => await _service.ConnectAsync(Preview(), CancellationToken.None));
+            await DevelopmentAsyncTest.ThrowsAsync<InvalidOperationException>(async () => await _service.ConnectAsync(Preview(), CancellationToken.None));
             Assert.IsTrue(_service.IsManaged(Package));
             Assert.AreEqual(DevelopmentSourceState.Attention, _store.Record.State);
             Assert.AreEqual(0, _files.Writes);
             Assert.AreEqual("1", new SourceManifestEdit(_files.Bytes).GetReference("com.example.concurrent"));
         }
 
-        [Test]
-        public void CancelBeforeConnectMakesNoChanges()
+        [UnityTest]
+        public IEnumerator CancelBeforeConnectMakesNoChanges() => DevelopmentAsyncTest.Run(CancelBeforeConnectMakesNoChangesAsync);
+
+        public async Task CancelBeforeConnectMakesNoChangesAsync()
         {
             var token = new CancellationToken(true);
-            Assert.ThrowsAsync(Is.InstanceOf<OperationCanceledException>(), async () => await _service.ConnectAsync(Preview(), token));
+            await DevelopmentAsyncTest.ThrowsAsync<OperationCanceledException>(async () => await _service.ConnectAsync(Preview(), token));
             Assert.AreEqual(0, _claims.Acquires);
             Assert.AreEqual(0, _files.Writes);
             Assert.IsEmpty(_store.LoadAll());
         }
 
-        [Test]
-        public async Task CancelAfterManifestWriteLetsResolverSettleAndReportsRealConnectedState()
+        [UnityTest]
+        public IEnumerator CancelAfterManifestWriteLetsResolverSettleAndReportsRealConnectedState() => DevelopmentAsyncTest.Run(CancelAfterManifestWriteLetsResolverSettleAndReportsRealConnectedStateAsync);
+
+        public async Task CancelAfterManifestWriteLetsResolverSettleAndReportsRealConnectedStateAsync()
         {
             using (var cancel = new CancellationTokenSource())
             {
@@ -124,20 +136,24 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             }
         }
 
-        [Test]
-        public async Task ConcurrentOperationIsBlockedUntilResolverSettles()
+        [UnityTest]
+        public IEnumerator ConcurrentOperationIsBlockedUntilResolverSettles() => DevelopmentAsyncTest.Run(ConcurrentOperationIsBlockedUntilResolverSettlesAsync);
+
+        public async Task ConcurrentOperationIsBlockedUntilResolverSettlesAsync()
         {
             var pending = new TaskCompletionSource<DevelopmentSourceResolution>();
             _resolver.Pending = pending.Task;
             Task<PackageDevelopmentSession> connection = _service.ConnectAsync(Preview(), CancellationToken.None);
-            Assert.ThrowsAsync<InvalidOperationException>(async () => await _service.RestoreAsync(Package, CancellationToken.None));
+            await DevelopmentAsyncTest.ThrowsAsync<InvalidOperationException>(async () => await _service.RestoreAsync(Package, CancellationToken.None));
             pending.SetResult(new DevelopmentSourceResolution(DevelopmentResolutionState.Ready, "ready"));
             await connection;
             Assert.IsFalse(_files.Locked);
         }
 
-        [Test]
-        public async Task ResolutionFailureDoesNotClaimSuccessOrReleaseProtection()
+        [UnityTest]
+        public IEnumerator ResolutionFailureDoesNotClaimSuccessOrReleaseProtection() => DevelopmentAsyncTest.Run(ResolutionFailureDoesNotClaimSuccessOrReleaseProtectionAsync);
+
+        public async Task ResolutionFailureDoesNotClaimSuccessOrReleaseProtectionAsync()
         {
             _resolver.Result = new DevelopmentSourceResolution(DevelopmentResolutionState.Failed, "Compilation needs repair.");
             PackageDevelopmentSession session = await _service.ConnectAsync(Preview(), CancellationToken.None);
@@ -146,8 +162,10 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual(0, _claims.Releases);
         }
 
-        [Test]
-        public async Task ReloadRecoveryRecognizesAlreadyWrittenLocalManifestWithoutRewritingIt()
+        [UnityTest]
+        public IEnumerator ReloadRecoveryRecognizesAlreadyWrittenLocalManifestWithoutRewritingIt() => DevelopmentAsyncTest.Run(ReloadRecoveryRecognizesAlreadyWrittenLocalManifestWithoutRewritingItAsync);
+
+        public async Task ReloadRecoveryRecognizesAlreadyWrittenLocalManifestWithoutRewritingItAsync()
         {
             _resolver.Result = new DevelopmentSourceResolution(DevelopmentResolutionState.Pending, "reload");
             await _service.ConnectAsync(Preview(), CancellationToken.None);
@@ -157,8 +175,10 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual(1, _files.Writes);
         }
 
-        [Test]
-        public async Task RestoreDirectReferenceRoundTripsExactBytesAndKeepsLocalWork()
+        [UnityTest]
+        public IEnumerator RestoreDirectReferenceRoundTripsExactBytesAndKeepsLocalWork() => DevelopmentAsyncTest.Run(RestoreDirectReferenceRoundTripsExactBytesAndKeepsLocalWorkAsync);
+
+        public async Task RestoreDirectReferenceRoundTripsExactBytesAndKeepsLocalWorkAsync()
         {
             byte[] original = (byte[])_files.Bytes.Clone();
             await _service.ConnectAsync(Preview(), CancellationToken.None);
@@ -172,8 +192,10 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual(Original, _resolver.Last.OriginalReference);
         }
 
-        [Test]
-        public async Task RestoreTransitiveDependencyRemovesOnlyTemporaryDirectReference()
+        [UnityTest]
+        public IEnumerator RestoreTransitiveDependencyRemovesOnlyTemporaryDirectReference() => DevelopmentAsyncTest.Run(RestoreTransitiveDependencyRemovesOnlyTemporaryDirectReferenceAsync);
+
+        public async Task RestoreTransitiveDependencyRemovesOnlyTemporaryDirectReferenceAsync()
         {
             _files.Bytes = Encoding.UTF8.GetBytes("{\"dependencies\":{\"com.example.parent\":\"1\"}}\r\n");
             byte[] original = (byte[])_files.Bytes.Clone();
@@ -184,8 +206,10 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual(Original, _resolver.Last.OriginalReference);
         }
 
-        [Test]
-        public async Task InterruptedRestoreRecoversOriginalManifestAfterRestart()
+        [UnityTest]
+        public IEnumerator InterruptedRestoreRecoversOriginalManifestAfterRestart() => DevelopmentAsyncTest.Run(InterruptedRestoreRecoversOriginalManifestAfterRestartAsync);
+
+        public async Task InterruptedRestoreRecoversOriginalManifestAfterRestartAsync()
         {
             await _service.ConnectAsync(Preview(), CancellationToken.None);
             _resolver.Result = new DevelopmentSourceResolution(DevelopmentResolutionState.Pending, "restart");
@@ -197,8 +221,10 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual(2, _files.Writes);
         }
 
-        [Test]
-        public async Task RecoveryDoesNotOverwriteAnExternallySelectedSource()
+        [UnityTest]
+        public IEnumerator RecoveryDoesNotOverwriteAnExternallySelectedSource() => DevelopmentAsyncTest.Run(RecoveryDoesNotOverwriteAnExternallySelectedSourceAsync);
+
+        public async Task RecoveryDoesNotOverwriteAnExternallySelectedSourceAsync()
         {
             await _service.ConnectAsync(Preview(), CancellationToken.None);
             _files.Bytes = Encoding.UTF8.GetBytes("{\"dependencies\":{\"" + Package + "\":\"9\"}}");
@@ -208,17 +234,21 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual("9", new SourceManifestEdit(_files.Bytes).GetReference(Package));
         }
 
-        [Test]
-        public void ClaimOwnedByAnotherProjectPreventsConnection()
+        [UnityTest]
+        public IEnumerator ClaimOwnedByAnotherProjectPreventsConnection() => DevelopmentAsyncTest.Run(ClaimOwnedByAnotherProjectPreventsConnectionAsync);
+
+        public async Task ClaimOwnedByAnotherProjectPreventsConnectionAsync()
         {
             _claims.Reject = true;
-            Assert.ThrowsAsync<InvalidOperationException>(async () => await _service.ConnectAsync(Preview(), CancellationToken.None));
+            await DevelopmentAsyncTest.ThrowsAsync<InvalidOperationException>(async () => await _service.ConnectAsync(Preview(), CancellationToken.None));
             Assert.AreEqual(0, _files.Writes);
             Assert.IsEmpty(_store.LoadAll());
         }
 
-        [Test]
-        public async Task ManifestChangeDuringResolveIsDetectedBeforeSuccess()
+        [UnityTest]
+        public IEnumerator ManifestChangeDuringResolveIsDetectedBeforeSuccess() => DevelopmentAsyncTest.Run(ManifestChangeDuringResolveIsDetectedBeforeSuccessAsync);
+
+        public async Task ManifestChangeDuringResolveIsDetectedBeforeSuccessAsync()
         {
             var pending = new TaskCompletionSource<DevelopmentSourceResolution>();
             _resolver.Pending = pending.Task;

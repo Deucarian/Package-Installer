@@ -1,4 +1,6 @@
 using System;
+using System.Collections;
+using UnityEngine.TestTools;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -11,8 +13,10 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 {
     internal sealed class DevelopmentGitBoundaryTests
     {
-        [Test]
-        public async Task MissingGitAndAuthenticationFailuresAreSanitizedAndPropagated()
+        [UnityTest]
+        public IEnumerator MissingGitAndAuthenticationFailuresAreSanitizedAndPropagated() => DevelopmentAsyncTest.Run(MissingGitAndAuthenticationFailuresAreSanitizedAndPropagatedAsync);
+
+        public async Task MissingGitAndAuthenticationFailuresAreSanitizedAndPropagatedAsync()
         {
             DevelopmentGitResult missing = await new FailureRunner("Git is unavailable.").RunAsync(
                 Path.GetFullPath("."), new[] { "status" }, CancellationToken.None);
@@ -21,8 +25,10 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             StringAssert.Contains("credential manager", Assert.Throws<DevelopmentGitException>(() => auth.RequireSuccess()).Message);
         }
 
-        [Test]
-        public async Task RunnerHonorsTimeoutAndCancellationWhileGitIsRunning()
+        [UnityTest]
+        public IEnumerator RunnerHonorsTimeoutAndCancellationWhileGitIsRunning() => DevelopmentAsyncTest.Run(RunnerHonorsTimeoutAndCancellationWhileGitIsRunningAsync);
+
+        public async Task RunnerHonorsTimeoutAndCancellationWhileGitIsRunningAsync()
         {
             string root = NewFixtureDirectory();
             string[] args = { "-c", "alias.fixture-wait=!sleep 2", "fixture-wait" };
@@ -32,19 +38,21 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             using (CancellationTokenSource cancellation = new CancellationTokenSource())
             {
                 cancellation.CancelAfter(75);
-                Assert.ThrowsAsync(Is.InstanceOf<OperationCanceledException>(), async () =>
+                await DevelopmentAsyncTest.ThrowsAsync<OperationCanceledException>( async () =>
                     await new DevelopmentGitProcessRunner().RunAsync(root, args, cancellation.Token));
             }
         }
 
-        [Test]
-        public async Task CancellationTerminatesDescendantsBeforeTheyCanWriteLater()
+        [UnityTest]
+        public IEnumerator CancellationTerminatesDescendantsBeforeTheyCanWriteLater() => DevelopmentAsyncTest.Run(CancellationTerminatesDescendantsBeforeTheyCanWriteLaterAsync);
+
+        public async Task CancellationTerminatesDescendantsBeforeTheyCanWriteLaterAsync()
         {
             string root = NewFixtureDirectory();
             using (CancellationTokenSource cancellation = new CancellationTokenSource())
             {
                 cancellation.CancelAfter(150);
-                Assert.ThrowsAsync(Is.InstanceOf<OperationCanceledException>(), async () =>
+                await DevelopmentAsyncTest.ThrowsAsync<OperationCanceledException>( async () =>
                     await new DevelopmentGitProcessRunner().RunAsync(root,
                         new[] { "-c", "alias.fixture-child=!sh -c '(sleep 1; echo escaped > escaped.txt) & wait'", "fixture-child" }, cancellation.Token));
             }
@@ -52,8 +60,10 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.IsFalse(File.Exists(Path.Combine(root, "escaped.txt")), "A Git descendant survived cancellation and wrote after the operation released.");
         }
 
-        [Test]
-        public async Task InheritedGitDirectoryCannotRedirectTheProcessToConsumer()
+        [UnityTest]
+        public IEnumerator InheritedGitDirectoryCannotRedirectTheProcessToConsumer() => DevelopmentAsyncTest.Run(InheritedGitDirectoryCannotRedirectTheProcessToConsumerAsync);
+
+        public async Task InheritedGitDirectoryCannotRedirectTheProcessToConsumerAsync()
         {
             string root = NewFixtureDirectory();
             string package = Path.Combine(root, "Package"), consumer = Path.Combine(root, "Consumer");
