@@ -1288,8 +1288,9 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual(1, resolverCalls);
         }
 
-        [Test]
-        public void FullUpdateCheckDeduplicatesNormalizedRemoteAndReferenceAliases()
+        [TestCase(false)]
+        [TestCase(true)]
+        public void FullUpdateCheckDeduplicatesNormalizedRemoteAndReferenceAliases(bool reverseOrder)
         {
             int gitCalls = 0;
             int manifestCalls = 0;
@@ -1331,7 +1332,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 InstallRegistryPackagesForTests(detectionService, first, second);
 
                 updateCheckService.CheckForUpdates(
-                    new[] { first, second },
+                    reverseOrder ? new[] { second, first } : new[] { first, second },
                     _ => PackageChannel.Stable);
                 PumpFullCheckUntilIdle(updateCheckService);
             }
@@ -1341,10 +1342,12 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             StringAssert.Contains("\"main\"", probedGitArguments);
             StringAssert.DoesNotContain("refs/heads/main", probedGitArguments);
             StringAssert.DoesNotContain("origin/main", probedGitArguments);
-            Assert.AreEqual(
-                "https://raw.githubusercontent.com/deucarian/shared/" +
-                StableRevision + "/Packages/Shared/package.json",
-                requestedManifestUrl);
+            // Both aliases identify the same GitHub repository. The first worker keeps
+            // its original owner/repository casing; the revision and package path stay exact.
+            CollectionAssert.Contains(new[] {
+                "https://raw.githubusercontent.com/deucarian/shared/" + StableRevision + "/Packages/Shared/package.json",
+                "https://raw.githubusercontent.com/Deucarian/Shared/" + StableRevision + "/Packages/Shared/package.json"
+            }, requestedManifestUrl);
         }
 
         [Test]
