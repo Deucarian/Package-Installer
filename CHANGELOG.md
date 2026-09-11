@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.6.11] - 2026-09-11
+
+- Refresh the fallback dependency catalog for definition authoring and align the embedded installer identity.
+- Align declared package dependencies with the definition-authoring development wave.
+
+
 ## [1.6.10] - 2026-09-11
 
 - Align the fallback catalog with typed-key Editor adapters and host diagnostics.
