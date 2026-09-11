@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.6.3] - 2026-09-11
+
+- Put channel and package search before the local tabs, with compact preferences and a dedicated update summary.
+- Match the reference package-list/detail proportions and remove duplicated branding from row titles.
+- Hide the idle operation footer while keeping operation activity, cancellation and failures accessible.
+
 ## [1.6.2] - 2026-09-11
 
 - Use Editor 1.10.2 for corrected scaled focus and shared context geometry.

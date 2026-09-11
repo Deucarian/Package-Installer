@@ -15,7 +15,7 @@ namespace Deucarian.PackageInstaller.Editor
             private readonly PackageInstallerWindow owner;
             private readonly DeucarianEditorChoiceBar tabs;
             private readonly DeucarianEditorWorkspaceForm scope;
-            private readonly DeucarianEditorWorkspaceForm options;
+            private readonly TextField packageSearch;
             private readonly Button check;
             private readonly Button refresh;
             private readonly Button update;
@@ -41,9 +41,12 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 this.owner = owner;
                 View = new DeucarianEditorCollectionWorkspace(owner.PageRoot, Application.productName,
-                    "Package Installer", "Find and manage your Deucarian packages.",
-                    DeucarianToolIds.PackageInstaller, "Search packages…");
+                    "Packages", "Add and update what your project needs.",
+                    DeucarianToolIds.PackageInstaller, "Find a tool…");
                 View.UsePanels(); View.Collection.AddToClassList("dw-package-collection");
+                View.Workspace.SetScopeBeforeTabs();
+                View.Workspace.Scope.AddToClassList("dw-package-filters");
+                DeucarianEditorWorkspaceNavigation.Populate(View.Workspace, DeucarianToolIds.PackageInstaller);
                 tabs = new DeucarianEditorChoiceBar(new[] { "Installed", "Browse", "Updates", "Dependency graph" },
                     owner._viewMode == InstallerViewMode.EcosystemGraph ? 3 : 0, true);
                 tabs.Changed += value => {
@@ -52,28 +55,28 @@ namespace Deucarian.PackageInstaller.Editor
                     Refresh();
                 };
                 View.Workspace.Tabs.Add(tabs);
-                refresh = DeucarianEditorWorkspaceControls.Button("Refresh catalog", owner.RefreshPackages);
+                refresh = DeucarianEditorWorkspaceControls.IconButton("Refresh", DeucarianEditorIconIds.Refresh, owner.RefreshPackages);
                 check = DeucarianEditorWorkspaceControls.Button("Check updates", () => owner.HandleActionButton(PackageInstallerActionKind.CheckUpdates));
                 update = DeucarianEditorWorkspaceControls.Button("Review updates", () => owner.HandleActionButton(PackageInstallerActionKind.UpdateAll), true);
                 View.Workspace.PageActions.Add(refresh);
-                View.Workspace.PageActions.Add(check);
+                var preferences = DeucarianEditorWorkspaceControls.IconButton(string.Empty, DeucarianEditorIconIds.Settings, ShowPreferences);
+                preferences.tooltip = "Update preferences and activity";
+                View.Workspace.PageActions.Add(preferences);
                 updateBar = DeucarianEditorWorkspaceControls.Region("installer-updates", "dw-update-bar");
                 updateSummary = DeucarianEditorWorkspaceControls.Label("", "dw-label");
                 updateBar.Add(DeucarianEditorWorkspaceControls.Icon(DeucarianEditorIconIds.Update));
-                updateBar.Add(updateSummary); updateBar.Add(update); View.Workspace.Content.Add(updateBar);
+                updateBar.Add(updateSummary); updateBar.Add(check); updateBar.Add(update); View.Workspace.Content.Add(updateBar);
                 scope = new DeucarianEditorWorkspaceForm(View.Workspace.Scope);
                 scope.EnabledWhen(() => !owner.IsAnyOperationBusy());
-                scope.Choice("installer-project-channel", "Project channel",
+                scope.Choice("installer-project-channel", "Channel",
                     new[] { "Use package sources", "Stable · main", "Development · develop" },
                     () => { var selection = owner.GetGlobalProjectChannelSelection(); return !selection.HasValue ? 0 : selection.Channel == PackageChannel.Development ? 2 : 1; },
                     value => { if (value == 0) owner.ClearGlobalChannelOverrideFromPopup(); else owner.SetGlobalChannelOverride(value == 2 ? PackageChannel.Development : PackageChannel.Stable); Refresh(); });
                 status = DeucarianEditorWorkspaceControls.Label("", "dw-muted");
                 View.Workspace.FooterLeading.text = "Loading packages…";
-                options = new DeucarianEditorWorkspaceForm(View.Workspace.Scope).Section("Update preferences", true);
-                options.Toggle("installer-check-start", "Check on Editor start", () => PackageUpdateCheckPreferences.CheckOnEditorStart, value => PackageUpdateCheckPreferences.CheckOnEditorStart = value);
-                options.Toggle("installer-check-open", "Check when opened", () => PackageUpdateCheckPreferences.CheckOnWindowOpen, value => PackageUpdateCheckPreferences.CheckOnWindowOpen = value);
-                options.Root.Add(status);
-                View.Workspace.SearchField.RegisterValueChangedCallback(evt => { search = evt.newValue ?? ""; Refresh(); });
+                packageSearch = DeucarianEditorSearchField.Create("Find a package…", value => { search = value ?? ""; Refresh(); });
+                packageSearch.name = "installer-package-search";
+                View.Workspace.Scope.Add(packageSearch);
                 View.SetItems(Array.Empty<DeucarianEditorCollectionItem>(), null, "Loading packages…");
                 loading = DeucarianEditorWorkspaceControls.Panel("installer-loading");
                 loading.AddToClassList("dw-loading-panel");
@@ -91,10 +94,8 @@ namespace Deucarian.PackageInstaller.Editor
                 if (owner._packageDetectionService == null || owner._packageUpdateCheckService == null) return;
                 bool graph = owner._viewMode == InstallerViewMode.EcosystemGraph;
                 tabs.SetValueWithoutNotify(graph ? 3 : category);
-                View.Workspace.SearchField.SetEnabled(!graph);
-                View.Workspace.SetSearchPrompt(graph ? "Use graph search below" : "Search packages…");
+                packageSearch.SetEnabled(!graph);
                 scope.Refresh();
-                options.Refresh();
                 bool busy = owner.IsAnyOperationBusy();
                 refresh.SetEnabled(!busy);
                 bool hasUpdates = owner.GetPackagesWithUpdates().Length > 0;
@@ -104,12 +105,27 @@ namespace Deucarian.PackageInstaller.Editor
                 check.SetEnabled(checkState.Enabled);
                 update.SetEnabled(!busy && hasUpdates);
                 DeucarianEditorWorkspaceControls.Show(update, hasUpdates);
-                DeucarianEditorWorkspaceControls.Show(updateBar, hasUpdates && !graph);
-                updateSummary.text = owner.GetPackagesWithUpdates().Length + " updates available";
+                DeucarianEditorWorkspaceControls.Show(updateBar, !graph && !IsLoading);
+                updateSummary.text = hasUpdates ? owner.GetPackagesWithUpdates().Length + " updates available"
+                    : owner._packageUpdateCheckService.LastCheckedUtc.HasValue ? "No updates found" : "Check for package updates";
                 status.text = PackageRegistryProvider.StatusMessage + " · Updates: " +
                     (owner._packageUpdateCheckService.LastCheckedUtc.HasValue
                         ? owner._packageUpdateCheckService.LastCheckedUtc.Value.ToLocalTime().ToString("HH:mm:ss") : "not checked");
+                updateSummary.tooltip = status.text;
                 rowsDirty = true;
+            }
+
+            private void ShowPreferences()
+            {
+                var menu = new GenericMenu();
+                menu.AddItem(new GUIContent("Check on Editor start"), PackageUpdateCheckPreferences.CheckOnEditorStart,
+                    () => PackageUpdateCheckPreferences.CheckOnEditorStart = !PackageUpdateCheckPreferences.CheckOnEditorStart);
+                menu.AddItem(new GUIContent("Check when opened"), PackageUpdateCheckPreferences.CheckOnWindowOpen,
+                    () => PackageUpdateCheckPreferences.CheckOnWindowOpen = !PackageUpdateCheckPreferences.CheckOnWindowOpen);
+                menu.AddSeparator(string.Empty);
+                menu.AddItem(new GUIContent("Operation activity"), owner._operationDetailsExpanded,
+                    () => owner.SetOperationDetailsExpanded(!owner._operationDetailsExpanded));
+                menu.ShowAsContext();
             }
 
             private void PumpRows()
@@ -159,7 +175,7 @@ namespace Deucarian.PackageInstaller.Editor
                     if ((package.DisplayName + " " + package.PackageId + " " + package.Description).IndexOf(search, StringComparison.OrdinalIgnoreCase) < 0) continue;
                     if (package.PackageId == owner._selectedPackageId) selected = package;
                     string version = owner._packageDetectionService.TryGetInstalledPackage(package.PackageId, out var info) ? info.version : "Not installed";
-                    rows.Add(new DeucarianEditorCollectionItem(package.PackageId, package.DisplayName, version,
+                    rows.Add(new DeucarianEditorCollectionItem(package.PackageId, PackageTitle(package), version,
                         installed ? owner.GetPackageVisualStatus(package).Label : package.Category,
                         () => { owner.SelectDefinition(package, package.IsIntegration ? SelectionKind.Integration : SelectionKind.Package, false); Refresh(); },
                         iconId: package.IsIntegration ? DeucarianEditorIconIds.Integration : DeucarianEditorIconIds.Package));
@@ -188,6 +204,7 @@ namespace Deucarian.PackageInstaller.Editor
                 loadingLabel.text = message;
                 DeucarianEditorWorkspaceControls.Show(loading, value && !graph);
                 DeucarianEditorWorkspaceControls.Show(View.Collection, !value && !graph);
+                DeucarianEditorWorkspaceControls.Show(updateBar, !value && !graph);
             }
             public void Dispose()
             {

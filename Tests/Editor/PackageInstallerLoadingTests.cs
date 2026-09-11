@@ -103,6 +103,10 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 PackageRegistryProvider.CaptureCachedStatus();
                 Assert.AreSame(load, loader.LocalLoad, "Status contributors must not fall back to a synchronous read.");
                 Assert.NotNull(root.Q("workspace-navigation"));
+                var search = root.Q<TextField>("installer-package-search");
+                Assert.NotNull(search, "Package filtering must not replace global tool navigation.");
+                Assert.That(search.parent.ClassListContains("dw-package-filters"), Is.True);
+                Assert.That(root.Query<TextField>().ToList().Count, Is.GreaterThanOrEqualTo(2));
                 Assert.That(root.Query<Label>().ToList().Any(label => label.text.Contains("Loading")), Is.True);
                 Assert.IsNull(Field(window, "_graphView"), "Opening the list must not construct the graph.");
                 Assert.IsFalse(root.Q("installer-project-channel").enabledInHierarchy);
@@ -147,7 +151,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 for (int i = 0; i < 100 && rows.childCount == 0; i++) Invoke(workspace, "PumpRows");
                 Assert.Greater(rows.childCount, 0);
                 Assert.Less(rows.childCount, total);
-                root.Q<TextField>().SetValueWithoutNotify(string.Empty);
+                root.Q<TextField>("installer-package-search").SetValueWithoutNotify(string.Empty);
                 workspace.GetType().GetField("search", Private).SetValue(workspace, "no-such-package-async-test");
                 Invoke(workspace, "Refresh");
                 for (int i = 0; i < 100; i++) Invoke(workspace, "PumpRows");
