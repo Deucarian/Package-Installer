@@ -15,6 +15,7 @@ namespace Deucarian.PackageInstaller.Editor
             private readonly PackageInstallerWindow owner;
             private readonly DeucarianEditorChoiceBar tabs;
             private readonly DeucarianEditorWorkspaceForm scope;
+            private readonly DeucarianEditorWorkspaceForm options;
             private readonly Button check;
             private readonly Button refresh;
             private readonly Button update;
@@ -24,6 +25,7 @@ namespace Deucarian.PackageInstaller.Editor
             private string detailsId;
             private InstallerPackageDetails details;
             private string detailsRevision;
+            private PackageDefinition detailsDefinition;
             private readonly VisualElement loading;
             private readonly VisualElement loadingIcon;
             private readonly Label loadingLabel;
@@ -33,6 +35,7 @@ namespace Deucarian.PackageInstaller.Editor
             private IEnumerator<object> pendingRows;
             private bool rowsDirty;
             internal DeucarianEditorCollectionWorkspace View { get; }
+            internal bool IsLoading { get; private set; }
 
             internal InstallerWorkspace(PackageInstallerWindow owner)
             {
@@ -66,7 +69,7 @@ namespace Deucarian.PackageInstaller.Editor
                     value => { if (value == 0) owner.ClearGlobalChannelOverrideFromPopup(); else owner.SetGlobalChannelOverride(value == 2 ? PackageChannel.Development : PackageChannel.Stable); Refresh(); });
                 status = DeucarianEditorWorkspaceControls.Label("", "dw-muted");
                 View.Workspace.FooterLeading.text = "Loading packages…";
-                var options = new DeucarianEditorWorkspaceForm(View.Workspace.Scope).Section("Update preferences", true);
+                options = new DeucarianEditorWorkspaceForm(View.Workspace.Scope).Section("Update preferences", true);
                 options.Toggle("installer-check-start", "Check on Editor start", () => PackageUpdateCheckPreferences.CheckOnEditorStart, value => PackageUpdateCheckPreferences.CheckOnEditorStart = value);
                 options.Toggle("installer-check-open", "Check when opened", () => PackageUpdateCheckPreferences.CheckOnWindowOpen, value => PackageUpdateCheckPreferences.CheckOnWindowOpen = value);
                 options.Root.Add(status);
@@ -91,6 +94,7 @@ namespace Deucarian.PackageInstaller.Editor
                 View.Workspace.SearchField.SetEnabled(!graph);
                 View.Workspace.SetSearchPrompt(graph ? "Use graph search below" : "Search packages…");
                 scope.Refresh();
+                options.Refresh();
                 bool busy = owner.IsAnyOperationBusy();
                 refresh.SetEnabled(!busy);
                 bool hasUpdates = owner.GetPackagesWithUpdates().Length > 0;
@@ -137,6 +141,11 @@ namespace Deucarian.PackageInstaller.Editor
                         PackageRegistryProvider.IsLocalLoading ? "Loading package catalog…" :
                         owner._packageDetectionService.IsRefreshing ? "Finding installed packages…" :
                         "Installed packages could not be loaded. Use Refresh catalog to retry.");
+                    if (!waiting)
+                    {
+                        detailsId = null; detailsDefinition = null; detailsRevision = null;
+                        details = new InstallerPackageDetails(owner, View.Details, null);
+                    }
                     yield break;
                 }
                 var rows = new List<DeucarianEditorCollectionItem>();
@@ -163,9 +172,10 @@ namespace Deucarian.PackageInstaller.Editor
                     : "No packages match this view.");
                 string selectedId = selected?.PackageId;
                 string revision = selected != null && owner._packageDetectionService.TryGetInstalledPackage(selected.PackageId, out var selectedInfo) ? selectedInfo.version + "|" + selectedInfo.resolvedPath : "";
-                if (details == null || detailsId != selectedId || detailsRevision != revision)
+                revision += "|" + string.Join(",", owner._packageDetectionService.InstalledPackageIds.OrderBy(id => id));
+                if (details == null || detailsId != selectedId || detailsRevision != revision || !ReferenceEquals(detailsDefinition, selected))
                 {
-                    detailsId = selectedId; detailsRevision = revision;
+                    detailsId = selectedId; detailsRevision = revision; detailsDefinition = selected;
                     details = new InstallerPackageDetails(owner, View.Details, selected);
                 }
                 details.Refresh();
@@ -173,6 +183,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             private void SetLoading(bool value, string message)
             {
+                IsLoading = value;
                 bool graph = owner._viewMode == InstallerViewMode.EcosystemGraph;
                 loadingLabel.text = message;
                 DeucarianEditorWorkspaceControls.Show(loading, value && !graph);

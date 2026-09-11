@@ -93,7 +93,7 @@ namespace Deucarian.PackageInstaller.Editor.Development
         {
             selection.Clear(); inspected = null;
             workflow.SelectPackage(package);
-            forms.RepositoryPath = workflow.Session?.RepositoryRoot ?? "";
+            forms.SelectPackage(workflow.Session?.RepositoryRoot);
             Refresh();
         }
 

@@ -20,7 +20,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (_listViewContainerHost != null)
             {
-                _listViewContainerHost.style.display = graphMode ? DisplayStyle.None : DisplayStyle.Flex;
+                _listViewContainerHost.style.display = graphMode || (_workspace?.IsLoading ?? false) ? DisplayStyle.None : DisplayStyle.Flex;
             }
 
             if (_graphModeContainer != null)

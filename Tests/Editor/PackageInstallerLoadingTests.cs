@@ -106,6 +106,10 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 Assert.That(root.Query<Label>().ToList().Any(label => label.text.Contains("Loading")), Is.True);
                 Assert.IsNull(Field(window, "_graphView"), "Opening the list must not construct the graph.");
                 Assert.IsFalse(root.Q("installer-project-channel").enabledInHierarchy);
+                Invoke(window, "UpdateViewVisibility");
+                Assert.That(root.Q("installer-loading").style.display.value, Is.EqualTo(DisplayStyle.Flex));
+                Assert.That(root.Q("workspace-collection").style.display.value, Is.EqualTo(DisplayStyle.None),
+                    "Visibility refresh must not reveal the empty list behind the loading state.");
                 Invoke(window, "RefreshGraphView", "loading regression");
                 Assert.IsNull(Field(window, "_cachedPackageGraph"));
                 UnityEngine.Object.DestroyImmediate(window);
@@ -135,7 +139,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 var detection = (PackageDetectionService)Field(window, "_packageDetectionService");
                 typeof(PackageDetectionService).GetProperty("HasSuccessfulRefresh").SetValue(detection, true);
                 var workspace = Field(window, "_workspace");
-                workspace.GetType().GetField("category", Private).SetValue(workspace, 2);
+                workspace.GetType().GetField("category", Private).SetValue(workspace, 1);
                 Invoke(workspace, "Refresh");
                 var rows = root.Q("workspace-collection-rows");
                 Assert.AreEqual(0, rows.childCount, "Refresh should schedule rows, not build them inline.");

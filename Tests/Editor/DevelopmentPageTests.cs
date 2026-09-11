@@ -71,6 +71,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 draft.value = "Retain this package commit draft";
                 Assert.That(workflow.Managed, Is.True);
                 Assert.That(page.Root.Q<TextField>("development-path").value, Is.EqualTo(Checkout));
+                Assert.That(page.Root.Q<TextField>("development-path").isReadOnly, Is.True,
+                    "A connected checkout cannot be silently changed by editing the folder field.");
                 page.Deactivate();
                 page.Activate(null);
                 Assert.That(workflow.Package.Id, Is.EqualTo(packages[1].Id));

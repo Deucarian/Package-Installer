@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.1] - 2026-09-11
+
+- Keep loading presentation intact during visibility refreshes and discard stale details after discovery failure.
+- Refresh package details when catalog definitions or installed dependents change.
+- Keep connected checkout paths read-only, package selection first, and restore review scoped to its selected package.
+- Use Editor 1.10.1 for scale-safe context layout and update tab-order regression expectations.
+
 ## [1.6.0] - 2026-09-11
 
 - Replace package details and graph context forms with Editor-owned native controls, preserving dependency planning, source channels, confirmations, samples and recovery.
