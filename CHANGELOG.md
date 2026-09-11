@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.6.8] - 2026-09-11
+
+- Require Editor 1.10.7 so the shared numeric controls compile on Unity 2021.3 as well as Unity 6.
+
 ## [1.6.7] - 2026-09-11
 
 - Verify the real Workspace, Changes and History sections at narrow, normal and enlarged scales, including their visible primary actions.
