@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.6.10] - 2026-09-11
+
+- Align the fallback catalog with typed-key Editor adapters and host diagnostics.
+- Fit expanded dependency groups within the graph canvas and validate every package focus at all presentation sizes.
+
 ## [1.6.9] - 2026-09-11
 
 - Require Editor 1.10.8, including both numeric and appearance-dropdown Unity 2021.3 compatibility fixes.

@@ -229,6 +229,7 @@
       "stableUrl": "https://github.com/Deucarian/API.git#main",
       "developmentUrl": "https://github.com/Deucarian/API.git#develop",
       "dependencies": [
+        "com.deucarian.diagnostics",
         "com.deucarian.editor",
         "com.deucarian.logging"
       ],
@@ -330,6 +331,7 @@
       "developmentUrl": "https://github.com/Deucarian/Object-Loading.git#develop",
       "dependencies": [
         "com.deucarian.common",
+        "com.deucarian.editor",
         "com.deucarian.logging"
       ],
       "recommendedWith": [
@@ -383,7 +385,10 @@
       "iconKey": "circle-dollar-sign",
       "stableUrl": "https://github.com/Deucarian/Monetization.git#main",
       "developmentUrl": "https://github.com/Deucarian/Monetization.git#develop",
-      "dependencies": [],
+      "dependencies": [
+        "com.deucarian.diagnostics",
+        "com.deucarian.editor"
+      ],
       "groupId": "runtime-services"
     },
     {
@@ -618,6 +623,7 @@
       "developmentUrl": "https://github.com/Deucarian/Camera-Navigation.git#develop",
       "dependencies": [
         "com.deucarian.common",
+        "com.deucarian.diagnostics",
         "com.deucarian.editor"
       ],
       "groupId": "world-xr-interaction"
@@ -1122,7 +1128,9 @@
       "iconKey": "gamepad-2",
       "stableUrl": "https://github.com/Deucarian/Gameplay-Foundation.git#main",
       "developmentUrl": "https://github.com/Deucarian/Gameplay-Foundation.git#develop",
-      "dependencies": []
+      "dependencies": [
+        "com.deucarian.editor"
+      ]
     },
     {
       "id": "com.deucarian.persistence",
@@ -1137,7 +1145,9 @@
       "iconKey": "save",
       "stableUrl": "https://github.com/Deucarian/Persistence.git#main",
       "developmentUrl": "https://github.com/Deucarian/Persistence.git#develop",
-      "dependencies": []
+      "dependencies": [
+        "com.deucarian.editor"
+      ]
     },
     {
       "id": "com.deucarian.progression",
@@ -1153,6 +1163,7 @@
       "stableUrl": "https://github.com/Deucarian/Progression.git#main",
       "developmentUrl": "https://github.com/Deucarian/Progression.git#develop",
       "dependencies": [
+        "com.deucarian.editor",
         "com.deucarian.gameplay-foundation"
       ]
     },
@@ -1170,11 +1181,12 @@
       "stableUrl": "https://github.com/Deucarian/Run-Upgrades.git#main",
       "developmentUrl": "https://github.com/Deucarian/Run-Upgrades.git#develop",
       "dependencies": [
-        "com.deucarian.gameplay-foundation",
         "com.deucarian.attacks",
-        "com.deucarian.weapon-systems",
+        "com.deucarian.diagnostics",
         "com.deucarian.editor",
-        "com.deucarian.game-content-authoring"
+        "com.deucarian.game-content-authoring",
+        "com.deucarian.gameplay-foundation",
+        "com.deucarian.weapon-systems"
       ]
     },
     {
@@ -1209,6 +1221,8 @@
       "stableUrl": "https://github.com/Deucarian/Combat.git#main",
       "developmentUrl": "https://github.com/Deucarian/Combat.git#develop",
       "dependencies": [
+        "com.deucarian.diagnostics",
+        "com.deucarian.editor",
         "com.deucarian.gameplay-foundation"
       ]
     },
@@ -1226,6 +1240,8 @@
       "stableUrl": "https://github.com/Deucarian/Encounters.git#main",
       "developmentUrl": "https://github.com/Deucarian/Encounters.git#develop",
       "dependencies": [
+        "com.deucarian.diagnostics",
+        "com.deucarian.editor",
         "com.deucarian.gameplay-foundation"
       ]
     },
@@ -1244,6 +1260,7 @@
       "developmentUrl": "https://github.com/Deucarian/World-Spawning.git#develop",
       "dependencies": [
         "com.deucarian.common",
+        "com.deucarian.editor",
         "com.deucarian.gameplay-foundation"
       ]
     },
@@ -1261,6 +1278,7 @@
       "stableUrl": "https://github.com/Deucarian/World-Navigation.git#main",
       "developmentUrl": "https://github.com/Deucarian/World-Navigation.git#develop",
       "dependencies": [
+        "com.deucarian.diagnostics",
         "com.deucarian.gameplay-foundation",
         "com.deucarian.world-spawning"
       ]
@@ -1279,10 +1297,11 @@
       "stableUrl": "https://github.com/Deucarian/Attacks.git#main",
       "developmentUrl": "https://github.com/Deucarian/Attacks.git#develop",
       "dependencies": [
-        "com.deucarian.gameplay-foundation",
         "com.deucarian.combat",
+        "com.deucarian.diagnostics",
         "com.deucarian.editor",
-        "com.deucarian.game-content-authoring"
+        "com.deucarian.game-content-authoring",
+        "com.deucarian.gameplay-foundation"
       ]
     },
     {
@@ -1299,9 +1318,10 @@
       "stableUrl": "https://github.com/Deucarian/Projectiles.git#main",
       "developmentUrl": "https://github.com/Deucarian/Projectiles.git#develop",
       "dependencies": [
-        "com.deucarian.gameplay-foundation",
-        "com.deucarian.combat",
         "com.deucarian.attacks",
+        "com.deucarian.combat",
+        "com.deucarian.editor",
+        "com.deucarian.gameplay-foundation",
         "com.deucarian.world-navigation",
         "com.deucarian.world-spawning"
       ]
@@ -1320,11 +1340,12 @@
       "stableUrl": "https://github.com/Deucarian/Weapon-Systems.git#main",
       "developmentUrl": "https://github.com/Deucarian/Weapon-Systems.git#develop",
       "dependencies": [
-        "com.deucarian.gameplay-foundation",
         "com.deucarian.attacks",
+        "com.deucarian.diagnostics",
         "com.deucarian.editor",
-        "com.deucarian.projectiles",
-        "com.deucarian.game-content-authoring"
+        "com.deucarian.game-content-authoring",
+        "com.deucarian.gameplay-foundation",
+        "com.deucarian.projectiles"
       ]
     },
     {

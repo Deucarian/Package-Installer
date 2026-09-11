@@ -12,8 +12,12 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         private const float ExpectedCategoryGap = 48f;
         private const float Tolerance = 0.1f;
 
-        [Test]
-        public void BundledCatalog_EveryPackageFocusHasNonOverlappingMeasuredBounds()
+        [TestCase(PackageGraphNodePresentationLevel.Full)]
+        [TestCase(PackageGraphNodePresentationLevel.Compact)]
+        [TestCase(PackageGraphNodePresentationLevel.Micro)]
+        [TestCase(PackageGraphNodePresentationLevel.IconOnly)]
+        public void BundledCatalog_EveryPackageFocusHasNonOverlappingMeasuredBounds(
+            PackageGraphNodePresentationLevel presentation)
         {
             PackageGraphModel graph = CreateBundledGraph();
             PackageGraphLayout layoutEngine = new PackageGraphLayout();
@@ -28,7 +32,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                     focusNode.PackageId,
                     string.Empty,
                     Vector2.zero,
-                    PackageGraphNodePresentationLevel.Full);
+                    presentation);
                 Rect[] visibleBounds = layout.NodeRects.Values
                     .Concat(layout.GroupNodes.Select(groupNode => groupNode.Rect))
                     .Concat(layout.OverflowSummaries.Select(summary => summary.Rect))
