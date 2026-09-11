@@ -19,3 +19,5 @@ jobs:
     uses: Deucarian/Package-Registry/.github/workflows/deucarian-catalog-projection-check.yml@develop
     with:
       catalog: installer
+      # Registry #150 reviews the typed API dependency graph for this feature branch.
+      registry-ref: ${{ github.event_name == 'pull_request' && github.head_ref == 'feature/typed-api-catalogs' && '665a5a61f7fecc074499fda38d4f10d990539e5d' || 'develop' }}
