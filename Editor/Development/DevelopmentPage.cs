@@ -49,11 +49,17 @@ namespace Deucarian.PackageInstaller.Editor.Development
             Root = new VisualElement();
             workspace = new DeucarianEditorWorkspace(Root, Application.productName);
             workspace.Title.text = "Package development";
-            workspace.Subtitle.text = "Edit a package here. Review and share its changes.";
+            workspace.Subtitle.text = "Edit locally. Test in Unity. Share your changes.";
             DeucarianEditorWorkspaceNavigation.Populate(workspace, ToolId);
             review = new DeucarianEditorChangeReview(workspace.Content);
             forms = new DevelopmentPageForms(workflow, workspace, review, StageSelected);
-            review.UseSections(workspace.Tabs);
+            review.UseSections(workspace.Tabs, integratedPublishing: true);
+            review.SectionChanged += value =>
+            {
+                forms.SelectSection(value);
+                if (value == 2 && !workflow.Busy && workflow.Repository != null && string.IsNullOrEmpty(workflow.History))
+                    _ = workflow.HistoryAsync();
+            };
             workspace.FooterLeading.text = "Loading installed packages…";
             workflow.Changed += Refresh;
             beginCatalogLoad();
@@ -88,7 +94,7 @@ namespace Deucarian.PackageInstaller.Editor.Development
         {
             selection.Clear(); inspected = null;
             workflow.SelectPackage(package);
-            forms.RepositoryPath = workflow.Session?.RepositoryRoot ?? "";
+            forms.SelectPackage(workflow.Session?.RepositoryRoot);
             Refresh();
         }
 
@@ -97,7 +103,7 @@ namespace Deucarian.PackageInstaller.Editor.Development
             if (disposed) return;
             forms.Refresh();
             workspace.FooterLeading.text = workflow.Status;
-            workspace.FooterTrailing.text = workflow.Managed ? "Local development · original source saved" : "Package repository scope only";
+            workspace.FooterTrailing.text = string.Empty;
             var rows = new List<DeucarianEditorChangeItem>();
             foreach (var file in workflow.Snapshot?.Files ?? Array.Empty<DevelopmentChangedFile>())
             {
@@ -115,7 +121,13 @@ namespace Deucarian.PackageInstaller.Editor.Development
                 inspected != null && snapshot != null && snapshot.Files.Any(f => f.Path == inspected.Substring(2) && f.IsBinary));
             review.SetHistory(string.IsNullOrWhiteSpace(workflow.History) ? Array.Empty<DeucarianEditorHistoryItem>() :
                 workflow.History.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
-                    .Select((line, i) => new DeucarianEditorHistoryItem(i.ToString(), line, "")).ToArray());
+                    .Select(HistoryItem).ToArray());
+        }
+
+        private static DeucarianEditorHistoryItem HistoryItem(string line, int index)
+        {
+            int separator = line.IndexOf(' ');
+            return new DeucarianEditorHistoryItem(index.ToString(), separator < 0 ? line : line.Substring(separator + 1), separator < 0 ? "" : line.Substring(0, separator));
         }
 
         private void AddRow(List<DeucarianEditorChangeItem> rows, DevelopmentChangedFile file, bool staged)
@@ -126,7 +138,7 @@ namespace Deucarian.PackageInstaller.Editor.Development
                 staged, rows.Count < DeucarianEditorChangeReview.MaximumVisibleChanges && selection.Contains(id),
                 () => { if (workflow.Busy) return; inspected = id; _ = workflow.InspectDiffAsync(file.Path, staged); },
                 value => { if (value) selection.Add(id); else selection.Remove(id); },
-                string.IsNullOrEmpty(file.OriginalPath) ? "Asset and .meta changes are paired when staging." : "Renamed from " + file.OriginalPath,
+                string.IsNullOrEmpty(file.OriginalPath) ? null : "Renamed from " + file.OriginalPath,
                 !workflow.Busy && workflow.Connected && !file.IsConflict));
         }
 

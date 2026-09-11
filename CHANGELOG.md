@@ -1,5 +1,56 @@
 # Changelog
 
+## [1.6.9] - 2026-09-11
+
+- Require Editor 1.10.8, including both numeric and appearance-dropdown Unity 2021.3 compatibility fixes.
+
+## [1.6.8] - 2026-09-11
+
+- Require Editor 1.10.7 so the shared numeric controls compile on Unity 2021.3 as well as Unity 6.
+
+## [1.6.7] - 2026-09-11
+
+- Verify the real Workspace, Changes and History sections at narrow, normal and enlarged scales, including their visible primary actions.
+
+## [1.6.6] - 2026-09-11
+
+- Match the non-blocking loading state to the skeleton-row reference, with an indeterminate activity track and available Control Center navigation.
+- Refine Package Development workspace, change review, history and source-restoration compositions through Editor 1.10.6.
+- Preserve all explicit source/Git confirmation boundaries; source restoration retains the checkout and uncommitted files.
+
+## [1.6.5] - 2026-09-11
+
+- Require Editor 1.10.5 for final responsive navigation, disabled-button contrast and consistent native Inspector/sample presentation.
+
+## [1.6.4] - 2026-09-11
+
+- Keep successful background checks quiet and place active/error details inside the page, not over the scale dock.
+- Use native shared activity buttons and the catalog's semantic package icons in the collection and details.
+
+## [1.6.3] - 2026-09-11
+
+- Put channel and package search before the local tabs, with compact preferences and a dedicated update summary.
+- Match the reference package-list/detail proportions and remove duplicated branding from row titles.
+- Hide the idle operation footer while keeping operation activity, cancellation and failures accessible.
+
+## [1.6.2] - 2026-09-11
+
+- Use Editor 1.10.2 for corrected scaled focus and shared context geometry.
+- Verify loading isolation against the visibility-owning container, rather than its retained child list.
+
+## [1.6.1] - 2026-09-11
+
+- Keep loading presentation intact during visibility refreshes and discard stale details after discovery failure.
+- Refresh package details when catalog definitions or installed dependents change.
+- Keep connected checkout paths read-only, package selection first, and restore review scoped to its selected package.
+- Use Editor 1.10.1 for scale-safe context layout and update tab-order regression expectations.
+
+## [1.6.0] - 2026-09-11
+
+- Replace package details and graph context forms with Editor-owned native controls, preserving dependency planning, source channels, confirmations, samples and recovery.
+- Show a loading surface while catalog and installed-package discovery complete; retain bounded incremental row creation.
+- Organize local development into Workspace, Changes and History, with commit controls beside the diff, sharing beside history, and explicit source restoration.
+
 ## [1.5.0] - 2026-09-10
 
 - Organize Package Development into Local source, Changes, Publish and History using shared Editor presentation. Preserve async catalog loading and guarded source/Git operations.

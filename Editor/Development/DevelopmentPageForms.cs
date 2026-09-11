@@ -18,6 +18,17 @@ namespace Deucarian.PackageInstaller.Editor.Development
         private readonly DeucarianEditorWorkspaceForm setup;
         private readonly DeucarianEditorWorkspaceForm branches;
         private readonly Button cancel;
+        private readonly Button connect;
+        private readonly DeucarianEditorSteps steps;
+        private readonly VisualElement restorePanel;
+        private readonly DeucarianEditorWorkspaceForm restoreForm;
+        private readonly DeucarianEditorWorkspaceForm branchScope;
+        private readonly TextField repositoryField;
+        private readonly VisualElement connectActions;
+        private readonly VisualElement connectedActions;
+        private readonly VisualElement workspaceCard;
+        private readonly VisualElement branchField;
+        private bool showRestore;
         private string branch = "feature/package-change";
         private string message = "";
         private string existingBranch = "";
@@ -28,27 +39,50 @@ namespace Deucarian.PackageInstaller.Editor.Development
         {
             this.workflow = workflow; this.workspace = workspace; this.review = review;
             packageForm = new DeucarianEditorWorkspaceForm(workspace.Scope);
-            setup = review.Context.Section("Local source");
-            setup.Note(() => workflow.Session == null ? "A local package reference changes this project's manifest. Restore it before committing project configuration." :
-                "Source state: " + workflow.Session.State + ". " + (workflow.Session.WasDirectDependency ? "Original direct reference saved." : "Temporary direct override of a transitive dependency; finish removes that override."));
-            setup.ReadOnly("development-installed", "Installed revision", () => workflow.Package?.InstalledRevision ?? "Select a package");
-            setup.ReadOnly("development-source", "Installed source", () => workflow.Package?.Source ?? "");
-            setup.ReadOnly("development-original", "Original reference", () => workflow.Session?.OriginalReference ?? "Saved when the repository is inspected");
-            setup.Text("development-path", "Repository folder", () => RepositoryPath, value => RepositoryPath = value);
-            setup.Action("development-browse", "Choose existing checkout…", PickFolder, () => !workflow.Busy && workflow.Package != null);
-            setup.Action("development-inspect", "Inspect existing checkout", () => _ = workflow.InspectAsync(RepositoryPath, false), CanInspect, true);
-            setup.Action("development-clone", "Clone to this new folder", Clone, () => CanInspect() && !workflow.Managed);
-            setup.ReadOnly("development-remote", "Origin", () => workflow.Repository?.RemoteDisplay ?? workflow.Package?.Remote ?? "");
-            setup.ReadOnly("development-verified-path", "Verified repository", () => workflow.Repository?.Root ?? "Not inspected");
+            branchScope = new DeucarianEditorWorkspaceForm(workspace.Scope);
+            branchField = branchScope.ReadOnly("development-scope-branch", "Branch", () => workflow.Snapshot?.Branch ?? workflow.Repository?.Branch ?? "Not connected").parent;
+            var content = DeucarianEditorWorkspaceControls.Region("development-local-source", "dw-local-source");
+            workspaceCard = DeucarianEditorWorkspaceControls.IconPanel("development-workspace-card", DeucarianEditorIconIds.Folder, content);
+            review.Context.Root.Add(workspaceCard);
+            setup = new DeucarianEditorWorkspaceForm(content);
+            content.Add(DeucarianEditorWorkspaceControls.Label("Local source", "dw-section-title"));
+            setup.Note(() => workflow.Connected ? "This project uses your local checkout. Edit the package and test it here." : "Connect a local checkout to edit this package in your project.");
+            repositoryField = setup.Text("development-path", "Local folder", () => RepositoryPath, value => { RepositoryPath = value; Refresh(); });
             setup.ReadOnly("development-branch", "Current branch", () => workflow.Snapshot?.Branch ?? workflow.Repository?.Branch ?? "Not inspected");
-            setup.ReadOnly("development-head", "Repository revision", () => workflow.Snapshot?.Head ?? workflow.Repository?.Head ?? "");
-            setup.Action("development-connect", "Connect local source", Connect,
-                () => !workflow.Busy && workflow.Repository != null && workflow.Snapshot != null &&
-                    workflow.Session?.State == DevelopmentSourceState.Prepared, true);
-            setup.Action("development-recover", "Check source / recover", () => _ = workflow.RecoverAsync(), () => !workflow.Busy && workflow.Managed);
-            setup.Action("development-restore", "Restore original source", Restore, () => !workflow.Busy && workflow.Managed);
+            setup.ReadOnly("development-original", "Original reference", () => workflow.Session?.OriginalReference ?? "Saved when the repository is inspected");
+            setup.ReadOnly("development-source-state", "Status", () => workflow.Connected ? "Local source connected" : workflow.Managed ? workflow.Session.Message : Prepared() ? "Checkout inspected · ready to connect" : "Choose a checkout to continue");
+            steps = new DeucarianEditorSteps("Inspect checkout", "Connect", "Edit and test"); steps.Root.AddToClassList("dw-steps-inline"); content.Add(steps.Root);
+            setup.Note(() => "Only this package will use the local folder.");
+            connect = setup.Action("development-connect", "Inspect checkout", () => { if (Prepared()) Connect(); else if (CanInspect()) _ = workflow.InspectAsync(RepositoryPath, false); },
+                () => !workflow.Connected && (Prepared() || CanInspect()), true);
+            var browse = setup.Action("development-browse", "Choose existing folder", PickFolder, () => !workflow.Busy && workflow.Package != null && !workflow.Managed);
+            var clone = setup.Action("development-clone", "Clone repository…", Clone, () => CanInspect() && !workflow.Managed);
+            connectActions = DeucarianEditorWorkspaceControls.Actions(connect, browse, clone); content.Add(connectActions);
+            var reviewChanges = setup.Action("development-review-changes", "Review changes", () => review.SelectSection(1), () => !workflow.Busy && workflow.Repository != null);
+            var finish = setup.Action("development-show-restore", "Restore original source…", () => { showRestore = true; Refresh(); }, () => !workflow.Busy && workflow.Managed);
+            connectedActions = DeucarianEditorWorkspaceControls.Actions(reviewChanges, finish); content.Add(connectedActions);
+
+            var restoreContent = DeucarianEditorWorkspaceControls.Region(null, "dw-source-recovery");
+            restoreContent.Add(DeucarianEditorWorkspaceControls.Label("Finish local testing", "dw-section-title"));
+            restorePanel = DeucarianEditorWorkspaceControls.IconPanel("development-restore-card", DeucarianEditorIconIds.Undo, restoreContent);
+            review.Context.Root.Add(restorePanel); restoreForm = new DeucarianEditorWorkspaceForm(restoreContent);
+            restoreForm.Note(() => "Return this project to its original package source.");
+            restoreForm.ReadOnly("development-restore-reference", "Project source", () => workflow.Session?.OriginalReference ?? "");
+            restoreForm.ReadOnly("development-kept-checkout", "Local checkout", () => "Kept on disk · " + (workflow.Repository?.Root ?? RepositoryPath));
+            restoreForm.ReadOnly("development-kept-changes", "Uncommitted changes", () => "Kept");
+            restoreForm.Note(() => "Your local edits and commits stay in the checkout.");
+            var keep = restoreForm.Action("development-keep-working", "Keep working locally", () => { showRestore = false; Refresh(); });
+            var restore = restoreForm.Action("development-restore", "Restore original source", Restore, () => !workflow.Busy && workflow.Managed, true);
+            restoreContent.Add(DeucarianEditorWorkspaceControls.Actions(restore, keep));
 
             branches = review.Context.Section("Branch and repository tools", true);
+            branches.ReadOnly("development-installed", "Installed revision", () => workflow.Package?.InstalledRevision ?? "Select a package");
+            branches.ReadOnly("development-source", "Installed source", () => workflow.Package?.Source ?? "");
+            branches.ReadOnly("development-remote", "Origin", () => workflow.Repository?.RemoteDisplay ?? workflow.Package?.Remote ?? "");
+            branches.ReadOnly("development-verified-path", "Verified repository", () => workflow.Repository?.Root ?? "Not inspected");
+            branches.ReadOnly("development-head", "Repository revision", () => workflow.Snapshot?.Head ?? workflow.Repository?.Head ?? "");
+            branches.Action("development-inspect", "Inspect existing checkout", () => _ = workflow.InspectAsync(RepositoryPath, false), CanInspect);
+            branches.Action("development-recover", "Check source / recover", () => _ = workflow.RecoverAsync(), () => !workflow.Busy && workflow.Managed);
             branches.Note(() => "Create or select a feature branch explicitly. Existing files and commits are retained. A branch change does not merge anything.");
             branches.Text("development-new-branch", "New feature branch", () => branch, value => branch = value);
             branches.Action("development-create-branch", "Create feature branch", () => _ = workflow.BranchAsync(branch, true), CanChange);
@@ -62,35 +96,65 @@ namespace Deucarian.PackageInstaller.Editor.Development
             review.Actions.Action("development-refresh", "Refresh changes", () => _ = workflow.RefreshAsync(), () => !workflow.Busy && workflow.Repository != null);
             review.Actions.Action("development-stage", "Stage selected…", () => stage(false), CanChange);
             review.Actions.Action("development-unstage", "Unstage selected…", () => stage(true), CanChange);
-            review.Actions.Action("development-history", "Load recent history", () => _ = workflow.HistoryAsync(), () => !workflow.Busy && workflow.Repository != null);
             review.Commit.Text("development-message", "Commit message", () => message, value => message = value, true);
             review.Commit.Action("development-commit", "Commit staged files", Commit,
                 () => CanChange() && !string.IsNullOrWhiteSpace(message) && workflow.Snapshot.Files.Any(f => f.IsStaged), true);
-            review.Commit.ReadOnly("development-upstream", "Upstream", () => workflow.Snapshot == null ? "Not inspected" :
+            review.Publish.Root.Add(DeucarianEditorWorkspaceControls.Label("Share your work", "dw-section-title"));
+            review.Publish.ReadOnly("development-share-remote", "Remote", () => workflow.Repository?.RemoteDisplay ?? "Not inspected");
+            review.Publish.ReadOnly("development-upstream", "Upstream", () => workflow.Snapshot == null ? "Not inspected" :
                 (string.IsNullOrWhiteSpace(workflow.Snapshot.Upstream) ? "No upstream; Push creates origin/" + workflow.Snapshot.Branch : workflow.Snapshot.Upstream));
-            review.Commit.ReadOnly("development-ahead-behind", "Ahead / behind", () => workflow.Snapshot == null ? "Unknown" :
+            review.Publish.ReadOnly("development-ahead-behind", "Status", () => workflow.Snapshot == null ? "Unknown" :
                 workflow.Snapshot.Ahead + " ahead · " + workflow.Snapshot.Behind + " behind (last local remote snapshot; fetch to refresh)");
-            review.Commit.Action("development-fetch", "Fetch origin", () => _ = workflow.TransferAsync(false), CanChange);
-            review.Commit.Action("development-push", "Push feature branch…", Push, CanChange);
-            review.Commit.ReadOnly("development-pr-branches", "Pull request", () =>
+            review.Publish.ReadOnly("development-pr-branches", "Pull request", () =>
                 (workflow.Snapshot?.Branch ?? "Feature branch") + " → " + (workflow.Package?.DevelopmentBranch ?? "development channel"));
-            review.Commit.Action("development-open-pr", "Open pull request in browser", () =>
+            review.Publish.Action("development-open-pr", "Open pull request", () =>
                 _ = workflow.OpenPullRequestAsync(UnityEngine.Application.OpenURL), () => !workflow.Busy &&
-                    DevelopmentPullRequest.UnavailableReason(workflow.Repository, workflow.Snapshot, workflow.Package?.DevelopmentBranch).Length == 0);
-            review.Commit.Note(() => "Only pushed commits enter the pull request. Verify the destination branch in your browser; reviewers, checks and merging stay there. " +
+                    DevelopmentPullRequest.UnavailableReason(workflow.Repository, workflow.Snapshot, workflow.Package?.DevelopmentBranch).Length == 0, true);
+            review.Publish.Action("development-fetch", "Fetch origin", () => _ = workflow.TransferAsync(false), CanChange);
+            review.Publish.Action("development-push", "Push feature branch…", Push, CanChange);
+            review.Publish.Action("development-history", "Refresh history", () => _ = workflow.HistoryAsync(), () => !workflow.Busy && workflow.Repository != null);
+            review.Publish.Note(() => "Only pushed commits enter the pull request. Verify the destination in your browser. " +
                 DevelopmentPullRequest.UnavailableReason(workflow.Repository, workflow.Snapshot, workflow.Package?.DevelopmentBranch));
             cancel = DeucarianEditorWorkspaceControls.Button("Cancel operation", workflow.Cancel);
             workspace.PageActions.Add(cancel);
+            SelectSection(0);
         }
 
         internal void SetPackages(IReadOnlyList<DevelopmentInstalledPackage> packages, Action<DevelopmentInstalledPackage> select)
         {
             if (packages.Count == 0) { packageForm.Note(() => "No supported installed Deucarian packages. Open Package Installer to install one."); return; }
-            packageForm.Choice("development-package", "Package", packages.Select(p => p.Name).ToArray(),
+            var package = packageForm.Choice("development-package", "Package", packages.Select(p => p.Name).ToArray(),
                 () => Math.Max(0, packages.ToList().FindIndex(p => p.Id == workflow.Package?.Id)), i => select(packages[i]));
+            package.parent.SendToBack();
             packageForm.EnabledWhen(() => !workflow.Busy);
         }
-        internal void Refresh() { packageForm.Refresh(); review.RefreshForms(); cancel.SetEnabled(workflow.Busy); }
+        internal void Refresh()
+        {
+            packageForm.Refresh(); branchScope.Refresh(); setup.Refresh(); restoreForm.Refresh(); review.RefreshForms();
+            connect.text = Prepared() ? "Connect local source" : "Inspect checkout";
+            repositoryField.isReadOnly = workflow.Managed || workflow.Busy;
+            steps.SetCurrent(workflow.Connected ? 2 : Prepared() ? 1 : 0);
+            DeucarianEditorWorkspaceControls.Show(connectActions, !workflow.Managed);
+            DeucarianEditorWorkspaceControls.Show(connectedActions, workflow.Managed);
+            DeucarianEditorWorkspaceControls.Show(restorePanel, showRestore && workflow.Managed);
+            DeucarianEditorWorkspaceControls.Show(workspaceCard, !showRestore || !workflow.Managed);
+            DeucarianEditorWorkspaceControls.Show(cancel, workflow.Busy);
+            cancel.SetEnabled(workflow.Busy);
+        }
+        internal void SelectPackage(string path) { RepositoryPath = path ?? ""; showRestore = false; }
+        internal void SelectSection(int index)
+        {
+            DeucarianEditorWorkspaceControls.Show(branchField, index != 0);
+            workspace.Scope.EnableInClassList("dw-development-workspace-scope", index == 0);
+        }
+        private bool Prepared()
+        {
+            if (workflow.Busy || workflow.Repository == null || workflow.Snapshot == null || workflow.Session?.State != DevelopmentSourceState.Prepared) return false;
+            try { return DevelopmentGitPolicy.SamePath(Path.GetFullPath(RepositoryPath), Path.GetFullPath(workflow.Repository.Root)); }
+            catch (ArgumentException) { return false; }
+            catch (NotSupportedException) { return false; }
+            catch (PathTooLongException) { return false; }
+        }
         private bool CanInspect() => !workflow.Busy && workflow.Package != null && !string.IsNullOrWhiteSpace(RepositoryPath);
         private bool CanChange() => !workflow.Busy && workflow.Connected && workflow.Snapshot != null;
         private void PickFolder()

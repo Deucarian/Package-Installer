@@ -345,6 +345,9 @@ namespace Deucarian.PackageInstaller.Editor
             CacheOperationFooterElements(_operationFooterContainer);
             UpdateOperationCancelButton();
             RefreshOperationDrawerContent();
+            if (_workspace != null)
+                DeucarianEditorWorkspaceControls.Show(_operationFooterContainer,
+                    IsAnyOperationBusy() || GetGlobalOperationStatusKind(operation) == PackageInstallerVisualStatusKind.Failed || _operationDetailsExpanded);
         }
 
         private void UpdateOperationCancelButton()
