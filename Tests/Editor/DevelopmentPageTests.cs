@@ -236,7 +236,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                     var input = page.Root.Q<TextField>("development-path");
                     input.value = Checkout;
                     var review = page.Root.Q<ScrollView>("review-scroll");
-                    var button = page.Root.Q<Button>("development-inspect");
+                    var button = page.Root.Q<Button>("development-connect");
+                    var sharedReview = (DeucarianEditorChangeReview)typeof(DevelopmentPage).GetField("review", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(page);
                     var openPullRequest = page.Root.Q<Button>("development-open-pr");
                     foreach (var size in new[] { new Vector2(1480, 850), new Vector2(820, 650), new Vector2(620, 800) })
                     {
@@ -245,13 +246,21 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                         foreach (int scale in new[] { 100, 150 })
                         {
                             DeucarianEditorAppearance.WorkspaceScalePercent = scale;
+                            sharedReview.SelectSection(0);
                             for (int i = 0; i < 10; i++) yield return null;
                             string context = size + " at " + scale + "%";
                             Assert.That(review.resolvedStyle.height, Is.GreaterThan(40), context);
                             Assert.That(button.worldBound.xMin, Is.GreaterThanOrEqualTo(review.worldBound.xMin - 1), context);
                             Assert.That(button.worldBound.xMax, Is.LessThanOrEqualTo(review.worldBound.xMax + 1), context);
-                            Assert.That(openPullRequest.worldBound.xMin, Is.GreaterThanOrEqualTo(review.worldBound.xMin - 1), context);
-                            Assert.That(openPullRequest.worldBound.xMax, Is.LessThanOrEqualTo(review.worldBound.xMax + 1), context);
+                            foreach (int section in new[] { 1, 2 })
+                            {
+                                sharedReview.SelectSection(section);
+                                for (int i = 0; i < 10; i++) yield return null;
+                                var action = section == 1 ? page.Root.Q<Button>("development-commit") : openPullRequest;
+                                Assert.That(action.resolvedStyle.height, Is.GreaterThan(20), context + " section " + section);
+                                Assert.That(action.worldBound.xMin, Is.GreaterThanOrEqualTo(review.worldBound.xMin - 1), context);
+                                Assert.That(action.worldBound.xMax, Is.LessThanOrEqualTo(review.worldBound.xMax + 1), context);
+                            }
                             Assert.That(openPullRequest.enabledInHierarchy, Is.False, context);
                             Assert.That(input.value, Is.EqualTo(Checkout), context);
                             Assert.That(page.Root.Query<SliderInt>("workspace-scale-slider").ToList().Count, Is.EqualTo(1));

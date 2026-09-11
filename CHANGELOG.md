@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.6.7] - 2026-09-11
+
+- Verify the real Workspace, Changes and History sections at narrow, normal and enlarged scales, including their visible primary actions.
+
 ## [1.6.6] - 2026-09-11
 
 - Match the non-blocking loading state to the skeleton-row reference, with an indeterminate activity track and available Control Center navigation.
