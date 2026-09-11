@@ -33,14 +33,6 @@ namespace Deucarian.PackageInstaller.Editor
                 RefreshOperationDrawerContent();
             }
 
-            if (_operationFooterContainer != null)
-            {
-                _operationFooterContainer.style.display = DisplayStyle.Flex;
-                _operationFooterContainer.style.height = OperationFooterHeight;
-                _operationFooterContainer.style.minHeight = OperationFooterHeight;
-                _operationFooterContainer.style.maxHeight = OperationFooterHeight;
-            }
-
             UpdateOperationFooter();
 
             if (_listViewButton != null)

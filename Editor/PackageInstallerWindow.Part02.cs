@@ -128,12 +128,12 @@ namespace Deucarian.PackageInstaller.Editor
                 OperationDrawerRetryButtonName);
             content.Add(_operationDrawerContainer);
 
-            _operationFooterContainer = CreateOperationFooterRow(
+            _operationFooterContainer = CreateWorkspaceOperationStatus(
                 () => SetOperationDetailsExpanded(!_operationDetailsExpanded),
                 CancelCurrentContextualOperation);
             CacheOperationFooterElements(_operationFooterContainer);
-            _workspace.View.Workspace.Footer.Clear();
-            _workspace.View.Workspace.Footer.Add(_operationFooterContainer);
+            content.Add(_operationFooterContainer);
+            DeucarianEditorWorkspaceControls.Show(_workspace.View.Workspace.Footer, false);
 
             SetViewMode(_viewMode);
             if (_hasPendingReloadCamera)

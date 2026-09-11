@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.6.4] - 2026-09-11
+
+- Keep successful background checks quiet and place active/error details inside the page, not over the scale dock.
+- Use native shared activity buttons and the catalog's semantic package icons in the collection and details.
+
 ## [1.6.3] - 2026-09-11
 
 - Put channel and package search before the local tabs, with compact preferences and a dedicated update summary.

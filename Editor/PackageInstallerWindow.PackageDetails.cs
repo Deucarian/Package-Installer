@@ -13,6 +13,9 @@ namespace Deucarian.PackageInstaller.Editor
             package.DisplayName.StartsWith("Deucarian ", StringComparison.Ordinal)
                 ? package.DisplayName.Substring("Deucarian ".Length) : package.DisplayName;
 
+        private static string PackageIcon(PackageDefinition package) =>
+            DeucarianEditorIcons.GetPackageIcon(GetPackageIconKey(package))?.name ?? DeucarianEditorIconIds.Package;
+
         private sealed partial class InstallerPackageDetails
         {
             private readonly PackageInstallerWindow owner;
@@ -33,7 +36,7 @@ namespace Deucarian.PackageInstaller.Editor
                     return;
                 }
                 var heading = DeucarianEditorWorkspaceControls.Region(null, "dw-detail-heading");
-                heading.Add(DeucarianEditorWorkspaceControls.Icon(package.IsIntegration ? DeucarianEditorIconIds.Integration : DeucarianEditorIconIds.Package));
+                heading.Add(DeucarianEditorWorkspaceControls.Icon(PackageIcon(package)));
                 heading.Add(DeucarianEditorWorkspaceControls.Label(PackageTitle(package), "dw-section-title")); root.Add(heading);
                 form.Note(() => package.Description);
                 form.ReadOnly("installer-selected-version", "Installed", () => owner._packageDetectionService.TryGetInstalledPackage(package.PackageId, out var info) ? info.version : "Not installed");

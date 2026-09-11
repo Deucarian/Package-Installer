@@ -103,6 +103,11 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 PackageRegistryProvider.CaptureCachedStatus();
                 Assert.AreSame(load, loader.LocalLoad, "Status contributors must not fall back to a synchronous read.");
                 Assert.NotNull(root.Q("workspace-navigation"));
+                var activity = root.Q(PackageInstallerWindow.OperationFooterRowName);
+                Assert.That(activity.ClassListContains("dw-operation-status"), Is.True);
+                Assert.That(activity.parent.name, Is.EqualTo("workspace-content"),
+                    "Operation activity belongs to the page, never the stationary scale dock.");
+                Assert.IsNull(activity.Q(PackageInstallerWindow.OperationFooterVersionName));
                 var search = root.Q<TextField>("installer-package-search");
                 Assert.NotNull(search, "Package filtering must not replace global tool navigation.");
                 Assert.That(search.parent.ClassListContains("dw-package-filters"), Is.True);

@@ -178,7 +178,7 @@ namespace Deucarian.PackageInstaller.Editor
                     rows.Add(new DeucarianEditorCollectionItem(package.PackageId, PackageTitle(package), version,
                         installed ? owner.GetPackageVisualStatus(package).Label : package.Category,
                         () => { owner.SelectDefinition(package, package.IsIntegration ? SelectionKind.Integration : SelectionKind.Package, false); Refresh(); },
-                        iconId: package.IsIntegration ? DeucarianEditorIconIds.Integration : DeucarianEditorIconIds.Package));
+                        iconId: PackageIcon(package)));
                     if (rows.Count % 8 == 0)
                     { SetLoading(false, ""); View.SetItems(rows, owner._selectedPackageId, "Loading packages…"); }
                 }
