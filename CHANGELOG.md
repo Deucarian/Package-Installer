@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.6.9] - 2026-09-11
+
+- Require Editor 1.10.8, including both numeric and appearance-dropdown Unity 2021.3 compatibility fixes.
+
 ## [1.6.8] - 2026-09-11
 
 - Require Editor 1.10.7 so the shared numeric controls compile on Unity 2021.3 as well as Unity 6.
