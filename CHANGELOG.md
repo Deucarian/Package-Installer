@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.6.6] - 2026-09-11
+
+- Match the non-blocking loading state to the skeleton-row reference, with an indeterminate activity track and available Control Center navigation.
+- Refine Package Development workspace, change review, history and source-restoration compositions through Editor 1.10.6.
+- Preserve all explicit source/Git confirmation boundaries; source restoration retains the checkout and uncommitted files.
+
 ## [1.6.5] - 2026-09-11
 
 - Require Editor 1.10.5 for final responsive navigation, disabled-button contrast and consistent native Inspector/sample presentation.

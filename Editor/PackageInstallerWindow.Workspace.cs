@@ -28,6 +28,7 @@ namespace Deucarian.PackageInstaller.Editor
             private PackageDefinition detailsDefinition;
             private readonly VisualElement loading;
             private readonly VisualElement loadingIcon;
+            private readonly VisualElement loadingFill;
             private readonly Label loadingLabel;
             private readonly VisualElement updateBar;
             private readonly Label updateSummary;
@@ -80,10 +81,24 @@ namespace Deucarian.PackageInstaller.Editor
                 View.SetItems(Array.Empty<DeucarianEditorCollectionItem>(), null, "Loading packages…");
                 loading = DeucarianEditorWorkspaceControls.Panel("installer-loading");
                 loading.AddToClassList("dw-loading-panel");
-                loadingIcon = DeucarianEditorWorkspaceControls.Icon(DeucarianEditorIconIds.Busy); loading.Add(loadingIcon);
-                loadingLabel = DeucarianEditorWorkspaceControls.Label("Loading packages…", "dw-section-title"); loading.Add(loadingLabel);
-                loading.Add(DeucarianEditorWorkspaceControls.Label("Checking your installed packages and catalog.", "dw-muted"));
-                for (int i = 0; i < 3; i++) loading.Add(DeucarianEditorWorkspaceControls.Region(null, "dw-loading-placeholder"));
+                var loadingHeading = DeucarianEditorWorkspaceControls.Region(null, "dw-loading-heading");
+                loadingIcon = DeucarianEditorWorkspaceControls.Icon(DeucarianEditorIconIds.Busy); loadingHeading.Add(loadingIcon);
+                var loadingCopy = DeucarianEditorWorkspaceControls.Region(null, "dw-loading-copy");
+                loadingLabel = DeucarianEditorWorkspaceControls.Label("Loading packages…", "dw-section-title"); loadingCopy.Add(loadingLabel);
+                loadingCopy.Add(DeucarianEditorWorkspaceControls.Label("You can keep using the Control Center.", "dw-muted"));
+                loadingHeading.Add(loadingCopy); loading.Add(loadingHeading);
+                var loadingTrack = DeucarianEditorWorkspaceControls.Region(null, "dw-progress");
+                loadingTrack.tooltip = "Loading is in progress; this is not a percentage estimate.";
+                loadingFill = DeucarianEditorWorkspaceControls.Region(null, "dw-progress-fill"); loadingTrack.Add(loadingFill); loading.Add(loadingTrack);
+                for (int i = 0; i < 3; i++)
+                {
+                    var placeholder = DeucarianEditorWorkspaceControls.Region(null, "dw-loading-placeholder");
+                    placeholder.Add(DeucarianEditorWorkspaceControls.Region(null, "dw-loading-avatar"));
+                    var lines = DeucarianEditorWorkspaceControls.Region(null, "dw-loading-lines");
+                    lines.Add(DeucarianEditorWorkspaceControls.Region(null, "dw-loading-line"));
+                    var description = DeucarianEditorWorkspaceControls.Region(null, "dw-loading-line"); description.AddToClassList("dw-loading-line-long"); lines.Add(description);
+                    placeholder.Add(lines); placeholder.Add(DeucarianEditorWorkspaceControls.Region(null, "dw-loading-badge")); loading.Add(placeholder);
+                }
                 View.Workspace.Content.Insert(0, loading);
                 SetLoading(true, "Loading packages…");
                 rowPump = owner.PageRoot.schedule.Execute(PumpRows).Every(16);
@@ -131,7 +146,10 @@ namespace Deucarian.PackageInstaller.Editor
             private void PumpRows()
             {
                 if (loading.style.display.value != DisplayStyle.None && DeucarianEditorAmbientMotionSettings.MotionScale > 0)
+                {
                     loadingIcon.transform.rotation = Quaternion.Euler(0, 0, (float)(EditorApplication.timeSinceStartup * 180 % 360));
+                    loadingFill.style.marginLeft = Length.Percent((float)((Math.Sin(EditorApplication.timeSinceStartup * 2) + 1) * 25));
+                }
                 if (rowsDirty)
                 {
                     pendingRows?.Dispose();
@@ -202,6 +220,10 @@ namespace Deucarian.PackageInstaller.Editor
                 IsLoading = value;
                 bool graph = owner._viewMode == InstallerViewMode.EcosystemGraph;
                 loadingLabel.text = message;
+                View.Workspace.Title.text = value ? "Package Installer" : "Packages";
+                View.Workspace.Subtitle.text = value ? "Discover and install packages to extend your experience." : "Add and update what your project needs.";
+                DeucarianEditorWorkspaceControls.Show(View.Workspace.Tabs, !value);
+                DeucarianEditorWorkspaceControls.Show(packageSearch, !value);
                 DeucarianEditorWorkspaceControls.Show(loading, value && !graph);
                 DeucarianEditorWorkspaceControls.Show(View.Collection, !value && !graph);
                 DeucarianEditorWorkspaceControls.Show(updateBar, !value && !graph);

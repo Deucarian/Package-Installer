@@ -26,6 +26,8 @@ namespace Deucarian.PackageInstaller.Editor.Development
         private readonly TextField repositoryField;
         private readonly VisualElement connectActions;
         private readonly VisualElement connectedActions;
+        private readonly VisualElement workspaceCard;
+        private readonly VisualElement branchField;
         private bool showRestore;
         private string branch = "feature/package-change";
         private string message = "";
@@ -38,9 +40,10 @@ namespace Deucarian.PackageInstaller.Editor.Development
             this.workflow = workflow; this.workspace = workspace; this.review = review;
             packageForm = new DeucarianEditorWorkspaceForm(workspace.Scope);
             branchScope = new DeucarianEditorWorkspaceForm(workspace.Scope);
-            branchScope.ReadOnly("development-scope-branch", "Branch", () => workflow.Snapshot?.Branch ?? workflow.Repository?.Branch ?? "Not connected");
+            branchField = branchScope.ReadOnly("development-scope-branch", "Branch", () => workflow.Snapshot?.Branch ?? workflow.Repository?.Branch ?? "Not connected").parent;
             var content = DeucarianEditorWorkspaceControls.Region("development-local-source", "dw-local-source");
-            review.Context.Root.Add(DeucarianEditorWorkspaceControls.IconPanel("development-workspace-card", DeucarianEditorIconIds.Folder, content));
+            workspaceCard = DeucarianEditorWorkspaceControls.IconPanel("development-workspace-card", DeucarianEditorIconIds.Folder, content);
+            review.Context.Root.Add(workspaceCard);
             setup = new DeucarianEditorWorkspaceForm(content);
             content.Add(DeucarianEditorWorkspaceControls.Label("Local source", "dw-section-title"));
             setup.Note(() => workflow.Connected ? "This project uses your local checkout. Edit the package and test it here." : "Connect a local checkout to edit this package in your project.");
@@ -48,24 +51,29 @@ namespace Deucarian.PackageInstaller.Editor.Development
             setup.ReadOnly("development-branch", "Current branch", () => workflow.Snapshot?.Branch ?? workflow.Repository?.Branch ?? "Not inspected");
             setup.ReadOnly("development-original", "Original reference", () => workflow.Session?.OriginalReference ?? "Saved when the repository is inspected");
             setup.ReadOnly("development-source-state", "Status", () => workflow.Connected ? "Local source connected" : workflow.Managed ? workflow.Session.Message : Prepared() ? "Checkout inspected · ready to connect" : "Choose a checkout to continue");
-            steps = new DeucarianEditorSteps("Choose a folder", "Connect local source", "Edit and test"); content.Add(steps.Root);
+            steps = new DeucarianEditorSteps("Inspect checkout", "Connect", "Edit and test"); steps.Root.AddToClassList("dw-steps-inline"); content.Add(steps.Root);
+            setup.Note(() => "Only this package will use the local folder.");
             connect = setup.Action("development-connect", "Inspect checkout", () => { if (Prepared()) Connect(); else if (CanInspect()) _ = workflow.InspectAsync(RepositoryPath, false); },
                 () => !workflow.Connected && (Prepared() || CanInspect()), true);
-            var browse = setup.Action("development-browse", "Choose folder", PickFolder, () => !workflow.Busy && workflow.Package != null && !workflow.Managed);
+            var browse = setup.Action("development-browse", "Choose existing folder", PickFolder, () => !workflow.Busy && workflow.Package != null && !workflow.Managed);
             var clone = setup.Action("development-clone", "Clone repository…", Clone, () => CanInspect() && !workflow.Managed);
             connectActions = DeucarianEditorWorkspaceControls.Actions(connect, browse, clone); content.Add(connectActions);
             var reviewChanges = setup.Action("development-review-changes", "Review changes", () => review.SelectSection(1), () => !workflow.Busy && workflow.Repository != null);
             var finish = setup.Action("development-show-restore", "Restore original source…", () => { showRestore = true; Refresh(); }, () => !workflow.Busy && workflow.Managed);
             connectedActions = DeucarianEditorWorkspaceControls.Actions(reviewChanges, finish); content.Add(connectedActions);
 
-            restorePanel = DeucarianEditorWorkspaceControls.Panel("development-restore-card", "Restore original source?");
-            review.Context.Root.Add(restorePanel); restoreForm = new DeucarianEditorWorkspaceForm(restorePanel);
-            restoreForm.Note(() => "Return this project to its saved package reference. Your checkout, commits and uncommitted files stay on disk.");
-            restoreForm.ReadOnly("development-restore-reference", "Original source", () => workflow.Session?.OriginalReference ?? "");
-            restoreForm.ReadOnly("development-kept-checkout", "Local checkout", () => workflow.Repository?.Root ?? RepositoryPath);
-            var keep = restoreForm.Action("development-keep-working", "Keep working", () => { showRestore = false; Refresh(); });
+            var restoreContent = DeucarianEditorWorkspaceControls.Region(null, "dw-source-recovery");
+            restoreContent.Add(DeucarianEditorWorkspaceControls.Label("Finish local testing", "dw-section-title"));
+            restorePanel = DeucarianEditorWorkspaceControls.IconPanel("development-restore-card", DeucarianEditorIconIds.Undo, restoreContent);
+            review.Context.Root.Add(restorePanel); restoreForm = new DeucarianEditorWorkspaceForm(restoreContent);
+            restoreForm.Note(() => "Return this project to its original package source.");
+            restoreForm.ReadOnly("development-restore-reference", "Project source", () => workflow.Session?.OriginalReference ?? "");
+            restoreForm.ReadOnly("development-kept-checkout", "Local checkout", () => "Kept on disk · " + (workflow.Repository?.Root ?? RepositoryPath));
+            restoreForm.ReadOnly("development-kept-changes", "Uncommitted changes", () => "Kept");
+            restoreForm.Note(() => "Your local edits and commits stay in the checkout.");
+            var keep = restoreForm.Action("development-keep-working", "Keep working locally", () => { showRestore = false; Refresh(); });
             var restore = restoreForm.Action("development-restore", "Restore original source", Restore, () => !workflow.Busy && workflow.Managed, true);
-            restorePanel.Add(DeucarianEditorWorkspaceControls.EndActions(keep, restore));
+            restoreContent.Add(DeucarianEditorWorkspaceControls.Actions(restore, keep));
 
             branches = review.Context.Section("Branch and repository tools", true);
             branches.ReadOnly("development-installed", "Installed revision", () => workflow.Package?.InstalledRevision ?? "Select a package");
@@ -109,6 +117,7 @@ namespace Deucarian.PackageInstaller.Editor.Development
                 DevelopmentPullRequest.UnavailableReason(workflow.Repository, workflow.Snapshot, workflow.Package?.DevelopmentBranch));
             cancel = DeucarianEditorWorkspaceControls.Button("Cancel operation", workflow.Cancel);
             workspace.PageActions.Add(cancel);
+            SelectSection(0);
         }
 
         internal void SetPackages(IReadOnlyList<DevelopmentInstalledPackage> packages, Action<DevelopmentInstalledPackage> select)
@@ -128,10 +137,16 @@ namespace Deucarian.PackageInstaller.Editor.Development
             DeucarianEditorWorkspaceControls.Show(connectActions, !workflow.Managed);
             DeucarianEditorWorkspaceControls.Show(connectedActions, workflow.Managed);
             DeucarianEditorWorkspaceControls.Show(restorePanel, showRestore && workflow.Managed);
+            DeucarianEditorWorkspaceControls.Show(workspaceCard, !showRestore || !workflow.Managed);
             DeucarianEditorWorkspaceControls.Show(cancel, workflow.Busy);
             cancel.SetEnabled(workflow.Busy);
         }
         internal void SelectPackage(string path) { RepositoryPath = path ?? ""; showRestore = false; }
+        internal void SelectSection(int index)
+        {
+            DeucarianEditorWorkspaceControls.Show(branchField, index != 0);
+            workspace.Scope.EnableInClassList("dw-development-workspace-scope", index == 0);
+        }
         private bool Prepared()
         {
             if (workflow.Busy || workflow.Repository == null || workflow.Snapshot == null || workflow.Session?.State != DevelopmentSourceState.Prepared) return false;
