@@ -21,7 +21,7 @@ namespace Deucarian.PackageInstaller.Editor
     internal static class PackageInstallerRuntimeIdentity
     {
         public const string PackageId = "com.deucarian.package-installer";
-        public const string Version = "1.5.0";
+        public const string Version = "1.6.0";
 
         public static PackageInstallerAssemblyIdentity Current =>
             new PackageInstallerAssemblyIdentity(

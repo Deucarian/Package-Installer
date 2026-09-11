@@ -2,7 +2,7 @@
 
 ## Local package development (1.4.5)
 
-Use **Control Center → Packages → Package development**, or **Develop locally**
+Use **Control Center → Packages → Package Development**, or **Develop locally**
 from an installed package, to inspect/clone its repository, connect local source,
 review files and Unity metadata, commit selected staging and push a feature
 branch. Open the pull request form in GitHub or Bitbucket Cloud in your browser.
@@ -10,7 +10,9 @@ Restore reconnects the original reference while preserving local work. Your
 existing Git client can handle commits and pushes; the local-source workflow
 does not require using the in-window Git controls.
 See [the workflow and recovery guide](Documentation~/LOCAL_DEVELOPMENT.md).
-Requires shared Editor 1.8.1. Tests and compilation remain explicit validation
+Workspace connects and restores the checkout. Changes groups the file list, diff and commit draft. History groups recent commits and explicit sharing actions. Choosing a page never stages, commits, pushes or switches source.
+
+Requires shared Editor 1.10.0. Tests and compilation remain explicit validation
 steps; source-ready status is not a claim that tests passed.
 
 ## In-window navigation
@@ -30,7 +32,7 @@ Requires Editor 1.5.0 or newer. Development is delivered through Git `#develop`;
 
 It is the Deucarian ecosystem front door for installing standalone packages, integration packages, suite packages, templates, and explicitly declared package samples from Package Registry metadata.
 
-Current package version: `1.5.0`.
+Current package version: `1.6.0`.
 
 The Installer opens with a loading state. Local catalog reads run in the background, package rows appear in small batches, and the dependency graph is built only when its tab is selected. You can navigate away while loading; returning resumes the existing page. Remote refresh failures keep the cached or bundled catalog available.
 

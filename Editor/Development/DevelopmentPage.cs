@@ -48,12 +48,17 @@ namespace Deucarian.PackageInstaller.Editor.Development
             this.capturePackages = capturePackages;
             Root = new VisualElement();
             workspace = new DeucarianEditorWorkspace(Root, Application.productName);
-            workspace.Title.text = "Package development";
-            workspace.Subtitle.text = "Edit a package here. Review and share its changes.";
+            workspace.Title.text = "Package Development";
+            workspace.Subtitle.text = "Work on a package. Test it here. Share it when ready.";
             DeucarianEditorWorkspaceNavigation.Populate(workspace, ToolId);
             review = new DeucarianEditorChangeReview(workspace.Content);
             forms = new DevelopmentPageForms(workflow, workspace, review, StageSelected);
-            review.UseSections(workspace.Tabs);
+            review.UseSections(workspace.Tabs, integratedPublishing: true);
+            review.SectionChanged += value =>
+            {
+                if (value == 2 && !workflow.Busy && workflow.Repository != null && string.IsNullOrEmpty(workflow.History))
+                    _ = workflow.HistoryAsync();
+            };
             workspace.FooterLeading.text = "Loading installed packages…";
             workflow.Changed += Refresh;
             beginCatalogLoad();
@@ -126,7 +131,7 @@ namespace Deucarian.PackageInstaller.Editor.Development
                 staged, rows.Count < DeucarianEditorChangeReview.MaximumVisibleChanges && selection.Contains(id),
                 () => { if (workflow.Busy) return; inspected = id; _ = workflow.InspectDiffAsync(file.Path, staged); },
                 value => { if (value) selection.Add(id); else selection.Remove(id); },
-                string.IsNullOrEmpty(file.OriginalPath) ? "Asset and .meta changes are paired when staging." : "Renamed from " + file.OriginalPath,
+                string.IsNullOrEmpty(file.OriginalPath) ? null : "Renamed from " + file.OriginalPath,
                 !workflow.Busy && workflow.Connected && !file.IsConflict));
         }
 

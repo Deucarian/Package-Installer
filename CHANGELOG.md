@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.6.0] - 2026-09-11
+
+- Replace package details and graph context forms with Editor-owned native controls, preserving dependency planning, source channels, confirmations, samples and recovery.
+- Show a loading surface while catalog and installed-package discovery complete; retain bounded incremental row creation.
+- Organize local development into Workspace, Changes and History, with commit controls beside the diff, sharing beside history, and explicit source restoration.
+
 ## [1.5.0] - 2026-09-10
 
 - Organize Package Development into Local source, Changes, Publish and History using shared Editor presentation. Preserve async catalog loading and guarded source/Git operations.

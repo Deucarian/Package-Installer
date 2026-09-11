@@ -245,7 +245,7 @@ namespace Deucarian.PackageInstaller.Editor
 
                 using (PackageGraphOpenProfiler.Measure(PackageGraphOpenTiming.LayoutRepaintScheduling))
                 {
-                    _graphDetailsContainer?.MarkDirtyRepaint();
+                    _nativeGraphDetails?.Refresh();
                     _operationDrawerContainer?.MarkDirtyRepaint();
                     UpdateOperationFooter();
                     UpdateViewVisibility();

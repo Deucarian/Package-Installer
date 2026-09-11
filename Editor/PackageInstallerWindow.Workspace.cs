@@ -22,7 +22,13 @@ namespace Deucarian.PackageInstaller.Editor
             private string search = "";
             private int category;
             private string detailsId;
-            private DeucarianEditorWorkspaceForm details;
+            private InstallerPackageDetails details;
+            private string detailsRevision;
+            private readonly VisualElement loading;
+            private readonly VisualElement loadingIcon;
+            private readonly Label loadingLabel;
+            private readonly VisualElement updateBar;
+            private readonly Label updateSummary;
             private readonly IVisualElementScheduledItem rowPump;
             private IEnumerator<object> pendingRows;
             private bool rowsDirty;
@@ -32,9 +38,10 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 this.owner = owner;
                 View = new DeucarianEditorCollectionWorkspace(owner.PageRoot, Application.productName,
-                    "Package Installer", "Find, review and update your project’s packages.",
+                    "Package Installer", "Find and manage your Deucarian packages.",
                     DeucarianToolIds.PackageInstaller, "Search packages…");
-                tabs = new DeucarianEditorChoiceBar(new[] { "Installed", "Updates", "Browse", "Dependency graph" },
+                View.UsePanels(); View.Collection.AddToClassList("dw-package-collection");
+                tabs = new DeucarianEditorChoiceBar(new[] { "Installed", "Browse", "Updates", "Dependency graph" },
                     owner._viewMode == InstallerViewMode.EcosystemGraph ? 3 : 0, true);
                 tabs.Changed += value => {
                     if (value < 3) category = value;
@@ -47,7 +54,10 @@ namespace Deucarian.PackageInstaller.Editor
                 update = DeucarianEditorWorkspaceControls.Button("Review updates", () => owner.HandleActionButton(PackageInstallerActionKind.UpdateAll), true);
                 View.Workspace.PageActions.Add(refresh);
                 View.Workspace.PageActions.Add(check);
-                View.Workspace.PageActions.Add(update);
+                updateBar = DeucarianEditorWorkspaceControls.Region("installer-updates", "dw-update-bar");
+                updateSummary = DeucarianEditorWorkspaceControls.Label("", "dw-label");
+                updateBar.Add(DeucarianEditorWorkspaceControls.Icon(DeucarianEditorIconIds.Update));
+                updateBar.Add(updateSummary); updateBar.Add(update); View.Workspace.Content.Add(updateBar);
                 scope = new DeucarianEditorWorkspaceForm(View.Workspace.Scope);
                 scope.EnabledWhen(() => !owner.IsAnyOperationBusy());
                 scope.Choice("installer-project-channel", "Project channel",
@@ -55,9 +65,21 @@ namespace Deucarian.PackageInstaller.Editor
                     () => { var selection = owner.GetGlobalProjectChannelSelection(); return !selection.HasValue ? 0 : selection.Channel == PackageChannel.Development ? 2 : 1; },
                     value => { if (value == 0) owner.ClearGlobalChannelOverrideFromPopup(); else owner.SetGlobalChannelOverride(value == 2 ? PackageChannel.Development : PackageChannel.Stable); Refresh(); });
                 status = DeucarianEditorWorkspaceControls.Label("", "dw-muted");
-                View.Workspace.Scope.Add(status);
+                View.Workspace.FooterLeading.text = "Loading packages…";
+                var options = new DeucarianEditorWorkspaceForm(View.Workspace.Scope).Section("Update preferences", true);
+                options.Toggle("installer-check-start", "Check on Editor start", () => PackageUpdateCheckPreferences.CheckOnEditorStart, value => PackageUpdateCheckPreferences.CheckOnEditorStart = value);
+                options.Toggle("installer-check-open", "Check when opened", () => PackageUpdateCheckPreferences.CheckOnWindowOpen, value => PackageUpdateCheckPreferences.CheckOnWindowOpen = value);
+                options.Root.Add(status);
                 View.Workspace.SearchField.RegisterValueChangedCallback(evt => { search = evt.newValue ?? ""; Refresh(); });
                 View.SetItems(Array.Empty<DeucarianEditorCollectionItem>(), null, "Loading packages…");
+                loading = DeucarianEditorWorkspaceControls.Panel("installer-loading");
+                loading.AddToClassList("dw-loading-panel");
+                loadingIcon = DeucarianEditorWorkspaceControls.Icon(DeucarianEditorIconIds.Busy); loading.Add(loadingIcon);
+                loadingLabel = DeucarianEditorWorkspaceControls.Label("Loading packages…", "dw-section-title"); loading.Add(loadingLabel);
+                loading.Add(DeucarianEditorWorkspaceControls.Label("Checking your installed packages and catalog.", "dw-muted"));
+                for (int i = 0; i < 3; i++) loading.Add(DeucarianEditorWorkspaceControls.Region(null, "dw-loading-placeholder"));
+                View.Workspace.Content.Insert(0, loading);
+                SetLoading(true, "Loading packages…");
                 rowPump = owner.PageRoot.schedule.Execute(PumpRows).Every(16);
             }
 
@@ -78,6 +100,8 @@ namespace Deucarian.PackageInstaller.Editor
                 check.SetEnabled(checkState.Enabled);
                 update.SetEnabled(!busy && hasUpdates);
                 DeucarianEditorWorkspaceControls.Show(update, hasUpdates);
+                DeucarianEditorWorkspaceControls.Show(updateBar, hasUpdates && !graph);
+                updateSummary.text = owner.GetPackagesWithUpdates().Length + " updates available";
                 status.text = PackageRegistryProvider.StatusMessage + " · Updates: " +
                     (owner._packageUpdateCheckService.LastCheckedUtc.HasValue
                         ? owner._packageUpdateCheckService.LastCheckedUtc.Value.ToLocalTime().ToString("HH:mm:ss") : "not checked");
@@ -86,6 +110,8 @@ namespace Deucarian.PackageInstaller.Editor
 
             private void PumpRows()
             {
+                if (loading.style.display.value != DisplayStyle.None && DeucarianEditorAmbientMotionSettings.MotionScale > 0)
+                    loadingIcon.transform.rotation = Quaternion.Euler(0, 0, (float)(EditorApplication.timeSinceStartup * 180 % 360));
                 if (rowsDirty)
                 {
                     pendingRows?.Dispose();
@@ -105,6 +131,8 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 if (PackageRegistryProvider.IsLocalLoading || !owner._packageDetectionService.HasSuccessfulRefresh)
                 {
+                    bool waiting = PackageRegistryProvider.IsLocalLoading || owner._packageDetectionService.IsRefreshing;
+                    SetLoading(waiting, PackageRegistryProvider.IsLocalLoading ? "Loading package catalog…" : "Finding installed packages…");
                     View.SetItems(Array.Empty<DeucarianEditorCollectionItem>(), null,
                         PackageRegistryProvider.IsLocalLoading ? "Loading package catalog…" :
                         owner._packageDetectionService.IsRefreshing ? "Finding installed packages…" :
@@ -118,63 +146,37 @@ namespace Deucarian.PackageInstaller.Editor
                     yield return null;
                     bool installed = owner._packageDetectionService.IsInstalled(package.PackageId);
                     var updateStatus = owner._packageUpdateCheckService.GetStatus(package, owner.GetSelectedChannel(package));
-                    if (category == 0 && !installed || category == 1 && !updateStatus.NeedsAttention) continue;
+                    if (category == 0 && !installed || category == 2 && !updateStatus.NeedsAttention) continue;
                     if ((package.DisplayName + " " + package.PackageId + " " + package.Description).IndexOf(search, StringComparison.OrdinalIgnoreCase) < 0) continue;
                     if (package.PackageId == owner._selectedPackageId) selected = package;
                     string version = owner._packageDetectionService.TryGetInstalledPackage(package.PackageId, out var info) ? info.version : "Not installed";
                     rows.Add(new DeucarianEditorCollectionItem(package.PackageId, package.DisplayName, version,
                         installed ? owner.GetPackageVisualStatus(package).Label : package.Category,
-                        () => { owner.SelectDefinition(package, package.IsIntegration ? SelectionKind.Integration : SelectionKind.Package, false); Refresh(); }));
+                        () => { owner.SelectDefinition(package, package.IsIntegration ? SelectionKind.Integration : SelectionKind.Package, false); Refresh(); },
+                        iconId: package.IsIntegration ? DeucarianEditorIconIds.Integration : DeucarianEditorIconIds.Package));
                     if (rows.Count % 8 == 0)
-                        View.SetItems(rows, owner._selectedPackageId, "Loading packages…");
+                    { SetLoading(false, ""); View.SetItems(rows, owner._selectedPackageId, "Loading packages…"); }
                 }
-                View.SetItems(rows, selected?.PackageId, category == 1
+                SetLoading(false, "");
+                View.SetItems(rows, selected?.PackageId, category == 2
                     ? "No pending updates in the current results. Check updates to verify against the selected channels."
                     : "No packages match this view.");
                 string selectedId = selected?.PackageId;
-                if (details == null || detailsId != selectedId)
+                string revision = selected != null && owner._packageDetectionService.TryGetInstalledPackage(selected.PackageId, out var selectedInfo) ? selectedInfo.version + "|" + selectedInfo.resolvedPath : "";
+                if (details == null || detailsId != selectedId || detailsRevision != revision)
                 {
-                    detailsId = selectedId;
-                    BuildDetails(selected);
+                    detailsId = selectedId; detailsRevision = revision;
+                    details = new InstallerPackageDetails(owner, View.Details, selected);
                 }
                 details.Refresh();
             }
 
-            private void BuildDetails(PackageDefinition package)
+            private void SetLoading(bool value, string message)
             {
-                View.Details.Clear();
-                details = new DeucarianEditorWorkspaceForm(View.Details);
-                if (package == null)
-                {
-                    details.Section("Package details").Note(() => "Select a package to review its source, dependencies and available actions. Changes are confirmed before they are applied.");
-                    return;
-                }
-                var summary = details.Section(package.DisplayName);
-                summary.Note(() => package.Description);
-                summary.ReadOnly("installer-selected-id", "Package", () => package.PackageId);
-                summary.Action("installer-develop", "Develop locally", () => DeucarianEditorNavigation.Open(View.Workspace.Root,
-                    Development.DevelopmentPage.ToolId, package.PackageId), () => owner._packageDetectionService.IsInstalled(package.PackageId));
-                summary.ReadOnly("installer-selected-version", "Installed", () => owner._packageDetectionService.TryGetInstalledPackage(package.PackageId, out var info) ? info.version : "Not installed");
-                summary.ReadOnly("installer-selected-channel", "Channel", () => PackageChannelPolicy.GetChannelLabel(owner.GetSelectedChannel(package)));
-                summary.ReadOnly("installer-selected-update", "Update", () => GetUpdateStatusText(owner._packageUpdateCheckService.GetStatus(package, owner.GetSelectedChannel(package))));
-                summary.Root.Add(DeucarianEditorWorkspaceControls.Embedded(() => {
-                    owner.EnsureStyles();
-                    using (DeucarianEditorWorkbenchGUI.BeginEmbeddedPage())
-                        owner.DrawPackageActionButtons(package, true);
-                }, "installer-package-actions"));
-                var advanced = details.Section("Source, dependencies & options", true);
-                advanced.Root.Add(DeucarianEditorWorkspaceControls.Embedded(() => {
-                    owner.EnsureStyles();
-                    using (DeucarianEditorWorkbenchGUI.BeginEmbeddedPage())
-                    {
-                        owner.DrawRequirementsPanel(package);
-                        owner.DrawChannelPanel(package);
-                        if (package.IsTemplate && package.CompositionPresets.Count > 0) owner.DrawTemplateCompositionPanel(package);
-                        owner.DrawOptionalCompanionsPanel(package);
-                        owner.DrawExtrasPanel(package);
-                        owner.DrawAdvancedPanel(package);
-                    }
-                }, "installer-package-options"));
+                bool graph = owner._viewMode == InstallerViewMode.EcosystemGraph;
+                loadingLabel.text = message;
+                DeucarianEditorWorkspaceControls.Show(loading, value && !graph);
+                DeucarianEditorWorkspaceControls.Show(View.Collection, !value && !graph);
             }
             public void Dispose()
             {

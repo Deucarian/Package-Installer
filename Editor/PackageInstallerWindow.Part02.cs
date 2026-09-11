@@ -162,7 +162,8 @@ namespace Deucarian.PackageInstaller.Editor
                 HandleGraphRootFocused, HandleGraphGroupFocused, _visibilityFilterState,
                 HandleVisibilityFilterChanged);
             _graphContentRow.Add(_graphView);
-            _graphDetailsContainer = new IMGUIContainer(DrawGraphDetailsGui);
+            _graphDetailsContainer = DeucarianEditorWorkspaceControls.Scroll("installer-graph-details");
+            _nativeGraphDetails = new InstallerGraphDetails(this, _graphDetailsContainer);
             _graphDetailsContainer.AddToClassList("dpi-graph-details");
             _graphContentRow.Add(_graphDetailsContainer);
         }
