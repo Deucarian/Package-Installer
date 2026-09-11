@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.6.2] - 2026-09-11
+
+- Use Editor 1.10.2 for corrected scaled focus and shared context geometry.
+- Verify loading isolation against the visibility-owning container, rather than its retained child list.
+
 ## [1.6.1] - 2026-09-11
 
 - Keep loading presentation intact during visibility refreshes and discard stale details after discovery failure.

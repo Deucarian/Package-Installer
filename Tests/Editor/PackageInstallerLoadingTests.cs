@@ -108,7 +108,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 Assert.IsFalse(root.Q("installer-project-channel").enabledInHierarchy);
                 Invoke(window, "UpdateViewVisibility");
                 Assert.That(root.Q("installer-loading").style.display.value, Is.EqualTo(DisplayStyle.Flex));
-                Assert.That(root.Q("workspace-collection").style.display.value, Is.EqualTo(DisplayStyle.None),
+                Assert.That(((VisualElement)Field(window, "_listViewContainerHost")).style.display.value, Is.EqualTo(DisplayStyle.None),
                     "Visibility refresh must not reveal the empty list behind the loading state.");
                 Invoke(window, "RefreshGraphView", "loading regression");
                 Assert.IsNull(Field(window, "_cachedPackageGraph"));
