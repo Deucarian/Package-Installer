@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.6.5] - 2026-09-11
+
+- Require Editor 1.10.5 for final responsive navigation, disabled-button contrast and consistent native Inspector/sample presentation.
+
 ## [1.6.4] - 2026-09-11
 
 - Keep successful background checks quiet and place active/error details inside the page, not over the scale dock.
