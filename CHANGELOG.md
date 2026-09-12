@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.7.1] - 2026-09-12
+
+- Include the Viewer Template's direct Pointer Capture dependency in the generated fallback catalog.
+
 ## [1.7.0] - 2026-09-12
 
 - Offer a default locally excluded package checkout, preserve package-only Git boundaries, and clearly show temporary project connection changes and Restore installed version.
