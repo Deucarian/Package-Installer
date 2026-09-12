@@ -32,7 +32,15 @@ Requires Editor 1.5.0 or newer. Development is delivered through Git `#develop`;
 
 It is the Deucarian ecosystem front door for installing standalone packages, integration packages, suite packages, templates, and explicitly declared package samples from Package Registry metadata.
 
-Current package version: `1.6.11`.
+Current package version: `1.7.0`.
+
+Package development proposes `.deucarian/checkouts/<package-id>` inside the
+project. Cloning there adds a local Git exclusion, not a tracked `.gitignore`
+change. The checkout retains its own Git history and package-only change list.
+Connecting still temporarily edits `Packages/manifest.json` and can update
+`Packages/packages-lock.json`; these project changes remain visible. Use
+**Restore installed version** before committing project configuration. The
+checkout, edits and commits are kept. An external checkout is still supported.
 
 The Installer opens with a loading state. Local catalog reads run in the background, package rows appear in small batches, and the dependency graph is built only when its tab is selected. You can navigate away while loading; returning resumes the existing page. Remote refresh failures keep the cached or bundled catalog available.
 

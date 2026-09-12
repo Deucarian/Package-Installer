@@ -606,7 +606,8 @@
       "developmentUrl": "https://github.com/Deucarian/XR-UI.git#develop",
       "dependencies": [
         "com.deucarian.common",
-        "com.deucarian.editor"
+        "com.deucarian.editor",
+        "com.deucarian.theming"
       ],
       "groupId": "world-xr-interaction"
     },
@@ -764,6 +765,8 @@
       "stableUrl": "https://github.com/Deucarian/Pointer-Capture.git#main",
       "developmentUrl": "https://github.com/Deucarian/Pointer-Capture.git#develop",
       "dependencies": [
+        "com.deucarian.common",
+        "com.deucarian.diagnostics",
         "com.deucarian.editor"
       ],
       "groupId": "world-xr-interaction"

@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.7.0] - 2026-09-12
+
+- Offer a default locally excluded package checkout, preserve package-only Git boundaries, and clearly show temporary project connection changes and Restore installed version.
+
 ## [1.6.11] - 2026-09-11
 
 - Refresh the fallback dependency catalog for definition authoring and align the embedded installer identity.

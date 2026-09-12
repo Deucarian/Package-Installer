@@ -42,6 +42,9 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 page.Update(new Rect(0, 0, 1180, 800));
                 Assert.That(captures, Is.EqualTo(1));
                 Assert.That(workflow.Package.Id, Is.EqualTo(packages[1].Id), "A route survives deferred loading.");
+                Assert.That(page.Root.Q<TextField>("development-path").value,
+                    Is.EqualTo(DevelopmentCheckoutLocation.DefaultPath(Project, packages[1].Id)));
+                Assert.That(page.Root.Query<Label>().ToList().Any(label => label.text != null && label.text.Contains("lockfile")), Is.True);
                 page.Update(new Rect(0, 0, 820, 650));
                 Assert.That(captures, Is.EqualTo(1));
                 Assert.That(page.Root.Q<Button>("development-stage").enabledInHierarchy, Is.False);
@@ -80,6 +83,8 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 Assert.That(picker.index, Is.EqualTo(1));
                 Assert.That(draft.value, Is.EqualTo("Retain this package commit draft"));
                 Assert.That(page.Root.Q<Button>("development-restore").enabledInHierarchy, Is.True);
+                Assert.That(page.Root.Q<Button>("development-restore").text, Is.EqualTo("Restore installed version"));
+                Assert.That(page.Root.Query<Label>().ToList().Any(label => label.text != null && label.text.Contains("Local development active")), Is.True);
                 ports.AssertNoMutationOrGit();
             }
         }

@@ -28,6 +28,7 @@ namespace Deucarian.PackageInstaller.Editor.Development
         private readonly VisualElement connectedActions;
         private readonly VisualElement workspaceCard;
         private readonly VisualElement branchField;
+        private readonly Label activeNotice;
         private bool showRestore;
         private string branch = "feature/package-change";
         private string message = "";
@@ -39,6 +40,9 @@ namespace Deucarian.PackageInstaller.Editor.Development
         {
             this.workflow = workflow; this.workspace = workspace; this.review = review;
             packageForm = new DeucarianEditorWorkspaceForm(workspace.Scope);
+            activeNotice = DeucarianEditorWorkspaceControls.Label("", "dw-muted");
+            activeNotice.name = "development-active-notice";
+            workspace.Scope.Add(activeNotice);
             branchScope = new DeucarianEditorWorkspaceForm(workspace.Scope);
             branchField = branchScope.ReadOnly("development-scope-branch", "Branch", () => workflow.Snapshot?.Branch ?? workflow.Repository?.Branch ?? "Not connected").parent;
             var content = DeucarianEditorWorkspaceControls.Region("development-local-source", "dw-local-source");
@@ -46,20 +50,24 @@ namespace Deucarian.PackageInstaller.Editor.Development
             review.Context.Root.Add(workspaceCard);
             setup = new DeucarianEditorWorkspaceForm(content);
             content.Add(DeucarianEditorWorkspaceControls.Label("Local source", "dw-section-title"));
-            setup.Note(() => workflow.Connected ? "This project uses your local checkout. Edit the package and test it here." : "Connect a local checkout to edit this package in your project.");
+            setup.Note(() => workflow.Connected ? "Local development active. This project runs your local package code." : "Clone a package, then connect it to edit and test in this project.");
             repositoryField = setup.Text("development-path", "Local folder", () => RepositoryPath, value => { RepositoryPath = value; Refresh(); });
             setup.ReadOnly("development-branch", "Current branch", () => workflow.Snapshot?.Branch ?? workflow.Repository?.Branch ?? "Not inspected");
             setup.ReadOnly("development-original", "Original reference", () => workflow.Session?.OriginalReference ?? "Saved when the repository is inspected");
-            setup.ReadOnly("development-source-state", "Status", () => workflow.Connected ? "Local source connected" : workflow.Managed ? workflow.Session.Message : Prepared() ? "Checkout inspected · ready to connect" : "Choose a checkout to continue");
+            setup.ReadOnly("development-source-state", "Status", () => workflow.Connected ? "Local development active" : workflow.Managed ? workflow.Session.Message : Prepared() ? "Checkout inspected · ready to connect" : "Clone here, or choose an existing checkout");
+            setup.Note(() => "Cloning to the default location adds a local Git exclusion. The clone keeps its own branches, commits and pushes. Your shared .gitignore is not edited.");
+            setup.ReadOnly("development-project-impact", "Project connection", () => workflow.Managed
+                ? "Temporarily changed: Packages/manifest.json; Unity may also update packages-lock.json."
+                : "Cloning does not connect the project. Connecting temporarily changes its package manifest and may change its lockfile.");
             steps = new DeucarianEditorSteps("Inspect checkout", "Connect", "Edit and test"); steps.Root.AddToClassList("dw-steps-inline"); content.Add(steps.Root);
-            setup.Note(() => "Only this package will use the local folder.");
+            setup.Note(() => "Restore the installed version before committing project package configuration. Package Git actions never stage project files.");
             connect = setup.Action("development-connect", "Inspect checkout", () => { if (Prepared()) Connect(); else if (CanInspect()) _ = workflow.InspectAsync(RepositoryPath, false); },
                 () => !workflow.Connected && (Prepared() || CanInspect()), true);
             var browse = setup.Action("development-browse", "Choose existing folder", PickFolder, () => !workflow.Busy && workflow.Package != null && !workflow.Managed);
             var clone = setup.Action("development-clone", "Clone repository…", Clone, () => CanInspect() && !workflow.Managed);
             connectActions = DeucarianEditorWorkspaceControls.Actions(connect, browse, clone); content.Add(connectActions);
             var reviewChanges = setup.Action("development-review-changes", "Review changes", () => review.SelectSection(1), () => !workflow.Busy && workflow.Repository != null);
-            var finish = setup.Action("development-show-restore", "Restore original source…", () => { showRestore = true; Refresh(); }, () => !workflow.Busy && workflow.Managed);
+            var finish = setup.Action("development-show-restore", "Restore installed version…", () => { showRestore = true; Refresh(); }, () => !workflow.Busy && workflow.Managed);
             connectedActions = DeucarianEditorWorkspaceControls.Actions(reviewChanges, finish); content.Add(connectedActions);
 
             var restoreContent = DeucarianEditorWorkspaceControls.Region(null, "dw-source-recovery");
@@ -72,7 +80,7 @@ namespace Deucarian.PackageInstaller.Editor.Development
             restoreForm.ReadOnly("development-kept-changes", "Uncommitted changes", () => "Kept");
             restoreForm.Note(() => "Your local edits and commits stay in the checkout.");
             var keep = restoreForm.Action("development-keep-working", "Keep working locally", () => { showRestore = false; Refresh(); });
-            var restore = restoreForm.Action("development-restore", "Restore original source", Restore, () => !workflow.Busy && workflow.Managed, true);
+            var restore = restoreForm.Action("development-restore", "Restore installed version", Restore, () => !workflow.Busy && workflow.Managed, true);
             restoreContent.Add(DeucarianEditorWorkspaceControls.Actions(restore, keep));
 
             branches = review.Context.Section("Branch and repository tools", true);
@@ -130,6 +138,9 @@ namespace Deucarian.PackageInstaller.Editor.Development
         }
         internal void Refresh()
         {
+            activeNotice.text = workflow.Connected ? "Local development active · project connection temporarily changed"
+                : "Local connection needs attention · restore or recover before committing project configuration";
+            DeucarianEditorWorkspaceControls.Show(activeNotice, workflow.Managed);
             packageForm.Refresh(); branchScope.Refresh(); setup.Refresh(); restoreForm.Refresh(); review.RefreshForms();
             connect.text = Prepared() ? "Connect local source" : "Inspect checkout";
             repositoryField.isReadOnly = workflow.Managed || workflow.Busy;
@@ -141,7 +152,7 @@ namespace Deucarian.PackageInstaller.Editor.Development
             DeucarianEditorWorkspaceControls.Show(cancel, workflow.Busy);
             cancel.SetEnabled(workflow.Busy);
         }
-        internal void SelectPackage(string path) { RepositoryPath = path ?? ""; showRestore = false; }
+        internal void SelectPackage(string path) { RepositoryPath = path ?? workflow.DefaultCheckoutPath; showRestore = false; }
         internal void SelectSection(int index)
         {
             DeucarianEditorWorkspaceControls.Show(branchField, index != 0);
@@ -163,6 +174,7 @@ namespace Deucarian.PackageInstaller.Editor.Development
         {
             string destination = RepositoryPath;
             DevelopmentConfirmation.Show(workflow, "Clone package repository", workflow.Package.Remote + "\n\nNew folder: " + destination +
+                "\n\nFor the default location, add a local Git exclude rule to the project. No tracked project files or staging are changed by cloning." +
                 "\n\nA partial clone is preserved if canceled. The project is connected only after a separate review.", "Clone",
                 () => _ = workflow.InspectAsync(destination, true));
         }
@@ -171,7 +183,8 @@ namespace Deucarian.PackageInstaller.Editor.Development
             DevelopmentConfirmation.Show(workflow, "Connect local package source", workflow.Repository.Root + "\n" + workflow.Repository.RemoteDisplay +
                 "\nBranch: " + workflow.Snapshot.Branch + "\nInstalled revision: " + workflow.Package.InstalledRevision +
                 (workflow.Snapshot.IsClean ? "\nCheckout is clean." : "\nCheckout has existing changes; they are kept and will be used by this project.") +
-                "\n\nUnity will resolve a local file reference. Restore the original source before committing consumer configuration.", "Connect this checkout",
+                "\n\nProject connection temporarily changed: Packages/manifest.json and possibly Packages/packages-lock.json. " +
+                "The clone stays outside project Git, but these connection changes remain visible. Restore installed version before committing project configuration.", "Connect this checkout",
                 () => _ = workflow.ConnectAsync());
         }
         private void Restore()
