@@ -352,7 +352,8 @@
       "stableUrl": "https://github.com/Deucarian/Media.git#main",
       "developmentUrl": "https://github.com/Deucarian/Media.git#develop",
       "dependencies": [
-        "com.deucarian.common"
+        "com.deucarian.common",
+        "com.deucarian.editor"
       ],
       "groupId": "runtime-services"
     },
@@ -1182,6 +1183,7 @@
       "developmentUrl": "https://github.com/Deucarian/Run-Upgrades.git#develop",
       "dependencies": [
         "com.deucarian.attacks",
+        "com.deucarian.combat",
         "com.deucarian.diagnostics",
         "com.deucarian.editor",
         "com.deucarian.game-content-authoring",
@@ -1242,7 +1244,8 @@
       "dependencies": [
         "com.deucarian.diagnostics",
         "com.deucarian.editor",
-        "com.deucarian.gameplay-foundation"
+        "com.deucarian.gameplay-foundation",
+        "com.deucarian.world-spawning"
       ]
     },
     {
@@ -1279,6 +1282,7 @@
       "developmentUrl": "https://github.com/Deucarian/World-Navigation.git#develop",
       "dependencies": [
         "com.deucarian.diagnostics",
+        "com.deucarian.editor",
         "com.deucarian.gameplay-foundation",
         "com.deucarian.world-spawning"
       ]
@@ -1341,6 +1345,7 @@
       "developmentUrl": "https://github.com/Deucarian/Weapon-Systems.git#develop",
       "dependencies": [
         "com.deucarian.attacks",
+        "com.deucarian.combat",
         "com.deucarian.diagnostics",
         "com.deucarian.editor",
         "com.deucarian.game-content-authoring",

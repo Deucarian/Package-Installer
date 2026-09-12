@@ -32,7 +32,7 @@ Requires Editor 1.5.0 or newer. Development is delivered through Git `#develop`;
 
 It is the Deucarian ecosystem front door for installing standalone packages, integration packages, suite packages, templates, and explicitly declared package samples from Package Registry metadata.
 
-Current package version: `1.6.10`.
+Current package version: `1.6.11`.
 
 The Installer opens with a loading state. Local catalog reads run in the background, package rows appear in small batches, and the dependency graph is built only when its tab is selected. You can navigate away while loading; returning resumes the existing page. Remote refresh failures keep the cached or bundled catalog available.
 
@@ -417,3 +417,9 @@ After installing, updating, or removing a package, the installer refreshes insta
 ## License
 
 MIT. See [LICENSE.md](LICENSE.md).
+
+## Definition authoring integration
+
+The package catalog includes the direct editor and runtime dependencies needed by the definition-authoring workflow. Use a coherent set of package development versions when trying the new samples.
+
+See the [shared authoring walkthrough](https://github.com/Deucarian/Editor/blob/develop/Documentation~/DefinitionAuthoring.md). Runtime packages expose their **Definition Workflow** sample through Package Manager.
