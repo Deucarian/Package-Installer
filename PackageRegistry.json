@@ -460,7 +460,6 @@
       "stableUrl": "https://github.com/Deucarian/Viewer-Shell.git#main",
       "developmentUrl": "https://github.com/Deucarian/Viewer-Shell.git#develop",
       "dependencies": [
-        "com.deucarian.common",
         "com.deucarian.theming",
         "com.deucarian.ui",
         "com.deucarian.viewer-rendering"
