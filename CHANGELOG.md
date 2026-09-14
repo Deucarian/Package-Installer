@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.7.4 - Unreleased
+
+- Regenerate the bundled registry after removing the unused Viewer Shell dependency on Common. Keep embedded identity synchronized.
+
 ## 1.7.3 - Unreleased
 
 - Project the Activity visualization dependency on Tweens into the bundled registry.
