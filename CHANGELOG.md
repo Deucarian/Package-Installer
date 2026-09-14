@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.7.2] - 2026-09-14
+
+- Include Tweens visibility ownership and the UI dependency in the generated fallback catalog.
+- Restore the pinned CI compatibility download using its timestamped archive URL, preserving the verified checksum.
+
 ## [1.7.1] - 2026-09-12
 
 - Include the Viewer Template's direct Pointer Capture dependency in the generated fallback catalog.
