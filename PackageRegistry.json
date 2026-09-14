@@ -737,7 +737,8 @@
         "com.deucarian.simultria.rendering",
         "com.deucarian.simultria-viewer-integration",
         "com.deucarian.template.viewer",
-        "com.deucarian.authentication"
+        "com.deucarian.authentication",
+        "com.deucarian.tweens"
       ],
       "integrationTargets": [
         "com.deucarian.activity-visualization",
