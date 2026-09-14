@@ -22,7 +22,9 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             PackageGraphModel graph = CreateBundledGraph();
             PackageGraphLayout layoutEngine = new PackageGraphLayout();
 
-            Assert.AreEqual(65, graph.Nodes.Count, "The bundled catalog coverage changed; audit the new focus states.");
+            Assert.AreEqual(66, graph.Nodes.Count, "The bundled catalog coverage changed; audit the new focus states.");
+            Assert.IsTrue(graph.Nodes.Any(node => node.PackageId == "com.deucarian.tweens"),
+                "The reviewed visibility package must participate in every presentation audit.");
 
             foreach (PackageGraphNode focusNode in graph.Nodes)
             {

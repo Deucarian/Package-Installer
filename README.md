@@ -32,7 +32,7 @@ Requires Editor 1.5.0 or newer. Development is delivered through Git `#develop`;
 
 It is the Deucarian ecosystem front door for installing standalone packages, integration packages, suite packages, templates, and explicitly declared package samples from Package Registry metadata.
 
-Current package version: `1.7.1`.
+Current package version: `1.7.2`.
 
 Package development proposes `.deucarian/checkouts/<package-id>` inside the
 project. Cloning there adds a local Git exclusion, not a tracked `.gitignore`
