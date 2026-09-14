@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.7.5 - Unreleased
+
+- Refresh the API fallback dependency graph for cancellation-safe browser texture ownership.
+
 ## 1.7.4 - Unreleased
 
 - Regenerate the bundled registry after removing the unused Viewer Shell dependency on Common. Keep embedded identity synchronized.
