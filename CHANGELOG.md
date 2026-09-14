@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.7.3 - Unreleased
+
+- Project the Activity visualization dependency on Tweens into the bundled registry.
+
 ## [1.7.2] - 2026-09-14
 
 - Include Tweens visibility ownership and the UI dependency in the generated fallback catalog.
