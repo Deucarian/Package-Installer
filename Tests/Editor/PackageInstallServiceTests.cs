@@ -8,33 +8,45 @@ using UnityEngine.TestTools;
 
 namespace Deucarian.PackageInstaller.Editor.Tests
 {
-    internal sealed class PackageInstallServiceTests
+    internal sealed partial class PackageInstallServiceTests
     {
         private string _temporaryProjectRoot;
+        private PackageInstallerTestSessionScope _sessionScope;
 
         [SetUp]
         public void SetUp()
         {
-            _temporaryProjectRoot = Path.Combine(
-                Path.GetTempPath(),
-                "Deucarian.PackageInstaller.Tests",
-                Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(_temporaryProjectRoot);
-            PackageInstallerSelfUpdateState.Clear();
-            PackageOperationAutoResumeState.ResetForTests();
-            PackageInstallerActivityService.ClearForTests();
+            _sessionScope = new PackageInstallerTestSessionScope();
+            try
+            {
+                _temporaryProjectRoot = Path.Combine(
+                    Path.GetTempPath(),
+                    "Deucarian.PackageInstaller.Tests",
+                    Guid.NewGuid().ToString("N"));
+                Directory.CreateDirectory(_temporaryProjectRoot);
+                PackageInstallerSelfUpdateState.Clear();
+                PackageOperationAutoResumeState.ResetForTests();
+                PackageInstallerActivityService.ClearForTests();
+            }
+            catch
+            {
+                _sessionScope.Dispose();
+                _sessionScope = null;
+                throw;
+            }
         }
 
         [TearDown]
         public void TearDown()
         {
-            PackageInstallerSelfUpdateState.Clear();
-            PackageOperationAutoResumeState.ResetForTests();
-            PackageInstallerActivityService.ClearForTests();
-
-            if (Directory.Exists(_temporaryProjectRoot))
+            try
             {
-                Directory.Delete(_temporaryProjectRoot, true);
+                if (Directory.Exists(_temporaryProjectRoot)) Directory.Delete(_temporaryProjectRoot, true);
+            }
+            finally
+            {
+                _sessionScope?.Dispose();
+                _sessionScope = null;
             }
         }
 
@@ -1539,12 +1551,14 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
         private sealed class ControlledPackageInstallClient : IPackageInstallClient
         {
+            public Action BeforeAdd { get; set; }
             public List<string> AddedUrls { get; } = new List<string>();
 
             public List<ControlledRequest> Requests { get; } = new List<ControlledRequest>();
 
             public IPackageInstallRequest Add(string packageUrl)
             {
+                BeforeAdd?.Invoke();
                 AddedUrls.Add(packageUrl);
                 ControlledRequest request = new ControlledRequest();
                 Requests.Add(request);

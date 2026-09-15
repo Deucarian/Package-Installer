@@ -1,5 +1,4 @@
 using System;
-using UnityEditor;
 using UnityEngine;
 
 namespace Deucarian.PackageInstaller.Editor
@@ -11,6 +10,9 @@ namespace Deucarian.PackageInstaller.Editor
         public string projectPath;
         public long capturedAtUtcTicks;
         public string searchText;
+        public string workspaceSearchText;
+        public int workspaceCategory;
+        public PackageOperationQueueSnapshot queue;
         public bool showInstalled = true;
         public bool showNotInstalled = true;
         public string selectedPackageId;
@@ -52,42 +54,19 @@ namespace Deucarian.PackageInstaller.Editor
     internal static class PackageInstallerWindowReloadState
     {
         private const int CurrentSchemaVersion = 1;
-        private const string StateKey =
-            "Deucarian.PackageInstaller.WindowReloadState";
-
-        private static bool _isAssemblyReloading;
-
-        static PackageInstallerWindowReloadState()
+        internal static string Serialize(PackageInstallerWindowReloadSnapshot snapshot)
         {
-            EditorApplication.quitting -= HandleEditorQuitting;
-            EditorApplication.quitting += HandleEditorQuitting;
-        }
-
-        internal static bool IsAssemblyReloading => _isAssemblyReloading;
-
-        internal static void SaveForAssemblyReload(PackageInstallerWindowReloadSnapshot snapshot)
-        {
-            _isAssemblyReloading = true;
-
-            if (snapshot == null)
-            {
-                ClearSavedState();
-                return;
-            }
-
+            if (snapshot == null) return string.Empty;
             snapshot.schemaVersion = CurrentSchemaVersion;
             snapshot.projectPath = GetCurrentProjectPath();
             snapshot.capturedAtUtcTicks = DateTime.UtcNow.Ticks;
             Normalize(snapshot);
-            SessionState.SetString(StateKey, JsonUtility.ToJson(snapshot));
+            return JsonUtility.ToJson(snapshot);
         }
 
-        internal static bool TryConsume(out PackageInstallerWindowReloadSnapshot snapshot)
+        internal static bool TryDeserialize(string json, out PackageInstallerWindowReloadSnapshot snapshot)
         {
             snapshot = null;
-            string json = SessionState.GetString(StateKey, string.Empty);
-            SessionState.EraseString(StateKey);
-
             if (string.IsNullOrWhiteSpace(json))
             {
                 return false;
@@ -111,14 +90,6 @@ namespace Deucarian.PackageInstaller.Editor
 
             Normalize(snapshot);
             return true;
-        }
-
-        internal static void ClearForNormalDisable()
-        {
-            if (!_isAssemblyReloading)
-            {
-                ClearSavedState();
-            }
         }
 
         internal static PackageInstallerWindowReloadResolution Resolve(
@@ -180,25 +151,6 @@ namespace Deucarian.PackageInstaller.Editor
                 PackageGraphNavigationState.Overview());
         }
 
-        internal static void SetRawStateForTests(string json)
-        {
-            SessionState.SetString(StateKey, json ?? string.Empty);
-        }
-
-        internal static bool HasSavedStateForTests =>
-            !string.IsNullOrWhiteSpace(SessionState.GetString(StateKey, string.Empty));
-
-        internal static void SimulateNewDomainForTests()
-        {
-            _isAssemblyReloading = false;
-        }
-
-        internal static void ResetForTests()
-        {
-            _isAssemblyReloading = false;
-            ClearSavedState();
-        }
-
         private static bool IsValid(PackageInstallerWindowReloadSnapshot snapshot)
         {
             return snapshot != null &&
@@ -219,6 +171,8 @@ namespace Deucarian.PackageInstaller.Editor
         {
             snapshot.projectPath = snapshot.projectPath ?? string.Empty;
             snapshot.searchText = snapshot.searchText ?? string.Empty;
+            snapshot.workspaceSearchText = snapshot.workspaceSearchText ?? string.Empty;
+            snapshot.workspaceCategory = Mathf.Clamp(snapshot.workspaceCategory, 0, 2);
             snapshot.selectedPackageId = snapshot.selectedPackageId ?? string.Empty;
             snapshot.focusedPackageId = snapshot.focusedPackageId ?? string.Empty;
             snapshot.focusedGroupId = snapshot.focusedGroupId ?? string.Empty;
@@ -247,15 +201,5 @@ namespace Deucarian.PackageInstaller.Editor
                 .TrimEnd('/');
         }
 
-        private static void HandleEditorQuitting()
-        {
-            _isAssemblyReloading = false;
-            ClearSavedState();
-        }
-
-        private static void ClearSavedState()
-        {
-            SessionState.EraseString(StateKey);
-        }
     }
 }

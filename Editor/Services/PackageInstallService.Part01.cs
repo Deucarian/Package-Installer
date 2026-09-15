@@ -78,6 +78,15 @@ namespace Deucarian.PackageInstaller.Editor
                     selfUpdateAppliedOnReload,
                     out PackageOperationRecoveryRecord recoveryRecord))
             {
+                if (recoveryRecord != null && recoveryRecord.Steps.All(step =>
+                        step.State == PackageInstallProgressItemState.Completed ||
+                        step.State == PackageInstallProgressItemState.AlreadyCorrect))
+                {
+                    RestoreOperation(recoveryRecord);
+                    CompleteOperationIfIdle();
+                    CompleteRecoveredOperationWithoutRequestIfNeeded();
+                    NotifyStateChanged();
+                }
                 return false;
             }
 
