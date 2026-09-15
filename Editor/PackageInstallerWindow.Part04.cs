@@ -328,6 +328,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void UpdateOperationFooter()
         {
+            _queueView?.Refresh(CaptureQueue());
             if (_operationFooterContainer == null)
             {
                 return;

@@ -9,24 +9,14 @@ namespace Deucarian.PackageInstaller.Editor.Tests
         private const string IntegrationPackageId = "com.deucarian.session.api-integration";
         private const string IntegrationsGroupId = "integrations";
 
-        [SetUp]
-        public void SetUp()
-        {
-            PackageInstallerWindowReloadState.ResetForTests();
-        }
-
-        [TearDown]
-        public void TearDown()
-        {
-            PackageInstallerWindowReloadState.ResetForTests();
-        }
-
         [Test]
-        public void AssemblyReloadSnapshotRoundTripsOnceWithCompleteUiState()
+        public void WorkspaceReloadSnapshotRoundTripsWithCompleteUiState()
         {
             PackageInstallerWindowReloadSnapshot source = new PackageInstallerWindowReloadSnapshot
             {
                 searchText = "logging diagnostics",
+                workspaceSearchText = "notifications",
+                workspaceCategory = 2,
                 showInstalled = false,
                 showNotInstalled = true,
                 selectedPackageId = IntegrationPackageId,
@@ -46,14 +36,11 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 graphZoom = 0.82f
             };
 
-            PackageInstallerWindowReloadState.SaveForAssemblyReload(source);
-
-            Assert.IsTrue(PackageInstallerWindowReloadState.IsAssemblyReloading);
-            Assert.IsTrue(PackageInstallerWindowReloadState.HasSavedStateForTests);
-
-            PackageInstallerWindowReloadState.SimulateNewDomainForTests();
-            Assert.IsTrue(PackageInstallerWindowReloadState.TryConsume(out PackageInstallerWindowReloadSnapshot restored));
+            string state = PackageInstallerWindowReloadState.Serialize(source);
+            Assert.IsTrue(PackageInstallerWindowReloadState.TryDeserialize(state, out PackageInstallerWindowReloadSnapshot restored));
             Assert.AreEqual(source.searchText, restored.searchText);
+            Assert.AreEqual(source.workspaceSearchText, restored.workspaceSearchText);
+            Assert.AreEqual(source.workspaceCategory, restored.workspaceCategory);
             Assert.AreEqual(source.showInstalled, restored.showInstalled);
             Assert.AreEqual(source.showNotInstalled, restored.showNotInstalled);
             Assert.AreEqual(source.selectedPackageId, restored.selectedPackageId);
@@ -70,44 +57,70 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual(source.graphPanX, restored.graphPanX);
             Assert.AreEqual(source.graphPanY, restored.graphPanY);
             Assert.AreEqual(source.graphZoom, restored.graphZoom);
-            Assert.IsFalse(PackageInstallerWindowReloadState.HasSavedStateForTests);
-            Assert.IsFalse(PackageInstallerWindowReloadState.TryConsume(out _));
         }
 
         [Test]
-        public void AssemblyReloadDisableRetainsMarkerButNormalDisableClearsIt()
+        public void IndependentWorkspaceSnapshotsKeepOwnTabSearchSelectionAndQueue()
         {
-            PackageInstallerWindowReloadState.SaveForAssemblyReload(
-                new PackageInstallerWindowReloadSnapshot());
-
-            PackageInstallerWindowReloadState.ClearForNormalDisable();
-
-            Assert.IsTrue(PackageInstallerWindowReloadState.HasSavedStateForTests);
-
-            PackageInstallerWindowReloadState.SimulateNewDomainForTests();
-            PackageInstallerWindowReloadState.ClearForNormalDisable();
-
-            Assert.IsFalse(PackageInstallerWindowReloadState.HasSavedStateForTests);
+            string first = PackageInstallerWindowReloadState.Serialize(new PackageInstallerWindowReloadSnapshot
+            {
+                workspaceSearchText = "notifications", workspaceCategory = 1,
+                selectedPackageId = "com.deucarian.notifications", sidebarScrollY = 145,
+                queue = new PackageOperationQueueSnapshot
+                {
+                    operationName = "Install notifications",
+                    items = new[] { new PackageOperationQueueItem
+                    {
+                        packageId = "com.deucarian.notifications", displayName = "Notifications",
+                        state = PackageInstallProgressItemState.Completed
+                    } }
+                }
+            });
+            string second = PackageInstallerWindowReloadState.Serialize(new PackageInstallerWindowReloadSnapshot
+            {
+                workspaceSearchText = "themes", workspaceCategory = 2,
+                selectedPackageId = "com.deucarian.theming", sidebarScrollY = 20
+            });
+            Assert.IsTrue(PackageInstallerWindowReloadState.TryDeserialize(first, out var firstState));
+            Assert.IsTrue(PackageInstallerWindowReloadState.TryDeserialize(second, out var secondState));
+            Assert.AreEqual(1, firstState.workspaceCategory);
+            Assert.AreEqual("notifications", firstState.workspaceSearchText);
+            Assert.AreEqual("com.deucarian.notifications", firstState.selectedPackageId);
+            Assert.AreEqual(145, firstState.sidebarScrollY);
+            Assert.AreEqual("1 completed · 0 current · 0 remaining", firstState.queue.Summary);
+            Assert.AreEqual(2, secondState.workspaceCategory);
+            Assert.AreEqual("themes", secondState.workspaceSearchText);
+            Assert.AreEqual("com.deucarian.theming", secondState.selectedPackageId);
+            Assert.AreEqual(20, secondState.sidebarScrollY);
         }
 
         [Test]
-        public void MalformedOrInvalidCameraStateIsConsumedWithoutRestoring()
+        public void InvalidTabAndScrollValuesNormalizeWithoutDiscardingSelection()
         {
-            PackageInstallerWindowReloadState.SetRawStateForTests("{malformed");
+            string state = PackageInstallerWindowReloadState.Serialize(new PackageInstallerWindowReloadSnapshot
+            {
+                workspaceCategory = -1, sidebarScrollY = float.NaN, detailsScrollY = -10,
+                selectedPackageId = IntegrationPackageId
+            });
+            Assert.IsTrue(PackageInstallerWindowReloadState.TryDeserialize(state, out var restored));
+            Assert.AreEqual(0, restored.workspaceCategory);
+            Assert.AreEqual(0, restored.sidebarScrollY);
+            Assert.AreEqual(0, restored.detailsScrollY);
+            Assert.AreEqual(IntegrationPackageId, restored.selectedPackageId);
+        }
 
-            Assert.IsFalse(PackageInstallerWindowReloadState.TryConsume(out _));
-            Assert.IsFalse(PackageInstallerWindowReloadState.HasSavedStateForTests);
+        [Test]
+        public void MalformedOrInvalidCameraStateIsRejectedWithoutRestoring()
+        {
+            Assert.IsFalse(PackageInstallerWindowReloadState.TryDeserialize("{malformed", out _));
 
-            PackageInstallerWindowReloadState.SaveForAssemblyReload(
+            string state = PackageInstallerWindowReloadState.Serialize(
                 new PackageInstallerWindowReloadSnapshot
                 {
                     hasGraphCamera = true,
                     graphZoom = 0f
                 });
-            PackageInstallerWindowReloadState.SimulateNewDomainForTests();
-
-            Assert.IsFalse(PackageInstallerWindowReloadState.TryConsume(out _));
-            Assert.IsFalse(PackageInstallerWindowReloadState.HasSavedStateForTests);
+            Assert.IsFalse(PackageInstallerWindowReloadState.TryDeserialize(state, out _));
         }
 
         [Test]

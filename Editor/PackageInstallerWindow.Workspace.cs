@@ -20,8 +20,9 @@ namespace Deucarian.PackageInstaller.Editor
             private readonly Button refresh;
             private readonly Button update;
             private readonly Label status;
-            private string search = "";
+            private string search;
             private int category;
+            private bool restoreScroll = true;
             private string detailsId;
             private InstallerPackageDetails details;
             private string detailsRevision;
@@ -41,6 +42,8 @@ namespace Deucarian.PackageInstaller.Editor
             internal InstallerWorkspace(PackageInstallerWindow owner)
             {
                 this.owner = owner;
+                search = owner._workspaceSearchText ?? string.Empty;
+                category = owner._workspaceCategory;
                 View = new DeucarianEditorCollectionWorkspace(owner.PageRoot, Application.productName,
                     "Packages", "Add and update what your project needs.",
                     DeucarianToolIds.PackageInstaller, "Find a tool…");
@@ -49,9 +52,9 @@ namespace Deucarian.PackageInstaller.Editor
                 View.Workspace.Scope.AddToClassList("dw-package-filters");
                 DeucarianEditorWorkspaceNavigation.Populate(View.Workspace, DeucarianToolIds.PackageInstaller);
                 tabs = new DeucarianEditorChoiceBar(new[] { "Installed", "Browse", "Updates", "Dependency graph" },
-                    owner._viewMode == InstallerViewMode.EcosystemGraph ? 3 : 0, true);
+                    owner._viewMode == InstallerViewMode.EcosystemGraph ? 3 : category, true);
                 tabs.Changed += value => {
-                    if (value < 3) category = value;
+                    if (value < 3) owner._workspaceCategory = category = value;
                     owner.SetViewMode(value == 3 ? InstallerViewMode.EcosystemGraph : InstallerViewMode.List);
                     Refresh();
                 };
@@ -75,8 +78,9 @@ namespace Deucarian.PackageInstaller.Editor
                     value => { if (value == 0) owner.ClearGlobalChannelOverrideFromPopup(); else owner.SetGlobalChannelOverride(value == 2 ? PackageChannel.Development : PackageChannel.Stable); Refresh(); });
                 status = DeucarianEditorWorkspaceControls.Label("", "dw-muted");
                 View.Workspace.FooterLeading.text = "Loading packages…";
-                packageSearch = DeucarianEditorSearchField.Create("Find a package…", value => { search = value ?? ""; Refresh(); });
+                packageSearch = DeucarianEditorSearchField.Create("Find a package…", value => { owner._workspaceSearchText = search = value ?? ""; Refresh(); });
                 packageSearch.name = "installer-package-search";
+                packageSearch.SetValueWithoutNotify(search);
                 View.Workspace.Scope.Add(packageSearch);
                 View.SetItems(Array.Empty<DeucarianEditorCollectionItem>(), null, "Loading packages…");
                 loading = DeucarianEditorWorkspaceControls.Panel("installer-loading");
@@ -213,6 +217,26 @@ namespace Deucarian.PackageInstaller.Editor
                     details = new InstallerPackageDetails(owner, View.Details, selected);
                 }
                 details.Refresh();
+                if (restoreScroll)
+                {
+                    restoreScroll = false;
+                    View.Collection.schedule.Execute(() =>
+                    {
+                        var list = View.Collection.Q<ScrollView>("workspace-collection");
+                        if (list != null) list.scrollOffset = owner._sidebarScrollPosition;
+                        if (View.Details is ScrollView detailScroll) detailScroll.scrollOffset = owner._detailsScrollPosition;
+                    });
+                }
+            }
+
+            internal void CaptureState()
+            {
+                owner._workspaceSearchText = search;
+                owner._workspaceCategory = category;
+                if (restoreScroll) return;
+                var list = View.Collection.Q<ScrollView>("workspace-collection");
+                if (list != null) owner._sidebarScrollPosition = list.scrollOffset;
+                if (View.Details is ScrollView detailsScroll) owner._detailsScrollPosition = detailsScroll.scrollOffset;
             }
 
             private void SetLoading(bool value, string message)

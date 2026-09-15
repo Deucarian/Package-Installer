@@ -9,37 +9,6 @@ namespace Deucarian.PackageInstaller.Editor
     {
 
 
-        private static PackageOperationRecoveryStep NormalizeStepForResume(
-            PackageOperationRecoveryStep step,
-            bool selfUpdateAppliedOnReload)
-        {
-            PackageInstallProgressItemState state = step.State == PackageInstallProgressItemState.Active
-                ? PackageInstallProgressItemState.Pending
-                : step.State;
-            string[] prerequisites = selfUpdateAppliedOnReload
-                ? step.PrerequisitePackageIds
-                    .Where(id => !PackageInstallerRuntimeIdentity.IsSelf(id))
-                    .ToArray()
-                : step.PrerequisitePackageIds.ToArray();
-
-            return new PackageOperationRecoveryStep(
-                step.PackageId,
-                step.DisplayName,
-                step.Channel,
-                step.TargetUrl,
-                step.IsDependency,
-                prerequisites,
-                step.RootPackageIds,
-                step.RootPaths,
-                step.DependencyReason,
-                state,
-                step.Message,
-                step.DetectedCurrentSource,
-                step.DetectedCurrentVersion,
-                step.DetectedCurrentIdentity,
-                step.RequestedChannel);
-        }
-
         private static bool IsResumableState(PackageInstallProgressItemState state)
         {
             return state == PackageInstallProgressItemState.Pending ||
@@ -54,7 +23,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             foreach (PackageOperationRecoveryStep recoveryStep in record.Steps)
             {
-                PackageDefinition packageDefinition = CreateRecoveredPackageDefinition(recoveryStep);
+                PackageDefinition packageDefinition = PackageOperationRecoveryPreparation.CreateDefinition(recoveryStep);
                 definitions[recoveryStep.PackageId] = packageDefinition;
                 planSteps.Add(new PackageDependencyInstallStep(
                     packageDefinition,
@@ -119,27 +88,6 @@ namespace Deucarian.PackageInstaller.Editor
                     recoveryStep.State,
                     recoveryStep.Message);
             }
-        }
-
-        private static PackageDefinition CreateRecoveredPackageDefinition(
-            PackageOperationRecoveryStep step)
-        {
-            string displayName = string.IsNullOrWhiteSpace(step.DisplayName)
-                ? step.PackageId
-                : step.DisplayName;
-            string developmentUrl = step.Channel == PackageChannel.Development
-                ? step.TargetUrl
-                : string.Empty;
-
-            return new PackageDefinition(
-                displayName,
-                step.PackageId,
-                step.TargetUrl,
-                string.Empty,
-                Array.Empty<string>(),
-                PackageKind.Library,
-                developmentUrl,
-                category: "Tools");
         }
 
         private void NotifyStateChanged()
