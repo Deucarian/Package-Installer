@@ -109,6 +109,12 @@ namespace Deucarian.PackageInstaller.Editor
                     return "Failed";
                 case PackageInstallProgressItemState.Skipped:
                     return "Skipped";
+                case PackageInstallProgressItemState.Blocked:
+                    return "Blocked";
+                case PackageInstallProgressItemState.Canceled:
+                    return "Canceled";
+                case PackageInstallProgressItemState.AlreadyCorrect:
+                    return "Already installed";
                 default:
                     return "Pending";
             }

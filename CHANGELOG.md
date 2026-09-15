@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.7.6] - 2026-09-15
+
+- Show the complete dependency queue before the first package request and retain completed/current/remaining progress through reload and completion. Restore each workspace independently.
+
+
 ## 1.7.5 - Unreleased
 
 - Refresh the API fallback dependency graph for cancellation-safe browser texture ownership.

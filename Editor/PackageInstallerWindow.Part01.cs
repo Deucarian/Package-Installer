@@ -300,7 +300,7 @@ namespace Deucarian.PackageInstaller.Editor
         {
             AssemblyReloadEvents.beforeAssemblyReload -= HandleBeforeAssemblyReload;
             AssemblyReloadEvents.beforeAssemblyReload += HandleBeforeAssemblyReload;
-            bool restoredAfterReload = PackageInstallerWindowReloadState.TryConsume(
+            bool restoredAfterReload = PackageInstallerWindowReloadState.TryDeserialize(_windowReloadState,
                 out PackageInstallerWindowReloadSnapshot reloadSnapshot);
             if (restoredAfterReload)
             {
