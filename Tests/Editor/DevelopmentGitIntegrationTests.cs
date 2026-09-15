@@ -57,6 +57,65 @@ namespace Deucarian.PackageInstaller.Editor.Tests
 
         // Fixtures are retained beneath the explicit validation root as inspectable evidence.
         [UnityTest]
+        public IEnumerator DefaultNestedCloneKeepsConsumerCleanAndPackageGitIndependent() => DevelopmentAsyncTest.Run(async () =>
+        {
+            await Git(_consumer, "init", "--initial-branch=develop");
+            await ConfigureIdentity(_consumer);
+            File.WriteAllText(Path.Combine(_consumer, "consumer.txt"), "preserve me\n");
+            await Git(_consumer, "add", ".");
+            await Git(_consumer, "commit", "-m", "Consumer baseline");
+            string head = await Git(_consumer, "rev-parse", "HEAD");
+            string index = await Git(_consumer, "ls-files", "--stage", "-z");
+            string destination = DevelopmentCheckoutLocation.DefaultPath(_consumer, PackageId);
+            var clone = await _repositories.CloneAsync(PackageId, _remotePath, destination, _consumer, _token);
+            Assert.That(await Git(_consumer, "status", "--porcelain"), Is.Empty);
+            Assert.That(File.Exists(Path.Combine(_consumer, ".gitignore")), Is.False);
+            var workspace = new DevelopmentGitWorkspace(clone, _repositories, _runner, _files);
+            await workspace.RefreshAsync(_token);
+            await workspace.CreateBranchAsync("feature/nested-checkout", _token);
+            await ConfigureIdentity(destination);
+            File.WriteAllText(Path.Combine(destination, "Asset.txt"), "nested package edit\n");
+            await workspace.RefreshAsync(_token);
+            await workspace.StageAsync(new[] { "Asset.txt" }, _token);
+            await workspace.CommitAsync("Only package source", _token);
+            await workspace.PushAsync(_token);
+            Assert.That(await Git(_consumer, "rev-parse", "HEAD"), Is.EqualTo(head));
+            Assert.That(await Git(_consumer, "ls-files", "--stage", "-z"), Is.EqualTo(index));
+            Assert.That(await Git(_consumer, "status", "--porcelain"), Is.Empty);
+            Assert.That((await Git(_remotePath, "rev-parse", "feature/nested-checkout")).Trim(),
+                Is.EqualTo((await Git(destination, "rev-parse", "HEAD")).Trim()));
+        });
+
+        [UnityTest]
+        public IEnumerator DefaultCloneNeverHidesTrackedProjectFiles() => DevelopmentAsyncTest.Run(async () =>
+        {
+            await Git(_consumer, "init", "--initial-branch=develop");
+            string destination = DevelopmentCheckoutLocation.DefaultPath(_consumer, PackageId);
+            Directory.CreateDirectory(destination);
+            File.WriteAllText(Path.Combine(destination, "tracked.txt"), "existing project source");
+            await Git(_consumer, "add", ".");
+            string index = await Git(_consumer, "ls-files", "--stage", "-z");
+            await DevelopmentAsyncTest.ThrowsAsync<DevelopmentGitException>(async () =>
+                await _repositories.CloneAsync(PackageId, _remotePath, destination, _consumer, _token));
+            Assert.That(await Git(_consumer, "ls-files", "--stage", "-z"), Is.EqualTo(index));
+            Assert.That(File.ReadAllText(Path.Combine(destination, "tracked.txt")), Is.EqualTo("existing project source"));
+        });
+
+        [UnityTest]
+        public IEnumerator LocalExcludeUpdateIsIdempotentAndPreservesExistingRules() => DevelopmentAsyncTest.Run(async () =>
+        {
+            await Git(_consumer, "init", "--initial-branch=develop");
+            string exclude = Path.Combine(_consumer, ".git", "info", "exclude");
+            File.WriteAllText(exclude, "# keep this rule\nprivate-notes.txt\n");
+            var storage = new DevelopmentLocalCheckoutStorage(_runner, _files);
+            await storage.PrepareAsync(_consumer, PackageId, _token);
+            string once = File.ReadAllText(exclude);
+            await storage.PrepareAsync(_consumer, PackageId, _token);
+            Assert.That(File.ReadAllText(exclude), Is.EqualTo(once));
+            StringAssert.StartsWith("# keep this rule\nprivate-notes.txt\n", once);
+        });
+
+        [UnityTest]
         public IEnumerator SelectedStageCommitPushPreservesUnselectedConsumerAndWorkingFiles() => DevelopmentAsyncTest.Run(SelectedStageCommitPushPreservesUnselectedConsumerAndWorkingFilesAsync);
 
         public async Task SelectedStageCommitPushPreservesUnselectedConsumerAndWorkingFilesAsync()

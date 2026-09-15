@@ -24,6 +24,7 @@ namespace Deucarian.PackageInstaller.Editor.Development
         { this.projectRoot = projectRoot; this.repositories = repositories; this.runner = runner; this.files = files; this.sources = sources; }
 
         internal DevelopmentInstalledPackage Package { get; private set; }
+        internal string DefaultCheckoutPath => Package == null ? "" : DevelopmentCheckoutLocation.DefaultPath(projectRoot, Package.Id);
         internal DevelopmentRepository Repository { get; private set; }
         internal DevelopmentGitSnapshot Snapshot { get; private set; }
         internal PackageDevelopmentSession Session { get; private set; }

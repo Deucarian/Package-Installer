@@ -698,6 +698,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 new[]
                 {
                     "com.deucarian.common",
+                    "com.deucarian.editor",
                     "com.deucarian.logging"
                 },
                 objectLoading.dependencies);
@@ -950,7 +951,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             PackageRegistryEntry persistence = result.Registry.packages
                 .Single(package => package.id == "com.deucarian.persistence");
             Assert.AreEqual("state-data", persistence.groupId);
-            CollectionAssert.IsEmpty(persistence.dependencies);
+            CollectionAssert.AreEqual(new[] { "com.deucarian.editor" }, persistence.dependencies);
 
             PackageRegistryEntry defenseGames = result.Registry.packages
                 .Single(package => package.id == "com.deucarian.defense-games");
@@ -980,7 +981,9 @@ namespace Deucarian.PackageInstaller.Editor.Tests
             Assert.AreEqual("Core", monetization.type);
             Assert.AreEqual("Runtime Services", monetization.ecosystemGroup);
             Assert.AreEqual("runtime-services", monetization.groupId);
-            CollectionAssert.IsEmpty(monetization.dependencies);
+            CollectionAssert.AreEqual(
+                new[] { "com.deucarian.diagnostics", "com.deucarian.editor" },
+                monetization.dependencies);
             StringAssert.Contains("Monetization.git#main", monetization.stableUrl);
             StringAssert.Contains("Monetization.git#develop", monetization.developmentUrl);
 

@@ -20,7 +20,7 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (_listViewContainerHost != null)
             {
-                _listViewContainerHost.style.display = graphMode ? DisplayStyle.None : DisplayStyle.Flex;
+                _listViewContainerHost.style.display = graphMode || (_workspace?.IsLoading ?? false) ? DisplayStyle.None : DisplayStyle.Flex;
             }
 
             if (_graphModeContainer != null)
@@ -31,14 +31,6 @@ namespace Deucarian.PackageInstaller.Editor
             if (_operationDrawerContainer != null)
             {
                 RefreshOperationDrawerContent();
-            }
-
-            if (_operationFooterContainer != null)
-            {
-                _operationFooterContainer.style.display = DisplayStyle.Flex;
-                _operationFooterContainer.style.height = OperationFooterHeight;
-                _operationFooterContainer.style.minHeight = OperationFooterHeight;
-                _operationFooterContainer.style.maxHeight = OperationFooterHeight;
             }
 
             UpdateOperationFooter();
@@ -245,7 +237,7 @@ namespace Deucarian.PackageInstaller.Editor
 
                 using (PackageGraphOpenProfiler.Measure(PackageGraphOpenTiming.LayoutRepaintScheduling))
                 {
-                    _graphDetailsContainer?.MarkDirtyRepaint();
+                    _nativeGraphDetails?.Refresh();
                     _operationDrawerContainer?.MarkDirtyRepaint();
                     UpdateOperationFooter();
                     UpdateViewVisibility();

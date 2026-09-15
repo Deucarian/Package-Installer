@@ -103,9 +103,26 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 PackageRegistryProvider.CaptureCachedStatus();
                 Assert.AreSame(load, loader.LocalLoad, "Status contributors must not fall back to a synchronous read.");
                 Assert.NotNull(root.Q("workspace-navigation"));
+                var activity = root.Q(PackageInstallerWindow.OperationFooterRowName);
+                Assert.That(activity.ClassListContains("dw-operation-status"), Is.True);
+                Assert.That(activity.parent.name, Is.EqualTo("workspace-content"),
+                    "Operation activity belongs to the page, never the stationary scale dock.");
+                Assert.IsNull(activity.Q(PackageInstallerWindow.OperationFooterVersionName));
+                var search = root.Q<TextField>("installer-package-search");
+                Assert.NotNull(search, "Package filtering must not replace global tool navigation.");
+                Assert.That(search.parent.ClassListContains("dw-package-filters"), Is.True);
+                Assert.That(root.Query<TextField>().ToList().Count, Is.GreaterThanOrEqualTo(2));
                 Assert.That(root.Query<Label>().ToList().Any(label => label.text.Contains("Loading")), Is.True);
                 Assert.IsNull(Field(window, "_graphView"), "Opening the list must not construct the graph.");
                 Assert.IsFalse(root.Q("installer-project-channel").enabledInHierarchy);
+                Invoke(window, "UpdateViewVisibility");
+                Assert.That(root.Q("installer-loading").style.display.value, Is.EqualTo(DisplayStyle.Flex));
+                Assert.That(root.Q("installer-loading").Query(className: "dw-loading-placeholder").ToList().Count, Is.EqualTo(3));
+                Assert.That(root.Q("installer-loading").Query(className: "dw-loading-avatar").ToList().Count, Is.EqualTo(3));
+                Assert.NotNull(root.Q("installer-loading").Q(className: "dw-progress-fill"));
+                Assert.That(root.Q("installer-loading").Query<Label>().ToList().Any(label => label.text == "You can keep using the Control Center."), Is.True);
+                Assert.That(((VisualElement)Field(window, "_listViewContainerHost")).style.display.value, Is.EqualTo(DisplayStyle.None),
+                    "Visibility refresh must not reveal the empty list behind the loading state.");
                 Invoke(window, "RefreshGraphView", "loading regression");
                 Assert.IsNull(Field(window, "_cachedPackageGraph"));
                 UnityEngine.Object.DestroyImmediate(window);
@@ -135,7 +152,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 var detection = (PackageDetectionService)Field(window, "_packageDetectionService");
                 typeof(PackageDetectionService).GetProperty("HasSuccessfulRefresh").SetValue(detection, true);
                 var workspace = Field(window, "_workspace");
-                workspace.GetType().GetField("category", Private).SetValue(workspace, 2);
+                workspace.GetType().GetField("category", Private).SetValue(workspace, 1);
                 Invoke(workspace, "Refresh");
                 var rows = root.Q("workspace-collection-rows");
                 Assert.AreEqual(0, rows.childCount, "Refresh should schedule rows, not build them inline.");
@@ -143,7 +160,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 for (int i = 0; i < 100 && rows.childCount == 0; i++) Invoke(workspace, "PumpRows");
                 Assert.Greater(rows.childCount, 0);
                 Assert.Less(rows.childCount, total);
-                root.Q<TextField>().SetValueWithoutNotify(string.Empty);
+                root.Q<TextField>("installer-package-search").SetValueWithoutNotify(string.Empty);
                 workspace.GetType().GetField("search", Private).SetValue(workspace, "no-such-package-async-test");
                 Invoke(workspace, "Refresh");
                 for (int i = 0; i < 100; i++) Invoke(workspace, "PumpRows");

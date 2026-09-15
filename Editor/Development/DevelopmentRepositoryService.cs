@@ -26,13 +26,16 @@ namespace Deucarian.PackageInstaller.Editor.Development
             string expectedIdentity = DevelopmentGitPolicy.RemoteIdentity(expectedRemote, _allowFixtureRemotes);
             string root = _files.Canonicalize(selectedPath);
             string consumer = _files.Canonicalize(consumerRoot);
-            RejectConsumerOverlap(root, consumer);
+            DevelopmentCheckoutLocation.RequireAllowed(root, consumer, packageId);
+            if (DevelopmentCheckoutLocation.IsDefault(consumer, packageId, root))
+                await new DevelopmentLocalCheckoutStorage(_git, _files).RequireIgnoredAsync(consumer, packageId, token).ConfigureAwait(false);
             string actualRoot = _files.Canonicalize(await Required(root, token, "rev-parse", "--show-toplevel").ConfigureAwait(false));
             if (!DevelopmentGitPolicy.SamePath(root, actualRoot))
                 throw new DevelopmentGitException("Select the package repository root. Nested package layouts are not supported in this version.");
             string common = await GitPath(root, "--git-common-dir", token).ConfigureAwait(false);
             string gitDirectory = await GitPath(root, "--git-dir", token).ConfigureAwait(false);
-            RejectConsumerOverlap(common, consumer);
+            DevelopmentCheckoutLocation.RequireAllowed(common, consumer, packageId, true);
+            DevelopmentCheckoutLocation.RequireAllowed(gitDirectory, consumer, packageId, true);
             await RejectConsumerGit(root, common, consumer, token).ConfigureAwait(false);
             RequirePackageIdentity(root, packageId);
             string[] urls = (await Required(root, token, "remote", "get-url", "--all", "origin").ConfigureAwait(false)).Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
@@ -70,9 +73,11 @@ namespace Deucarian.PackageInstaller.Editor.Development
             DevelopmentGitPolicy.RequireAbsolutePath(consumerRoot);
             DevelopmentGitPolicy.RequireSourceBranch(sourceBranch);
             string full = Path.GetFullPath(destination);
+            if (DevelopmentCheckoutLocation.IsDefault(consumerRoot, packageId, full))
+                await new DevelopmentLocalCheckoutStorage(_git, _files).PrepareAsync(consumerRoot, packageId, token).ConfigureAwait(false);
             string parent = _files.Canonicalize(Path.GetDirectoryName(full));
             string canonicalDestination = Path.Combine(parent, Path.GetFileName(full));
-            RejectConsumerOverlap(canonicalDestination, _files.Canonicalize(consumerRoot));
+            DevelopmentCheckoutLocation.RequireAllowed(canonicalDestination, _files.Canonicalize(consumerRoot), packageId);
             if (_files.FileExists(canonicalDestination) || _files.DirectoryExists(canonicalDestination))
                 throw new DevelopmentGitException("Choose a new, absent clone folder. Existing repositories require explicit reuse.");
             // Git clone creates this folder. Cancellation/failure never removes a partial clone or user files.
@@ -108,12 +113,6 @@ namespace Deucarian.PackageInstaller.Editor.Development
             if (DevelopmentGitPolicy.SamePath(root, consumerRepository) || DevelopmentGitPolicy.SamePath(common, consumerCommon) ||
                 DevelopmentGitPolicy.ContainsPath(common, consumerRepository))
                 throw new DevelopmentGitException("The consumer repository and its linked worktrees cannot be a package Git target.");
-        }
-        private static void RejectConsumerOverlap(string root, string consumer)
-        {
-            if (DevelopmentGitPolicy.ContainsPath(root, consumer) || DevelopmentGitPolicy.ContainsPath(consumer, root) ||
-                root.Replace('\\', '/').Split('/').Any(part => part.Equals("PackageCache", StringComparison.OrdinalIgnoreCase)))
-                throw new DevelopmentGitException("Choose a separate package repository outside the consumer project and PackageCache.");
         }
         private async Task<string> GitPath(string root, string option, CancellationToken token)
         {

@@ -54,7 +54,7 @@ namespace Deucarian.PackageInstaller.Editor.Tests
                 Assert.NotNull(root.Q("workspace-details"));
                 var tabs = root.Q<DeucarianEditorChoiceBar>();
                 Assert.NotNull(tabs);
-                CollectionAssert.AreEqual(new[] { "Installed", "Updates", "Browse", "Dependency graph" },
+                CollectionAssert.AreEqual(new[] { "Installed", "Browse", "Updates", "Dependency graph" },
                     tabs.Children().OfType<Button>().Select(button => button.text).ToArray());
                 Assert.AreEqual(0, tabs.Value);
                 Assert.NotNull(root.Q("installer-project-channel"));

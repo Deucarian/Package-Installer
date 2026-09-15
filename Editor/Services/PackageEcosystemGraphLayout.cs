@@ -1050,7 +1050,7 @@ namespace Deucarian.PackageInstaller.Editor
             ISet<string> placedGroupIds,
             ICollection<PackageGraphOverflowSummary> overflowSummaries)
         {
-            EgoCategoryCluster[] clusters = CreateEgoCategoryClusters(graph, nodes, placedPackageIds);
+            PackageGraphEgoCluster[] clusters = CreatePackageGraphEgoClusters(graph, nodes, placedPackageIds);
 
             if (clusters.Length == 0)
             {
@@ -1059,7 +1059,10 @@ namespace Deucarian.PackageInstaller.Editor
 
             int packageCount = clusters.Sum(cluster => cluster.Packages.Count);
 
-            if (packageCount > DenseEgoVisibleLimit)
+            bool vertical = zone == PackageGraphEgoLayoutZone.Providers ||
+                            zone == PackageGraphEgoLayoutZone.Dependents;
+            if (packageCount > DenseEgoVisibleLimit ||
+                (vertical && PackageGraphEgoCluster.NeedsDenseLayout(clusters, metrics)))
             {
                 PlaceDenseEgoZone(
                     graph,
@@ -1108,14 +1111,14 @@ namespace Deucarian.PackageInstaller.Editor
                 placedGroupIds);
         }
 
-        private static EgoCategoryCluster[] CreateEgoCategoryClusters(
+        private static PackageGraphEgoCluster[] CreatePackageGraphEgoClusters(
             PackageGraphModel graph,
             IReadOnlyList<PackageGraphNode> nodes,
             ISet<string> placedPackageIds)
         {
             if (graph == null || nodes == null || nodes.Count == 0)
             {
-                return Array.Empty<EgoCategoryCluster>();
+                return Array.Empty<PackageGraphEgoCluster>();
             }
 
             Dictionary<string, List<PackageGraphNode>> packagesByGroup =
@@ -1144,7 +1147,7 @@ namespace Deucarian.PackageInstaller.Editor
                 {
                     return !graph.TryGetGroup(pair.Key, out PackageGraphGroup group)
                         ? null
-                        : new EgoCategoryCluster(
+                        : new PackageGraphEgoCluster(
                             group,
                             pair.Value
                                 .OrderBy(GetRelationshipSortIndex)
@@ -1172,7 +1175,7 @@ namespace Deucarian.PackageInstaller.Editor
             float defaultY = zone == PackageGraphEgoLayoutZone.Integrations
                 ? metrics.IntegrationPackageY
                 : metrics.CompanionPackageY;
-            EgoCategoryCluster[] clusters = CreateEgoCategoryClusters(graph, nodes, placedPackageIds);
+            PackageGraphEgoCluster[] clusters = CreatePackageGraphEgoClusters(graph, nodes, placedPackageIds);
 
             if (clusters.Length == 0)
             {
@@ -1237,7 +1240,7 @@ namespace Deucarian.PackageInstaller.Editor
         }
 
         private static Rect GetHorizontalZoneSpan(
-            IReadOnlyList<EgoCategoryCluster> clusters,
+            IReadOnlyList<PackageGraphEgoCluster> clusters,
             PackageGraphEgoLayoutMetrics metrics)
         {
             int packageCount = clusters?.Sum(cluster => cluster.Packages.Count) ?? 0;
@@ -1276,7 +1279,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static void PlaceDenseEgoZone(
             PackageGraphModel graph,
-            IReadOnlyList<EgoCategoryCluster> clusters,
+            IReadOnlyList<PackageGraphEgoCluster> clusters,
             PackageGraphEgoLayoutZone zone,
             PackageGraphEgoLayoutMetrics metrics,
             float horizontalPackageY,
@@ -1416,7 +1419,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static void AddDenseContextGroups(
             PackageGraphModel graph,
-            IReadOnlyList<EgoCategoryCluster> clusters,
+            IReadOnlyList<PackageGraphEgoCluster> clusters,
             IReadOnlyCollection<PackageGraphNode> visiblePackages,
             bool vertical,
             float anchorX,
@@ -1427,7 +1430,7 @@ namespace Deucarian.PackageInstaller.Editor
             HashSet<string> visiblePackageIds = new HashSet<string>(
                 visiblePackages.Select(package => package.PackageId),
                 StringComparer.OrdinalIgnoreCase);
-            EgoCategoryCluster[] visibleClusters = clusters
+            PackageGraphEgoCluster[] visibleClusters = clusters
                 .Where(cluster => cluster.Packages.Any(package => visiblePackageIds.Contains(package.PackageId)))
                 .Take(4)
                 .ToArray();
@@ -1452,7 +1455,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static void PlaceVerticalEgoClusters(
             PackageGraphModel graph,
-            IReadOnlyList<EgoCategoryCluster> clusters,
+            IReadOnlyList<PackageGraphEgoCluster> clusters,
             PackageGraphEgoLayoutZone zone,
             PackageGraphEgoLayoutMetrics metrics,
             IDictionary<string, Rect> nodeRects,
@@ -1462,15 +1465,7 @@ namespace Deucarian.PackageInstaller.Editor
             ICollection<PackageGraphGroupLayoutNode> groupNodes,
             ISet<string> placedGroupIds)
         {
-            float anchorSpan = 0f;
-
-            for (int index = 0; index < clusters.Count - 1; index++)
-            {
-                anchorSpan += GetVerticalClusterDownExtent(clusters[index], metrics) +
-                              metrics.PackageSubclusterGap +
-                              GetVerticalClusterUpExtent(clusters[index + 1], metrics);
-            }
-
+            float anchorSpan = PackageGraphEgoCluster.GetVerticalAnchorSpan(clusters, metrics);
             float clusterCenterY = metrics.SelectedNodeCenter.y - anchorSpan * 0.5f;
             float packageX = zone == PackageGraphEgoLayoutZone.Providers
                 ? metrics.ProviderPackageX
@@ -1481,8 +1476,8 @@ namespace Deucarian.PackageInstaller.Editor
 
             for (int clusterIndex = 0; clusterIndex < clusters.Count; clusterIndex++)
             {
-                EgoCategoryCluster cluster = clusters[clusterIndex];
-                float packageStackHeight = GetVerticalPackageStackHeight(cluster, metrics);
+                PackageGraphEgoCluster cluster = clusters[clusterIndex];
+                float packageStackHeight = cluster.GetVerticalStackHeight(metrics);
                 float packageStartY = clusterCenterY - packageStackHeight * 0.5f;
 
                 for (int index = 0; index < cluster.Packages.Count; index++)
@@ -1506,16 +1501,16 @@ namespace Deucarian.PackageInstaller.Editor
 
                 if (clusterIndex < clusters.Count - 1)
                 {
-                    clusterCenterY += GetVerticalClusterDownExtent(cluster, metrics) +
+                    clusterCenterY += cluster.GetVerticalDownExtent(metrics) +
                                       metrics.PackageSubclusterGap +
-                                      GetVerticalClusterUpExtent(clusters[clusterIndex + 1], metrics);
+                                      clusters[clusterIndex + 1].GetVerticalUpExtent(metrics);
                 }
             }
         }
 
         private static void PlaceHorizontalEgoClusters(
             PackageGraphModel graph,
-            IReadOnlyList<EgoCategoryCluster> clusters,
+            IReadOnlyList<PackageGraphEgoCluster> clusters,
             PackageGraphEgoLayoutZone zone,
             PackageGraphEgoLayoutMetrics metrics,
             float horizontalPackageY,
@@ -1544,7 +1539,7 @@ namespace Deucarian.PackageInstaller.Editor
                   metrics.CategoryNodeGap -
                   metrics.ContextGroupDownExtent;
 
-            foreach (EgoCategoryCluster cluster in clusters)
+            foreach (PackageGraphEgoCluster cluster in clusters)
             {
                 float clusterWidth = GetHorizontalClusterWidth(cluster, metrics);
                 float clusterCenterX = cursorX + clusterWidth * 0.5f;
@@ -1575,7 +1570,7 @@ namespace Deucarian.PackageInstaller.Editor
 
         private static void AddEgoContextGroup(
             PackageGraphModel graph,
-            EgoCategoryCluster cluster,
+            PackageGraphEgoCluster cluster,
             Vector2 hubCenter,
             ICollection<PackageGraphGroupLayoutNode> groupNodes,
             ISet<string> placedGroupIds)
@@ -1604,26 +1599,8 @@ namespace Deucarian.PackageInstaller.Editor
                     : cluster.Packages.Count + " related packages"));
         }
 
-        private static float GetVerticalClusterUpExtent(
-            EgoCategoryCluster cluster,
-            PackageGraphEgoLayoutMetrics metrics)
-        {
-            return Mathf.Max(
-                GetVerticalPackageStackHeight(cluster, metrics) * 0.5f,
-                metrics.ContextGroupUpExtent);
-        }
-
-        private static float GetVerticalClusterDownExtent(
-            EgoCategoryCluster cluster,
-            PackageGraphEgoLayoutMetrics metrics)
-        {
-            return Mathf.Max(
-                GetVerticalPackageStackHeight(cluster, metrics) * 0.5f,
-                metrics.ContextGroupDownExtent);
-        }
-
         private static float GetHorizontalClusterWidth(
-            EgoCategoryCluster cluster,
+            PackageGraphEgoCluster cluster,
             PackageGraphEgoLayoutMetrics metrics)
         {
             return Mathf.Max(
@@ -1631,19 +1608,8 @@ namespace Deucarian.PackageInstaller.Editor
                 Mathf.Max(GroupChipHubSize, GroupChipCaptionWidth));
         }
 
-        private static float GetVerticalPackageStackHeight(
-            EgoCategoryCluster cluster,
-            PackageGraphEgoLayoutMetrics metrics)
-        {
-            int count = cluster == null ? 0 : cluster.Packages.Count;
-            return count <= 0
-                ? 0f
-                : count * metrics.RelatedPackageMetrics.Height +
-                  Mathf.Max(0, count - 1) * metrics.PackageCardGap;
-        }
-
         private static float GetHorizontalPackageRowWidth(
-            EgoCategoryCluster cluster,
+            PackageGraphEgoCluster cluster,
             PackageGraphEgoLayoutMetrics metrics)
         {
             int count = cluster == null ? 0 : cluster.Packages.Count;
@@ -2472,21 +2438,6 @@ namespace Deucarian.PackageInstaller.Editor
             {
                 return new ChildPlacement(null, package);
             }
-        }
-
-        private sealed class EgoCategoryCluster
-        {
-            public EgoCategoryCluster(PackageGraphGroup group, IReadOnlyList<PackageGraphNode> packages)
-            {
-                Group = group;
-                Packages = packages == null
-                    ? Array.Empty<PackageGraphNode>()
-                    : packages.Where(package => package != null).ToArray();
-            }
-
-            public PackageGraphGroup Group { get; }
-
-            public IReadOnlyList<PackageGraphNode> Packages { get; }
         }
 
         private sealed class PackageGraphNodePackageIdComparer : IEqualityComparer<PackageGraphNode>

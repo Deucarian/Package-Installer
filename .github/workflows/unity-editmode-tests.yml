@@ -227,7 +227,7 @@ jobs:
       - name: Prepare Unity OpenSSL 1.1 compatibility
         shell: bash
         env:
-          OPENSSL11_URL: https://security.debian.org/debian-security/pool/updates/main/o/openssl/libssl1.1_1.1.1w-0%2Bdeb11u8_amd64.deb
+          OPENSSL11_URL: https://snapshot.debian.org/archive/debian-security/20260615T025018Z/pool/updates/main/o/openssl/libssl1.1_1.1.1w-0%2Bdeb11u8_amd64.deb
           OPENSSL11_SHA256: dcc68a543de6cb955a57077b66dcdb15f61d1e31e072f2c6cc4082c37da1b00d
         run: |
           set -euo pipefail

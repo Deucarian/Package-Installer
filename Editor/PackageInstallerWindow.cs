@@ -321,7 +321,8 @@ namespace Deucarian.PackageInstaller.Editor
         private VisualElement _graphContentRow;
         private VisualElement _windowContentRoot;
         private IMGUIContainer _listViewContainer;
-        private IMGUIContainer _graphDetailsContainer;
+        private VisualElement _graphDetailsContainer;
+        private InstallerGraphDetails _nativeGraphDetails;
         private VisualElement _operationDrawerContainer;
         private ScrollView _operationDrawerScrollView;
         private VisualElement _operationDrawerContent;
