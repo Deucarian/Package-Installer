@@ -69,7 +69,6 @@ namespace Deucarian.PackageInstaller.Editor
             PackageInstallerActivityService.Changed -= UpdateOperationFooter;
             HideGlobalChannelOverridePopup();
             _stateRepository = null;
-            PackageInstallerWindowReloadState.ClearForNormalDisable();
         }
         private void CreateGUI()
         {
@@ -93,6 +92,7 @@ namespace Deucarian.PackageInstaller.Editor
             _workspace = new InstallerWorkspace(this);
             VisualElement content = _workspace.View.Workspace.Content;
             _windowContentRoot = content;
+            CreateQueueView();
 
             StyleSheet graphStyleSheet = DeucarianEditorUIResources.LoadStyleSheet(GraphStyleSheetPath);
 

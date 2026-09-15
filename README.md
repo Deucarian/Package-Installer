@@ -19,6 +19,14 @@ steps; source-ready status is not a claim that tests passed.
 
 The left sidebar changes pages in the current window, keeping each page's draft and session alive. Right-click a sidebar item and choose **Open in new window** for an independent workspace. Closing a workspace releases its pages; ordinary page changes do not reset lab messages or stop package operations.
 
+The package queue appears from the first install with every planned dependency,
+completed/current/remaining counts, and an ordered scrollable list. It stays
+visible through necessary Unity reloads and on completion. Operation activity
+still holds detailed diagnostics. Reloads preserve each workspace's package tab,
+search, selection and scroll position; opening another tool does not request an
+Installer navigation change. Resuming an interrupted operation keeps its exact
+saved targets and completed steps under the existing recovery checks.
+
 
 ## Shared workspace (1.3.0)
 
@@ -32,7 +40,7 @@ Requires Editor 1.5.0 or newer. Development is delivered through Git `#develop`;
 
 It is the Deucarian ecosystem front door for installing standalone packages, integration packages, suite packages, templates, and explicitly declared package samples from Package Registry metadata.
 
-Current package version: `1.7.5`.
+Current package version: `1.7.6`.
 
 Package development proposes `.deucarian/checkouts/<package-id>` inside the
 project. Cloning there adds a local Git exclusion, not a tracked `.gitignore`

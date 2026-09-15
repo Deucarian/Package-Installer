@@ -330,12 +330,12 @@ namespace Deucarian.PackageInstaller.Editor
 
             if (selfUpdateAppliedOnReload)
             {
-                preparedSteps = FilterAppliedSelfUpdate(preparedSteps);
+                preparedSteps = PackageOperationRecoveryPreparation.ReconcileAppliedSelfUpdate(preparedSteps);
             }
 
             PackageOperationRecoveryStep[] normalizedSteps = preparedSteps
                 .Where(step => step != null)
-                .Select(step => NormalizeStepForResume(step, selfUpdateAppliedOnReload))
+                .Select(step => PackageOperationRecoveryPreparation.NormalizeForResume(step, selfUpdateAppliedOnReload))
                 .ToArray();
             PackageOperationRootRequest[] normalizedRootRequests = record.RootRequests
                 .Where(root => normalizedSteps.Any(step => step.RootPackageIds.Contains(
@@ -352,7 +352,12 @@ namespace Deucarian.PackageInstaller.Editor
                     PackageInstallerSelfUpdateState.AcknowledgeApplied();
                 }
 
-                record = null;
+                // Keep completed rows available to the UI even when the last install was
+                // the Installer itself and no further UPM request is needed.
+                record = new PackageOperationRecoveryRecord(
+                    record.OperationId, record.OperationName, record.RegistryFingerprint,
+                    record.CreatedAtUtcTicks, DateTime.UtcNow.Ticks, normalizedSteps,
+                    record.Messages, normalizedRootRequests);
                 return false;
             }
 
@@ -380,14 +385,5 @@ namespace Deucarian.PackageInstaller.Editor
             return true;
         }
 
-        private static IEnumerable<PackageOperationRecoveryStep> FilterAppliedSelfUpdate(
-            IEnumerable<PackageOperationRecoveryStep> steps)
-        {
-            return (steps ?? Array.Empty<PackageOperationRecoveryStep>())
-                .Where(step =>
-                    step != null &&
-                    !PackageInstallerRuntimeIdentity.IsSelf(step.PackageId))
-                .ToArray();
-        }
     }
 }
