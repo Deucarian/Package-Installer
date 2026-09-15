@@ -183,7 +183,7 @@ namespace Deucarian.PackageInstaller.Editor
             IEnumerable<PackageOperationRecoveryStep> steps = record.Steps;
             if (selfUpdateAppliedOnReload)
             {
-                steps = FilterAppliedSelfUpdate(steps);
+                steps = PackageOperationRecoveryPreparation.ReconcileAppliedSelfUpdate(steps);
             }
 
             return steps
@@ -335,6 +335,11 @@ namespace Deucarian.PackageInstaller.Editor
                 PackageInstallProgressItemState.Active,
                 "Installing " + _currentInstall.PackageDefinition.DisplayName + "...");
             _lastStatusMessage = "Installing " + _currentInstall.PackageDefinition.DisplayName + "...";
+
+            // UPM can trigger script reload while adding the first dependency. Publish and
+            // persist the entire plan before crossing that boundary, including remaining steps.
+            SavePendingOperationState();
+            NotifyStateChanged();
 
             try
             {

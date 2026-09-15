@@ -184,13 +184,22 @@ namespace Deucarian.PackageInstaller.Editor
 
         private void HandleBeforeAssemblyReload()
         {
+            _windowReloadState = CaptureReloadState();
+        }
+
+        public string CaptureReloadState()
+        {
+            _workspace?.CaptureState();
             PackageGraphCameraState camera = _graphView != null
                 ? _graphView.GetCameraStateForReload()
                 : new PackageGraphCameraState(Vector2.zero, 1f);
-            PackageInstallerWindowReloadState.SaveForAssemblyReload(
+            return PackageInstallerWindowReloadState.Serialize(
                 new PackageInstallerWindowReloadSnapshot
                 {
                     searchText = _visibilityFilterState.SearchText,
+                    workspaceSearchText = _workspaceSearchText,
+                    workspaceCategory = _workspaceCategory,
+                    queue = CaptureQueue(),
                     showInstalled = _visibilityFilterState.ShowInstalled,
                     showNotInstalled = _visibilityFilterState.ShowNotInstalled,
                     selectedPackageId = _selectedPackageId,
@@ -211,9 +220,19 @@ namespace Deucarian.PackageInstaller.Editor
                 });
         }
 
+        public void RestoreReloadState(string state)
+        {
+            if (!PackageInstallerWindowReloadState.TryDeserialize(state, out var snapshot)) return;
+            _windowReloadState = state;
+            RestoreReloadSnapshot(snapshot);
+        }
+
         private void RestoreReloadSnapshot(PackageInstallerWindowReloadSnapshot snapshot)
         {
             _pendingReloadSnapshot = snapshot;
+            _workspaceSearchText = snapshot.workspaceSearchText;
+            _workspaceCategory = snapshot.workspaceCategory;
+            _restoredQueue = snapshot.queue;
             _reloadStatePendingValidation = true;
             _visibilityFilterState.Set(
                 snapshot.searchText,
